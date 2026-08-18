@@ -1,0 +1,25 @@
+{
+  "name": "@codegraph/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "codegraph command-line interface",
+  "bin": {
+    "codegraph": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@codegraph/analyzer": "workspace:*",
+    "@codegraph/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

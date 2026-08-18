@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+.vitest/
+
+# Java extractor (Maven)
+extractors/java/target/
+
+.DS_Store
+.idea/
+.vscode/
+*.log

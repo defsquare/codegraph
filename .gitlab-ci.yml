@@ -1,0 +1,25 @@
+image: node:22
+
+stages: [check]
+
+variables:
+  PNPM_HOME: "$CI_PROJECT_DIR/.pnpm-store"
+
+cache:
+  key:
+    files: [pnpm-lock.yaml]
+  paths: [.pnpm-store]
+
+verify:
+  stage: check
+  before_script:
+    - corepack enable pnpm
+    - pnpm config set store-dir .pnpm-store
+    - pnpm install --frozen-lockfile
+  script:
+    - pnpm -r build
+    - pnpm -r typecheck
+    - pnpm -r test
+    # schemas/ is a committed artifact: regenerating must be a no-op.
+    - pnpm run gen:schemas
+    - git diff --exit-code schemas/ || (echo "schemas/ is stale — run pnpm run gen:schemas and commit" && exit 1)
