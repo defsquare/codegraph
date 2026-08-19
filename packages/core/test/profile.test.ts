@@ -158,6 +158,49 @@ describe("validateEntity — required ⊆ traits ⊆ required ∪ optional", () 
     expect(codes(validateEntity(demo, stubWithExtra))).toEqual(["trait-not-allowed"]);
   });
 
+  // METAMODEL §1.4: the type/value split is "only meaningful in profiles that
+  // declare it". A profile that omits `space` licenses none — which is what
+  // makes the sentence enforceable rather than decorative.
+  describe("declaration space (METAMODEL §1.4)", () => {
+    const spaced: Profile = {
+      ...demo,
+      space: { class: ["type", "value"], method: ["value"] },
+    };
+
+    it("accepts a space the profile licenses for that kind", () => {
+      const cls = entity("demo:acme/Order", "class", ["TNamed", "TType"], {
+        name: "Order",
+        isStub: false,
+        space: ["type"],
+      });
+      expect(validateEntity(spaced, cls)).toEqual([]);
+    });
+
+    it("rejects a space the profile does not license for that kind", () => {
+      const m = entity("demo:acme/Order.bill()", "method", ["TNamed", "TInvocable"], {
+        name: "bill",
+        signature: "bill()",
+        space: ["type"],
+      });
+      const issues = validateEntity(spaced, m);
+      expect(codes(issues)).toEqual(["space-not-allowed"]);
+      expect(issues[0]?.message).toContain("type");
+    });
+
+    it("rejects any space at all in a profile that declares none", () => {
+      const cls = entity("demo:acme/Order", "class", ["TNamed", "TType"], {
+        name: "Order",
+        isStub: false,
+        space: ["value"],
+      });
+      expect(codes(validateEntity(demo, cls))).toEqual(["space-not-allowed"]);
+    });
+
+    it("says nothing about an entity that omits space", () => {
+      expect(validateEntity(spaced, validClass)).toEqual([]);
+    });
+  });
+
   it("rejects a kind the profile does not declare, and stops there", () => {
     const alien = entity("demo:acme/Order", "record", ["TNamed", "TType"], {
       name: "Order",
@@ -268,6 +311,28 @@ describe("validateProfile", () => {
       edges: ["calls"],
     } as unknown as Profile;
     expect(codes(validateProfile(bogus)).sort()).toEqual(["unknown-edge-kind", "unknown-trait"]);
+  });
+
+  it("rejects a space entry for a kind the profile does not declare", () => {
+    const stray: Profile = {
+      lang: "demo",
+      kinds: { class: { required: ["TNamed"], optional: [] } },
+      edges: [],
+      space: { interface: ["type"] },
+    };
+    const issues = validateProfile(stray);
+    expect(codes(issues)).toEqual(["unknown-space-kind"]);
+    expect(issues[0]?.path).toBe("space.interface");
+  });
+
+  it("rejects a declaration space outside the canonical vocabulary", () => {
+    const bogus = {
+      lang: "demo",
+      kinds: { class: { required: ["TNamed"], optional: [] } },
+      edges: [],
+      space: { class: ["runtime"] },
+    } as unknown as Profile;
+    expect(codes(validateProfile(bogus))).toEqual(["unknown-space-kind"]);
   });
 
   it("rejects a trait declared both required and optional", () => {
