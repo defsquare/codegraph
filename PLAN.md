@@ -150,10 +150,20 @@ Edge kinds: `import`, `inheritance`, `interfaceImplementation`, `invocation`,
 interface Profile {
   lang: string;
   kinds: Record<string, { required: TraitName[]; optional: TraitName[] }>;
-  edges: EdgeKind[];             // which associations this language can emit
-  notes?: string[];              // documented static-analysis blind spots
+  edges: EdgeKind[];                    // which associations this language can emit
+  space?: Record<string, Space[]>;      // per kind, the declaration spaces it MAY occupy
+  notes?: string[];                     // documented static-analysis blind spots
 }
 ```
+
+**Decision (M1 audit, added after the first draft of this section):** `space?`
+belongs on the Profile, not only on the Entity. METAMODEL §1.4 says the type/value
+split is "only meaningful in profiles that declare it"; without a profile-side
+declaration that sentence is unenforceable and `space: ["type"]` on a Java entity
+would validate. A profile that omits `space` licenses none, which is exactly the
+statement "this language has no type/value split". Only the TypeScript profile
+declares it. The field is optional and additive: every profile literal predating
+the decision still compiles unchanged.
 
 **Decision (was open in the design doc):** validation uses
 `required ⊆ traits ⊆ required ∪ optional` — strict equality is too brittle for
@@ -221,6 +231,17 @@ Reference example (the doc's §9 EDN example, translated):
 
 - [ ] `pnpm run gen:schemas` → `z.toJSONSchema()` → `schemas/model.schema.json`
       (committed; the Java extractor validates against it in its own tests).
+
+**Decision (M1 audit):** the published schema must be sufficient on its own. Zod
+refinements do not survive `z.toJSONSchema()`, so the trait-key rule of §4.5 step 3
+is re-stated in the emitted schema as one `if/then` conditional per key-contributing
+trait, generated from the same `TRAITS` table. Without it the contract accepted
+`{traits: ["TNamed"]}` with no `name`, and "an extractor in any language can
+self-validate using only the published schema" was only partly true. What remains
+outside the schema — deliberately — is everything profile-aware: which kinds exist
+and which trait compositions each kind licenses. That is `validateEntity`'s job and
+requires the profile data, so an extractor self-validates structure + vocabulary +
+trait keys against the schema, and the analyzer adds the profile pass on load.
 
 **Deliverable Phase 1:** `@codegraph/core` published locally; 9 profile data
 files; JSON Schema generated; unit tests incl. the canonical hierarchy-breaking
