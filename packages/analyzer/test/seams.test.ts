@@ -12,7 +12,6 @@ const SEAMS: Readonly<Record<string, () => unknown>> = {
   typeDependencyGraph: () => analyzer.typeDependencyGraph(javaGraph()),
   dependenciesOf: () => analyzer.dependenciesOf({} as never, "x"),
   dependentsOf: () => analyzer.dependentsOf({} as never, "x"),
-  coupling: () => analyzer.coupling({} as never),
   cycles: () => analyzer.cycles({} as never),
   toDot: () => analyzer.toDot({} as never),
   escapeDot: () => analyzer.escapeDot("x"),
