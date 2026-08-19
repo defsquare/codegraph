@@ -2,7 +2,8 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", "extractors/**", "schemas/**"] },
+  // `.remember/` is a gitignored local-tooling scratch dir, not repo source.
+  { ignores: ["**/dist/**", "**/node_modules/**", "extractors/**", "schemas/**", ".remember/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
