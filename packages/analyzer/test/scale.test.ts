@@ -15,7 +15,7 @@ import { composeViews, declaredOnly, internalOnly } from "../src/views.js";
 /**
  * SCALE BUDGET — opt-in, never part of a normal run.
  *
- * The committed fixture is 164 entities: it proves correctness and nothing
+ * The committed fixture is 166 entities: it proves correctness and nothing
  * about cost. The failures this guards are the ones that only appear on a real
  * corpus — an unmemoized container walk going quadratic, a recursive Tarjan
  * blowing the stack at 15 000 nodes. Both look like a mysterious crash rather

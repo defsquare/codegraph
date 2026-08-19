@@ -67,18 +67,28 @@ describe("foldedGraphToJson", () => {
 
   it("preserves the measured fixture shape and its diagnostics", () => {
     const module = foldedGraphToJson(foldGraph(graph, { level: "module" }));
-    expect(module.nodes).toHaveLength(27);
-    expect(module.edges).toHaveLength(32);
-    expect(module.diagnostics.droppedEdges).toBe(0);
+    expect(module.nodes).toHaveLength(10);
+    expect(module.edges).toHaveLength(14);
+    // The five edges reaching the two Spoon-fabricated phantoms, which have no
+    // honest module. Dropped and counted, never folded onto themselves.
+    expect(module.diagnostics.droppedEdges).toBe(5);
 
     const type = foldedGraphToJson(foldGraph(graph, { level: "type" }));
-    expect(type.nodes).toHaveLength(41);
+    expect(type.nodes).toHaveLength(36);
     expect(type.diagnostics.foldedEdges + type.diagnostics.droppedEdges).toBe(173);
-    // The three packages have no containing type — reported, never hidden.
+    // Packages have no containing TYPE — the corpus's three plus the seven
+    // external modules external types now hang off. Reported, never hidden.
     expect(type.diagnostics.unfoldableEntities).toEqual([
       "java:com.acme.order",
       "java:com.acme.order.adapter",
       "java:com.acme.order.legacy",
+      "java:com.megacorp.ledger",
+      "java:java.io",
+      "java:java.lang",
+      "java:java.lang.annotation",
+      "java:java.time",
+      "java:java.util",
+      "java:java.util.function",
     ]);
   });
 

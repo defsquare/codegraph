@@ -78,12 +78,20 @@ export function createFolder(graph: CodeGraph): Folder {
 
       const parent: EntityId | undefined = graph.parentOf(cursor);
       if (parent === undefined) {
-        // End of the chain. A STUB is its own container at every level: an
-        // external type is declared with neither parent nor children
-        // (METAMODEL.md §6), and its module cannot be recovered without
-        // parsing its id — which is forbidden. Folding it onto itself keeps
-        // the edge, honestly labelled as reaching a stub.
-        if (isStubEntity(entity)) result = cursor;
+        // End of the chain with no container found. Leaving `result` undefined
+        // is the point: the entity is UNPLACEABLE at this level and is reported
+        // as such, never folded onto itself.
+        //
+        // A stub used to be treated as its own container at every level, on the
+        // grounds that its module could not be recovered without parsing its id
+        // (forbidden — CLAUDE.md 7). That silently changed the graph's
+        // GRANULARITY instead: `java.io/PrintStream`, and even the primitive
+        // `int`, became nodes of module dependency graphs, where 88% of the
+        // nodes on a real corpus were not modules. The trait check above already
+        // folds a stub class onto itself at TYPE level and a stub package at
+        // MODULE level, which is every case where self-containment is true; the
+        // extractor now supplies `parent` for external types whose package is
+        // itself external, so the honest answer is reachable by walking.
         break;
       }
       cursor = parent;

@@ -184,7 +184,7 @@ describe("typeDependencyGraph over the committed Java snapshot", () => {
   it("folds all 173 edges: 163 aggregate into 71 pairs, 10 have no type", () => {
     const folded = typeDependencyGraph(graph);
     expect(folded.edges).toHaveLength(71);
-    expect(folded.nodes).toHaveLength(41);
+    expect(folded.nodes).toHaveLength(36);
     const weight = folded.edges.reduce((sum, e) => sum + e.count, 0);
     expect(weight).toBe(163);
     expect(weight).toBe(folded.diagnostics.foldedEdges);
@@ -192,7 +192,20 @@ describe("typeDependencyGraph over the committed Java snapshot", () => {
     // containing TYPE. Reported, never silently discarded.
     expect(folded.diagnostics.droppedEdges).toBe(10);
     expect(weight + folded.diagnostics.droppedEdges).toBe(173);
-    expect(folded.diagnostics.unfoldableEntities).toEqual([ORDER_PKG, ADAPTER_PKG, LEGACY_PKG]);
+    // Packages have no containing TYPE — the corpus's three plus the seven
+    // external modules external types now hang off. Reported, never hidden.
+    expect(folded.diagnostics.unfoldableEntities).toEqual([
+      "java:com.acme.order",
+      "java:com.acme.order.adapter",
+      "java:com.acme.order.legacy",
+      "java:com.megacorp.ledger",
+      "java:java.io",
+      "java:java.lang",
+      "java:java.lang.annotation",
+      "java:java.time",
+      "java:java.util",
+      "java:java.util.function",
+    ]);
   });
 
   it("contributes every edge kind, not just invocations", () => {

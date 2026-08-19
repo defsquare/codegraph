@@ -14,8 +14,8 @@ describe("buildGraph over the committed Java snapshot", () => {
   const graph = javaGraph();
 
   it("indexes every declared entity, stubs included", () => {
-    expect(graph.entities.size).toBe(164);
-    expect(graph.ids()).toHaveLength(164);
+    expect(graph.entities.size).toBe(166);
+    expect(graph.ids()).toHaveLength(166);
     expect(graph.has(STRING)).toBe(true);
     expect(graph.isStub(STRING)).toBe(true);
     expect(graph.isStub(ORDER)).toBe(false);
@@ -30,8 +30,9 @@ describe("buildGraph over the committed Java snapshot", () => {
   it("reads containment through the trait key, never by parsing an id", () => {
     expect(graph.parentOf(ORDER)).toBe(PACKAGE);
     expect(graph.parentOf(PACKAGE)).toBeUndefined();
-    // A stub has neither parent nor children (METAMODEL.md §6).
-    expect(graph.parentOf(STRING)).toBeUndefined();
+    // A stub has no children, and a parent only when its module is itself
+    // external — which is how the analyzer reaches it without parsing the id.
+    expect(graph.parentOf(STRING)).toBe("java:java.lang");
     expect(graph.childrenOf(STRING)).toEqual([]);
   });
 

@@ -88,7 +88,7 @@ describe("foldedGraphToCsv", () => {
     const rows = parseCsv(foldedGraphToCsv(folded));
     expect(rows[0]).toEqual(FOLDED_COLUMNS);
     expect(rows).toHaveLength(folded.edges.length + 1);
-    expect(folded.edges).toHaveLength(32); // measured: the fixture's module fold
+    expect(folded.edges).toHaveLength(14); // measured: the fixture's module fold
   });
 
   it("carries the view and level on every row, not only in a header", () => {

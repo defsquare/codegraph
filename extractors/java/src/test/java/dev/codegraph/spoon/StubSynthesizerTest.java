@@ -39,21 +39,56 @@ class StubSynthesizerTest {
               DECLARED_TYPE,
               DECLARED_TYPE + ".bill(com.acme.order.Order)"));
 
-  /** The exact degraded shape: two traits, a name, isStub, and nothing else. */
+  /** The degraded shape: a name, isStub, its external module, and nothing else. */
   @Test
-  void aStubIsAClassWithTNamedAndTTypeOnly() {
-    Entity stub = only(synthesize("java:com.nonexistent.external/MissingLib"));
+  void aStubIsADegradedClassPlacedInItsExternalModule() {
+    List<Entity> stubs = synthesize("java:com.nonexistent.external/MissingLib");
+    Entity stub = onlyType(stubs);
 
     assertEquals("java:com.nonexistent.external/MissingLib", stub.id());
     assertEquals("class", stub.kind());
-    assertEquals(List.of(TraitName.TNamed, TraitName.TType), stub.traits());
+    assertEquals(
+        Set.of(TraitName.TNamed, TraitName.TType, TraitName.TChildOf), Set.copyOf(stub.traits()));
     assertEquals("MissingLib", stub.name());
     assertTrue(stub.stub());
     assertNull(stub.anchor(), "a stub has no source to anchor to");
-    assertNull(stub.parent());
     assertNull(stub.children());
     assertNull(stub.declaredType());
     assertNull(stub.signature());
+
+    // The module comes with it, or `parent` would dangle and break graph closure.
+    Entity module = onlyPackage(stubs);
+    assertEquals("java:com.nonexistent.external", module.id());
+    assertEquals(module.id(), stub.parent());
+    assertEquals(List.of(stub.id()), module.children(), "containment must agree both ways");
+    assertTrue(module.stub());
+  }
+
+  /**
+   * The refusal that protects every module-level analysis. Spoon invents FQNs
+   * inside the corpus's own packages, so a phantom type may NOT be hung off the
+   * real package — that would make a fabrication read as internal and
+   * manufacture a module self-dependency out of a class that does not exist.
+   */
+  @Test
+  void aPhantomInACorpusPackageIsNotAttributedToIt() {
+    List<Entity> stubs = synthesize("java:com.acme.order/Invoice");
+    Entity stub = onlyType(stubs);
+
+    assertEquals(1, stubs.size(), () -> "no module stub may be invented for a declared package: " + stubs);
+    assertNull(
+        stub.parent(),
+        "an invented type in a corpus package must stay unplaceable, not be attributed to it");
+    assertEquals(Set.of(TraitName.TNamed, TraitName.TType), Set.copyOf(stub.traits()));
+  }
+
+  /** A primitive has no module at all; `java:<unnamed>` is not one. */
+  @Test
+  void primitivesAreNotGivenAModule() {
+    List<Entity> stubs = synthesize("java:<unnamed>/int");
+
+    assertEquals(1, stubs.size(), () -> "the unnamed package is not a module stub: " + stubs);
+    assertNull(onlyType(stubs).parent());
   }
 
   /**
@@ -73,13 +108,16 @@ class StubSynthesizerTest {
   /** Resolvable on the classpath, still not corpus code: the JDK stubs like anything else. */
   @Test
   void jdkTypesBecomeStubs() {
-    assertEquals("String", only(synthesize("java:java.lang/String")).name());
+    assertEquals("String", onlyType(synthesize("java:java.lang/String")).name());
   }
 
   @Test
   void nestedStubsAreNamedByTheirSimpleName() {
-    Entity stub = only(synthesize("java:com.acme.other/Outer.Inner"));
+    Entity stub = onlyType(synthesize("java:com.acme.other/Outer.Inner"));
     assertEquals("Inner", stub.name());
+    // The enclosing external type is not reified — nothing referenced it — so a
+    // nested stub hangs off its module directly. Degraded, but never invented.
+    assertEquals("java:com.acme.other", stub.parent());
   }
 
   @Test
@@ -88,7 +126,12 @@ class StubSynthesizerTest {
     referenced.add("java:z.pkg/Zed");
 
     List<Entity> stubs = new StubSynthesizer().synthesize(referenced, WHITELIST);
-    assertEquals(List.of("java:a.pkg/Alpha", "java:z.pkg/Zed"), stubs.stream().map(Entity::id).toList());
+    // Each external type brings its module. Determinism is what is being pinned,
+    // so compare the sorted ids — Model.sorted decides the emitted order anyway.
+    assertEquals(
+        List.of("java:a.pkg", "java:a.pkg/Alpha", "java:z.pkg", "java:z.pkg/Zed"),
+        stubs.stream().map(Entity::id).sorted().toList());
+    assertEquals(4, stubs.size(), "a repeated reference must not duplicate a stub");
   }
 
   // ---------------------------------------------------- what it refuses to do
@@ -128,7 +171,9 @@ class StubSynthesizerTest {
                     "java:com.acme.other/Real")),
             WHITELIST);
 
-    assertEquals(List.of("java:com.acme.other/Real"), stubs.stream().map(Entity::id).toList());
+    assertEquals(
+        List.of("java:com.acme.other", "java:com.acme.other/Real"),
+        stubs.stream().map(Entity::id).sorted().toList());
     assertEquals(2, synthesizer.anomalies().size());
     assertTrue(
         synthesizer.anomalies().stream().allMatch(a -> a.contains("not a type or package id")));
@@ -187,9 +232,17 @@ class StubSynthesizerTest {
     return new StubSynthesizer().synthesize(new TreeSet<>(List.of(referencedIds)), WHITELIST);
   }
 
-  private static Entity only(List<Entity> entities) {
-    assertEquals(1, entities.size(), () -> "expected exactly one entity, got " + entities);
-    return entities.get(0);
+  /** The single TYPE stub; synthesis also emits the module stubs types hang off. */
+  private static Entity onlyType(List<Entity> entities) {
+    List<Entity> types = entities.stream().filter(e -> "class".equals(e.kind())).toList();
+    assertEquals(1, types.size(), () -> "expected exactly one type stub, got " + entities);
+    return types.get(0);
+  }
+
+  private static Entity onlyPackage(List<Entity> entities) {
+    List<Entity> packages = entities.stream().filter(e -> "package".equals(e.kind())).toList();
+    assertEquals(1, packages.size(), () -> "expected exactly one module stub, got " + entities);
+    return packages.get(0);
   }
 
   private static List<Error> validate(String modelJson) throws IOException {

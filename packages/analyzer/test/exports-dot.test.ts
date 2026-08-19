@@ -202,7 +202,7 @@ describe("toDot on the Java fixture", () => {
     const drawn = parsed.topLevelEdges.map(([from, to]) => `${from} -> ${to}`).sort();
     const expected = folded.edges.map((edge) => `${edge.from} -> ${edge.to}`).sort();
     expect(drawn).toEqual(expected);
-    expect(drawn).toHaveLength(32); // measured: the fixture's module-level fold
+    expect(drawn).toHaveLength(14); // measured: the fixture's module-level fold
   });
 
   it("declares a node statement for every folded node", () => {

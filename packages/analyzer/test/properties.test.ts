@@ -127,6 +127,12 @@ const edgesArb = fc.array(
 
 const LEVELS: readonly FoldLevel[] = ["type", "module"];
 
+/** The trait that defines each fold level — a container must carry its level's. */
+const LEVEL_TRAIT_OF = { type: "TType", module: "TModule" } as const satisfies Record<
+  FoldLevel,
+  string
+>;
+
 describe("foundation properties", () => {
   it("every entity folds to a container that exists, or is reported unfoldable", () => {
     fc.assert(
@@ -147,12 +153,30 @@ describe("foundation properties", () => {
     );
   });
 
-  it("a stub is its own container at every level", () => {
+  it("a container always carries the level's own trait — folding never changes granularity", () => {
+    // The property the old "a stub is its own container at every level" rule
+    // violated: it let a stub CLASS be the container of a MODULE-level fold, so
+    // 88% of a real corpus's module-graph nodes were not modules. Whatever the
+    // shape, a container must carry the trait that defines the level.
     fc.assert(
       fc.property(shapeArb, edgesArb, fc.constantFrom(...LEVELS), (shape, seeds, level) => {
         const graph = corpus(shape, seeds);
         for (const id of graph.ids()) {
-          if (!graph.isStub(id)) continue;
+          const container = folderFor(graph).container(id, level);
+          if (container === undefined) continue; // unplaceable is a legitimate answer
+          const entity = graph.entity(container);
+          expect(entity?.traits).toContain(LEVEL_TRAIT_OF[level]);
+        }
+      }),
+    );
+  });
+
+  it("an entity with the level's trait is its own container, stub or not", () => {
+    fc.assert(
+      fc.property(shapeArb, edgesArb, fc.constantFrom(...LEVELS), (shape, seeds, level) => {
+        const graph = corpus(shape, seeds);
+        for (const id of graph.ids()) {
+          if (!graph.entity(id)?.traits.includes(LEVEL_TRAIT_OF[level])) continue;
           expect(folderFor(graph).container(id, level)).toBe(id);
         }
       }),

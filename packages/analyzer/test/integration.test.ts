@@ -41,9 +41,9 @@ import { edge, javaFixture, javaGraph, pkg, toyModel, type } from "./fixture.js"
  * here with the stage that noticed, rather than as a silent metric drift.
  */
 
-const ENTITIES = 164;
+const ENTITIES = 166;
 const EDGES = 173;
-const STUBS = 24;
+const STUBS = 26;
 /** 75 of the 173 edges touch a stub; the internal-only corpus keeps 98. */
 const INTERNAL_EDGES = 98;
 /** Exactly two edges are the extractor's inference, both module→module imports. */
@@ -144,12 +144,25 @@ describe("stage 4/5 — folding and the queries built on it", () => {
     expect(query.nodes).toEqual(folded.nodes);
     expect(query.edges).toEqual(folded.edges);
 
-    expect(query.nodes).toHaveLength(41);
+    expect(query.nodes).toHaveLength(36);
     expect(query.edges).toHaveLength(71);
     // The three corpus-declared packages carry TModule but not TType, so they
     // have no containing type. Reported, never hidden — and the 10 import edges
     // they own are the ones dropped.
-    expect(query.diagnostics.unfoldableEntities).toEqual([ORDER, ADAPTER, LEGACY]);
+    // Packages have no containing TYPE — the corpus's three plus the seven
+    // external modules external types now hang off. Reported, never hidden.
+    expect(query.diagnostics.unfoldableEntities).toEqual([
+      "java:com.acme.order",
+      "java:com.acme.order.adapter",
+      "java:com.acme.order.legacy",
+      "java:com.megacorp.ledger",
+      "java:java.io",
+      "java:java.lang",
+      "java:java.lang.annotation",
+      "java:java.time",
+      "java:java.util",
+      "java:java.util.function",
+    ]);
     expect(query.diagnostics.droppedEdges).toBe(10);
     expect(query.diagnostics.foldedEdges).toBe(163);
     expect(query.diagnostics.foldedEdges + query.diagnostics.droppedEdges).toBe(EDGES);
@@ -413,7 +426,12 @@ describe("stage 7 — exports render the model honestly", () => {
     const realTokens = imports()
       .nodes.filter((n) => !n.isStub)
       .map((n) => tokensFor(n.id));
-    expect(stubTokens.length).toBe(STUBS);
+    // The import graph is module-level, so its stubs are the seven external
+    // MODULES — not all 26 stubs, which would mean classes had leaked in.
+    expect(stubTokens.length).toBe(7);
+    for (const node of imports().nodes) {
+      expect(graph.entity(node.id)?.traits).toContain("TModule");
+    }
     expect(realTokens.length).toBe(3);
     const realUnion = new Set(realTokens.flatMap((s) => [...s]));
     // Some attribute marks EVERY stub and NO corpus entity: a degraded external

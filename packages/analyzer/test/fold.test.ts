@@ -47,15 +47,30 @@ describe("containment folding over the committed Java snapshot", () => {
     }
   });
 
-  it("treats a stub as its own container — its id may not be parsed to find one", () => {
-    expect(graph.parentOf(STRING)).toBeUndefined();
+  it("places an external type in its external module, and never in a corpus one", () => {
+    // A stub type IS its own containing type — it is a type. Its MODULE is
+    // reached by walking `parent`, which the extractor supplies precisely so the
+    // analyzer never has to parse an id to find it (CLAUDE.md 7).
     expect(containingType(graph, STRING)).toBe(STRING);
-    // A stub class has no TModule and no parent: folding it onto itself is what
-    // keeps the edge, rather than walking off the end of the chain.
-    expect(containingModule(graph, STRING)).toBe(STRING);
-    // A stub package is a module in its own right.
+    expect(graph.parentOf(STRING)).toBe("java:java.lang");
+    expect(containingModule(graph, STRING)).toBe("java:java.lang");
+
+    // A stub package is a module in its own right, but is NOT a type: folding it
+    // onto itself at type level is what once put modules into type graphs.
     expect(containingModule(graph, LEDGER_PKG)).toBe(LEDGER_PKG);
+    expect(containingType(graph, LEDGER_PKG)).toBeUndefined();
     expect(graph.isStub(LEDGER_PKG)).toBe(true);
+  });
+
+  it("leaves a type unplaceable rather than attributing it to a corpus module", () => {
+    // `Invoice` is a Spoon fabrication inside the corpus's OWN package, so the
+    // extractor withholds a parent (PLAN.md §5.2). It must stay out of the module
+    // graph entirely — attributing it would invent a corpus self-dependency.
+    const INVOICE = "java:com.acme.order/Invoice";
+    expect(graph.isStub(INVOICE)).toBe(true);
+    expect(graph.parentOf(INVOICE)).toBeUndefined();
+    expect(containingType(graph, INVOICE)).toBe(INVOICE);
+    expect(containingModule(graph, INVOICE)).toBeUndefined();
   });
 
   it("reports no containing type for a non-stub module", () => {
@@ -140,7 +155,7 @@ describe("foldGraph", () => {
     expect(stubNode?.isStub).toBe(true);
     // Every entity is either a member of exactly one node or reported unfoldable.
     const members = folded.nodes.reduce((sum, n) => sum + n.members, 0);
-    expect(members + folded.diagnostics.unfoldableEntities.length).toBe(164);
+    expect(members + folded.diagnostics.unfoldableEntities.length).toBe(166);
   });
 
   it("is deterministic: nodes and edges are sorted, and two runs agree", () => {

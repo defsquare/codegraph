@@ -17,14 +17,14 @@ describe("views", () => {
 
   it("the identity view keeps everything", () => {
     const projection = projectView(graph, identityView);
-    expect(projection.entities).toHaveLength(164);
+    expect(projection.entities).toHaveLength(166);
     expect(projection.edges).toHaveLength(173);
     expect(projection.view).toEqual({ name: "all", filters: [] });
   });
 
   it("internalOnly drops stubs and every edge touching one", () => {
     const projection = projectView(graph, internalOnly);
-    expect(projection.entities).toHaveLength(164 - 24);
+    expect(projection.entities).toHaveLength(166 - 26);
     expect(projection.entities.every((entity) => !isStubEntity(entity))).toBe(true);
     for (const edge of projection.edges) {
       expect(graph.isStub(edge.from)).toBe(false);
@@ -117,8 +117,8 @@ describe("view arithmetic and purity", () => {
   const graph = javaGraph();
   const stubIds = graph.ids().filter((id) => graph.isStub(id));
 
-  it("internalOnly removes exactly the 24 stubs — no more, no fewer", () => {
-    expect(stubIds).toHaveLength(24);
+  it("internalOnly removes exactly the 26 stubs — no more, no fewer", () => {
+    expect(stubIds).toHaveLength(26);
     const kept = new Set(projectView(graph, internalOnly).entities.map((e) => e.id));
     const removed = graph.ids().filter((id) => !kept.has(id));
     // Set equality, not just a count: a filter that dropped the right NUMBER of
@@ -152,7 +152,7 @@ describe("view arithmetic and purity", () => {
     expect(kept).toHaveLength(171);
     for (const inferred of derived) expect(kept).not.toContain(inferred);
     // Entities are untouched: declaredOnly filters edges only.
-    expect(projectView(graph, declaredOnly).entities).toHaveLength(164);
+    expect(projectView(graph, declaredOnly).entities).toHaveLength(166);
   });
 
   it("composition is a conjunction, in any order and to any depth", () => {
