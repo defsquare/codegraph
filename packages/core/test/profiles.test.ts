@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { EDGE_KINDS, TRAIT_NAMES } from "../src/names.js";
 import { SPACES } from "../src/primitives.js";
-import type { Entity } from "../src/entity.js";
-import { validateEntity, validateProfile, type Profile } from "../src/profile.js";
-import { PROFILES, getProfile, typescriptProfile } from "../src/profiles/index.js";
+import { Entity } from "../src/entity.js";
+import { parseModel, SCHEMA_VERSION } from "../src/model.js";
+import { validateEntity, validateModel, validateProfile, type Profile } from "../src/profile.js";
+import { PROFILES, clojureProfile, getProfile, typescriptProfile } from "../src/profiles/index.js";
 
 // Profiles are data; this suite is the check that the data stays inside the
 // canonical vocabularies and keeps saying what each language actually is.
@@ -144,6 +145,79 @@ describe("structural claims that must not silently regress", () => {
       );
     });
     expect(licensing.length).toBeGreaterThan(0);
+  });
+
+  // The declaration above says the profile ALLOWS the composition. This runs it:
+  // a real fn-var entity, parsed by the Entity schema and validated against the
+  // shipped Clojure profile. It is the acceptance case of the whole trait design
+  // (METAMODEL §3.7, PLAN Phase 1 deliverable) and must never regress to a
+  // profile-shape assertion.
+  it("validates a real Clojure fn-var as TNamed + TStructural + TInvocable", () => {
+    const clj = clojureProfile;
+    const fnVar = Entity.parse({
+      id: "clj:acme.order/bill",
+      kind: "function",
+      traits: ["TNamed", "TStructural", "TInvocable"],
+      name: "bill",
+      signature: "([order] [order opts])",
+    });
+
+    expect(validateEntity(clj, fnVar)).toEqual([]);
+
+    // Named, value holder and invocable at once — and the trait set is exactly
+    // the kind's required set, so nothing optional is propping it up.
+    expect([...clj.kinds["function"]!.required].sort()).toEqual([
+      "TInvocable",
+      "TNamed",
+      "TStructural",
+    ]);
+
+    // Dropping any one of the three breaks it: all three are load-bearing.
+    for (const dropped of ["TNamed", "TStructural", "TInvocable"] as const) {
+      const partial = {
+        ...fnVar,
+        traits: fnVar.traits.filter((t) => t !== dropped),
+      } as unknown as Entity;
+      expect(
+        validateEntity(clj, partial).map((i) => i.code),
+        `dropping ${dropped}`,
+      ).toEqual(["missing-required-trait"]);
+    }
+  });
+
+  it("carries the fn-var through a full model round-trip under its own profile", () => {
+    const model = parseModel({
+      schemaVersion: SCHEMA_VERSION,
+      lang: "clj",
+      extractor: { name: "clj-kondo-adapter", version: "0.0.0" },
+      root: "/corpus",
+      entities: [
+        {
+          id: "clj:acme.order/bill",
+          kind: "function",
+          traits: ["TNamed", "TStructural", "TInvocable"],
+          name: "bill",
+          signature: "([order])",
+        },
+        {
+          id: "clj:acme.tax/apply-tax",
+          kind: "function",
+          traits: ["TNamed", "TStructural", "TInvocable"],
+          name: "apply-tax",
+          signature: "([amount])",
+        },
+      ],
+      edges: [
+        {
+          edge: "invocation",
+          from: "clj:acme.order/bill",
+          to: "clj:acme.tax/apply-tax",
+          provenance: "declared",
+          anchor: { file: "src/acme/order.clj", span: [12, 12] },
+        },
+      ],
+    });
+    expect(validateModel(model, clojureProfile)).toEqual([]);
   });
 
   it("PHP is the only profile with fileInclude and traitUsage", () => {

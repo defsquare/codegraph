@@ -25,6 +25,9 @@ export * from "./model.js";
 // The published cross-language contract, generated from the schemas above.
 export * from "./jsonschema.js";
 
+// Graph-level integrity helpers: closure and self-reference (CLAUDE.md 4, 10).
+export * from "./integrity.js";
+
 // Language profiles as data, plus validation (METAMODEL.md §5).
 export * from "./profile.js";
 
