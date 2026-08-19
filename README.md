@@ -81,7 +81,7 @@ pnpm --filter @codegraph/cli exec codegraph analyze model.json --report deps
 | # | Milestone | State |
 |---|---|---|
 | M0 | Bootstrap — workspace builds, CI green | ✅ |
-| M1 | Core metamodel — traits, 9 profiles, validation, JSON Schema | 🚧 |
+| M1 | Core metamodel — traits, 9 profiles, validation, JSON Schema | ✅ |
 | M2 | Java extractor — fixture corpus → schema-valid `model.json` | ⬜ |
 | M3 | Analyzer — import graph, type deps, cycles, coupling | ⬜ |
 | M4 | CLI + property suite end-to-end on a real Java repo | ⬜ |
