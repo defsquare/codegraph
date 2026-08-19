@@ -170,9 +170,21 @@ the decision still compiles unchanged.
 optional traits like `TComment`/`TSourceAnchor`; unrestricted subset would hide
 extractor bugs. This gives both.
 
-- [ ] Define all **9 profiles** (Java, C#, Go, Clojure, JS, TS, Python, PHP, Rust)
+- [x] Define all **9 profiles** (Java, C#, Go, Clojure, JS, TS, Python, PHP, Rust)
       as data files — specifiable without being implemented (robustness test).
       Only Java's needs to be exercised in Phase 2.
+
+**Decision (M1 review) — lang ids are frozen as declared:**
+
+| `clj` | `csharp` | `go` | `java` | `js` | `php` | `python` | `rust` | `ts` |
+|---|---|---|---|---|---|---|---|---|
+
+Abbreviated where the abbreviation is the idiomatic name of the language
+(`clj`, `js`, `ts`), spelled out otherwise. The mixed style is deliberate and
+not to be "tidied": the lang id is the **EntityId prefix**, so it is embedded in
+every id an extractor emits and in every edge endpoint referencing one. Renaming
+one after an extractor ships invalidates that extractor's whole id space and any
+model.json already produced. Frozen before M2 for exactly that reason.
 
 ### 4.5 Validation
 
@@ -367,3 +379,6 @@ Documented static limits (all languages, per profile `notes`): reflection,
 | Traits/profile equality (open point §2) | `required ⊆ traits ⊆ required ∪ optional` | strict equality breaks on TComment; free subset hides extractor bugs |
 | Marker traits | `TWithInvocations` etc. contribute no keys | edge lists live in `edges[]`, not on entities — keeps entities flat and avoids duplication |
 | Java extractor language | Java (Maven) subproject, JSON out | Spoon is a JVM lib; the TS side stays extractor-agnostic |
+| Lang ids (M1 review) | frozen as declared, abbreviations kept (`clj`/`js`/`ts`) | the lang id is the EntityId prefix — renaming one invalidates every id an extractor has emitted |
+| Profile `space` (M1 audit) | `space?` declared per kind on the Profile, not only on the Entity | METAMODEL §1.4's "only meaningful in profiles that declare it" is otherwise unenforceable |
+| Trait keys in the published schema (M1 audit) | re-stated as `if/then` conditionals generated from `TRAITS` | Zod refinements do not survive `z.toJSONSchema()`; without them the contract accepted `{traits:["TNamed"]}` with no `name` |

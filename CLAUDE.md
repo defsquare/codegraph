@@ -109,7 +109,7 @@ pnpm --filter @codegraph/cli exec codegraph analyze model.json --report deps
 
 ## Engineering rules
 
-### Tests first, properties as contract
+### Red-Green TDD is mandatory, properties as contract
 - Every bug fix starts with the smallest deterministic failing test.
 - The property suite (closure, no self-reference `from !== to`, provenance set,
   profile validity, deterministic sorted output) runs against **every**
