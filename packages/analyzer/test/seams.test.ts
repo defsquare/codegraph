@@ -9,16 +9,24 @@ import { javaGraph } from "./fixture.js";
  */
 const SEAMS: Readonly<Record<string, () => unknown>> = {
   cycles: () => analyzer.cycles({} as never),
-  toDot: () => analyzer.toDot({} as never),
-  escapeDot: () => analyzer.escapeDot("x"),
-  foldedGraphToCsv: () => analyzer.foldedGraphToCsv({} as never),
-  couplingToCsv: () => analyzer.couplingToCsv({} as never),
-  cyclesToCsv: () => analyzer.cyclesToCsv({} as never),
-  foldedGraphToJson: () => analyzer.foldedGraphToJson({} as never),
-  couplingToJson: () => analyzer.couplingToJson({} as never),
-  cyclesToJson: () => analyzer.cyclesToJson({} as never),
-  toJsonString: () => analyzer.toJsonString({}),
 };
+
+/**
+ * The export slice has landed, so its functions no longer belong above: they
+ * are asserted for real in exports-dot/csv/json.test.ts. They still have to be
+ * reachable through the barrel.
+ */
+const LANDED = [
+  "toDot",
+  "escapeDot",
+  "foldedGraphToCsv",
+  "couplingToCsv",
+  "cyclesToCsv",
+  "foldedGraphToJson",
+  "couplingToJson",
+  "cyclesToJson",
+  "toJsonString",
+] as const;
 
 describe("M3 seams", () => {
   for (const [name, call] of Object.entries(SEAMS)) {
@@ -27,6 +35,12 @@ describe("M3 seams", () => {
       expect(call).toThrow(/^M3: .* slice fills this in$/);
     });
   }
+
+  it("still exports the landed export slice from the barrel", () => {
+    for (const name of LANDED) {
+      expect(typeof (analyzer as Record<string, unknown>)[name]).toBe("function");
+    }
+  });
 
   it("exports the foundation the slices code against", () => {
     for (const name of [
