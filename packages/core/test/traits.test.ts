@@ -11,7 +11,7 @@ const EXPECTED_KEYS: Record<TraitName, readonly string[]> = {
   TWithChildren: ["children"],
   TChildOf: ["parent"],
   TAttachedTo: ["attachedTo"],
-  TModule: ["definedIn"],
+  TModule: ["definedIn", "isStub"],
   TType: ["isStub"],
   TWithInheritances: [],
   TWithImplements: [],

@@ -889,10 +889,14 @@
                     "type": "string"
                   },
                   "type": "array"
+                },
+                "isStub": {
+                  "type": "boolean"
                 }
               },
               "required": [
-                "definedIn"
+                "definedIn",
+                "isStub"
               ]
             }
           },

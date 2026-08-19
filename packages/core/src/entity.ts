@@ -40,7 +40,13 @@ export const Entity = z
   });
 export type Entity = z.infer<typeof Entity>;
 
-/** Only `TType` contributes `isStub`; an entity not declaring it is never a stub. */
+/**
+ * `TType` and `TModule` are the traits that contribute `isStub`; an entity
+ * declaring neither is never a stub. Both are included so that "internal-only
+ * view = filter stubs" (METAMODEL.md §6) holds for the module/import layer too,
+ * not just for types.
+ */
 export function isStubEntity(e: Entity): boolean {
-  return e.traits.includes("TType") && (e as Record<string, unknown>)["isStub"] === true;
+  const declaresStubbable = e.traits.includes("TType") || e.traits.includes("TModule");
+  return declaresStubbable && (e as Record<string, unknown>)["isStub"] === true;
 }

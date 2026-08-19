@@ -46,7 +46,7 @@ function traitKeys(trait: TraitName, ids: fc.Arbitrary<string>): Record<string, 
     case "TAttachedTo":
       return { attachedTo: ids };
     case "TModule":
-      return { definedIn: fc.array(textArb, { maxLength: 3 }) };
+      return { definedIn: fc.array(textArb, { maxLength: 3 }), isStub: fc.boolean() };
     case "TType":
       return { isStub: fc.boolean() };
     case "TTypedEntity":

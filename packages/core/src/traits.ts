@@ -19,7 +19,11 @@ export const TRAITS = {
   TAttachedTo: z.object({ attachedTo: EntityId }),
 
   // modularity
-  TModule: z.object({ definedIn: z.array(z.string()) }),
+  // `isStub` mirrors TType's: the import graph is module-level (METAMODEL.md §9),
+  // so an import of an external package needs a module node to point at or the
+  // first-class import layer cannot close. A module the corpus never declares is
+  // degraded exactly as an external type is — `definedIn: []` and `isStub: true`.
+  TModule: z.object({ definedIn: z.array(z.string()), isStub: z.boolean() }),
 
   // types
   TType: z.object({ isStub: z.boolean() }),
