@@ -344,19 +344,34 @@ of hundreds would distort every coupling metric the analyzer computes.
 - [x] Graph closure and self-reference asserted on the snapshot from both sides
       (`StubDisciplineTest` in Java, `unknownReferences`/`selfReferences` in TS).
 - [x] Measure resolution rate in noClasspath on a real corpus; report unresolved
-      counts in the extractor's stderr summary. **Measured (M2 audit): 98.9% on
-      apache/commons-lang — 263 files, 134 944 type references, 1 466 unresolved,
-      15 338 entities (261 stubs), 24 631 edges, 6.6 s wall clock — and 77.0% on
-      spring-petclinic (30 files, 2 211 references, 509 unresolved).** Both are
-      above the §5.3 target of 85%… and the spread is the real finding: the rate
-      measures the corpus's DEPENDENCY SURFACE, not the extractor. commons-lang
-      depends on nothing but the JDK, which resolves against the runner's own
-      classpath; petclinic's Spring/JPA jars are absent and every reference to
-      them fails. A single cross-corpus target is therefore not meaningful, which
-      is why `ResolutionRateTest` asserts a deliberately low floor plus
-      `unresolved > 0` — the direction that matters — instead of pinning a number
-      that would pressure someone into deleting the unresolvable half of the
-      corpus, the only evidence for §5.2.
+      counts in the extractor's stderr summary. **Measured (M2 audit): 100.0% on
+      apache/commons-lang — 263 files, 133 478 type references, 0 unresolved,
+      15 338 entities (261 stubs), 24 631 edges, 6.6 s wall clock — and 77.8% on
+      spring-petclinic (30 files, 2 189 references, 487 unresolved).**
+
+      Categorising the failures is what makes those numbers readable, and it
+      first corrected the metric: **every one of commons-lang's 1 466 originally
+      "unresolved" references was `<nulltype>`**, Spoon's static type for the
+      `null` literal — a pseudo-type that can never have a declaration, which the
+      extractor already refuses to make an entity. It is now excluded from the
+      denominator alongside type variables, for the same stated reason. The old
+      98.9% was measuring how many `return null;` statements commons-lang
+      contains.
+
+      What is left is a clean statement: the rate measures the corpus's
+      **dependency surface**, not the extractor. commons-lang is self-contained
+      and depends on nothing but the JDK, which resolves against the runner's own
+      classpath — so it resolves perfectly and the 85% target is **vacuous**
+      there. petclinic's 487 failures are Spring and Jakarta types
+      (`jakarta.persistence` 86, `org.springframework.web.bind.annotation` 82,
+      `org.springframework.data.domain` 48, …) whose jars are simply absent; a
+      jar that is not there cannot be resolved by any extractor, so 77.8% is a
+      structural floor for that corpus, not a defect to fix. This is exactly the
+      legacy/non-compilable case M2 exists for, and it is why the stub discipline
+      of §5.2 — not the resolution rate — is the property worth asserting.
+      `ResolutionRateTest` therefore keeps a deliberately low floor plus
+      `unresolved > 0` rather than pinning a number that would pressure someone
+      into deleting the unresolvable half of the corpus.
 
 - [x] **Two fabrication bugs found only under real load (M2 audit), both fixed
       and both now in the fixture corpus (`Batch.java`) and

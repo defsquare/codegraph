@@ -15,7 +15,8 @@ import spoon.reflect.visitor.filter.TypeFilter;
  * the classpath. Membership is {@link CorpusWhitelist}'s job and nothing else's.
  *
  * @param totalTypeReferences every {@link CtTypeReference} in the model, type
- *     variables excluded (a {@code T} is not a resolution question)
+ *     variables and {@code <nulltype>} excluded — neither is a resolution
+ *     question (see {@link #measure})
  * @param resolvedTypeReferences those with a reachable declaration
  * @param entityCount entities written, stubs included
  * @param stubCount entities with {@code isStub: true}
@@ -30,15 +31,28 @@ public record ResolutionStats(
     int edgeCount,
     int droppedSelfEdges) {
 
-  /** Counts type references over the whole model; the pass is read-only. */
+  /** Spoon's static type for the {@code null} literal — a pseudo-type, not a type. */
+  private static final String NULL_TYPE = "<nulltype>";
+
+  /**
+   * Counts type references over the whole model; the pass is read-only.
+   *
+   * <p>Two kinds of reference are excluded, for one reason: they name nothing
+   * that could ever have a declaration, so counting them measures the corpus's
+   * writing style rather than what the extractor could see. A type variable is
+   * the long-standing case. {@code <nulltype>} is the other, found by auditing a
+   * real corpus: on apache/commons-lang it was <b>all 1466</b> of the references
+   * previously reported unresolved, so the headline rate was a function of how
+   * many {@code return null;} statements the corpus contains. The extractor
+   * already refuses to make either one an entity; the metric must agree with it.
+   */
   public static ResolutionStats measure(CtModel model) {
     long total = 0;
     long resolved = 0;
     for (CtTypeReference<?> reference :
         model.getElements(new TypeFilter<CtTypeReference<?>>(CtTypeReference.class))) {
-      // A type variable has no declaration to resolve to; counting it would
-      // depress the rate without naming a real blind spot.
-      if (reference instanceof CtTypeParameterReference) {
+      if (reference instanceof CtTypeParameterReference
+          || NULL_TYPE.equals(reference.getSimpleName())) {
         continue;
       }
       total++;
