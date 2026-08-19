@@ -11,3 +11,6 @@ extractors/java/target/
 .idea/
 .vscode/
 *.log
+
+# Agent worktrees and local session state
+.claude/

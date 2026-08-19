@@ -54,18 +54,30 @@ other file compiles — if `javac` ever reports an error outside
 | `Reporting.java` | **Three import forms**: `import java.util.ArrayList` (normal), `import java.time.*` (on-demand), `import static java.util.Arrays.asList` (static). | Per the java profile, all three fold to module-level `import` edges and the wildcard names the **package**, not the types it brings in. See the open questions below. |
 | `Reporting.java` | **Generic erasure, arrays, varargs.** `max(java.util.List<T>)` with `T extends Comparable<T>`; `first(java.util.List<T>)` with unbounded `T`; `join(String[])`; `lines(String...)`. | Ids erase: both generic methods take `java.util.List`. `max`'s declared return type erases to its bound (`java:java.lang/Comparable`), `first`'s unbounded `T` erases to `java:java.lang/Object` (JLS 4.6). Varargs render as the array form, so `lines(java.lang.String[])` and `join(java.lang.String[])` are indistinguishable by parameters alone — only the name separates them. |
 
-## Open questions this corpus forces (for the integrator)
+## Questions this corpus forced, and how they were answered
 
-These are not defects in the fixture. They are decisions the extractor cannot
-avoid making, and this corpus is what makes each one visible instead of latent.
+These were not defects in the fixture. They are decisions the extractor could
+not avoid making, and this corpus is what made each one visible instead of
+latent. **All five are now decided**; the answers are recorded inline below and
+pinned by `fixtures/java/expected/model.json`.
 
 1. **Two lambdas on one line collide.** `Notifications.java:11` starts two
    lambdas, so the `(file, startLine)` disambiguator produces the *same* id
    twice: `java:com.acme.order/Notifications#com/acme/order/Notifications.java:11`.
    Ids must be unique per model. Either the disambiguator grows a column or an
-   in-line ordinal, or the extractor deduplicates and loses one lambda. Decide
-   deliberately; do not let a `HashMap` decide by insertion order. A lambda and
-   an anonymous class sharing a line collide the same way.
+   in-line ordinal, or the extractor deduplicates and loses one lambda. A lambda
+   and an anonymous class sharing a line collide the same way.
+
+   **ANSWERED (M2) — deduplicate, and this is a KNOWN LOSS.** The id scheme is
+   locked for M2 (PLAN §4.6), so the extractor keeps the first lambda in AST
+   order and drops the second: deterministic, never `HashMap`-dependent. The
+   snapshot shows the cost — the corpus contains **5** nameless invocables
+   (lambdas at lines 8, 11, 11, 15 and the anonymous class at 22) and the model
+   contains **4**. Nothing else in the model is wrong: closure holds and the
+   surviving lambda's edges are its own. But one real lambda is absent, and no
+   assertion can currently tell that from a lambda that was never written.
+   Closing this needs a column (or an ordinal) in the disambiguator, which is an
+   id-scheme change and therefore a decision for M3, not a bug in a seam.
 2. **An anonymous class has two possible ids.** Spoon reports
    `com.acme.order.Notifications$1` as a *resolved* referenced type. Routed
    through `forTypeReference` that becomes `java:com.acme.order/Notifications.1`;

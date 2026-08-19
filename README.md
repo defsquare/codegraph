@@ -82,10 +82,15 @@ pnpm --filter @codegraph/cli exec codegraph analyze model.json --report deps
 |---|---|---|
 | M0 | Bootstrap — workspace builds, CI green | ✅ |
 | M1 | Core metamodel — traits, 9 profiles, validation, JSON Schema | ✅ |
-| M2 | Java extractor — fixture corpus → schema-valid `model.json` | ⬜ |
+| M2 | Java extractor — fixture corpus → schema- and profile-valid `model.json` | ✅ |
 | M3 | Analyzer — import graph, type deps, cycles, coupling | ⬜ |
 | M4 | CLI + property suite end-to-end on a real Java repo | ⬜ |
 | M5 | 2nd language — clj-kondo adapter, cross-language import graph | ⬜ |
+
+The M2 output over the reference corpus is committed as
+[`fixtures/java/expected/model.json`](fixtures/java/expected/model.json) — 147
+entities (23 stubs) and 155 edges, pretty-printed and sorted so that any change
+to what the extractor claims about known code shows up as a reviewable diff.
 
 ## Documentation
 

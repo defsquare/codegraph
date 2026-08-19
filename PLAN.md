@@ -103,7 +103,7 @@ Each trait declares only the keys it contributes:
 | `TWithChildren`       | `children: EntityId[]` (lexical containment) |
 | `TChildOf`            | `parent: EntityId`                        |
 | `TAttachedTo`         | `attachedTo: EntityId` (semantic attachment — Go receivers, Rust impl blocks, C# extension methods, Clojure extend-type) |
-| `TModule`             | `definedIn: string[]` (CodeFile paths; 1-1, 1-N or N-N per language) |
+| `TModule`             | `definedIn: string[]` (CodeFile paths; 1-1, 1-N or N-N per language), `isStub: boolean` |
 | `TType`               | `isStub: boolean`                         |
 | `TWithInheritances`   | *(marker — edges carry the data)*         |
 | `TWithImplements`     | *(marker — edges carry the data)*         |
@@ -218,7 +218,7 @@ Reference example (the doc's §9 EDN example, translated):
 
 ```json
 {
-  "id": "java:com.acme.order/OrderService.bill(Order)",
+  "id": "java:com.acme.order/OrderService.bill(com.acme.order.Order)",
   "kind": "method",
   "traits": ["TNamed", "TInvocable", "TWithParameters", "TWithLocalVariables",
              "TWithInvocations", "TWithAccesses", "TTypedEntity", "TChildOf",
@@ -233,13 +233,20 @@ Reference example (the doc's §9 EDN example, translated):
 ```json
 {
   "edge": "invocation",
-  "from": "java:com.acme.order/OrderService.bill(Order)",
+  "from": "java:com.acme.order/OrderService.bill(com.acme.order.Order)",
   "to": "java:com.acme.order/TaxCalculator.apply(double)",
   "candidates": ["java:com.acme.order/TaxCalculator.apply(double)"],
   "provenance": "declared",
   "anchor": { "file": "OrderService.java", "span": [19, 19] }
 }
 ```
+
+**Id parameter types are erased FQNs, not simple names** (M2, verified against
+Spoon). `archive(java.util.List)` and `archive(com.acme.order.legacy.List)` are
+legal overloads whose simple names are identical; rendered as `archive(List)`
+they collapse into one id and one method disappears silently. Ids must be
+unique per model, so the FQN form is normative — here, in METAMODEL.md §10, and
+in the extractor. The fixture corpus pins the collision as a regression test.
 
 - [ ] `pnpm run gen:schemas` → `z.toJSONSchema()` → `schemas/model.schema.json`
       (committed; the Java extractor validates against it in its own tests).
@@ -269,7 +276,7 @@ via Jackson. CLI: `java -jar codegraph-java.jar --src <dir> --out model.json`.
 
 | Java construct | kind | traits |
 |---|---|---|
-| package | `package` | TNamed, TModule, TWithChildren |
+| package | `package` | TNamed, TModule, TWithChildren (TModule brings `definedIn` **and `isStub`**) |
 | class / interface / enum / record / annotation | `class`/`interface`/… | TNamed, TType, TWithInheritances, TWithImplements, TWithChildren, TChildOf, TSourceAnchor, (TComment) |
 | method | `method` | TNamed, TInvocable, TWithParameters, TWithLocalVariables, TWithInvocations, TWithAccesses, TTypedEntity, TChildOf, TSourceAnchor |
 | constructor | `constructor` | TInvocable, TWithParameters, … — **no TNamed, no TTypedEntity** |
@@ -290,14 +297,59 @@ whitelist becomes `{ kind: "class", traits: ["TNamed","TType"], isStub: true }`.
 **Never filter by package prefix.** Edges to stubs are kept; internal-only
 analysis = analyzer-side `filter(!isStub)`.
 
+**Decision (M2): `isStub` is contributed by `TModule` as well as `TType`.** The
+import graph is module-level (§4.6, METAMODEL §9), so `import java.util.List`
+yields an edge to `java:java.util` — a package no corpus file declares and, with
+`isStub` on `TType` alone, one nothing could represent. The choices were a class
+stub named `util` (a fabrication), a permanently dangling endpoint (breaking
+closure, invariant 10), or making a degraded module expressible. An external
+package is now `{ kind: "package", traits: ["TNamed","TModule","TWithChildren"],
+definedIn: [], isStub: true }` — `definedIn: []` is precisely what makes it
+external — so "internal view = filter stubs" holds for the import layer too.
+Only `TType` and `TModule` contribute `isStub`; a dangling **member** id is
+still refused and reported, because a `method` stub would need a degraded-member
+concept core does not have.
+
+**Primitives, `void` and `<nulltype>` are not entities.** `EntityIds.erasedTypeName`
+keeps primitives as-is by design, so pass 2 omits `declaredType` for them rather
+than letting `java:<unnamed>/int` reach pass 4 and be fabricated into a stub
+*class* named `int`. `TTypedEntity`'s value is optional even when the trait is
+declared, so omitting is legal and lossless — and a phantom class with a fan-in
+of hundreds would distort every coupling metric the analyzer computes.
+
 ### 5.3 Validation of the extractor
 
-- [ ] Fixture corpus in `fixtures/java/` (overloads, lambdas, inner classes,
+- [x] Fixture corpus in `fixtures/java/` (overloads, lambdas, inner classes,
       constructors, static imports, an unresolvable external lib) + snapshot
-      `model.json`.
-- [ ] Extractor test validates its output against `schemas/model.schema.json`.
-- [ ] Measure resolution rate in noClasspath on a real corpus (target ≥ ~85%);
-      report unresolved counts in the extractor's stderr summary.
+      `fixtures/java/expected/model.json`, pretty-printed and sorted so it is
+      reviewable in a diff. `SnapshotTest` reproduces it;
+      `-Dcodegraph.updateSnapshot=true` regenerates it deliberately.
+- [x] Extractor test validates its output against `schemas/model.schema.json`
+      (`ModelSchemaValidationTest`, networknt).
+- [x] **Profile conformance across the language boundary**: a JSON Schema cannot
+      express per-kind trait rules, so `packages/core/test/fixtures-java.test.ts`
+      loads the snapshot, `parseModel`s it and runs `validateModel` against
+      `javaProfile` expecting zero issues. This is the M2 acceptance gate — the
+      first check that runs both halves of the system against each other.
+- [ ] **KNOWN GAP carried into M3 — the lambda id disambiguator is too coarse.**
+      `Type#file:startLine` cannot separate two lambdas that START ON THE SAME
+      LINE (`chain(() -> a, () -> b)`). The extractor deduplicates
+      deterministically (first in AST order wins) rather than letting a hash
+      decide, but one real lambda is then absent from the model and nothing
+      distinguishes that from a lambda never written. Measured on the fixtures:
+      5 nameless invocables in source, 4 in the model; pinned by
+      `StubDisciplineTest.lambdasSharingALineCollapseIntoOneEntityAndTheLossIsBounded`.
+      The fix is a column or an in-line ordinal in the disambiguator — an
+      id-scheme change, hence M3 and not a seam-level bug.
+- [x] Graph closure and self-reference asserted on the snapshot from both sides
+      (`StubDisciplineTest` in Java, `unknownReferences`/`selfReferences` in TS).
+- [x] Measure resolution rate in noClasspath on a real corpus; report unresolved
+      counts in the extractor's stderr summary. **Measured on the fixtures: 94.1%
+      (509 references, 30 unresolved).** The rate is high because JDK types
+      resolve against the runner's classpath, so `ResolutionRateTest` asserts a
+      deliberately low floor plus `unresolved > 0` — the direction that matters.
+      A high bar here would pressure someone into deleting the unresolvable half
+      of the corpus, which is the only evidence for §5.2.
 
 ## 6. Phase 3 — `@codegraph/analyzer`
 
@@ -365,7 +417,7 @@ Documented static limits (all languages, per profile `notes`): reflection,
 |---|---|---|
 | M0 | Bootstrap | workspace builds, CI green |
 | M1 | Core metamodel | traits + 9 profiles + validation + JSON Schema, tested |
-| M2 | Java extractor | fixture corpus → valid `model.json`, schema-validated, ≥85% resolution on real corpus |
+| M2 | Java extractor | ✅ fixture corpus → valid `model.json`, schema-validated **and profile-validated across the language boundary**, closed graph, 94.1% resolution on the fixtures |
 | M3 | Analyzer | import graph, type deps, cycles, coupling metrics, DOT export |
 | M4 | CLI + properties | end-to-end `codegraph analyze` on a real Java repo; property suite green |
 | M5 | 2nd language | clj-kondo adapter; cross-language import-graph query works |

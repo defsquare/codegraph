@@ -158,7 +158,7 @@ Example where they diverge: a Go method with receiver `(o *Order)` is a
 
 | Trait | Attributes contributed | Notes |
 |---|---|---|
-| `TModule` | `definedIn: string[]` (CodeFile paths) | module↔file cardinality varies by language: 1-1 (JS/TS/Python: module *is* the file), 1-N (Java package, C#/Go/PHP namespace), N-N (Rust inline `mod`). Rust modules are hierarchical (crate = root) |
+| `TModule` | `definedIn: string[]` (CodeFile paths), `isStub: boolean` | module↔file cardinality varies by language: 1-1 (JS/TS/Python: module *is* the file), 1-N (Java package, C#/Go/PHP namespace), N-N (Rust inline `mod`). Rust modules are hierarchical (crate = root). `isStub` mirrors `TType`'s: the import graph is module-level (§9), so an import of an external module needs an endpoint that exists — a stub module has `definedIn: []`, which is exactly what makes it external |
 
 ### 3.4 Types
 
@@ -262,12 +262,22 @@ plus whatever both profiles share).
 
 ## 6. Stub
 
-Not a separate node type — an Entity with `TType` and `isStub: true`,
-representing a type **external to the corpus** (JDK, npm packages, …).
+Not a separate node type — an Entity with `isStub: true`, representing something
+**external to the corpus** (JDK, npm packages, …). Exactly two traits contribute
+`isStub`, so exactly two things are stubbable:
 
-- Degraded: usually only `TNamed + TType`, no children, no anchor.
+| Stub of | Trait | Shape | Why it must exist |
+|---|---|---|---|
+| a **type** | `TType` | usually only `TNamed + TType`, no children, no anchor | every corpus references types it does not declare |
+| a **module** | `TModule` | `TNamed + TModule + TWithChildren`, `definedIn: []`, no children | the import graph is module-level (§9), so `import java.util.List` points at the *package* `java:java.util` — with no module stub the first-class import layer could never satisfy closure (§11 invariant) |
+
+A **member** (method, field) is deliberately *not* stubbable: an external member
+folds up to its declaring type's stub. Fabricating a `class` named `bill(Order)`
+to close an endpoint is the one thing stub synthesis exists to prevent — an
+unresolvable member id is reported and left dangling instead.
+
 - Edges *to* stubs are kept; the internal-only view is obtained by filtering
-  stubs out at analysis time.
+  stubs out at analysis time — uniformly, for types and modules alike.
 - Membership is decided by a **whitelist of corpus-declared ids** built in a
   first pass — never by package/name prefix (Spoon in noClasspath mode invents
   plausible FQNs; prefix filters would launder them into facts).
@@ -330,7 +340,7 @@ part of the conceptual vocabulary even though they never appear in
 
 ```json
 {
-  "id": "java:com.acme.order/OrderService.bill(Order)",
+  "id": "java:com.acme.order/OrderService.bill(com.acme.order.Order)",
   "kind": "method",
   "traits": ["TNamed", "TInvocable", "TWithParameters", "TWithLocalVariables",
              "TWithInvocations", "TWithAccesses", "TTypedEntity", "TChildOf",
@@ -343,6 +353,14 @@ part of the conceptual vocabulary even though they never appear in
 }
 ```
 
+Note the id's parameter types: **erased fully-qualified names**, not simple
+names. Simple names genuinely collide — `archive(java.util.List)` and
+`archive(com.acme.order.legacy.List)` are legal Java overloads that both render
+as `archive(List)`, so under simple names they would merge into a single id and
+one method would vanish from the model with no error. Ids must be unique, so the
+FQN form wins; the `signature` attribute keeps the same form. (The fixture
+corpus contains exactly that overload pair as a regression case.)
+
 Reading it through the metamodel: the entity is a `method` **kind** whose
 **traits** license each attribute — `TNamed` brings `name`, `TInvocable` brings
 `signature` (also serving as the id's disambiguator), `TTypedEntity` brings
@@ -354,7 +372,7 @@ Reading it through the metamodel: the entity is a `method` **kind** whose
 ```json
 {
   "edge": "invocation",
-  "from": "java:com.acme.order/OrderService.bill(Order)",
+  "from": "java:com.acme.order/OrderService.bill(com.acme.order.Order)",
   "to": "java:com.acme.order/TaxCalculator.apply(double)",
   "provenance": "declared",
   "anchor": { "file": "OrderService.java", "span": [19, 19] }
