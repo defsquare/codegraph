@@ -147,7 +147,9 @@ describe("escapeDot", () => {
     // A lone backslash would start a DOT escape sequence, so it is doubled.
     expect(escapeDot("a\\b")).toBe('"a\\\\b"');
     expect(escapeDot("line1\nline2")).toBe('"line1\\nline2"');
-    expect(escapeDot("crlf\r\nnext")).toBe('"crlf\\nnext"');
+    // CR is a control character, not a line break DOT understands: it gets its
+    // own escape, so CRLF stays distinguishable from a bare LF.
+    expect(escapeDot("crlf\r\nnext")).toBe('"crlf\\u000d\\nnext"');
   });
 
   it("escapes the backslash before the quote, never after", () => {
@@ -161,8 +163,24 @@ describe("escapeDot", () => {
   });
 
   it("neutralizes control characters rather than emitting them raw", () => {
-    expect(escapeDot("a\tb")).toBe('"a b"');
-    expect(escapeDot("a\u0000b")).toBe('"a b"');
+    // A raw control character cannot appear in a DOT quoted string at all, so
+    // it is rendered as its own escape — never emitted, never dropped.
+    expect(escapeDot("a\tb")).toBe('"a\\u0009b"');
+    expect(escapeDot("a\u0000b")).toBe('"a\\u0000b"');
+    expect(escapeDot("a\u007fb")).toBe('"a\\u007fb"');
+  });
+
+  it("keeps ids that differ only by a control character distinct", () => {
+    // Ids are opaque (CLAUDE.md invariant 7). Mapping every control character
+    // onto one replacement would render two DIFFERENT nodes under the SAME DOT
+    // id, silently merging them and drawing edges the model never contained.
+    const rendered = ["a\tb", "a b", "a\u0000b", "a\u000bb", "a\\u0009b"].map(escapeDot);
+    expect(new Set(rendered).size).toBe(rendered.length);
+  });
+
+  it("keeps CR distinct from LF, which is a real DOT line break", () => {
+    expect(escapeDot("a\nb")).toBe('"a\\nb"');
+    expect(escapeDot("a\r\nb")).not.toBe(escapeDot("a\nb"));
   });
 });
 

@@ -53,16 +53,24 @@ const INFERRED_LINE = "#8a8a8a";
  * `[` `]` `$`, and a Java signature id can contain a quote or a backslash. In a
  * DOT quoted string a backslash introduces an escape (`\n`, `\l`, `\N`, `\G`…),
  * so a literal backslash must be doubled BEFORE anything else is escaped.
- * Control characters other than newline cannot appear in a quoted string at
- * all; they become spaces, which is lossy but never produces invalid DOT.
+ *
+ * Control characters other than LF cannot appear in a quoted string at all, so
+ * each is rendered as its own `\uXXXX` escape. The mapping is INJECTIVE, which
+ * is the point: collapsing every control character onto one replacement would
+ * give two different entities the same DOT node id, merge them into one box and
+ * draw edges between things the model never related. Injectivity holds because
+ * backslashes are doubled first, so every backslash left in the output is one
+ * this function introduced.
  */
 export function escapeDot(value: string): string {
   const escaped = value
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
-    .replace(/\r\n|\r|\n/g, "\\n")
+    .replace(/\n/g, "\\n")
     // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, " ");
+    .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, (character) =>
+      `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
+    );
   return `"${escaped}"`;
 }
 
