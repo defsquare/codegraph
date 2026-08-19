@@ -22,6 +22,7 @@
         "java:com.acme.order/AbstractOrder",
         "java:com.acme.order/Audited",
         "java:com.acme.order/Basket",
+        "java:com.acme.order/Batch",
         "java:com.acme.order/Channel",
         "java:com.acme.order/Discountable",
         "java:com.acme.order/Money",
@@ -35,6 +36,7 @@
         "com/acme/order/AbstractOrder.java",
         "com/acme/order/Audited.java",
         "com/acme/order/Basket.java",
+        "com/acme/order/Batch.java",
         "com/acme/order/Channel.java",
         "com/acme/order/Discountable.java",
         "com/acme/order/Money.java",
@@ -1189,6 +1191,425 @@
         "span" : [
           18,
           20
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch",
+      "kind" : "class",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TComment",
+        "TWithChildren",
+        "TChildOf",
+        "TType",
+        "TWithInheritances",
+        "TWithImplements"
+      ],
+      "name" : "Batch",
+      "isStub" : false,
+      "parent" : "java:com.acme.order",
+      "children" : [
+        "java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])",
+        "java:com.acme.order/Batch.allocator()",
+        "java:com.acme.order/Batch.counts",
+        "java:com.acme.order/Batch.priced()",
+        "java:com.acme.order/Batch.prices",
+        "java:com.acme.order/Batch.running()",
+        "java:com.acme.order/Batch.size()"
+      ],
+      "comments" : [
+        "Array members and an anonymous class that uses its own members.\n\n<p>Both were blind spots found by auditing a real corpus (commons-lang), not by\nthis corpus: arrays were present but nothing ever read `array.length`, and an\nanonymous class was present but nothing inside it touched its own fields.\n\n<p>`counts.length` and `int[]::new` declare their member on the ARRAY type. An\narray is not an entity, and its component type does not own those members —\nattributing them to the component invented a stub class named `int` and an\naccess on `com.acme.order.Money` that the source never writes.\n\n<p>The anonymous `Priceable` is identified by `#file:line`; Spoon names it\n`Batch$1`, so any edge that names it from a type REFERENCE must be translated\nback, or one declared class ends up with two ids and the second is laundered\ninto a stub carrying the corpus's own package."
+      ],
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          20,
+          62
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48",
+      "kind" : "lambda",
+      "traits" : [
+        "TSourceAnchor",
+        "TChildOf",
+        "TInvocable",
+        "TWithParameters",
+        "TWithLocalVariables",
+        "TWithInvocations",
+        "TWithAccesses"
+      ],
+      "signature" : "com.acme.order.Priceable()",
+      "parent" : "java:com.acme.order/Batch.running()",
+      "parameters" : [ ],
+      "localVariables" : [ ],
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          48,
+          60
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.<init>()",
+      "kind" : "constructor",
+      "traits" : [
+        "TSourceAnchor",
+        "TChildOf",
+        "TInvocable",
+        "TWithParameters",
+        "TWithLocalVariables",
+        "TWithInvocations",
+        "TWithAccesses"
+      ],
+      "signature" : "<init>()",
+      "parent" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48",
+      "parameters" : [ ],
+      "localVariables" : [ ],
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          48,
+          60
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.price()",
+      "kind" : "method",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TChildOf",
+        "TTypedEntity",
+        "TInvocable",
+        "TWithParameters",
+        "TWithLocalVariables",
+        "TWithInvocations",
+        "TWithAccesses"
+      ],
+      "name" : "price",
+      "signature" : "price()",
+      "declaredType" : "java:com.acme.order/Money",
+      "parent" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48",
+      "parameters" : [ ],
+      "localVariables" : [ ],
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          53,
+          55
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.running",
+      "kind" : "attribute",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TChildOf",
+        "TTypedEntity",
+        "TStructural"
+      ],
+      "name" : "running",
+      "declaredType" : "java:com.acme.order/Money",
+      "parent" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.scaled(com.acme.order.Money)",
+      "kind" : "method",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TChildOf",
+        "TTypedEntity",
+        "TInvocable",
+        "TWithParameters",
+        "TWithLocalVariables",
+        "TWithInvocations",
+        "TWithAccesses"
+      ],
+      "name" : "scaled",
+      "signature" : "scaled(com.acme.order.Money)",
+      "declaredType" : "java:com.acme.order/Money",
+      "parent" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48",
+      "parameters" : [
+        "java:com.acme.order/Batch#com/acme/order/Batch.java:48.scaled(com.acme.order.Money)#param:base"
+      ],
+      "localVariables" : [ ],
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          57,
+          59
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.scaled(com.acme.order.Money)#param:base",
+      "kind" : "parameter",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TChildOf",
+        "TTypedEntity",
+        "TStructural"
+      ],
+      "name" : "base",
+      "declaredType" : "java:com.acme.order/Money",
+      "parent" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.scaled(com.acme.order.Money)",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          57,
+          57
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])",
+      "kind" : "constructor",
+      "traits" : [
+        "TSourceAnchor",
+        "TChildOf",
+        "TInvocable",
+        "TWithParameters",
+        "TWithLocalVariables",
+        "TWithInvocations",
+        "TWithAccesses"
+      ],
+      "signature" : "<init>(int[],com.acme.order.Money[])",
+      "parent" : "java:com.acme.order/Batch",
+      "parameters" : [
+        "java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])#param:counts",
+        "java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])#param:prices"
+      ],
+      "localVariables" : [ ],
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          26,
+          29
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])#param:counts",
+      "kind" : "parameter",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TChildOf",
+        "TTypedEntity",
+        "TStructural"
+      ],
+      "name" : "counts",
+      "parent" : "java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          26,
+          26
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])#param:prices",
+      "kind" : "parameter",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TChildOf",
+        "TTypedEntity",
+        "TStructural"
+      ],
+      "name" : "prices",
+      "declaredType" : "java:com.acme.order/Money",
+      "parent" : "java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          26,
+          26
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch.allocator()",
+      "kind" : "method",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TComment",
+        "TChildOf",
+        "TTypedEntity",
+        "TInvocable",
+        "TWithParameters",
+        "TWithLocalVariables",
+        "TWithInvocations",
+        "TWithAccesses"
+      ],
+      "name" : "allocator",
+      "signature" : "allocator()",
+      "declaredType" : "java:java.util.function/IntFunction",
+      "parent" : "java:com.acme.order/Batch",
+      "parameters" : [ ],
+      "localVariables" : [ ],
+      "comments" : [
+        "`int[]::new` — a constructor declared on the array type."
+      ],
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          42,
+          44
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch.counts",
+      "kind" : "attribute",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TChildOf",
+        "TTypedEntity",
+        "TStructural"
+      ],
+      "name" : "counts",
+      "parent" : "java:com.acme.order/Batch",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          22,
+          22
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch.priced()",
+      "kind" : "method",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TComment",
+        "TChildOf",
+        "TTypedEntity",
+        "TInvocable",
+        "TWithParameters",
+        "TWithLocalVariables",
+        "TWithInvocations",
+        "TWithAccesses"
+      ],
+      "name" : "priced",
+      "signature" : "priced()",
+      "parent" : "java:com.acme.order/Batch",
+      "parameters" : [ ],
+      "localVariables" : [ ],
+      "comments" : [
+        "`prices.length` — a field of `Money[]`, not of `Money`."
+      ],
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          37,
+          39
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch.prices",
+      "kind" : "attribute",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TChildOf",
+        "TTypedEntity",
+        "TStructural"
+      ],
+      "name" : "prices",
+      "declaredType" : "java:com.acme.order/Money",
+      "parent" : "java:com.acme.order/Batch",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          24,
+          24
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch.running()",
+      "kind" : "method",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TComment",
+        "TChildOf",
+        "TTypedEntity",
+        "TInvocable",
+        "TWithParameters",
+        "TWithLocalVariables",
+        "TWithInvocations",
+        "TWithAccesses"
+      ],
+      "name" : "running",
+      "signature" : "running()",
+      "declaredType" : "java:com.acme.order/Priceable",
+      "parent" : "java:com.acme.order/Batch",
+      "parameters" : [ ],
+      "localVariables" : [ ],
+      "comments" : [
+        "An anonymous class that reads its own field and calls its own method."
+      ],
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          47,
+          61
+        ]
+      }
+    },
+    {
+      "id" : "java:com.acme.order/Batch.size()",
+      "kind" : "method",
+      "traits" : [
+        "TNamed",
+        "TSourceAnchor",
+        "TComment",
+        "TChildOf",
+        "TTypedEntity",
+        "TInvocable",
+        "TWithParameters",
+        "TWithLocalVariables",
+        "TWithInvocations",
+        "TWithAccesses"
+      ],
+      "name" : "size",
+      "signature" : "size()",
+      "parent" : "java:com.acme.order/Batch",
+      "parameters" : [ ],
+      "localVariables" : [ ],
+      "comments" : [
+        "`counts.length` — a field of `int[]`, not of `int`."
+      ],
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          32,
+          34
         ]
       }
     },
@@ -3364,6 +3785,16 @@
       "isStub" : true
     },
     {
+      "id" : "java:java.util.function/IntFunction",
+      "kind" : "class",
+      "traits" : [
+        "TNamed",
+        "TType"
+      ],
+      "name" : "IntFunction",
+      "isStub" : true
+    },
+    {
       "id" : "java:java.util/ArrayList",
       "kind" : "class",
       "traits" : [
@@ -3630,6 +4061,81 @@
         "span" : [
           19,
           19
+        ]
+      },
+      "isRead" : true,
+      "isWrite" : false
+    },
+    {
+      "edge" : "access",
+      "from" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.price()",
+      "to" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.running",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          54,
+          54
+        ]
+      },
+      "isRead" : true,
+      "isWrite" : false
+    },
+    {
+      "edge" : "access",
+      "from" : "java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])",
+      "to" : "java:com.acme.order/Batch.counts",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          27,
+          27
+        ]
+      },
+      "isRead" : false,
+      "isWrite" : true
+    },
+    {
+      "edge" : "access",
+      "from" : "java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])",
+      "to" : "java:com.acme.order/Batch.prices",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          28,
+          28
+        ]
+      },
+      "isRead" : false,
+      "isWrite" : true
+    },
+    {
+      "edge" : "access",
+      "from" : "java:com.acme.order/Batch.priced()",
+      "to" : "java:com.acme.order/Batch.prices",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          38,
+          38
+        ]
+      },
+      "isRead" : true,
+      "isWrite" : false
+    },
+    {
+      "edge" : "access",
+      "from" : "java:com.acme.order/Batch.size()",
+      "to" : "java:com.acme.order/Batch.counts",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          33,
+          33
         ]
       },
       "isRead" : true,
@@ -4083,6 +4589,45 @@
         "span" : [
           23,
           23
+        ]
+      }
+    },
+    {
+      "edge" : "invocation",
+      "from" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.price()",
+      "to" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.scaled(com.acme.order.Money)",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          54,
+          54
+        ]
+      }
+    },
+    {
+      "edge" : "invocation",
+      "from" : "java:com.acme.order/Batch.running()",
+      "to" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          48,
+          60
+        ]
+      }
+    },
+    {
+      "edge" : "invocation",
+      "from" : "java:com.acme.order/Batch.running()",
+      "to" : "java:com.acme.order/Money.zero()",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          50,
+          50
         ]
       }
     },
@@ -4824,6 +5369,136 @@
         "span" : [
           11,
           11
+        ]
+      }
+    },
+    {
+      "edge" : "reference",
+      "from" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48",
+      "to" : "java:com.acme.order/Priceable",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          48,
+          60
+        ]
+      }
+    },
+    {
+      "edge" : "reference",
+      "from" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.price()",
+      "to" : "java:com.acme.order/Money",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          53,
+          53
+        ]
+      }
+    },
+    {
+      "edge" : "reference",
+      "from" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.price()",
+      "to" : "java:java.lang/Override",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          52,
+          52
+        ]
+      }
+    },
+    {
+      "edge" : "reference",
+      "from" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.running",
+      "to" : "java:com.acme.order/Money",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "edge" : "reference",
+      "from" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.scaled(com.acme.order.Money)",
+      "to" : "java:com.acme.order/Money",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          57,
+          57
+        ]
+      }
+    },
+    {
+      "edge" : "reference",
+      "from" : "java:com.acme.order/Batch#com/acme/order/Batch.java:48.scaled(com.acme.order.Money)#param:base",
+      "to" : "java:com.acme.order/Money",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          57,
+          57
+        ]
+      }
+    },
+    {
+      "edge" : "reference",
+      "from" : "java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])#param:prices",
+      "to" : "java:com.acme.order/Money",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          26,
+          26
+        ]
+      }
+    },
+    {
+      "edge" : "reference",
+      "from" : "java:com.acme.order/Batch.allocator()",
+      "to" : "java:java.util.function/IntFunction",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          42,
+          42
+        ]
+      }
+    },
+    {
+      "edge" : "reference",
+      "from" : "java:com.acme.order/Batch.prices",
+      "to" : "java:com.acme.order/Money",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          24,
+          24
+        ]
+      }
+    },
+    {
+      "edge" : "reference",
+      "from" : "java:com.acme.order/Batch.running()",
+      "to" : "java:com.acme.order/Priceable",
+      "provenance" : "declared",
+      "anchor" : {
+        "file" : "com/acme/order/Batch.java",
+        "span" : [
+          47,
+          47
         ]
       }
     },

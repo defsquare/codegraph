@@ -222,9 +222,21 @@ public final class EntityIds {
   public static String forExecutableReference(CtExecutableReference<?> reference) {
     CtTypeReference<?> owner = reference.getDeclaringType();
     String ownerId = owner == null ? typeId("", UNKNOWN_TYPE) : forTypeReference(owner);
+    return forExecutableReferenceIn(ownerId, reference);
+  }
+
+  /**
+   * Same id, with the owner supplied. The caller knows things a reference does
+   * not: an anonymous class is identified by {@code #file:line}, not by Spoon's
+   * {@code Outer$N} name, so its members must be named under that id or they
+   * miss the entity pass 2 declared.
+   */
+  public static String forExecutableReferenceIn(
+      String ownerTypeId, CtExecutableReference<?> reference) {
+    requireText(ownerTypeId, "owner type id");
     String name =
         reference.isConstructor() ? CONSTRUCTOR_NAME : normalizeName(reference.getSimpleName());
-    return ownerId + "." + name + renderParameterTypes(reference.getParameters());
+    return ownerTypeId + "." + name + renderParameterTypes(reference.getParameters());
   }
 
   public static String forField(CtField<?> field) {
@@ -239,7 +251,13 @@ public final class EntityIds {
   public static String forFieldReference(CtFieldReference<?> reference) {
     CtTypeReference<?> owner = reference.getDeclaringType();
     String ownerId = owner == null ? typeId("", UNKNOWN_TYPE) : forTypeReference(owner);
-    return ownerId + "." + reference.getSimpleName();
+    return forFieldReferenceIn(ownerId, reference);
+  }
+
+  /** Same id, with the owner supplied — see {@link #forExecutableReferenceIn}. */
+  public static String forFieldReferenceIn(String ownerTypeId, CtFieldReference<?> reference) {
+    requireText(ownerTypeId, "owner type id");
+    return ownerTypeId + "." + reference.getSimpleName();
   }
 
   // ------------------------------------------------- parameters and locals
@@ -376,8 +394,16 @@ public final class EntityIds {
     return "(" + String.join(",", rendered) + ")";
   }
 
-  /** Unwraps arrays to their component type and type variables to their bound. */
-  private static CtTypeReference<?> elementTypeOf(CtTypeReference<?> reference) {
+  /**
+   * Unwraps arrays to their component type and type variables to their bound —
+   * the same normalization {@link #forTypeReference} applies before naming a
+   * type. Public because every caller that must decide "is this reference an
+   * entity at all?" has to ask about the SAME type this class would name: asking
+   * {@code isPrimitive()} of {@code int[]} answers false while the id resolves to
+   * {@code int}, which is how primitive stub classes reached a real corpus.
+   * Returns null for an unbounded type variable (JLS 4.6 erases it to Object).
+   */
+  public static CtTypeReference<?> elementTypeOf(CtTypeReference<?> reference) {
     CtTypeReference<?> current = reference;
     for (int guard = 0; guard < 64 && current != null; guard++) {
       if (current instanceof CtArrayTypeReference<?> array) {

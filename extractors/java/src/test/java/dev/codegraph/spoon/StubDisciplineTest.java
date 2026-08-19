@@ -212,11 +212,13 @@ class StubDisciplineTest {
    * share an id and the extractor keeps the first in AST order. The corpus holds
    * 5 nameless invocables; the model holds 4.
    *
-   * <p>This asserts the count that is actually emitted, not the count that ought
-   * to be — a green test here means "the known loss is exactly the known loss".
-   * Fixing it means adding a column or an ordinal to the disambiguator, which
-   * changes the id scheme; when that happens this test should fail, and the fix
-   * is to raise the expectation to 5, not to delete the assertion.
+   * <p>Stated as the PROPERTY rather than as a corpus-wide count, so that adding
+   * a fixture file (as the array/anonymous audit did) does not read as the id
+   * scheme changing. The property: the id
+   * {@code Notifications#…/Notifications.java:11} is emitted exactly once even
+   * though line 11 starts two lambdas, and no lambda id is emitted twice. When
+   * the disambiguator gains a column or an ordinal, THIS test fails — and the
+   * fix is to assert two distinct ids on line 11, never to delete the assertion.
    */
   @Test
   void lambdasSharingALineCollapseIntoOneEntityAndTheLossIsBounded() {
@@ -227,13 +229,15 @@ class StubDisciplineTest {
             .sorted()
             .toList();
 
+    String collision = "java:com.acme.order/Notifications#com/acme/order/Notifications.java:11";
     assertEquals(
-        4,
-        nameless.size(),
+        1,
+        nameless.stream().filter(collision::equals).count(),
         () ->
-            "the corpus declares 5 nameless invocables (lambdas at Notifications.java 8, 11, 11, 15 "
-                + "and the anonymous class at 22); 4 survive because the two on line 11 share the "
-                + "(file, startLine) id. If this number changed, the id scheme changed: "
+            "Notifications.java:11 starts TWO lambdas: `chain(() -> …, () -> …)`. The id scheme is "
+                + "Type#file:startLine (PLAN.md §4.6, locked for M2), so they share an id and the "
+                + "first in AST order wins — one real lambda is absent from the model and nothing "
+                + "distinguishes that from a lambda never written. Nameless invocables emitted: "
                 + nameless);
     assertEquals(
         nameless.size(), Set.copyOf(nameless).size(), "lambda ids must still be unique: " + nameless);

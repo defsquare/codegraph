@@ -563,11 +563,16 @@ public final class EdgeExtractor {
       if (field == null) {
         continue;
       }
-      Optional<String> member = safe(() -> EntityIds.forFieldReference(field));
-      Optional<String> ownerType =
-          field.getDeclaringType() == null
-              ? Optional.empty()
-              : safe(() -> EntityIds.forTypeReference(field.getDeclaringType()));
+      if (isArrayOwned(field.getDeclaringType())) {
+        // `xs.length`: the field belongs to the array type, not to its component.
+        // Attributing it to the component invented an access on `java.lang.String`
+        // and a stub class named `boolean` (measured on commons-lang: 426 edges).
+        droppedUnidentifiedTargets++;
+        continue;
+      }
+      Optional<String> ownerType = typeIdOfReference(field.getDeclaringType());
+      Optional<String> member =
+          ownerType.flatMap(owner -> safe(() -> EntityIds.forFieldReferenceIn(owner, field)));
       if (member.isEmpty()) {
         droppedUnidentifiedTargets++;
         continue;
@@ -661,7 +666,7 @@ public final class EdgeExtractor {
         continue;
       }
       Optional<String> target =
-          safe(() -> EntityIds.forTypeReference(reference)).filter(id -> !UNKNOWN_TYPE_ID.equals(id));
+          typeIdOfReference(reference).filter(id -> !UNKNOWN_TYPE_ID.equals(id));
       Optional<SourceAnchor> anchor = anchorOf(reference);
       Optional<Owner> owner = ownerOf(reference);
       if (target.isEmpty() || anchor.isEmpty() || owner.isEmpty()) {
@@ -950,16 +955,55 @@ public final class EdgeExtractor {
   }
 
   private Optional<Target> targetOf(CtExecutableReference<?> executable) {
-    Optional<String> member = safe(() -> EntityIds.forExecutableReference(executable));
+    CtTypeReference<?> declaring = executable.getDeclaringType();
+    if (isArrayOwned(declaring)) {
+      // `String[]::new` and `int[]::new` declare their executable on the ARRAY
+      // type. Folding that up would name the component type and claim the corpus
+      // calls a member of `java.lang.String` (or of a fabricated class `int`).
+      return Optional.empty();
+    }
+    String type = typeIdOfReference(declaring).orElse(UNKNOWN_TYPE_ID);
+    Optional<String> member = safe(() -> EntityIds.forExecutableReferenceIn(type, executable));
     if (member.isEmpty()) {
       return Optional.empty();
     }
-    CtTypeReference<?> declaring = executable.getDeclaringType();
-    String type =
-        declaring == null
-            ? UNKNOWN_TYPE_ID
-            : safe(() -> EntityIds.forTypeReference(declaring)).orElse(UNKNOWN_TYPE_ID);
     return Optional.of(new Target(member.get(), type));
+  }
+
+  /**
+   * An array type owns {@code length} and the {@code T[]::new} constructor, and
+   * an array is not an entity in any profile. Neither the array nor its component
+   * type can honestly receive the fact, so it is dropped: the dependency on the
+   * component is already stated by the written type reference that mentions it.
+   */
+  private static boolean isArrayOwned(CtTypeReference<?> declaringType) {
+    return declaringType instanceof CtArrayTypeReference<?>;
+  }
+
+  /**
+   * Type id of a REFERENCE, honouring the corpus's id for anonymous classes.
+   * Spoon names an anonymous class {@code Outer$N}, which {@link EntityIds}
+   * renders {@code java:pkg/Outer.N} — but pass 2 declared that same class as
+   * {@code java:pkg/Outer#file:line}. Left alone, one declared class gets two
+   * ids and the second is laundered into a stub bearing the corpus's own package.
+   */
+  private Optional<String> typeIdOfReference(CtTypeReference<?> reference) {
+    if (reference == null) {
+      return Optional.empty();
+    }
+    CtType<?> declaration = safeTypeDeclaration(reference);
+    if (declaration != null && isAnonymous(declaration)) {
+      return typeIdOf(declaration);
+    }
+    return safe(() -> EntityIds.forTypeReference(reference));
+  }
+
+  private static CtType<?> safeTypeDeclaration(CtTypeReference<?> reference) {
+    try {
+      return reference.getTypeDeclaration();
+    } catch (RuntimeException e) {
+      return null;
+    }
   }
 
   private Optional<SourceAnchor> anchorOf(CtElement element) {

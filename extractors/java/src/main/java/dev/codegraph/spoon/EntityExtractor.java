@@ -628,7 +628,10 @@ public final class EntityExtractor {
    *       not an entity in any language's profile, and a phantom class named
    *       {@code int} with a fan-in of hundreds would distort every coupling
    *       metric the analyzer computes. {@link EntityIds#erasedTypeName}
-   *       deliberately keeps primitives as-is, so this filter cannot live there;
+   *       deliberately keeps primitives as-is, so this filter cannot live there.
+   *       The test is applied to {@link EntityIds#elementTypeOf} — the type the
+   *       id will name — not to the reference: {@code int[]} is not primitive but
+   *       its id is {@code java:<unnamed>/int};
    *   <li>a reference Spoon could not name at all, which would otherwise be
    *       emitted as an invented id — the laundering PLAN.md §5.2 forbids.
    * </ul>
@@ -637,7 +640,15 @@ public final class EntityExtractor {
     if (reference == null) {
       return null;
     }
-    if (reference.isPrimitive() || NULL_TYPE.equals(reference.getSimpleName())) {
+    // Ask the question of the type the id will actually name. `int[]` is not
+    // primitive, but forTypeReference unwraps it to `int`, so testing the
+    // reference itself let `java:<unnamed>/int` through — measured on
+    // commons-lang: 8 primitive stub classes with a fan-in of 44-88 each.
+    CtTypeReference<?> named = EntityIds.elementTypeOf(reference);
+    if (named == null) {
+      return EntityIds.forTypeReference(reference); // unbounded type variable → Object
+    }
+    if (named.isPrimitive() || NULL_TYPE.equals(named.getSimpleName())) {
       return null;
     }
     String id = EntityIds.forTypeReference(reference);
