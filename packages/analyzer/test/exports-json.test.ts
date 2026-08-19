@@ -13,6 +13,7 @@ import {
   ADVERSARIAL_IDS,
   couplingRow,
   couplingTable,
+  cycleEdge,
   cycleReport,
   foldedEdge,
   foldedNode,
@@ -168,6 +169,39 @@ describe("couplingToJson and cyclesToJson", () => {
       expect("entities" in value).toBe(false);
       expect("lang" in value).toBe(false);
     }
+  });
+
+  it("carries each component's edges through, with the evidence intact", () => {
+    // EXPORT HONESTY (decision 7). `StronglyConnectedComponent.edges` is what
+    // makes a reported cycle actionable AND auditable: `count` is the cost of
+    // cutting a link and `provenances`/`allDeclared` say whether the link is a
+    // declared fact or an extractor inference. A copy that kept only
+    // members/size/weight would still typecheck and still round-trip, and would
+    // quietly publish cycles stripped of their evidence — so the copy is
+    // asserted field by field, not just for presence.
+    const cut = cycleEdge("java:a/A", "java:b/B", { count: 4, kinds: ["invocation"] });
+    const inferred = cycleEdge("java:b/B", "java:a/A", {
+      count: 1,
+      provenances: ["derived"],
+      allDeclared: false,
+    });
+    const loop = cycleEdge("java:a/A", "java:a/A", { count: 6 });
+    const withEdges = cycleReport([scc(["java:a/A", "java:b/B"], 3, 11, [cut, inferred, loop])]);
+
+    const json = cyclesToJson(withEdges);
+    const edges = json.components[0]!.edges;
+    expect(edges).toEqual([cut, inferred, loop]);
+    // Detached: mutating the export must not reach the live report.
+    expect(edges).not.toBe(withEdges.components[0]!.edges);
+    expect(edges[0]!.kinds).not.toBe(cut.kinds);
+    expect(edges[1]!.provenances).not.toBe(inferred.provenances);
+    // A fact and an inference stay distinguishable after serialization, and
+    // arrays (not Sets) mean JSON.stringify loses neither.
+    const parsed = JSON.parse(toJsonString(json)) as typeof json;
+    const round = parsed.components[0]!.edges;
+    expect(round[0]).toMatchObject({ allDeclared: true, provenances: ["declared"] });
+    expect(round[1]).toMatchObject({ allDeclared: false, provenances: ["derived"] });
+    expect(round[2]).toMatchObject({ selfLoop: true, count: 6 });
   });
 });
 

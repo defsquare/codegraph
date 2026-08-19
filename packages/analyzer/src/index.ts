@@ -39,14 +39,17 @@ export * from "./views.js";
 // Stage 4: folding to type/module level, with aggregated weighted edges.
 export * from "./fold.js";
 
-// Stage 5: queries (seam).
+// Stage 5: the two comparable layers — module imports and type dependencies —
+// plus the neighbourhood of one entity (METAMODEL.md §9).
 export * from "./queries.js";
 
-// Stage 6: metrics (seams).
+// Stage 6: metrics over a folded graph. Each result repeats the level and view
+// it was computed under; a coupling number without its view is not a fact.
 export * from "./metrics/coupling.js";
 export * from "./metrics/cycles.js";
 
-// Stage 7: exports (seams).
+// Stage 7: renderings. Derived and dynamic-candidate relations stay visually
+// distinguishable from declared facts, and stubs from corpus entities.
 export * from "./exports/dot.js";
 export * from "./exports/csv.js";
 export * from "./exports/json.js";

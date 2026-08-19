@@ -1,7 +1,11 @@
 import type { EdgeKind, EntityId, Provenance } from "@codegraph/core";
 import type { FoldedEdge, FoldedGraph, FoldedNode, FoldLevel } from "../src/fold.js";
 import type { CouplingRow, CouplingTable } from "../src/metrics/coupling.js";
-import type { CycleReport, StronglyConnectedComponent } from "../src/metrics/cycles.js";
+import type {
+  CycleEdge,
+  CycleReport,
+  StronglyConnectedComponent,
+} from "../src/metrics/cycles.js";
 import { compareIds } from "../src/order.js";
 import type { ViewDescriptor } from "../src/views.js";
 
@@ -109,8 +113,28 @@ export function scc(
   members: readonly EntityId[],
   internalEdgeCount: number,
   weight: number,
+  edges: readonly CycleEdge[] = [],
 ): StronglyConnectedComponent {
-  return { members, size: members.length, internalEdgeCount, weight };
+  return { members, size: members.length, internalEdgeCount, weight, edges };
+}
+
+/** A CycleEdge as `cycles()` builds them: sets already flattened to sorted arrays. */
+export function cycleEdge(
+  from: EntityId,
+  to: EntityId,
+  overrides: Partial<Omit<CycleEdge, "from" | "to">> = {},
+): CycleEdge {
+  const kinds = overrides.kinds ?? (["invocation"] as const);
+  const provenances = overrides.provenances ?? (["declared"] as const);
+  return {
+    from,
+    to,
+    count: overrides.count ?? 1,
+    kinds: [...kinds],
+    provenances: [...provenances],
+    allDeclared: overrides.allDeclared ?? provenances.every((p) => p === "declared"),
+    selfLoop: overrides.selfLoop ?? from === to,
+  };
 }
 
 export function cycleReport(

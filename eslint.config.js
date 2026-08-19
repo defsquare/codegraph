@@ -2,8 +2,20 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  // `.remember/` is a gitignored local-tooling scratch dir, not repo source.
-  { ignores: ["**/dist/**", "**/node_modules/**", "extractors/**", "schemas/**", ".remember/**"] },
+  // `.remember/` is a gitignored local-tooling scratch dir and `.claude/` holds
+  // agent worktrees — checkouts of OTHER branches. Neither is repo source, and
+  // linting a worktree makes `pnpm run lint` report on code that is not in this
+  // branch at all.
+  {
+    ignores: [
+      "**/dist/**",
+      "**/node_modules/**",
+      "extractors/**",
+      "schemas/**",
+      ".remember/**",
+      ".claude/**",
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

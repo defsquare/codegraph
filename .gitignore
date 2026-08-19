@@ -1,4 +1,7 @@
-node_modules/
+# No trailing slash: a `node_modules` SYMLINK (used to run a worktree's tests
+# against the main checkout's installs) is not a directory, so `node_modules/`
+# would leave it untracked-but-stageable.
+node_modules
 dist/
 *.tsbuildinfo
 coverage/

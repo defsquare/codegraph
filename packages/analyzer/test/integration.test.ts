@@ -10,10 +10,10 @@ import { describe, expect, it } from "vitest";
 import { couplingToCsv, cyclesToCsv, foldedGraphToCsv } from "../src/exports/csv.js";
 import { escapeDot, toDot } from "../src/exports/dot.js";
 import { foldedGraphToJson, toJsonString } from "../src/exports/json.js";
-import { foldGraph, type FoldedGraph } from "../src/fold.js";
+import { foldGraph, type FoldedEdge, type FoldedGraph } from "../src/fold.js";
 import { buildGraph } from "../src/graph.js";
 import { isClean, loadModels } from "../src/load.js";
-import { coupling } from "../src/metrics/coupling.js";
+import { coupling, type CouplingRow } from "../src/metrics/coupling.js";
 import { cycles } from "../src/metrics/cycles.js";
 import { dependenciesOf, dependentsOf, importGraph, typeDependencyGraph } from "../src/queries.js";
 import { composeViews, declaredOnly, identityView, internalOnly, projectView } from "../src/views.js";
@@ -258,13 +258,34 @@ describe("stage 6 — coupling, stated with its view and level", () => {
   });
 
   it("conserves weight: the edge counts are the fold's, not the fan-out's", () => {
-    const table = coupling(folded);
     // fanOut counts DISTINCT nodes; outgoingEdgeCount sums FoldedEdge.count.
     // The two are constantly confused, so both are asserted against the fold.
-    const out = table.rows.reduce((s, r) => s + r.outgoingEdgeCount, 0);
-    const inc = table.rows.reduce((s, r) => s + r.incomingEdgeCount, 0);
-    expect(out).toBe(folded.diagnostics.foldedEdges);
-    expect(inc).toBe(folded.diagnostics.foldedEdges);
+    //
+    // THE CONSERVATION LAW IS STATED PER SELF-LOOP MODE, because a coupling
+    // row's four counters all obey `includeSelfLoops` together (a row reading
+    // "fanOut 0, outgoing weight 6" would be incoherent). So:
+    //  - includeSelfLoops: true  — every base edge the fold produced is counted
+    //    exactly once from each end, so the sums hit `foldedEdges` on the nose.
+    //    This is the anti-double-counting guard, and it is exact.
+    //  - the default        — the same law restricted to non-self folded edges.
+    // Asserting only one of the two would leave the other free to drift.
+    const sum = (rows: readonly CouplingRow[], key: "outgoingEdgeCount" | "incomingEdgeCount") =>
+      rows.reduce((s, r) => s + r[key], 0);
+    const weightOf = (keep: (e: FoldedEdge) => boolean) =>
+      folded.edges.filter(keep).reduce((s, e) => s + e.count, 0);
+
+    const loose = coupling(folded, { includeSelfLoops: true });
+    expect(sum(loose.rows, "outgoingEdgeCount")).toBe(folded.diagnostics.foldedEdges);
+    expect(sum(loose.rows, "incomingEdgeCount")).toBe(folded.diagnostics.foldedEdges);
+
+    const table = coupling(folded);
+    const nonSelfWeight = weightOf((e) => !e.selfLoop);
+    expect(sum(table.rows, "outgoingEdgeCount")).toBe(nonSelfWeight);
+    expect(sum(table.rows, "incomingEdgeCount")).toBe(nonSelfWeight);
+    // The fixture really does exercise the gap — most module-level weight is
+    // intra-package, so the two readings must not accidentally coincide here.
+    expect(nonSelfWeight).toBeLessThan(folded.diagnostics.foldedEdges);
+
     for (const row of table.rows) {
       expect(row.ce).toBe(row.fanOut);
       expect(row.ca).toBe(row.fanIn);
@@ -341,8 +362,25 @@ describe("stage 7 — exports render the model honestly", () => {
     // first statement rather than the first byte.
     expect(dotStatements(dot)[0]?.startsWith("digraph")).toBe(true);
     expect(toDot(imports(), { header: false }).startsWith("digraph")).toBe(true);
-    expect(dotEdgeStatements(dot)).toHaveLength(imports().edges.length);
-    expect(dotNodeStatements(dot).size).toBe(imports().nodes.length);
+
+    // "Never draw a relationship the model does not contain" is asserted with
+    // the legend OFF, because the legend's key deliberately DOES contain
+    // synthetic nodes and edges — they explain the notation, they are not
+    // corpus facts. Counting them here would either hide a genuinely invented
+    // corpus edge behind the legend's constant or force this number to track
+    // the legend's layout.
+    const bare = toDot(imports(), { legend: false });
+    expect(dotEdgeStatements(bare)).toHaveLength(imports().edges.length);
+    expect(dotNodeStatements(bare).size).toBe(imports().nodes.length);
+
+    // With the legend on, every EXTRA statement must belong to the legend
+    // cluster and none may collide with a corpus id — so the reader can never
+    // mistake a key entry for a dependency.
+    const corpusIds = new Set(imports().nodes.map((n) => n.id));
+    const legendNodes = [...dotNodeStatements(dot).keys()].filter((id) => !corpusIds.has(id));
+    expect(legendNodes).toHaveLength(dotNodeStatements(dot).size - corpusIds.size);
+    for (const id of legendNodes) expect(corpusIds.has(id)).toBe(false);
+    expect(dotEdgeStatements(dot).length).toBeGreaterThan(imports().edges.length);
   });
 
   it("distinguishes an inference from a fact", () => {
@@ -422,9 +460,21 @@ describe("stage 7 — exports render the model honestly", () => {
     const coupled = parseCsv(couplingToCsv(coupling(imports())));
     expect(coupled[0]!.map((h) => h.toLowerCase())).toContain("isstub");
     expect(coupled).toHaveLength(imports().nodes.length + 1);
-    const cycled = parseCsv(cyclesToCsv(cycles(foldGraph(graph, { level: "type" }))));
-    // Two components of two members each, one row per member, plus the header.
-    expect(cycled).toHaveLength(5);
+    const report = cycles(foldGraph(graph, { level: "type" }));
+    const cycled = parseCsv(cyclesToCsv(report));
+    // ONE ROW PER MEMBER, for components AND self-loops — a self-loop is a
+    // reported cycle too, so omitting those rows would make the CSV disagree
+    // with the report it renders. The count is derived from the report rather
+    // than hard-coded, so this stays a statement about the rendering (nothing
+    // dropped, nothing invented) instead of a restatement of the fixture.
+    const members = report.components.reduce((s, c) => s + c.members.length, 0);
+    expect(cycled).toHaveLength(1 + members + report.selfLoops.length);
+    expect(members).toBe(4); // the fixture's two genuine 2-cycles
+    expect(report.selfLoops).toHaveLength(11);
+    const label = (row: string[]) => row[0]!;
+    const body = cycled.slice(1);
+    expect(body.filter((r) => label(r) === "selfLoop")).toHaveLength(report.selfLoops.length);
+    expect(body.filter((r) => label(r).startsWith("scc:"))).toHaveLength(members);
   });
 
   it("emits JSON with sets flattened to sorted arrays and no Set left behind", () => {

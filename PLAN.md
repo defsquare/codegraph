@@ -392,21 +392,61 @@ of hundreds would distort every coupling metric the analyzer computes.
 
 Input: one or more `model.json` files (multi-language later — union of models).
 
-1. **Load & validate** against core (profile-aware). Hard fail on schema errors,
-   collected warnings on profile violations.
-2. **Graph construction**: entity map by id; **derived inverse indexes**
-   (incomingInvocations, incomingAccesses, subtypes, importers…) computed in
-   memory, never persisted.
-3. **Closure check**: every edge endpoint / parent / child resolves to a known
-   id or a stub — a property, not an assumption.
-4. **Queries / analyses** (initial set):
-   - module→module **import graph** (the first-class, cross-language layer);
-   - type-level dependency graph (all edge kinds folded to their containing types);
-   - coupling metrics: fan-in/fan-out, afferent/efferent coupling, instability;
-   - cycle detection (Tarjan SCC) at module and type level;
-   - stub filter toggle (internal-only vs full view);
-   - provenance filter (facts-only view = `declared` edges).
-5. **Exports**: filtered JSON, DOT/Graphviz, CSV of metrics (GraphML/Mermaid later).
+- [x] **Load & validate** against core (profile-aware). Hard fail on schema
+      errors, collected warnings on profile violations (`loadModels`, `isClean`).
+- [x] **Graph construction**: entity map by id; **derived inverse indexes**
+      (incomingInvocations, incomingAccesses, subtypes, importers…) computed in
+      memory, never persisted. `test/no-inverse-index-serialized.test.ts` scans
+      every export for an inverse-index key rather than trusting the convention.
+- [x] **Closure check**: every edge endpoint / parent / child resolves to a known
+      id or a stub — asserted as a property, using core's `unknownReferences`.
+- [x] **Queries / analyses**:
+      `importGraph` (module→module, the cross-language layer), `typeDependencyGraph`,
+      `dependenciesOf`/`dependentsOf`, `neighboursOf` (METAMODEL §9 in one record),
+      `coupling` (fan-in/fan-out, Ca/Ce, instability) with `topByFanIn`/`topByFanOut`,
+      `cycles` (Tarjan SCC) at module and type level, and the view stack
+      (`internalOnly`, `declaredOnly`, `provenanceOnly`, `composeViews`).
+- [x] **Exports**: DOT/Graphviz, CSV (folded graph, coupling, cycles) and JSON
+      artefacts (GraphML/Mermaid later).
+
+### 6.1 What M3 settled
+
+**Folding aggregates, and keeps what it aggregated.** A `FoldedEdge` carries
+`count`, `kinds` and `provenances`; collapsing parallel edges to a bare pair
+would discard exactly what makes the result auditable. Self-loops created BY
+folding (a method calling a sibling method of its own class) are kept and
+flagged — they are cohesion, not the forbidden self-edge of METAMODEL §4.
+
+**Self-loops are excluded from coupling by default, on all four counters
+together.** `fanIn`/`fanOut` AND `outgoingEdgeCount`/`incomingEdgeCount` obey
+`includeSelfLoops` as a unit, so a row can never read "fanOut 0, outgoing weight
+6". Counting a self-loop would give every cohesive class Ce ≥ 1 and Ca ≥ 1 and
+instability could never reach 0 or 1. The conservation law follows per mode:
+with `includeSelfLoops: true` the row sums equal `diagnostics.foldedEdges`
+exactly; by default they equal the non-self folded weight. Both are pinned.
+
+**Tarjan is iterative, with an explicit frame stack.** The recursive
+formulation exhausts V8's stack at the ~15 000 nodes commons-lang folds to, and
+it fails only on real corpora because every hand-built test graph is shallow.
+Guarded by a 20 000-node chain and a 20 000-node ring.
+
+**A stub is its own container at every fold level.** A stub has no parent, so a
+stub CLASS becomes its own module node. Consequence, measured on the fixture:
+24 of the 27 module-level nodes are external classes. Anything user-facing
+should default to `internalOnly` at module level. See the M4 note below.
+
+**An analysis number without its view is not a fact.** `FoldedGraph`,
+`CouplingTable` and `CycleReport` all carry `level` and `view`, and every CSV
+row repeats them as columns (a `#` comment line is data to an RFC 4180 parser).
+
+- [ ] **KNOWN GAP carried into M4 — stub classes do not fold into their stub
+      package.** The extractor emits stub packages (`java:java.util`) and stub
+      classes (`java:java.util/List`) as unrelated roots, so the unfiltered
+      module graph lists external CLASSES as modules. The import layer is
+      unaffected (the extractor already writes imports module→module:
+      `nonModuleEndpoints` is 0 on the fixture, gson and commons-lang), but the
+      full type-fold at module level is noisier than it should be. The fix is a
+      `parent` on stub classes in the extractor, not a special case in the fold.
 
 ## 7. Phase 4 — `@codegraph/cli`
 
@@ -455,7 +495,7 @@ Documented static limits (all languages, per profile `notes`): reflection,
 | M0 | Bootstrap | workspace builds, CI green |
 | M1 | Core metamodel | traits + 9 profiles + validation + JSON Schema, tested |
 | M2 | Java extractor | ✅ fixture corpus → valid `model.json`, schema-validated **and profile-validated across the language boundary**, closed graph, 94.1% resolution on the fixtures |
-| M3 | Analyzer | import graph, type deps, cycles, coupling metrics, DOT export |
+| M3 | Analyzer | ✅ import graph, type deps, cycles, coupling metrics, DOT/CSV/JSON exports; 252 tests; verified end to end on google/gson (3 624 entities) and apache/commons-lang (15 338 entities) |
 | M4 | CLI + properties | end-to-end `codegraph analyze` on a real Java repo; property suite green |
 | M5 | 2nd language | clj-kondo adapter; cross-language import-graph query works |
 

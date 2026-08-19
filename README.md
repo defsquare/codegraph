@@ -83,14 +83,27 @@ pnpm --filter @codegraph/cli exec codegraph analyze model.json --report deps
 | M0 | Bootstrap — workspace builds, CI green | ✅ |
 | M1 | Core metamodel — traits, 9 profiles, validation, JSON Schema | ✅ |
 | M2 | Java extractor — fixture corpus → schema- and profile-valid `model.json` | ✅ |
-| M3 | Analyzer — import graph, type deps, cycles, coupling | ⬜ |
+| M3 | Analyzer — import graph, type deps, cycles, coupling, exports | ✅ |
 | M4 | CLI + property suite end-to-end on a real Java repo | ⬜ |
 | M5 | 2nd language — clj-kondo adapter, cross-language import graph | ⬜ |
 
 The M2 output over the reference corpus is committed as
-[`fixtures/java/expected/model.json`](fixtures/java/expected/model.json) — 147
-entities (23 stubs) and 155 edges, pretty-printed and sorted so that any change
+[`fixtures/java/expected/model.json`](fixtures/java/expected/model.json) — 164
+entities (24 stubs) and 173 edges, pretty-printed and sorted so that any change
 to what the extractor claims about known code shows up as a reviewable diff.
+
+M3 runs that snapshot through the whole pipeline in the test suite, and was
+verified against two real corpora extracted with the M2 extractor: google/gson
+(3 624 entities / 8 834 edges) and apache/commons-lang (15 338 / 24 631). On
+commons-lang the analyzer stages take ~190 ms end to end and the most
+depended-upon types come out as `StringUtils` (Ca 39), `ArrayUtils` (33),
+`ToStringStyle` and `ObjectUtils` (19) — which is the answer a human would give.
+
+Every number the analyzer reports carries the **fold level** and the **view** it
+was computed under. `internalOnly` drops stubs, `declaredOnly` drops inferences;
+neither is the "true" answer, and a coupling number without its view is not a
+fact. Renderings keep the distinction visible: in DOT a solid edge is a declared
+fact and a dashed one contains an inference, and stub nodes are dashed and grey.
 
 ## Documentation
 
