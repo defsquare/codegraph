@@ -436,9 +436,24 @@ public final class EntityIds {
     return dollar < 0 ? qualifiedName : qualifiedName.substring(0, dollar);
   }
 
-  /** Spoon writes nested types with {@code $}; ids use {@code .} throughout. */
+  /**
+   * Spoon writes nested types with {@code $}; ids use {@code .} throughout.
+   *
+   * <p>Type arguments are also cut here, because an id is erased by contract. For
+   * a type Spoon RESOLVED they never reach the name, but for an unresolved one
+   * they do: {@code new MutableConfiguration<>()} in noClasspath yields the name
+   * {@code MutableConfiguration<>} (measured on spring-petclinic), which would
+   * make {@code Foo<A>} and {@code Foo<B>} two entities for one type. A leading
+   * {@code <} is left alone — that is the JVM's {@code <init>}/{@code <clinit>},
+   * a name and not an argument list.
+   */
   private static String normalizeName(String name) {
-    return name == null ? "" : name.replace('$', '.').trim();
+    if (name == null) {
+      return "";
+    }
+    String trimmed = name.replace('$', '.').trim();
+    int arguments = trimmed.indexOf('<');
+    return arguments > 0 ? trimmed.substring(0, arguments) : trimmed;
   }
 
   /** Nearest enclosing type that has a name — anonymous classes are skipped. */

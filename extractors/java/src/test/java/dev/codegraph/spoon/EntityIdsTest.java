@@ -1,6 +1,7 @@
 package dev.codegraph.spoon;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -76,6 +77,27 @@ class EntityIdsTest {
       }
       """;
 
+  /**
+   * An unresolvable generic instantiated with a diamond. Spoon RESOLVES type
+   * arguments away for a type it knows, so this case only appears in noClasspath
+   * — which is the mode the extractor runs in (measured on spring-petclinic:
+   * {@code new MutableConfiguration<>()}).
+   */
+  private static final String DIAMOND =
+      """
+      package com.acme.cache;
+
+      public class Caches {
+        public Object build() {
+          return new MutableConfiguration<>();
+        }
+
+        public Object pair() {
+          return new Holder<String, Integer>();
+        }
+      }
+      """;
+
   private static CtModel model;
 
   @BeforeAll
@@ -86,6 +108,7 @@ class EntityIdsTest {
     launcher.getEnvironment().setCommentEnabled(true);
     launcher.addInputResource(new VirtualFile(ORDER_SERVICE, "OrderService.java"));
     launcher.addInputResource(new VirtualFile(LOOSE, "Loose.java"));
+    launcher.addInputResource(new VirtualFile(DIAMOND, "Caches.java"));
     model = launcher.buildModel();
   }
 
@@ -186,6 +209,31 @@ class EntityIdsTest {
         "java:com.acme.order/OrderService.max(java.lang.Number,int[])", EntityIds.forMethod(method("max", 2)));
   }
 
+  /**
+   * Erasure has to hold for types Spoon could NOT resolve, which is the only
+   * place the argument list survives into the name. Left alone,
+   * {@code MutableConfiguration<>} and {@code Holder<String,Integer>} become
+   * entity ids of their own — one type per argument list, each with a share of
+   * the real type's fan-in.
+   */
+  @Test
+  void typeArgumentsAreErasedEvenWhenSpoonCouldNotResolveTheType() {
+    for (CtTypeReference<?> reference :
+        model.getElements(new TypeFilter<CtTypeReference<?>>(CtTypeReference.class))) {
+      String id = EntityIds.forTypeReference(reference);
+      assertFalse(
+          id.contains("<") && !id.contains("<unnamed>") && !id.contains("<unknown>"),
+          () -> "type arguments survived into an id: " + id);
+    }
+    assertEquals(
+        "java:com.acme.cache/MutableConfiguration",
+        EntityIds.forTypeReference(instantiated("MutableConfiguration")),
+        "Spoon invents the enclosing package for an unresolved type (that is §5.2's hazard, and "
+            + "the whitelist's job); the id must at least be ERASED, or one type splits in two");
+    assertEquals(
+        "java:com.acme.cache/Holder", EntityIds.forTypeReference(instantiated("Holder")));
+  }
+
   @Test
   void erasedTypeNameDropsTypeArgumentsButKeepsArrayDepth() {
     CtMethod<?> billList = method("bill", 2);
@@ -217,10 +265,19 @@ class EntityIdsTest {
     assertEquals("java:com.acme.order/OrderService." + EntityIds.signatureOf(bill), EntityIds.forMethod(bill));
   }
 
+  /**
+   * Also pins that erasure leaves {@code <init>} alone: a leading {@code <} is
+   * the JVM's name for a constructor, not the start of a type-argument list.
+   * The constructor is selected by its declaring type rather than by position in
+   * the model — adding a fixture file must not silently retarget this test.
+   */
   @Test
   void constructorUsesInitAndHasNoName() {
     CtConstructor<?> constructor =
-        model.getElements(new TypeFilter<CtConstructor<?>>(CtConstructor.class)).get(0);
+        model.getElements(new TypeFilter<CtConstructor<?>>(CtConstructor.class)).stream()
+            .filter(candidate -> "OrderService".equals(candidate.getDeclaringType().getSimpleName()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("OrderService declares a constructor"));
     assertEquals("<init>(java.lang.String)", EntityIds.signatureOf(constructor));
     assertEquals(
         "java:com.acme.order/OrderService.<init>(java.lang.String)", EntityIds.forConstructor(constructor));
@@ -279,6 +336,17 @@ class EntityIdsTest {
         .filter(t -> t.getSimpleName().equals(simpleName))
         .findFirst()
         .orElseThrow(() -> new AssertionError("no such type in the fixture: " + simpleName));
+  }
+
+  /** The type reference of {@code new <simpleName>…()} — unresolved, so still generic. */
+  private static CtTypeReference<?> instantiated(String simpleName) {
+    return model
+        .getElements(new TypeFilter<spoon.reflect.code.CtConstructorCall<?>>(spoon.reflect.code.CtConstructorCall.class))
+        .stream()
+        .map(call -> call.getType())
+        .filter(reference -> reference != null && reference.getSimpleName().startsWith(simpleName))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no `new " + simpleName + "` in the fixture"));
   }
 
   private static CtMethod<?> method(String name, int parameterCount) {
