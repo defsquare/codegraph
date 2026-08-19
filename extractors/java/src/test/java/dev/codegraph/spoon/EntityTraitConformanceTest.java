@@ -210,22 +210,31 @@ class EntityTraitConformanceTest {
 
   /**
    * TInvocable contributes {@code signature}, and the id's signature disambiguator
-   * is the only thing keeping overloads apart. Simple parameter names would merge
-   * these two into one entity — hence fully-qualified erased parameter types.
+   * is the only thing keeping overloads apart. This is the sharpest form of the
+   * case: {@code archive(java.util.List)} and
+   * {@code archive(com.acme.order.legacy.List)} have IDENTICAL simple parameter
+   * names and differ only by package. Under METAMODEL.md §10's illustrative
+   * simple-name form both render {@code archive(List)}, collapse into one id, and
+   * one method disappears from the model without any error. Hence erased FQNs.
    */
   @Test
-  void overloadsAreDistinctEntitiesWithDistinctSignatures() {
-    List<JsonNode> billed =
+  void overloadsCollidingOnSimpleNamesStayDistinctEntities() {
+    List<JsonNode> archived =
         ofKind("method").stream()
-            .filter(method -> method.path("name").asText().equals("bill"))
+            .filter(method -> method.path("name").asText().equals("archive"))
             .filter(method -> method.path("parent").asText().equals("java:com.acme.order/OrderService"))
             .toList();
 
-    List<String> ids = billed.stream().map(method -> method.path("id").asText()).sorted().toList();
-    assertEquals(2, ids.size(), () -> "the two bill overloads must be two entities, not one: " + ids);
+    List<String> ids = archived.stream().map(method -> method.path("id").asText()).sorted().toList();
+    assertEquals(
+        List.of(
+            "java:com.acme.order/OrderService.archive(com.acme.order.legacy.List)",
+            "java:com.acme.order/OrderService.archive(java.util.List)"),
+        ids,
+        () -> "the two archive overloads must be two entities with FQN parameter types: " + ids);
 
     List<String> signatures =
-        billed.stream().map(method -> method.path("signature").asText()).distinct().sorted().toList();
+        archived.stream().map(method -> method.path("signature").asText()).distinct().sorted().toList();
     assertEquals(2, signatures.size(), () -> "the overloads share a signature: " + signatures);
   }
 

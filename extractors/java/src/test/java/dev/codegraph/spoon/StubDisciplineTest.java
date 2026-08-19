@@ -31,8 +31,15 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class StubDisciplineTest {
 
-  /** METAMODEL.md §6: a stub is a degraded TYPE node — a name and nothing more. */
-  private static final Set<String> STUB_TRAITS = Set.of("TNamed", "TType");
+  /** METAMODEL.md §6: a stub type is a degraded TYPE node — a name and nothing more. */
+  private static final Set<String> TYPE_STUB_TRAITS = Set.of("TNamed", "TType");
+
+  /**
+   * A stub PACKAGE is the module-level counterpart. It keeps TWithChildren (empty)
+   * because the import graph is module-level (METAMODEL.md §9) and an import edge
+   * needs an endpoint that exists; {@code definedIn: []} is what marks it external.
+   */
+  private static final Set<String> PACKAGE_STUB_TRAITS = Set.of("TNamed", "TModule", "TWithChildren");
 
   @TempDir static Path outputDirectory;
 
@@ -51,20 +58,51 @@ class StubDisciplineTest {
   // -------------------------------------------------- the shape of a stub
 
   @Test
-  void everyStubIsADegradedTypeNodeAndNothingMore() {
+  void everyStubIsADegradedNodeAndNothingMore() {
     for (JsonNode entity : stubs()) {
       String id = entity.path("id").asText();
-      assertEquals(
-          STUB_TRAITS,
-          Set.copyOf(ExtractorHarness.traitsOf(entity)),
-          () -> "stub " + id + " must carry exactly [TNamed, TType]");
-      assertEquals("class", entity.path("kind").asText(), () -> "stub " + id + " must be kind class");
+      String kind = entity.path("kind").asText();
+      Set<String> traits = Set.copyOf(ExtractorHarness.traitsOf(entity));
+
+      // Exactly two shapes are stubbable, because exactly two traits contribute
+      // `isStub`: TType (an external type) and TModule (an external package).
+      if ("package".equals(kind)) {
+        assertEquals(
+            PACKAGE_STUB_TRAITS, traits, () -> "package stub " + id + " must carry exactly " + PACKAGE_STUB_TRAITS);
+        assertTrue(
+            entity.path("definedIn").isEmpty(),
+            () -> "package stub " + id + " claims a corpus file — then it would not be external");
+        assertTrue(entity.path("children").isEmpty(), () -> "package stub " + id + " claims children");
+      } else {
+        assertEquals(
+            TYPE_STUB_TRAITS, traits, () -> "type stub " + id + " must carry exactly [TNamed, TType]");
+        assertEquals("class", kind, () -> "type stub " + id + " must be kind class");
+        assertFalse(entity.has("children"), () -> "stub " + id + " carries children");
+      }
+
       assertTrue(entity.hasNonNull("name"), () -> "stub " + id + " has TNamed but no name");
       assertFalse(
           entity.has("anchor"),
           () -> "stub " + id + " carries an anchor — a stub is not declared anywhere in the corpus");
       assertFalse(entity.has("parent"), () -> "stub " + id + " carries a parent");
-      assertFalse(entity.has("children"), () -> "stub " + id + " carries children");
+    }
+  }
+
+  /**
+   * The import layer is only first-class (CLAUDE.md invariant 9) if its endpoints
+   * exist. Every one of these is imported by the fixtures and declared by no
+   * corpus file, so each must appear as a degraded module rather than dangle.
+   */
+  @Test
+  void externalPackagesReachedByImportEdgesExistAsModuleStubs() {
+    for (String external :
+        List.of("java:java.util", "java:java.time", "java:com.megacorp.ledger")) {
+      JsonNode entity = byId.get(external);
+      assertTrue(
+          entity != null,
+          () -> external + " is an import target but no entity declares it — the import layer dangles");
+      assertTrue(entity.path("isStub").asBoolean(), () -> external + " is outside the corpus");
+      assertEquals("package", entity.path("kind").asText(), () -> external + " must stay a package");
     }
   }
 
@@ -108,13 +146,21 @@ class StubDisciplineTest {
     for (String declared :
         List.of(
             "java:com.acme.order/OrderService",
-            "java:com.acme.order/OrderService.Inner",
             "java:com.acme.order/Order",
-            "java:com.acme.order/Taxing",
-            "java:com.acme.order/TaxCalculator",
+            "java:com.acme.order/AbstractOrder",
+            "java:com.acme.order/Priceable",
+            "java:com.acme.order/Discountable",
+            "java:com.acme.order/Money",
             "java:com.acme.order/Channel",
             "java:com.acme.order/Audited",
-            "java:com.acme.billing/AbstractService")) {
+            // Nested types: absent from getAllTypes(), so an extractor that does not
+            // recurse getNestedTypes() drops them AND stubs every reference to them.
+            "java:com.acme.order/Basket.Line",
+            "java:com.acme.order/Basket.Line.Discount",
+            "java:com.acme.order/Basket.Cursor",
+            // A second package, and the simple-name collision partner of java.util.List.
+            "java:com.acme.order.adapter/LedgerAdapter",
+            "java:com.acme.order.legacy/List")) {
       JsonNode entity = byId.get(declared);
       assertTrue(entity != null, () -> declared + " is declared by the fixtures but absent from the model");
       assertFalse(
@@ -125,10 +171,14 @@ class StubDisciplineTest {
 
   /**
    * Resolvability is not membership: {@code java.util.List} resolves against the
-   * JDK on the test classpath, {@code MissingLib} resolves against nothing. Both
+   * JDK on the test classpath, {@code LedgerClient} resolves against nothing. Both
    * are outside the corpus, so both are stubs if they appear at all. Asserted as
    * "never internal" rather than "always present", because whether a given
    * external type is referenced depends on which edges the extractor emits.
+   *
+   * <p>{@code java.util.List} is also the simple-name twin of the corpus's own
+   * {@code com.acme.order.legacy.List}: if ids ever fell back to simple names the
+   * two would merge, and one of them would inherit the other's membership answer.
    */
   @Test
   void typesOutsideTheCorpusAreNeverInternalWhetherOrNotSpoonResolvedThem() {
@@ -136,10 +186,9 @@ class StubDisciplineTest {
         List.of(
             "java:java.util/List",
             "java:java.util/ArrayList",
-            "java:java.util/Collections",
             "java:java.lang/String",
             "java:java.lang/Runnable",
-            "java:com.nonexistent.external/MissingLib")) {
+            "java:com.megacorp.ledger/LedgerClient")) {
       JsonNode entity = byId.get(external);
       if (entity != null) {
         assertTrue(
@@ -148,11 +197,46 @@ class StubDisciplineTest {
       }
     }
     assertTrue(
-        byId.containsKey("java:com.nonexistent.external/MissingLib"),
+        byId.containsKey("java:com.megacorp.ledger/LedgerClient"),
         () ->
-            "the unresolvable external import is referenced by the fixtures (OrderService.external()) "
+            "the unresolvable external import is referenced by the fixtures (OrderService.ledger) "
                 + "and must survive as a stub; stubs present: "
                 + stubs().stream().map(e -> e.path("id").asText()).collect(Collectors.joining(", ")));
+  }
+
+  /**
+   * A KNOWN LOSS, pinned so it cannot quietly get worse or quietly get fixed.
+   *
+   * <p>The lambda/anonymous id is {@code Type#file:startLine} (PLAN.md §4.6,
+   * locked for M2). {@code Notifications.java:11} starts TWO lambdas, so they
+   * share an id and the extractor keeps the first in AST order. The corpus holds
+   * 5 nameless invocables; the model holds 4.
+   *
+   * <p>This asserts the count that is actually emitted, not the count that ought
+   * to be — a green test here means "the known loss is exactly the known loss".
+   * Fixing it means adding a column or an ordinal to the disambiguator, which
+   * changes the id scheme; when that happens this test should fail, and the fix
+   * is to raise the expectation to 5, not to delete the assertion.
+   */
+  @Test
+  void lambdasSharingALineCollapseIntoOneEntityAndTheLossIsBounded() {
+    List<String> nameless =
+        run.entities().stream()
+            .filter(entity -> "lambda".equals(entity.path("kind").asText()))
+            .map(entity -> entity.path("id").asText())
+            .sorted()
+            .toList();
+
+    assertEquals(
+        4,
+        nameless.size(),
+        () ->
+            "the corpus declares 5 nameless invocables (lambdas at Notifications.java 8, 11, 11, 15 "
+                + "and the anonymous class at 22); 4 survive because the two on line 11 share the "
+                + "(file, startLine) id. If this number changed, the id scheme changed: "
+                + nameless);
+    assertEquals(
+        nameless.size(), Set.copyOf(nameless).size(), "lambda ids must still be unique: " + nameless);
   }
 
   // --------------------------------------------------------- graph closure
