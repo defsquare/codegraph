@@ -1,9 +1,15 @@
 import { z } from "zod";
-import { PROVENANCES } from "./primitives.js";
+import { PROVENANCES, SPACES, Space } from "./primitives.js";
 import { EDGE_KINDS, EdgeKind, TRAIT_NAMES, TraitName } from "./names.js";
 import { TRAITS } from "./traits.js";
-import type { Entity } from "./entity.js";
+import { isStubEntity, type Entity } from "./entity.js";
 import type { Model } from "./model.js";
+
+/** The licit trait composition for one entity kind (METAMODEL.md §5). */
+export interface KindSpec {
+  readonly required: readonly TraitName[];
+  readonly optional: readonly TraitName[];
+}
 
 /**
  * A language profile is DATA (METAMODEL.md §5): the contract stating what a
@@ -13,10 +19,15 @@ import type { Model } from "./model.js";
  */
 export interface Profile {
   readonly lang: string;
-  readonly kinds: Readonly<
-    Record<string, { readonly required: readonly TraitName[]; readonly optional: readonly TraitName[] }>
-  >;
+  readonly kinds: Readonly<Record<string, KindSpec>>;
   readonly edges: readonly EdgeKind[];
+  /**
+   * Declaration spaces per kind (METAMODEL.md §1.4), listing the spaces a kind
+   * MAY occupy — the entity states which it actually does. Absent for every
+   * language without a type/value split; only TypeScript declares it, and that
+   * absence is what makes `Entity.space` on a non-TS entity an error.
+   */
+  readonly space?: Readonly<Record<string, readonly Space[]>> | undefined;
   /** Documented static-analysis blind spots (reflection, macros, dynamic require…). */
   readonly notes?: readonly string[] | undefined;
 }
@@ -32,6 +43,7 @@ export const ProfileSchema = z.object({
     }),
   ),
   edges: z.array(EdgeKind),
+  space: z.record(z.string(), z.array(Space)).optional(),
   notes: z.array(z.string()).optional(),
 });
 
@@ -48,6 +60,8 @@ export const VALIDATION_CODES = [
   "duplicate-entity-id",
   "profile-lang-mismatch",
   "required-optional-overlap",
+  "space-not-allowed",
+  "unknown-space-kind",
 ] as const;
 export type ValidationCode = (typeof VALIDATION_CODES)[number];
 
@@ -75,7 +89,10 @@ function formatIssues(issues: readonly ZodIssueLike[]): string {
  */
 export function validateEntity(profile: Profile, entity: Entity): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  const spec = profile.kinds[entity.kind];
+  // Own-property lookup only: kind names like `constructor` and `toString`
+  // (Java/C# do declare a `constructor` kind) would otherwise resolve to
+  // Object.prototype members on any profile that does NOT declare them.
+  const spec = Object.hasOwn(profile.kinds, entity.kind) ? profile.kinds[entity.kind] : undefined;
 
   if (spec === undefined) {
     // Without a kind spec the trait rules below are unenforceable, so stop here.
@@ -92,14 +109,22 @@ export function validateEntity(profile: Profile, entity: Entity): ValidationIssu
   // Strict equality is rejected — too brittle for genuinely optional traits like
   // TComment/TSourceAnchor. An unrestricted subset is rejected too — it would
   // silently absorb extractor bugs (a trait no profile ever licensed).
+  //
+  // A stub is exempt from the lower bound only (METAMODEL.md §6): it stands for
+  // a type OUTSIDE the corpus, so it is degraded by construction — no children,
+  // no parent, no anchor, usually just TNamed + TType (PLAN.md §5.2). Demanding
+  // the full composition of a declared type would make stubs unrepresentable.
+  // The upper bound still applies: a stub may not carry unlicensed traits.
   const declared = new Set<string>(entity.traits);
-  for (const required of spec.required) {
-    if (!declared.has(required)) {
-      issues.push({
-        code: "missing-required-trait",
-        path: entity.id,
-        message: `kind "${entity.kind}" requires trait ${required}`,
-      });
+  if (!isStubEntity(entity)) {
+    for (const required of spec.required) {
+      if (!declared.has(required)) {
+        issues.push({
+          code: "missing-required-trait",
+          path: entity.id,
+          message: `kind "${entity.kind}" requires trait ${required}`,
+        });
+      }
     }
   }
 
@@ -114,9 +139,27 @@ export function validateEntity(profile: Profile, entity: Entity): ValidationIssu
     }
   }
 
+  // The type/value split is TypeScript-family only (METAMODEL.md §1.4): a
+  // profile that does not declare `space` licenses no space at all.
+  if (entity.space !== undefined) {
+    const licensed =
+      profile.space !== undefined && Object.hasOwn(profile.space, entity.kind)
+        ? new Set<string>(profile.space[entity.kind])
+        : new Set<string>();
+    for (const space of entity.space) {
+      if (!licensed.has(space)) {
+        issues.push({
+          code: "space-not-allowed",
+          path: entity.id,
+          message: `space "${space}" is not licensed for kind "${entity.kind}" by profile "${profile.lang}"`,
+        });
+      }
+    }
+  }
+
   // Each declared trait must be able to parse the keys it contributes.
   for (const trait of entity.traits) {
-    const schema = TRAITS[trait];
+    const schema = Object.hasOwn(TRAITS, trait) ? TRAITS[trait] : undefined;
     if (!schema) {
       issues.push({
         code: "unknown-trait",
@@ -248,6 +291,29 @@ export function validateProfile(profile: Profile): ValidationIssue[] {
           path: `kinds.${kind}`,
           message: `${trait} is declared both required and optional`,
         });
+      }
+    }
+  }
+
+  // A space entry for a kind the profile never declares licenses nothing.
+  if (profile.space !== undefined) {
+    const knownSpaces = new Set<string>(SPACES);
+    for (const [kind, spaces] of Object.entries(profile.space)) {
+      if (!Object.hasOwn(profile.kinds, kind)) {
+        issues.push({
+          code: "unknown-space-kind",
+          path: `space.${kind}`,
+          message: `space is declared for kind "${kind}", which the profile does not define`,
+        });
+      }
+      for (const space of spaces) {
+        if (!knownSpaces.has(space)) {
+          issues.push({
+            code: "unknown-space-kind",
+            path: `space.${kind}`,
+            message: `${space} is not a declaration space`,
+          });
+        }
       }
     }
   }

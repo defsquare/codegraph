@@ -1,3 +1,4 @@
+import type { TraitName } from "../names.js";
 import type { Profile } from "../profile.js";
 
 /**
@@ -90,6 +91,8 @@ export const javaProfile: Profile = {
 
     // No TNamed (a constructor has no own name) and no TTypedEntity (it has no
     // return type); the id's disambiguator is the signature.
+    // `constructor` is the one kind name TypeScript will not contextually type
+    // from an index signature (Object.prototype shadows it), hence `satisfies`.
     constructor: {
       required: [
         "TInvocable",
@@ -99,8 +102,8 @@ export const javaProfile: Profile = {
         "TWithAccesses",
         "TChildOf",
         "TSourceAnchor",
-      ],
-      optional: ["TComment"],
+      ] satisfies readonly TraitName[],
+      optional: ["TComment"] satisfies readonly TraitName[],
     },
 
     // Lambdas and anonymous classes: invocable but nameless; the id's

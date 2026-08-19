@@ -105,6 +105,59 @@ describe("validateEntity — required ⊆ traits ⊆ required ∪ optional", () 
     expect(issues[0]?.message).toContain("TInvocable");
   });
 
+  // METAMODEL.md §6 / PLAN.md §5.2: a stub stands for a type outside the corpus
+  // and is degraded by construction, so it cannot satisfy a kind's full required
+  // set. Exempting it from the lower bound is what makes stubs representable.
+  it("exempts a stub from required traits it cannot possibly carry", () => {
+    const strict: Profile = {
+      lang: "demo",
+      kinds: {
+        class: {
+          required: ["TNamed", "TType", "TWithChildren", "TChildOf", "TSourceAnchor"],
+          optional: ["TComment"],
+        },
+      },
+      edges: [],
+    };
+    const stub = entity("demo:jdk/String", "class", ["TNamed", "TType"], {
+      name: "String",
+      isStub: true,
+    });
+    expect(validateEntity(strict, stub)).toEqual([]);
+  });
+
+  it("still holds a NON-stub of the same kind to its full required set", () => {
+    const strict: Profile = {
+      lang: "demo",
+      kinds: {
+        class: {
+          required: ["TNamed", "TType", "TWithChildren", "TChildOf", "TSourceAnchor"],
+          optional: ["TComment"],
+        },
+      },
+      edges: [],
+    };
+    const internal = entity("demo:acme/Order", "class", ["TNamed", "TType"], {
+      name: "Order",
+      isStub: false,
+    });
+    expect(codes(validateEntity(strict, internal))).toEqual([
+      "missing-required-trait",
+      "missing-required-trait",
+      "missing-required-trait",
+    ]);
+  });
+
+  it("still applies the upper bound to a stub — it may not carry unlicensed traits", () => {
+    const stubWithExtra = entity(
+      "demo:jdk/String",
+      "class",
+      ["TNamed", "TType", "TInvocable"],
+      { name: "String", isStub: true, signature: "String()" },
+    );
+    expect(codes(validateEntity(demo, stubWithExtra))).toEqual(["trait-not-allowed"]);
+  });
+
   it("rejects a kind the profile does not declare, and stops there", () => {
     const alien = entity("demo:acme/Order", "record", ["TNamed", "TType"], {
       name: "Order",

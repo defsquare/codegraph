@@ -143,6 +143,27 @@ export const typescriptProfile: Profile = {
     "reference",
   ],
 
+  // The declaration spaces each kind MAY occupy (METAMODEL.md §1.4). This is
+  // the licensed superset; the entity records which it actually occupies —
+  // a `namespace` exporting only types is `["type"]` even though both are licit.
+  // No other profile declares `space`: absence is the statement that the
+  // language has no type/value split, and makes `Entity.space` an error there.
+  space: {
+    module: ["value"],
+    namespace: ["type", "value"],
+    class: ["type", "value"],
+    abstractClass: ["type", "value"],
+    interface: ["type"],
+    typeAlias: ["type"],
+    enum: ["type", "value"],
+    function: ["value"],
+    method: ["value"],
+    arrowFunction: ["value"],
+    variable: ["value"],
+    parameter: ["value"],
+    property: ["value"],
+  },
+
   notes: [
     "This is the only profile that populates `Entity.space` (METAMODEL.md §1.4). Type-space only (`space: [\"type\"]`): `interface`, `typeAlias`. Both spaces (`[\"type\", \"value\"]`): `class`, `abstractClass`, `enum`, and a `namespace` that declares at least one value. Value-space only (`[\"value\"]`): `module`, `function`, `arrowFunction`, `method`, `variable`, `parameter`, `property`.",
     "A dependency whose target is type-space only is ERASED at runtime: it exists for the type checker and leaves nothing in the emitted JavaScript. Runtime, bundling and deployment analyses should therefore filter edges whose `to` resolves to a `space: [\"type\"]` entity; architectural coupling and design analyses should keep them, since the design dependency is real. Because the distinction is per-analysis, the model always stores both and never pre-filters.",

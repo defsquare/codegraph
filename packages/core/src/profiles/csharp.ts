@@ -1,3 +1,4 @@
+import type { TraitName } from "../names.js";
 import type { Profile } from "../profile.js";
 
 /**
@@ -106,6 +107,8 @@ export const csharpProfile: Profile = {
     },
 
     // No TNamed and no TTypedEntity; the id's disambiguator is the signature.
+    // `constructor` is the one kind name TypeScript will not contextually type
+    // from an index signature (Object.prototype shadows it), hence `satisfies`.
     constructor: {
       required: [
         "TInvocable",
@@ -115,8 +118,8 @@ export const csharpProfile: Profile = {
         "TWithAccesses",
         "TChildOf",
         "TSourceAnchor",
-      ],
-      optional: ["TComment"],
+      ] satisfies readonly TraitName[],
+      optional: ["TComment"] satisfies readonly TraitName[],
     },
 
     // A value holder whose accessors may hold bodies, hence the optional
