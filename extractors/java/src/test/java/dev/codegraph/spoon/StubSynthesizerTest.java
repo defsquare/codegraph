@@ -110,27 +110,51 @@ class StubSynthesizerTest {
   }
 
   /**
-   * {@code isStub} is TType's key and the profile licenses TType for type kinds
-   * only, so a package or a member id has no representable stub. Reporting it
-   * leaves a dangling endpoint for the analyzer's closure property to catch —
-   * strictly better than a {@code class} named {@code util} or {@code bill}.
+   * {@code isStub} is contributed by TType and TModule and by nothing else, so a
+   * TYPE id and a PACKAGE id both have a representable stub while a MEMBER id has
+   * none. A member id is reported, leaving a dangling endpoint for the analyzer's
+   * closure property to catch — strictly better than a {@code class} named
+   * {@code bill}, which is the fabrication this pass exists to prevent.
    */
   @Test
-  void nonTypeIdsAreReportedNotFabricated() {
+  void memberIdsAreReportedNotFabricated() {
     StubSynthesizer synthesizer = new StubSynthesizer();
     List<Entity> stubs =
         synthesizer.synthesize(
             new TreeSet<>(
                 List.of(
-                    "java:java.util",
                     "java:com.acme.other/Taxes.apply(double)",
                     "java:com.acme.other/Taxes#Taxes.java:12",
                     "java:com.acme.other/Real")),
             WHITELIST);
 
     assertEquals(List.of("java:com.acme.other/Real"), stubs.stream().map(Entity::id).toList());
-    assertEquals(3, synthesizer.anomalies().size());
-    assertTrue(synthesizer.anomalies().stream().allMatch(a -> a.contains("not a type id")));
+    assertEquals(2, synthesizer.anomalies().size());
+    assertTrue(
+        synthesizer.anomalies().stream().allMatch(a -> a.contains("not a type or package id")));
+  }
+
+  /**
+   * The module-level import layer (METAMODEL.md §9) is only first-class if its
+   * endpoints exist: {@code import java.util.List} yields an edge to
+   * {@code java:java.util}, a package no corpus file declares. It is stubbed as a
+   * degraded module — {@code definedIn: []} is what makes it external — so
+   * "internal-only view = filter stubs" works for the import graph too.
+   */
+  @Test
+  void externalPackagesBecomeDegradedModuleStubs() {
+    StubSynthesizer synthesizer = new StubSynthesizer();
+    List<Entity> stubs = synthesizer.synthesize(Set.of("java:java.util"), WHITELIST);
+
+    assertEquals(1, stubs.size());
+    Entity pkg = stubs.get(0);
+    assertEquals("java:java.util", pkg.id());
+    assertEquals("package", pkg.kind());
+    assertEquals("java.util", pkg.name(), "a package's name is its full dotted FQN");
+    assertEquals(Boolean.TRUE, pkg.isStub());
+    assertEquals(List.of(), pkg.definedIn(), "no corpus file declares it — that IS the degradation");
+    assertEquals(List.of(), pkg.children());
+    assertTrue(synthesizer.anomalies().isEmpty(), "a package stub is representable, not an anomaly");
   }
 
   @Test

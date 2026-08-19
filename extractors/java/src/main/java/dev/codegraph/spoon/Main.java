@@ -96,7 +96,9 @@ public final class Main {
     Anchors anchors = new Anchors(root);
 
     // Pass 1 — corpus membership, decided once and consulted by everything after.
-    CorpusWhitelist whitelist = CorpusWhitelist.build(spoonModel);
+    // The anchors matter: lambda/anonymous ids embed the root-relative file, so the
+    // whitelist must use the SAME Anchors as pass 2, or their ids disagree.
+    CorpusWhitelist whitelist = CorpusWhitelist.build(spoonModel, anchors);
 
     // Pass 2 — declared entities.
     List<Entity> declared = new EntityExtractor(whitelist, anchors).extract(spoonModel);

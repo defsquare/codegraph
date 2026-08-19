@@ -374,7 +374,13 @@ class EntityExtractorTest {
       assertEquals(entity.traits().contains(TraitName.TChildOf), entity.parent() != null, entity.id());
       assertEquals(entity.traits().contains(TraitName.TWithChildren), entity.children() != null, entity.id());
       assertEquals(entity.traits().contains(TraitName.TModule), entity.definedIn() != null, entity.id());
-      assertEquals(entity.traits().contains(TraitName.TType), entity.isStub() != null, entity.id());
+      // `isStub` is contributed by TType AND by TModule: an external package is a
+      // degraded module exactly as an external type is a degraded type, which is
+      // what lets the module-level import layer close (METAMODEL.md §6, §9).
+      assertEquals(
+          entity.traits().contains(TraitName.TType) || entity.traits().contains(TraitName.TModule),
+          entity.isStub() != null,
+          entity.id());
       assertEquals(entity.traits().contains(TraitName.TComment), entity.comments() != null, entity.id());
       assertEquals(
           entity.traits().contains(TraitName.TWithParameters), entity.parameters() != null, entity.id());

@@ -27,17 +27,22 @@ import java.util.TreeSet;
  * pass is an extraction bug (a declared entity that was never emitted), NOT a
  * stub, and must be reported rather than papered over with a fake external type.
  *
- * <p><b>Only type-shaped ids can be stubbed</b>, and that is a constraint of the
- * metamodel rather than a convenience: {@code isStub} is TType's key, and the
- * Java profile licenses TType for type kinds only — a {@code package} stub would
- * fail the profile's upper bound, and a {@code method} stub would need a
- * degraded-member concept core does not have. So a dangling member id (it should
- * not arrive: the edge pass retargets external members to their declaring type's
- * stub) or a dangling package id (an {@code import} of a package outside the
- * corpus) is REPORTED on stderr and left dangling, to be caught by the
- * analyzer's closure property. Naming a {@code class} after {@code java.util}
- * or after {@code bill(Order)} would be a fabrication, which is the one thing
- * this pass exists to prevent.
+ * <p><b>Only TYPE-shaped and PACKAGE-shaped ids can be stubbed</b>, and that is a
+ * constraint of the metamodel rather than a convenience: {@code isStub} is
+ * contributed by TType and TModule, and nothing else. A type id becomes a
+ * degraded {@code class}; a package id becomes a degraded {@code package} with
+ * {@code definedIn: []} — no corpus file declares it, which is precisely what
+ * makes it external. The package case is not optional: the import graph is
+ * module-level (METAMODEL.md §9), so {@code import java.util.List} yields an edge
+ * to {@code java:java.util}, and without a module stub the first-class import
+ * layer could never satisfy graph closure.
+ *
+ * <p>A dangling MEMBER id is still refused — it should not arrive at all, since
+ * the edge pass retargets external members to their declaring type's stub, and a
+ * {@code method} stub would need a degraded-member concept core does not have.
+ * It is REPORTED on stderr and left dangling, to be caught by the analyzer's
+ * closure property. Naming a {@code class} after {@code bill(Order)} would be a
+ * fabrication, which is the one thing this pass exists to prevent.
  *
  * <p>The stub's TNamed {@code name} comes from {@link EntityIds#typeSimpleName}:
  * the extractor owns its id scheme and may read it back. The analyzer may not.
@@ -45,6 +50,7 @@ import java.util.TreeSet;
 public final class StubSynthesizer {
 
   private static final String STUB_KIND = "class";
+  private static final String PACKAGE_STUB_KIND = "package";
 
   private List<String> anomalies = List.of();
 
@@ -80,12 +86,20 @@ public final class StubSynthesizer {
                 + id);
         continue;
       }
-      if (!isTypeShaped(id)) {
-        reported.add("not a type id, so it cannot be a stub (METAMODEL.md §6): " + id);
-        continue;
+      if (isTypeShaped(id)) {
+        stubs.add(
+            Entity.builder(id, STUB_KIND).named(EntityIds.typeSimpleName(id)).type(true).build());
+      } else if (isPackageShaped(id)) {
+        // definedIn is empty BECAUSE it is external: no corpus file declares it.
+        stubs.add(
+            Entity.builder(id, PACKAGE_STUB_KIND)
+                .named(packageName(id))
+                .definedIn(List.of(), true)
+                .withChildren(List.of())
+                .build());
+      } else {
+        reported.add("not a type or package id, so it cannot be a stub (METAMODEL.md §6): " + id);
       }
-      stubs.add(
-          Entity.builder(id, STUB_KIND).named(EntityIds.typeSimpleName(id)).type(true).build());
     }
 
     anomalies = List.copyOf(reported);
@@ -121,5 +135,27 @@ public final class StubSynthesizer {
     }
     String typePath = body.substring(slash + 1);
     return typePath.indexOf('(') < 0 && typePath.indexOf(')') < 0 && typePath.indexOf('#') < 0;
+  }
+
+  /**
+   * {@code java:<packageFqn>} — no {@code /} at all, and none of the punctuation
+   * a member id carries. The default package ({@code java:<unnamed>}) is always
+   * corpus-declared when it exists, so it never reaches this pass as a stub.
+   */
+  private static boolean isPackageShaped(String id) {
+    if (!id.startsWith(EntityIds.PREFIX)) {
+      return false;
+    }
+    String body = id.substring(EntityIds.PREFIX.length());
+    return !body.isEmpty()
+        && body.indexOf('/') < 0
+        && body.indexOf('(') < 0
+        && body.indexOf(')') < 0
+        && body.indexOf('#') < 0;
+  }
+
+  /** A package entity's TNamed name is its full dotted FQN, as pass 2 emits it. */
+  private static String packageName(String id) {
+    return id.substring(EntityIds.PREFIX.length());
   }
 }

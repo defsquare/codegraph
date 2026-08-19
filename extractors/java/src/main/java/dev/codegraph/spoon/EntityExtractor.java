@@ -116,6 +116,9 @@ public final class EntityExtractor {
   /** What {@link EntityIds#forTypeReference} answers when it cannot name a type. */
   private static final String UNNAMEABLE_TYPE_ID = EntityIds.forTypeReference(null);
 
+  /** Spoon's name for the type of the {@code null} literal. Not a declarable type. */
+  private static final String NULL_TYPE = "<nulltype>";
+
   private final CorpusWhitelist whitelist;
   private final Anchors anchors;
 
@@ -225,7 +228,9 @@ public final class EntityExtractor {
         Entity.Builder builder =
             Entity.builder(id, PACKAGE)
                 .named(entry.getValue())
-                .definedIn(List.copyOf(files.getOrDefault(id, Set.of())));
+                // Pass 2 only ever emits packages a corpus type is written in,
+                // so these are declared by construction; pass 4 makes the stubs.
+                .definedIn(List.copyOf(files.getOrDefault(id, Set.of())), false);
         add(new Draft(id, null, true, builder));
       }
     }
@@ -610,17 +615,29 @@ public final class EntityExtractor {
    *
    * <p>The rule: emit the id of any type Spoon could name, <b>even one the corpus
    * does not declare</b> — that is a real external type and pass 4 synthesizes
-   * its stub, so the link survives. Omit it only when there is nothing to name:
-   * {@code void} is not a type entity, and a reference Spoon could not name at
-   * all would otherwise be emitted as an invented id, which is exactly the
-   * laundering PLAN.md §5.2 forbids. The value is optional even when the trait is
-   * present (METAMODEL.md §3.4), so omitting is legal, and lossless.
+   * its stub, so the link survives. Omit it only when there is nothing to name.
+   * The value is optional even when the trait is present (METAMODEL.md §3.4), so
+   * omitting is legal, and lossless. Three cases have nothing to name:
+   *
+   * <ul>
+   *   <li>{@code void} — the absence of a type, not a type;
+   *   <li>a PRIMITIVE ({@code int}, {@code long}, {@code boolean}…) and
+   *       {@code <nulltype>}, the type Spoon gives the {@code null} literal. These
+   *       are named, so they would flow to pass 4 as {@code java:<unnamed>/int}
+   *       and be fabricated into stub <i>classes</i> called "int". A primitive is
+   *       not an entity in any language's profile, and a phantom class named
+   *       {@code int} with a fan-in of hundreds would distort every coupling
+   *       metric the analyzer computes. {@link EntityIds#erasedTypeName}
+   *       deliberately keeps primitives as-is, so this filter cannot live there;
+   *   <li>a reference Spoon could not name at all, which would otherwise be
+   *       emitted as an invented id — the laundering PLAN.md §5.2 forbids.
+   * </ul>
    */
   private static String declaredTypeIdOf(CtTypeReference<?> reference) {
     if (reference == null) {
       return null;
     }
-    if ("void".equals(EntityIds.erasedTypeName(reference))) {
+    if (reference.isPrimitive() || NULL_TYPE.equals(reference.getSimpleName())) {
       return null;
     }
     String id = EntityIds.forTypeReference(reference);

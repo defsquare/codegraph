@@ -108,7 +108,7 @@ class ModelWriterTest {
         List.of(
             Entity.builder(pkg, "package")
                 .named("com.acme.order")
-                .definedIn(List.of("com/acme/order/OrderService.java"))
+                .definedIn(List.of("com/acme/order/OrderService.java"), false)
                 .withChildren(List.of(type))
                 .build(),
             Entity.builder(type, "class")

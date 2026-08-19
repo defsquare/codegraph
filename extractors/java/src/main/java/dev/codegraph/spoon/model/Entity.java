@@ -137,9 +137,16 @@ public record Entity(
       return this;
     }
 
-    /** TModule → {@code definedIn} (the files a package is declared across). */
-    public Builder definedIn(List<String> files) {
+    /**
+     * TModule → {@code definedIn} (the files a package is declared across) and
+     * {@code isStub}. A package the corpus never declares is degraded exactly as
+     * an external type is: no files, {@code isStub: true}. Without it the
+     * module-level import layer (METAMODEL.md §9) could not close, because an
+     * {@code import java.util.List} names a package no corpus file declares.
+     */
+    public Builder definedIn(List<String> files, boolean stub) {
       this.definedIn = List.copyOf(files);
+      this.isStub = stub;
       traits.add(TraitName.TModule);
       return this;
     }
@@ -242,7 +249,10 @@ public record Entity(
     }
   }
 
-  /** METAMODEL.md §6: a stub is any entity declaring TType with {@code isStub: true}. */
+  /**
+   * METAMODEL.md §6: a stub is any entity declaring TType or TModule with
+   * {@code isStub: true} — the two traits that contribute the key.
+   */
   public boolean stub() {
     return Boolean.TRUE.equals(isStub);
   }
