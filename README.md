@@ -88,8 +88,8 @@ pnpm --filter @codegraph/cli exec codegraph analyze model.json --report deps
 | M5 | 2nd language — clj-kondo adapter, cross-language import graph | ⬜ |
 
 The M2 output over the reference corpus is committed as
-[`fixtures/java/expected/model.json`](fixtures/java/expected/model.json) — 164
-entities (24 stubs) and 173 edges, pretty-printed and sorted so that any change
+[`fixtures/java/expected/model.json`](fixtures/java/expected/model.json) — 166
+entities (26 stubs) and 173 edges, pretty-printed and sorted so that any change
 to what the extractor claims about known code shows up as a reviewable diff.
 
 M3 runs that snapshot through the whole pipeline in the test suite, and was
