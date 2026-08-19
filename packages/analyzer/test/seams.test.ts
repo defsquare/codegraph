@@ -8,7 +8,6 @@ import { javaGraph } from "./fixture.js";
  * empty result. When a slice lands, its case here becomes a real assertion.
  */
 const SEAMS: Readonly<Record<string, () => unknown>> = {
-  coupling: () => analyzer.coupling({} as never),
   cycles: () => analyzer.cycles({} as never),
   toDot: () => analyzer.toDot({} as never),
   escapeDot: () => analyzer.escapeDot("x"),
