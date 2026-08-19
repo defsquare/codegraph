@@ -1,11 +1,261 @@
 package dev.codegraph.spoon;
 
-/** CLI entry point: {@code java -jar codegraph-java.jar --src <dir> --out model.json}. */
+import dev.codegraph.spoon.model.Edge;
+import dev.codegraph.spoon.model.Entity;
+import dev.codegraph.spoon.model.ExtractorInfo;
+import dev.codegraph.spoon.model.Model;
+import dev.codegraph.spoon.model.ModelWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import spoon.Launcher;
+import spoon.reflect.CtModel;
+
+/**
+ * CLI: {@code java -jar codegraph-java.jar --src <dir> [--src <dir>…] --out model.json [--pretty]}.
+ *
+ * <p>THE PASS ORDER, and why it is not negotiable:
+ *
+ * <pre>
+ *   0. build the Spoon model            noClasspath: unresolvable code still parses
+ *   1. CorpusWhitelist.build            what the corpus DECLARES — before anything
+ *                                       else, because it is the only answer to
+ *                                       "internal or external?" that Spoon's
+ *                                       invented FQNs cannot fake (PLAN.md §5.2)
+ *   2. EntityExtractor.extract          nodes for declared constructs only
+ *   3. EdgeExtractor.extract            relations, outgoing only, every one anchored
+ *   4. StubSynthesizer.synthesize       degraded nodes for what 2 and 3 REFERENCED
+ *                                       but nothing DECLARED — driven by observed
+ *                                       references, not by a guess about the corpus
+ *   5. sort, write, summarize           byte-identical output across runs
+ * </pre>
+ *
+ * Pass 4 cannot run before pass 3: stubs exist because something referenced them.
+ * Passes 2 and 3 cannot run before pass 1: without the whitelist, membership
+ * degenerates into a prefix test, which is the one thing M2 must never do.
+ */
 public final class Main {
+
+  private static final String NAME = "codegraph-spoon";
+  private static final String VERSION = "0.1.0";
+  private static final int COMPLIANCE_LEVEL = 17;
+
+  private static final int EXIT_USAGE = 2;
+  private static final int EXIT_UNIMPLEMENTED = 3;
+
   private Main() {}
 
   public static void main(String[] args) {
-    System.err.println("codegraph-java 0.1.0 — extractor not yet implemented (M2)");
-    System.exit(2);
+    Options options;
+    try {
+      options = Options.parse(args);
+    } catch (IllegalArgumentException e) {
+      System.err.println("error: " + e.getMessage());
+      System.err.println();
+      System.err.print(usage());
+      System.exit(EXIT_USAGE);
+      return;
+    }
+
+    if (options.help()) {
+      System.out.print(usage());
+      return;
+    }
+
+    try {
+      run(options);
+    } catch (UnsupportedOperationException e) {
+      // Expected until the extraction passes land: the wiring is live, the pass is not.
+      System.err.println("error: unimplemented extraction pass: " + e.getMessage());
+      System.exit(EXIT_UNIMPLEMENTED);
+    } catch (Exception e) {
+      System.err.println("error: " + describe(e));
+      System.exit(1);
+    }
+  }
+
+  private static void run(Options options) throws Exception {
+    Path root = commonRoot(options.sources());
+
+    // Pass 0 — the Spoon model. noClasspath is the whole point: legacy corpora
+    // do not compile, and an extractor that requires a classpath extracts nothing.
+    Launcher launcher = new Launcher();
+    launcher.getEnvironment().setNoClasspath(true);
+    launcher.getEnvironment().setComplianceLevel(COMPLIANCE_LEVEL);
+    launcher.getEnvironment().setCommentEnabled(true);
+    for (Path source : options.sources()) {
+      launcher.addInputResource(source.toString());
+    }
+    CtModel spoonModel = launcher.buildModel();
+
+    ResolutionStats stats = ResolutionStats.measure(spoonModel);
+    Anchors anchors = new Anchors(root);
+
+    // Pass 1 — corpus membership, decided once and consulted by everything after.
+    CorpusWhitelist whitelist = CorpusWhitelist.build(spoonModel);
+
+    // Pass 2 — declared entities.
+    List<Entity> declared = new EntityExtractor(whitelist, anchors).extract(spoonModel);
+
+    // Pass 3 — relations; self-edges are not representable in the metamodel.
+    List<Edge> allEdges = new EdgeExtractor(whitelist, anchors).extract(spoonModel);
+    List<Edge> edges = new ArrayList<>(allEdges.size());
+    int droppedSelfEdges = 0;
+    for (Edge edge : allEdges) {
+      if (edge.selfReference()) {
+        droppedSelfEdges++;
+      } else {
+        edges.add(edge);
+      }
+    }
+
+    // Pass 4 — stubs for what was referenced but never declared.
+    List<Entity> stubs =
+        new StubSynthesizer().synthesize(danglingReferences(declared, edges), whitelist);
+
+    List<Entity> entities = new ArrayList<>(declared.size() + stubs.size());
+    entities.addAll(declared);
+    entities.addAll(stubs);
+
+    // Pass 5 — deterministic assembly and output.
+    ExtractorInfo extractor = new ExtractorInfo(NAME, VERSION, Boolean.TRUE);
+    Model model = Model.sorted(extractor, root.toString(), entities, edges);
+    new ModelWriter(options.pretty()).write(model, options.out());
+
+    System.err.println(
+        stats.withOutput(entities.size(), stubs.size(), edges.size(), droppedSelfEdges).summary());
+  }
+
+  /**
+   * Ids that pass 2 and pass 3 pointed at but pass 2 never emitted — the exact
+   * input pass 4 needs. Sorted, so the stub set is deterministic too.
+   */
+  private static Set<String> danglingReferences(List<Entity> declared, List<Edge> edges) {
+    Set<String> known = new java.util.HashSet<>();
+    for (Entity entity : declared) {
+      known.add(entity.id());
+    }
+
+    Set<String> referenced = new TreeSet<>();
+    for (Entity entity : declared) {
+      addIfPresent(referenced, entity.declaredType());
+      addIfPresent(referenced, entity.parent());
+      addIfPresent(referenced, entity.attachedTo());
+      addAll(referenced, entity.children());
+      addAll(referenced, entity.parameters());
+      addAll(referenced, entity.localVariables());
+    }
+    for (Edge edge : edges) {
+      addIfPresent(referenced, edge.from());
+      addIfPresent(referenced, edge.to());
+      addAll(referenced, edge.candidates());
+    }
+    referenced.removeAll(known);
+    return referenced;
+  }
+
+  private static void addIfPresent(Set<String> target, String id) {
+    if (id != null && !id.isBlank()) {
+      target.add(id);
+    }
+  }
+
+  private static void addAll(Set<String> target, List<String> ids) {
+    if (ids != null) {
+      for (String id : ids) {
+        addIfPresent(target, id);
+      }
+    }
+  }
+
+  /**
+   * Anchors are relative to a single root (METAMODEL.md §8). With several
+   * {@code --src} roots that is their deepest common ancestor, so no anchor ever
+   * needs an absolute path.
+   */
+  static Path commonRoot(List<Path> sources) {
+    Path common = sources.get(0).toAbsolutePath().normalize();
+    if (!Files.isDirectory(common)) {
+      common = common.getParent();
+    }
+    for (int i = 1; i < sources.size(); i++) {
+      Path candidate = sources.get(i).toAbsolutePath().normalize();
+      while (common != null && !candidate.startsWith(common)) {
+        common = common.getParent();
+      }
+    }
+    return common == null ? Path.of("/") : common;
+  }
+
+  private static String describe(Exception e) {
+    String message = e.getMessage();
+    return (message == null || message.isBlank()) ? e.toString() : message;
+  }
+
+  private static String usage() {
+    return """
+        codegraph-java %s — Spoon-based Java extractor
+
+        USAGE
+          java -jar codegraph-java.jar --src <dir> [--src <dir>…] --out <file> [--pretty]
+
+        OPTIONS
+          --src <dir>    source root to analyze; repeatable, at least one required
+          --out <file>   where to write model.json (required)
+          --pretty       indent the output (default: one dense line)
+          --help         print this and exit
+
+        The run prints a RESOLUTION SUMMARY to stderr: how many type references
+        Spoon resolved in noClasspath mode, how many entities and stubs were
+        emitted, and how many edges. stdout stays free for future piping.
+        """
+        .formatted(VERSION);
+  }
+
+  /** Hand-rolled parsing: an argument parser is not worth a dependency here. */
+  record Options(List<Path> sources, Path out, boolean pretty, boolean help) {
+
+    static Options parse(String[] args) {
+      Set<Path> sources = new LinkedHashSet<>();
+      Path out = null;
+      boolean pretty = false;
+
+      for (int i = 0; i < args.length; i++) {
+        String arg = args[i];
+        switch (arg) {
+          case "--help", "-h" -> {
+            return new Options(List.of(), null, false, true);
+          }
+          case "--src" -> sources.add(Path.of(value(args, ++i, "--src")));
+          case "--out" -> out = Path.of(value(args, ++i, "--out"));
+          case "--pretty" -> pretty = true;
+          default -> throw new IllegalArgumentException("unknown option: " + arg);
+        }
+      }
+
+      if (sources.isEmpty()) {
+        throw new IllegalArgumentException("--src is required (repeat it for several roots)");
+      }
+      if (out == null) {
+        throw new IllegalArgumentException("--out is required");
+      }
+      for (Path source : sources) {
+        if (!Files.exists(source)) {
+          throw new IllegalArgumentException("source root does not exist: " + source);
+        }
+      }
+      return new Options(List.copyOf(sources), out, pretty, false);
+    }
+
+    private static String value(String[] args, int index, String option) {
+      if (index >= args.length) {
+        throw new IllegalArgumentException(option + " needs a value");
+      }
+      return args[index];
+    }
   }
 }
