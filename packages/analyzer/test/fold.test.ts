@@ -246,3 +246,41 @@ describe("foldGraph", () => {
     ]);
   });
 });
+
+describe("folded endpoints survive exotic ids", () => {
+  // Ids are OPAQUE strings (CLAUDE.md invariant 7): a space, a NUL or any other
+  // byte is legal in one. Aggregation must therefore never pack a pair of ids
+  // into a single string it later splits — the endpoints below are recovered
+  // verbatim or the folded graph is quietly attributing edges to nodes that do
+  // not exist.
+  const EXOTIC = ["p/A B", "p/C\u0000D", "p/E\u0000 F G"] as const;
+
+  it("keeps `from` and `to` byte-identical to the container ids", () => {
+    const entities = [
+      pkg("x:p", EXOTIC.map((suffix) => `x:${suffix}`)),
+      ...EXOTIC.map((suffix) => type(`x:${suffix}`, "x:p", [`x:${suffix}.m()`])),
+      ...EXOTIC.map((suffix) => method(`x:${suffix}.m()`, `x:${suffix}`)),
+    ];
+    const edges = [
+      edge("invocation", `x:${EXOTIC[0]}.m()`, `x:${EXOTIC[1]}.m()`),
+      edge("invocation", `x:${EXOTIC[1]}.m()`, `x:${EXOTIC[2]}.m()`),
+      edge("reference", `x:${EXOTIC[2]}.m()`, `x:${EXOTIC[0]}`),
+    ];
+    const graph = buildGraph(loadModels(toyModel(entities, edges, "x")).union);
+    const folded = foldGraph(graph, { level: "type" });
+
+    expect(folded.nodes.map((node) => node.id)).toEqual(
+      EXOTIC.map((suffix) => `x:${suffix}`).sort(),
+    );
+    expect(folded.edges.map((e) => [e.from, e.to, e.count])).toEqual([
+      [`x:${EXOTIC[0]}`, `x:${EXOTIC[1]}`, 1],
+      [`x:${EXOTIC[1]}`, `x:${EXOTIC[2]}`, 1],
+      [`x:${EXOTIC[2]}`, `x:${EXOTIC[0]}`, 1],
+    ]);
+    // Every endpoint is a declared node: no phantom was invented by splitting.
+    for (const e of folded.edges) {
+      expect(folded.node(e.from)).toBeDefined();
+      expect(folded.node(e.to)).toBeDefined();
+    }
+  });
+});
