@@ -688,6 +688,341 @@
     "entities": {
       "items": {
         "additionalProperties": {},
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TNamed"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "name": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TSourceAnchor"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "anchor": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "file": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "span": {
+                      "prefixItems": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": 1,
+                          "type": "integer"
+                        }
+                      ],
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "file",
+                    "span"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "anchor"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TComment"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "comments": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "comments"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TWithChildren"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "children": {
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "children"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TChildOf"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "parent": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "parent"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TAttachedTo"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "attachedTo": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "attachedTo"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TModule"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "definedIn": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "definedIn"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TType"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "isStub": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "isStub"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TTypedEntity"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "declaredType": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TInvocable"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "signature": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "signature"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TWithParameters"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "parameters": {
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "parameters"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "traits": {
+                  "contains": {
+                    "const": "TWithLocalVariables"
+                  }
+                }
+              },
+              "required": [
+                "traits"
+              ]
+            },
+            "then": {
+              "properties": {
+                "localVariables": {
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "localVariables"
+              ]
+            }
+          }
+        ],
         "properties": {
           "id": {
             "minLength": 1,

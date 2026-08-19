@@ -4,10 +4,59 @@ import { TRAITS, traitSchemaFor } from "../src/traits.js";
 
 describe("Entity", () => {
   it("parses the minimal node: id, kind, traits", () => {
-    const e = Entity.parse({ id: "java:com.acme.order/Order", kind: "class", traits: ["TNamed", "TType"] });
+    const e = Entity.parse({
+      id: "java:com.acme.order/Order",
+      kind: "class",
+      traits: ["TNamed", "TType"],
+      name: "Order",
+      isStub: false,
+    });
     expect(e.id).toBe("java:com.acme.order/Order");
     expect(e.kind).toBe("class");
     expect(e.traits).toEqual(["TNamed", "TType"]);
+  });
+
+  it("parses a node declaring no trait at all", () => {
+    const e = Entity.parse({ id: "java:com.acme.order/Order", kind: "class", traits: [] });
+    expect(e.traits).toEqual([]);
+  });
+
+  // METAMODEL.md §2, Validity: "every declared trait's keys are present and
+  // well-typed". Profile-independent — TNamed contributes `name` in every
+  // language — so it is the Entity schema's job, not only validateEntity's.
+  it("obliges a declared trait to carry its keys", () => {
+    const missingName = Entity.safeParse({
+      id: "java:com.acme.order/Order",
+      kind: "class",
+      traits: ["TNamed", "TType"],
+      isStub: false,
+    });
+    expect(missingName.success).toBe(false);
+    expect(JSON.stringify(missingName.error?.issues)).toContain("TNamed");
+
+    const missingSignature = Entity.safeParse({
+      id: "java:com.acme.order/OrderService.bill(Order)",
+      kind: "method",
+      traits: ["TInvocable"],
+    });
+    expect(missingSignature.success).toBe(false);
+
+    const badAnchor = Entity.safeParse({
+      id: "java:com.acme.order/Order",
+      kind: "class",
+      traits: ["TSourceAnchor"],
+      anchor: { file: "Order.java" },
+    });
+    expect(badAnchor.success).toBe(false);
+  });
+
+  it("asks nothing of a marker trait — its data lives in edges", () => {
+    const marker = Entity.safeParse({
+      id: "java:com.acme.order/Order.total",
+      kind: "attribute",
+      traits: ["TStructural", "TWithAccesses", "TWithInvocations"],
+    });
+    expect(marker.success).toBe(true);
   });
 
   it("rejects an empty kind, a missing id, and names outside the trait vocabulary", () => {

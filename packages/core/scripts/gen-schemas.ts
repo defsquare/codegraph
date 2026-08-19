@@ -4,16 +4,16 @@
  * access to the TypeScript source, so everything the metamodel requires must
  * survive into the JSON Schema.
  *
- * Output is canonicalized (recursively key-sorted, trailing newline) so the
- * file is diff-stable and CI's `git diff --exit-code schemas/` only fires when
- * the contract actually changed.
+ * The schema itself is built by `modelJsonSchema()` in `src/jsonschema.ts` (so
+ * it is unit-testable); this script only canonicalizes and writes it. Output is
+ * recursively key-sorted with a trailing newline so the file is diff-stable and
+ * CI's `git diff --exit-code schemas/` only fires when the contract changed.
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { z } from "zod";
 
-import { Model, SCHEMA_VERSION } from "../src/model.js";
+import { modelJsonSchema } from "../src/jsonschema.js";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
@@ -31,19 +31,7 @@ function canonicalize(value: Json): Json {
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const outPath = join(repoRoot, "schemas", "model.schema.json");
 
-const generated = z.toJSONSchema(Model, { target: "draft-2020-12" }) as unknown as {
-  [key: string]: Json;
-};
-
-const schema = canonicalize({
-  ...generated,
-  $id: `https://codegraph.dev/schemas/model-${SCHEMA_VERSION}.schema.json`,
-  title: `Codegraph model.json (interchange contract ${SCHEMA_VERSION})`,
-  description:
-    "One extraction run: entities (nodes composed of traits) and edges (outgoing only, " +
-    "each carrying provenance and an anchor). Generated from @codegraph/core — edit the " +
-    "Zod schemas and re-run `pnpm run gen:schemas`, never this file.",
-});
+const schema = canonicalize(modelJsonSchema() as Json);
 
 await mkdir(dirname(outPath), { recursive: true });
 await writeFile(outPath, `${JSON.stringify(schema, null, 2)}\n`, "utf8");

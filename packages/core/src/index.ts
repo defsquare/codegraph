@@ -22,6 +22,9 @@ export * from "./edges.js";
 // The interchange file (METAMODEL.md §8).
 export * from "./model.js";
 
+// The published cross-language contract, generated from the schemas above.
+export * from "./jsonschema.js";
+
 // Language profiles as data, plus validation (METAMODEL.md §5).
 export * from "./profile.js";
 
