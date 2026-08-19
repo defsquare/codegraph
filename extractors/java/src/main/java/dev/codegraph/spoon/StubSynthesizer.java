@@ -1,8 +1,10 @@
 package dev.codegraph.spoon;
 
 import dev.codegraph.spoon.model.Entity;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * PASS 4 — one degraded entity per id that was REFERENCED but never DECLARED.
@@ -25,10 +27,26 @@ import java.util.Set;
  * pass is an extraction bug (a declared entity that was never emitted), NOT a
  * stub, and must be reported rather than papered over with a fake external type.
  *
+ * <p><b>Only type-shaped ids can be stubbed</b>, and that is a constraint of the
+ * metamodel rather than a convenience: {@code isStub} is TType's key, and the
+ * Java profile licenses TType for type kinds only — a {@code package} stub would
+ * fail the profile's upper bound, and a {@code method} stub would need a
+ * degraded-member concept core does not have. So a dangling member id (it should
+ * not arrive: the edge pass retargets external members to their declaring type's
+ * stub) or a dangling package id (an {@code import} of a package outside the
+ * corpus) is REPORTED on stderr and left dangling, to be caught by the
+ * analyzer's closure property. Naming a {@code class} after {@code java.util}
+ * or after {@code bill(Order)} would be a fabrication, which is the one thing
+ * this pass exists to prevent.
+ *
  * <p>The stub's TNamed {@code name} comes from {@link EntityIds#typeSimpleName}:
  * the extractor owns its id scheme and may read it back. The analyzer may not.
  */
 public final class StubSynthesizer {
+
+  private static final String STUB_KIND = "class";
+
+  private List<String> anomalies = List.of();
 
   /**
    * PASS 4.
@@ -41,6 +59,67 @@ public final class StubSynthesizer {
    * @return degraded {@code isStub} entities, one per external type
    */
   public List<Entity> synthesize(Set<String> referencedIds, CorpusWhitelist whitelist) {
-    throw new UnsupportedOperationException("M2: the stub agent fills this in");
+    if (whitelist == null) {
+      throw new IllegalArgumentException("stub synthesis needs the corpus whitelist");
+    }
+    if (referencedIds == null || referencedIds.isEmpty()) {
+      anomalies = List.of();
+      return List.of();
+    }
+
+    List<String> reported = new ArrayList<>();
+    List<Entity> stubs = new ArrayList<>();
+    // TreeSet: deduplicated by id and sorted, whatever the caller handed over.
+    for (String id : new TreeSet<>(referencedIds)) {
+      if (id == null || id.isBlank()) {
+        continue;
+      }
+      if (whitelist.declares(id)) {
+        reported.add(
+            "declared by the corpus but never emitted by the entity pass — extraction bug, not a stub: "
+                + id);
+        continue;
+      }
+      if (!isTypeShaped(id)) {
+        reported.add("not a type id, so it cannot be a stub (METAMODEL.md §6): " + id);
+        continue;
+      }
+      stubs.add(
+          Entity.builder(id, STUB_KIND).named(EntityIds.typeSimpleName(id)).type(true).build());
+    }
+
+    anomalies = List.copyOf(reported);
+    for (String anomaly : anomalies) {
+      System.err.println("warning: " + anomaly);
+    }
+    return List.copyOf(stubs);
+  }
+
+  /**
+   * What the last {@link #synthesize} call refused to fabricate, in the order it
+   * was reported. Empty is the healthy state.
+   */
+  public List<String> anomalies() {
+    return anomalies;
+  }
+
+  /**
+   * {@code java:<pkg>/<Type>} or {@code java:<pkg>/<Outer>.<Inner>}. A package id
+   * has no {@code /}; every member id carries a {@code (} or a {@code #}. A field
+   * id is genuinely indistinguishable from a nested type id — both are
+   * {@code Owner.name} — which is another reason the edge pass must retarget
+   * external members to their declaring type rather than lean on this check.
+   */
+  private static boolean isTypeShaped(String id) {
+    if (!id.startsWith(EntityIds.PREFIX)) {
+      return false;
+    }
+    String body = id.substring(EntityIds.PREFIX.length());
+    int slash = body.indexOf('/');
+    if (slash < 0 || slash == body.length() - 1) {
+      return false;
+    }
+    String typePath = body.substring(slash + 1);
+    return typePath.indexOf('(') < 0 && typePath.indexOf(')') < 0 && typePath.indexOf('#') < 0;
   }
 }
