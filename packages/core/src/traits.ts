@@ -13,8 +13,12 @@ export const TRAITS = {
   TSourceAnchor: z.object({ anchor: SourceAnchor }),
   TComment: z.object({ comments: z.array(z.string()) }),
 
-  // containment (where it is written) — distinct from attachment (what it belongs to)
-  TWithChildren: z.object({ children: z.array(EntityId) }),
+  // containment (where it is written) — distinct from attachment (what it belongs to).
+  // TWithChildren contributes NO key (MM-2): `children` is the exact inverse of
+  // `parent`, and inverse indexes are derived in memory, never serialized
+  // (CLAUDE.md invariant 4). The trait stays — it says "this is a container",
+  // which METAMODEL §3.2's containment-vs-attachment split needs.
+  TWithChildren: z.object({}),
   TChildOf: z.object({ parent: EntityId }),
   TAttachedTo: z.object({ attachedTo: EntityId }),
 
@@ -48,6 +52,7 @@ export const TRAITS = {
  * `edges[]` (stored outgoing-only) or is a pure classification (`TStructural`).
  */
 const MARKER_TRAIT_NAMES = [
+  "TWithChildren",
   "TWithInheritances",
   "TWithImplements",
   "TWithInvocations",

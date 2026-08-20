@@ -1,0 +1,27 @@
+{
+  "$id": "https://codegraph.dev/schemas/f.record-1.0.0.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One interned file path. `i` is its own index: dense, ascending from 0, gap-free. Anchors and `definedIn` reference these.",
+  "properties": {
+    "i": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "path": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "t": {
+      "const": "f",
+      "type": "string"
+    }
+  },
+  "required": [
+    "t",
+    "i",
+    "path"
+  ],
+  "title": "Codegraph model.jsonl \"f\" record (interchange contract 1.0.0)",
+  "type": "object"
+}

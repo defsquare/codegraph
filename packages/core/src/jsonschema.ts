@@ -1,74 +1,61 @@
 import { z } from "zod";
-import { TRAIT_NAMES, type TraitName } from "./names.js";
-import { MARKER_TRAITS, TRAITS } from "./traits.js";
-import { Model, SCHEMA_VERSION } from "./model.js";
+import { SCHEMA_VERSION } from "./model.js";
+import { RECORD_SCHEMAS, SECTION_ORDER, type RecordTag } from "./wire.js";
 
 export type JsonSchema = { [key: string]: unknown };
 
 /**
- * One JSON Schema conditional per key-contributing trait:
- * "if `traits` contains T, then T's keys are required and well-typed".
+ * The published cross-language contract: one JSON Schema per JSONL record type,
+ * so a Java, Go or .NET extractor can validate its output **line by line** with
+ * no access to this TypeScript source.
  *
- * Zod refinements do not survive `z.toJSONSchema`, so the rule the `Entity`
- * schema enforces in TypeScript is re-stated here in the published contract.
- * Both are generated from the same `TRAITS` table, so they cannot drift: a new
- * trait, or a changed key type, changes both at once.
+ * What a per-record schema CANNOT express, and what `schemas/README.md` states
+ * in prose instead:
+ *  - the container — section order, one header, one eof — because JSON Schema
+ *    describes a document, and a JSONL file is a sequence of them;
+ *  - dictionary resolution — `k`/`tr`/`p` are indices whose meaning lives in the
+ *    header, which a single-line validator cannot see;
+ *  - the trait-key rule (METAMODEL §2), for the same reason: which keys an
+ *    entity record must carry depends on resolving `tr` through the header.
+ *    v1 could state it as `if/then` conditionals because traits were inline
+ *    names; that is the one thing interning cost us, and it is stated in the
+ *    container contract and enforced by every reader.
  *
- * Marker traits are skipped by construction — they contribute no keys, so a
- * conditional for them would be vacuous (METAMODEL.md §3).
+ * Everything else IS enforced: every field's type, every reference being a
+ * non-negative integer, spans being 1-based, the closed vocabularies.
  */
-export function traitConditionals(): JsonSchema[] {
-  const conditionals: JsonSchema[] = [];
-
-  for (const trait of TRAIT_NAMES satisfies readonly TraitName[]) {
-    if (MARKER_TRAITS.has(trait)) continue;
-
-    // Only `properties` and `required` are lifted: the trait schema's own
-    // `additionalProperties: false` describes the trait in isolation, and
-    // applying it to the entity would forbid every OTHER trait's keys.
-    const traitSchema = z.toJSONSchema(TRAITS[trait], { target: "draft-2020-12" }) as {
-      properties?: JsonSchema;
-      required?: string[];
+export function recordJsonSchemas(): Record<RecordTag, JsonSchema> {
+  const out = {} as Record<RecordTag, JsonSchema>;
+  for (const tag of SECTION_ORDER) {
+    const generated = z.toJSONSchema(RECORD_SCHEMAS[tag], {
+      target: "draft-2020-12",
+      io: "input",
+    }) as JsonSchema;
+    out[tag] = {
+      ...generated,
+      $id: `https://codegraph.dev/schemas/${tag}.record-${SCHEMA_VERSION}.schema.json`,
+      title: `Codegraph model.jsonl "${tag}" record (interchange contract ${SCHEMA_VERSION})`,
+      description: RECORD_DESCRIPTIONS[tag],
     };
-
-    const then: JsonSchema = { properties: traitSchema.properties ?? {} };
-    if (traitSchema.required !== undefined && traitSchema.required.length > 0) {
-      then["required"] = traitSchema.required;
-    }
-
-    conditionals.push({
-      // `required: ["traits"]` keeps the `if` from passing vacuously on an
-      // entity that omits `traits` altogether.
-      if: { required: ["traits"], properties: { traits: { contains: { const: trait } } } },
-      then,
-    });
   }
-
-  return conditionals;
+  return out;
 }
 
-/**
- * The published cross-language contract: everything the metamodel requires of a
- * `model.json`, expressed so a Java, Go or .NET extractor can self-validate
- * with no access to this TypeScript source.
- */
-export function modelJsonSchema(): JsonSchema {
-  const generated = z.toJSONSchema(Model, { target: "draft-2020-12" }) as unknown as JsonSchema & {
-    properties: { entities: { items: JsonSchema } };
-  };
-
-  generated.properties.entities.items = {
-    ...generated.properties.entities.items,
-    allOf: traitConditionals(),
-  };
-
-  return {
-    ...generated,
-    $id: `https://codegraph.dev/schemas/model-${SCHEMA_VERSION}.schema.json`,
-    title: `Codegraph model.json (interchange contract ${SCHEMA_VERSION})`,
-    description:
-      "One extraction run: entities (nodes composed of traits) and edges (outgoing only, " +
-      "each carrying provenance and an anchor). Generated from @codegraph/core — edit the " +
-      "Zod schemas and re-run `pnpm run gen:schemas`, never this file.",
-  };
-}
+const RECORD_DESCRIPTIONS: Record<RecordTag, string> = {
+  header:
+    "First line of the file. Carries the model's own facts and the dictionaries every " +
+    "other record indexes into. Exactly one per file.",
+  f:
+    "One interned file path. `i` is its own index: dense, ascending from 0, gap-free. " +
+    "Anchors and `definedIn` reference these.",
+  e:
+    "One entity. `i` is its surrogate and equals its position in the section; `m`/`s`/`d` " +
+    "are the natural key, with `lang` taken from the header — no rendered id appears in the " +
+    "file. A module names ITSELF in `m` and writes its own path in `s`.",
+  x:
+    "One edge, outgoing direction only. `f`/`o` are entity surrogates, `k` and `p` index the " +
+    "header's edge-kind and provenance dictionaries.",
+  eof:
+    "Trailer. The counts make truncation detectable: a reader that reaches end-of-input " +
+    "without this record, or whose tallies disagree with it, must reject the file.",
+};

@@ -210,3 +210,48 @@ export function duplicateNaturalKeys(keys: Iterable<NaturalKey>): DuplicateNatur
     .filter((entry) => entry.positions.length > 1)
     .sort((a, b) => compareNaturalKeys(a.key, b.key));
 }
+
+/**
+ * The inverse of {@link renderId}. Well defined because rendering is injective
+ * (the reserved separators above), and total on any id rendering produced by
+ * core: split at the first `:`, then the first `#`, then the first `/`.
+ *
+ * WHO MAY CALL THIS: an **encoder** turning a rendered-id model into records,
+ * and test fixtures. Nothing else. CLAUDE.md invariant 7 forbids consumers
+ * parsing ids, and the rule it protects is real — deciding module membership by
+ * reading an id is how fabricated FQNs get laundered into facts (METAMODEL §6).
+ * Decoding a bijection core itself defined is a different act from inferring
+ * meaning from a string, but only just; keep the caller list short.
+ */
+export function parseRenderedId(id: string): NaturalKey {
+  const colon = id.indexOf(":");
+  if (colon < 1) throw new Error(`not a rendered id (no lang prefix): ${JSON.stringify(id)}`);
+  const lang = id.slice(0, colon);
+  const body = id.slice(colon + 1);
+
+  const hash = body.indexOf("#");
+  const head = hash < 0 ? body : body.slice(0, hash);
+  const disambiguator = hash < 0 ? undefined : body.slice(hash + 1);
+
+  const slash = head.indexOf("/");
+  const module = slash < 0 ? head : head.slice(0, slash);
+  const symbol = slash < 0 ? "" : head.slice(slash + 1);
+
+  const key: NaturalKey = { lang, module, symbol, disambiguator };
+  const issues = naturalKeyIssues(key);
+  if (issues.length > 0) {
+    throw new Error(
+      `not a rendered id (${issues.map((issue) => issue.message).join("; ")}): ${JSON.stringify(id)}`,
+    );
+  }
+  // Decoding is only exact ON renderId's IMAGE. A string like `l:m/#d` is not
+  // in it — it decodes to `(l, m, "", "d")`, which renders back as `l:m#d`, a
+  // DIFFERENT id. Left unchecked, two such ids could quietly become one entity.
+  // Verifying the round trip turns that into a refusal.
+  if (renderId(key) !== id) {
+    throw new Error(
+      `not a rendered id (it is not what renderId would produce for its own components): ${JSON.stringify(id)}`,
+    );
+  }
+  return key;
+}

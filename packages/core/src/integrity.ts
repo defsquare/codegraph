@@ -19,12 +19,12 @@ import type { Model } from "./model.js";
  * can make (METAMODEL.md §3). Pinned by a test against the §3 tables so a new
  * referencing trait cannot be added without teaching closure about it.
  *
- * Note what is absent: there is no `callers`, `subtypes` or `importers` key.
- * All inverse views are derived in memory by the analyzer and never serialized
- * (CLAUDE.md invariant 4), so closure never has to walk one.
+ * Note what is absent: there is no `callers`, `subtypes`, `importers` — nor
+ * `children`, the inverse of `parent` (MM-2). All inverse views are derived in
+ * memory by the analyzer and never serialized (CLAUDE.md invariant 4), so
+ * closure never has to walk one.
  */
 export const ENTITY_REFERENCE_KEYS = {
-  TWithChildren: { key: "children", many: true },
   TChildOf: { key: "parent", many: false },
   TAttachedTo: { key: "attachedTo", many: false },
   TTypedEntity: { key: "declaredType", many: false },

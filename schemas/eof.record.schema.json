@@ -1,0 +1,42 @@
+{
+  "$id": "https://codegraph.dev/schemas/eof.record-1.0.0.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Trailer. The counts make truncation detectable: a reader that reaches end-of-input without this record, or whose tallies disagree with it, must reject the file.",
+  "properties": {
+    "counts": {
+      "properties": {
+        "edges": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "entities": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "files": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "files",
+        "entities",
+        "edges"
+      ],
+      "type": "object"
+    },
+    "t": {
+      "const": "eof",
+      "type": "string"
+    }
+  },
+  "required": [
+    "t",
+    "counts"
+  ],
+  "title": "Codegraph model.jsonl \"eof\" record (interchange contract 1.0.0)",
+  "type": "object"
+}

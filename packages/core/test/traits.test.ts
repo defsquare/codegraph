@@ -8,7 +8,8 @@ const EXPECTED_KEYS: Record<TraitName, readonly string[]> = {
   TNamed: ["name"],
   TSourceAnchor: ["anchor"],
   TComment: ["comments"],
-  TWithChildren: ["children"],
+  // MM-2: the key is the inverse of `parent` and is derived, never stored.
+  TWithChildren: [],
   TChildOf: ["parent"],
   TAttachedTo: ["attachedTo"],
   TModule: ["definedIn", "isStub"],

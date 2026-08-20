@@ -1,0 +1,122 @@
+{
+  "$id": "https://codegraph.dev/schemas/header.record-1.0.0.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "First line of the file. Carries the model's own facts and the dictionaries every other record indexes into. Exactly one per file.",
+  "properties": {
+    "dict": {
+      "properties": {
+        "edges": {
+          "items": {
+            "enum": [
+              "import",
+              "inheritance",
+              "interfaceImplementation",
+              "invocation",
+              "access",
+              "reference",
+              "embedding",
+              "traitUsage",
+              "fileInclude"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kinds": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "provenance": {
+          "items": {
+            "enum": [
+              "declared",
+              "derived",
+              "dynamic-candidate",
+              "generated"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "traits": {
+          "items": {
+            "enum": [
+              "TNamed",
+              "TSourceAnchor",
+              "TComment",
+              "TWithChildren",
+              "TChildOf",
+              "TAttachedTo",
+              "TModule",
+              "TType",
+              "TWithInheritances",
+              "TWithImplements",
+              "TTypedEntity",
+              "TInvocable",
+              "TWithParameters",
+              "TWithLocalVariables",
+              "TWithInvocations",
+              "TStructural",
+              "TWithAccesses"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kinds",
+        "traits",
+        "edges",
+        "provenance"
+      ],
+      "type": "object"
+    },
+    "extractor": {
+      "additionalProperties": {},
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "lang": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "root": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "t": {
+      "const": "header",
+      "type": "string"
+    }
+  },
+  "required": [
+    "t",
+    "schemaVersion",
+    "lang",
+    "extractor",
+    "root",
+    "dict"
+  ],
+  "title": "Codegraph model.jsonl \"header\" record (interchange contract 1.0.0)",
+  "type": "object"
+}

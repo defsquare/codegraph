@@ -1,0 +1,137 @@
+{
+  "$id": "https://codegraph.dev/schemas/e.record-1.0.0.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": {},
+  "description": "One entity. `i` is its surrogate and equals its position in the section; `m`/`s`/`d` are the natural key, with `lang` taken from the header — no rendered id appears in the file. A module names ITSELF in `m` and writes its own path in `s`.",
+  "properties": {
+    "anchor": {
+      "prefixItems": [
+        {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "type": "array"
+    },
+    "attachedTo": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "comments": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "d": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "declaredType": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "definedIn": {
+      "items": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "array"
+    },
+    "i": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "isStub": {
+      "type": "boolean"
+    },
+    "k": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "localVariables": {
+      "items": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "array"
+    },
+    "m": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "parameters": {
+      "items": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "array"
+    },
+    "parent": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "s": {
+      "type": "string"
+    },
+    "signature": {
+      "type": "string"
+    },
+    "space": {
+      "items": {
+        "enum": [
+          "type",
+          "value"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "t": {
+      "const": "e",
+      "type": "string"
+    },
+    "tr": {
+      "items": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "t",
+    "i",
+    "k",
+    "tr",
+    "m",
+    "s"
+  ],
+  "title": "Codegraph model.jsonl \"e\" record (interchange contract 1.0.0)",
+  "type": "object"
+}

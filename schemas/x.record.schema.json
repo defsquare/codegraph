@@ -1,0 +1,81 @@
+{
+  "$id": "https://codegraph.dev/schemas/x.record-1.0.0.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": {},
+  "description": "One edge, outgoing direction only. `f`/`o` are entity surrogates, `k` and `p` index the header's edge-kind and provenance dictionaries.",
+  "properties": {
+    "anchor": {
+      "prefixItems": [
+        {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "type": "array"
+    },
+    "candidates": {
+      "items": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "array"
+    },
+    "f": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "isRead": {
+      "type": "boolean"
+    },
+    "isWrite": {
+      "type": "boolean"
+    },
+    "k": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "o": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "p": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sourceFile": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "t": {
+      "const": "x",
+      "type": "string"
+    }
+  },
+  "required": [
+    "t",
+    "k",
+    "f",
+    "o",
+    "p",
+    "anchor"
+  ],
+  "title": "Codegraph model.jsonl \"x\" record (interchange contract 1.0.0)",
+  "type": "object"
+}

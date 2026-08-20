@@ -22,11 +22,17 @@ export * from "./entity.js";
 // The single relationship concept (METAMODEL.md §4).
 export * from "./edges.js";
 
-// The interchange file (METAMODEL.md §8).
+// The interchange file (METAMODEL.md §8a).
 export * from "./model.js";
+
+// The JSONL encoding: record schemas and the streaming codec (§8b).
+export * from "./wire.js";
+export * from "./jsonl.js";
+export * from "./jsonl-file.js";
 
 // The published cross-language contract, generated from the schemas above.
 export * from "./jsonschema.js";
+export * from "./container-contract.js";
 
 // Graph-level integrity helpers: closure and self-reference (CLAUDE.md 4, 10).
 export * from "./integrity.js";

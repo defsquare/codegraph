@@ -1,19 +1,21 @@
 /**
- * Emits `schemas/model.schema.json` — THE cross-language contract. A Java, Go
- * or .NET extractor validates its output against this file alone, with no
- * access to the TypeScript source, so everything the metamodel requires must
- * survive into the JSON Schema.
+ * Emits `schemas/` — THE cross-language contract. A Java, Go or .NET extractor
+ * validates its output against these files alone, with no access to the
+ * TypeScript source, so everything the metamodel requires must survive into
+ * them: what a single line must look like into the per-record JSON Schemas,
+ * and what only the SEQUENCE of lines can express into `README.md`.
  *
- * The schema itself is built by `modelJsonSchema()` in `src/jsonschema.ts` (so
- * it is unit-testable); this script only canonicalizes and writes it. Output is
- * recursively key-sorted with a trailing newline so the file is diff-stable and
- * CI's `git diff --exit-code schemas/` only fires when the contract changed.
+ * The schemas are built by `recordJsonSchemas()` in `src/jsonschema.ts` (so they
+ * are unit-testable); this script only canonicalizes and writes them. Output is
+ * recursively key-sorted with a trailing newline so the files are diff-stable
+ * and CI's `git diff --exit-code schemas/` only fires when the contract changed.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { modelJsonSchema } from "../src/jsonschema.js";
+import { recordJsonSchemas } from "../src/jsonschema.js";
+import { containerContract } from "../src/container-contract.js";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
@@ -29,10 +31,31 @@ function canonicalize(value: Json): Json {
 }
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-const outPath = join(repoRoot, "schemas", "model.schema.json");
+const schemasDir = join(repoRoot, "schemas");
 
-const schema = canonicalize(modelJsonSchema() as Json);
+await mkdir(schemasDir, { recursive: true });
 
-await mkdir(dirname(outPath), { recursive: true });
-await writeFile(outPath, `${JSON.stringify(schema, null, 2)}\n`, "utf8");
-process.stdout.write(`wrote ${outPath}\n`);
+// A stale schema file is worse than a missing one: an extractor would validate
+// against a contract nothing generates any more.
+const written = new Set<string>(["README.md"]);
+const schemas = recordJsonSchemas();
+for (const [tag, schema] of Object.entries(schemas)) {
+  const name = `${tag}.record.schema.json`;
+  written.add(name);
+  await writeFile(
+    join(schemasDir, name),
+    `${JSON.stringify(canonicalize(schema as Json), null, 2)}\n`,
+    "utf8",
+  );
+}
+
+await writeFile(join(schemasDir, "README.md"), containerContract(), "utf8");
+
+for (const existing of await readdir(schemasDir)) {
+  if (!written.has(existing)) {
+    await unlink(join(schemasDir, existing));
+    process.stdout.write(`removed stale ${existing}\n`);
+  }
+}
+
+process.stdout.write(`wrote ${written.size} files to ${schemasDir}\n`);

@@ -14,7 +14,9 @@ import {
   naturalKeysEqual,
   renderId,
   sortByNaturalKey,
+  parseRenderedId,
 } from "../src/identity.js";
+import { decodeModel, encodeModel } from "../src/jsonl.js";
 import { MARKER_TRAITS } from "../src/traits.js";
 import { ENTITY_REFERENCE_KEYS, selfReferences, unknownReferences } from "../src/integrity.js";
 import { validateEntity, validateModel, type Profile } from "../src/profile.js";
@@ -48,8 +50,6 @@ function traitKeys(trait: TraitName, ids: fc.Arbitrary<string>): Record<string, 
       return { anchor: anchorArb };
     case "TComment":
       return { comments: fc.array(fc.string(), { maxLength: 3 }) };
-    case "TWithChildren":
-      return { children: fc.array(ids, { maxLength: 4 }) };
     case "TChildOf":
       return { parent: ids };
     case "TAttachedTo":
@@ -413,10 +413,12 @@ describe("graph integrity helpers (CLAUDE.md 4 and 10)", () => {
       "TAttachedTo",
       "TChildOf",
       "TTypedEntity",
-      "TWithChildren",
       "TWithLocalVariables",
       "TWithParameters",
     ]);
+    // `children` is absent BY DECISION (MM-2), not by omission: it is the exact
+    // inverse of `parent`, so storing it would violate invariant 4 twice over.
+    expect(Object.values(ENTITY_REFERENCE_KEYS).map((spec) => spec.key)).not.toContain("children");
     // CLAUDE.md invariant 4: inverse views are derived, never stored — so no
     // trait may contribute one. Guards against a "convenient" future addition.
     const forbidden = ["callers", "incoming", "subtypes", "importers", "accessors", "implementers"];
@@ -564,6 +566,139 @@ describe("natural keys (MM-1)", () => {
         },
       ),
       { numRuns: 200 },
+    );
+  });
+});
+
+/**
+ * The JSONL encoding (M6), generatively. The concrete tests pin the contract on
+ * one real corpus; these say the same things for models nobody wrote by hand.
+ */
+describe("the JSONL interchange round-trips (M6)", () => {
+  /**
+   * Ids are RENDERED from generated keys rather than assembled as strings: a
+   * hand-built string like `l:m/#d` is not in renderId's image, and the encoder
+   * rightly refuses it. What the format must round-trip is what core can emit.
+   */
+  const symbolArb = fc.constantFrom("T", "T.m()", "T.m(int)", "T.Inner", "T.f", "a.b.C", "T.m(a.b.C)");
+  const disambiguatorArb = fc.option(fc.constantFrom("F.java:1", "F.java:2", "param:x", "local:t:9"), {
+    nil: undefined,
+  });
+
+  const MODULES = ["m", "m.x", "<unnamed>"] as const;
+
+  /** A model whose entities are keyed properly: one module entity per module. */
+  function jsonlModelArb(lang: string): fc.Arbitrary<Model> {
+    const memberArb = fc
+      .tuple(fc.constantFrom(...MODULES), symbolArb, disambiguatorArb)
+      .map(([module, symbol, disambiguator]) => ({ lang, module, symbol, disambiguator }));
+
+    return fc.array(memberArb, { maxLength: 25 }).map((members) => {
+      const keys = new Map<string, NaturalKey>();
+      for (const module of MODULES) keys.set(renderId({ lang, module, symbol: "" }), { lang, module, symbol: "" });
+      for (const key of members) keys.set(renderId(key), key);
+
+      const ids = [...keys.keys()];
+      const entities = ids.map((id, index) => {
+        const isModule = keys.get(id)!.symbol === "";
+        return isModule
+          ? { id, kind: "package", traits: ["TNamed", "TModule"], name: "m", definedIn: ["A.java"], isStub: false }
+          : {
+              id,
+              kind: "class",
+              traits: ["TNamed", "TChildOf", "TSourceAnchor", "TType"],
+              name: `n${index}`,
+              parent: renderId({ lang, module: keys.get(id)!.module, symbol: "" }),
+              anchor: { file: `F${index % 3}.java`, span: [index + 1, index + 2] },
+              isStub: index % 5 === 0,
+            };
+      });
+
+      const members2 = ids.filter((id) => keys.get(id)!.symbol !== "");
+      const edges = members2.slice(0, -1).map((from, index) => ({
+        edge: "reference" as const,
+        from,
+        to: members2[index + 1]!,
+        provenance: index % 2 === 0 ? ("declared" as const) : ("derived" as const),
+        anchor: { file: `F${index % 3}.java`, span: [index + 1, index + 1] },
+      }));
+
+      return parseModel({
+        schemaVersion: SCHEMA_VERSION,
+        lang,
+        extractor: { name: "gen", version: "0.0.0" },
+        root: "/corpus",
+        entities,
+        edges,
+      });
+    });
+  }
+
+  const modelsArb = fc.constantFrom("java", "clj", "ts").chain((lang) => jsonlModelArb(lang));
+
+  it("preserves every entity and edge", () => {
+    fc.assert(
+      fc.property(modelsArb, (model) => {
+        const back = decodeModel([...encodeModel(model)]);
+        expect(back.entities.map((e) => e.id).sort()).toEqual(model.entities.map((e) => e.id).sort());
+        expect(back.edges.length).toBe(model.edges.length);
+        const before = new Map(model.entities.map((e) => [e.id, e]));
+        for (const entity of back.entities) expect(entity).toEqual(before.get(entity.id));
+      }),
+      { numRuns: 120 },
+    );
+  });
+
+  it("writes no rendered id — identity travels as (m, s, d)", () => {
+    fc.assert(
+      fc.property(modelsArb, (model) => {
+        const text = [...encodeModel(model)].join("\n");
+        for (const entity of model.entities) expect(text).not.toContain(entity.id);
+      }),
+      { numRuns: 80 },
+    );
+  });
+
+  it("is byte-identical for the same model, whatever order it arrived in", () => {
+    fc.assert(
+      fc.property(modelsArb, (model) => {
+        const once = [...encodeModel(model)].join("\n");
+        // Entities AND edges: canonical order must be imposed on both, or two
+        // extractor runs that visit the corpus differently produce different
+        // bytes for one model.
+        const reversed: Model = {
+          ...model,
+          entities: [...model.entities].reverse(),
+          edges: [...model.edges].reverse(),
+        };
+        expect([...encodeModel(reversed)].join("\n")).toBe(once);
+      }),
+      { numRuns: 80 },
+    );
+  });
+
+  /** Every proper prefix is a truncated file, and none may decode as complete. */
+  it("refuses every truncation", () => {
+    fc.assert(
+      fc.property(modelsArb, fc.nat(), (model, cut) => {
+        const all = [...encodeModel(model)];
+        const at = cut % all.length;
+        expect(() => decodeModel(all.slice(0, at))).toThrow();
+      }),
+      { numRuns: 120 },
+    );
+  });
+
+  it("assigns surrogates in canonical natural-key order", () => {
+    fc.assert(
+      fc.property(modelsArb, (model) => {
+        const back = decodeModel([...encodeModel(model)]);
+        const keys = back.entities.map((entity) => parseRenderedId(entity.id));
+        for (let i = 1; i < keys.length; i += 1) {
+          expect(compareNaturalKeys(keys[i - 1]!, keys[i]!)).toBeLessThan(0);
+        }
+      }),
+      { numRuns: 80 },
     );
   });
 });
