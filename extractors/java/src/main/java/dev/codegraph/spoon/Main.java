@@ -79,14 +79,25 @@ public final class Main {
   }
 
   private static void run(Options options) throws Exception {
+    try (Progress progress = Progress.forMode(options.progress())) {
+      run(options, progress);
+    }
+  }
+
+  private static void run(Options options, Progress progress) throws Exception {
     Path root = commonRoot(options.sources());
 
     // Pass 0 — the Spoon model. noClasspath is the whole point: legacy corpora
     // do not compile, and an extractor that requires a classpath extracts nothing.
+    // Spoon reports its own per-file progress; on a real corpus this pass is most
+    // of the wall clock, so it is the one that most needs a bar.
     Launcher launcher = new Launcher();
     launcher.getEnvironment().setNoClasspath(true);
     launcher.getEnvironment().setComplianceLevel(COMPLIANCE_LEVEL);
     launcher.getEnvironment().setCommentEnabled(true);
+    if (progress.isEnabled()) {
+      launcher.getEnvironment().setSpoonProgress(new SpoonProgressReporter(progress));
+    }
     for (Path source : options.sources()) {
       launcher.addInputResource(source.toString());
     }
@@ -98,13 +109,13 @@ public final class Main {
     // Pass 1 — corpus membership, decided once and consulted by everything after.
     // The anchors matter: lambda/anonymous ids embed the root-relative file, so the
     // whitelist must use the SAME Anchors as pass 2, or their ids disagree.
-    CorpusWhitelist whitelist = CorpusWhitelist.build(spoonModel, anchors);
+    CorpusWhitelist whitelist = CorpusWhitelist.build(spoonModel, anchors, progress);
 
     // Pass 2 — declared entities.
-    List<Entity> declared = new EntityExtractor(whitelist, anchors).extract(spoonModel);
+    List<Entity> declared = new EntityExtractor(whitelist, anchors).extract(spoonModel, progress);
 
     // Pass 3 — relations; self-edges are not representable in the metamodel.
-    List<Edge> allEdges = new EdgeExtractor(whitelist, anchors).extract(spoonModel);
+    List<Edge> allEdges = new EdgeExtractor(whitelist, anchors).extract(spoonModel, progress);
     List<Edge> edges = new ArrayList<>(allEdges.size());
     int droppedSelfEdges = 0;
     for (Edge edge : allEdges) {
@@ -116,8 +127,12 @@ public final class Main {
     }
 
     // Pass 4 — stubs for what was referenced but never declared.
-    List<Entity> stubs =
-        new StubSynthesizer().synthesize(danglingReferences(declared, edges), whitelist);
+    Set<String> dangling = danglingReferences(declared, edges);
+    List<Entity> stubs;
+    try (Progress.Phase phase = progress.phase("stubs", dangling.size(), "references")) {
+      stubs = new StubSynthesizer().synthesize(dangling, whitelist);
+      phase.at(dangling.size());
+    }
 
     List<Entity> entities = new ArrayList<>(declared.size() + stubs.size());
     entities.addAll(declared);
@@ -140,7 +155,7 @@ public final class Main {
         closed.add(edge);
       } else {
         droppedDanglingEdges++;
-        System.err.println(
+        progress.log(
             "warning: dropped an edge whose endpoint nothing declares: "
                 + edge.from()
                 + " -> "
@@ -152,14 +167,31 @@ public final class Main {
     // Pass 5 — deterministic assembly and output.
     ExtractorInfo extractor = new ExtractorInfo(NAME, VERSION, Boolean.TRUE);
     Model model = Model.sorted(extractor, root.toString(), entities, edges);
-    new JsonlWriter().write(model, options.out());
+    try (Progress.Phase phase = progress.phase("write", "records")) {
+      new JsonlWriter().write(model, options.out(), observing(phase));
+    }
 
-    System.err.println(
+    progress.log(
         stats.withOutput(entities.size(), stubs.size(), edges.size(), droppedSelfEdges).summary());
     if (droppedDanglingEdges > 0) {
-      System.err.println(
+      progress.log(
           "warning: " + droppedDanglingEdges + " edge(s) dropped for an undeclarable endpoint");
     }
+  }
+
+  /** The writer counts records; the bar shows them. */
+  private static JsonlWriter.Observer observing(Progress.Phase phase) {
+    return new JsonlWriter.Observer() {
+      @Override
+      public void total(long records) {
+        phase.total(records);
+      }
+
+      @Override
+      public void written(long records) {
+        phase.at(records);
+      }
+    };
   }
 
   /**
@@ -237,30 +269,38 @@ public final class Main {
         OPTIONS
           --src <dir>    source root to analyze; repeatable, at least one required
           --out <file>   where to write model.jsonl (required)
+          --progress <m> auto (default: a bar on a terminal, silence when piped),
+                         plain (one line per phase, no control characters), or none
+          --no-progress  same as --progress none
           --help         print this and exit
 
         The run prints a RESOLUTION SUMMARY to stderr: how many type references
         Spoon resolved in noClasspath mode, how many entities and stubs were
-        emitted, and how many edges. stdout stays free for future piping.
+        emitted, and how many edges. Progress goes to stderr too, and never to a
+        stream that is not a terminal unless asked for. stdout stays free for
+        future piping.
         """
         .formatted(VERSION);
   }
 
   /** Hand-rolled parsing: an argument parser is not worth a dependency here. */
-  record Options(List<Path> sources, Path out, boolean help) {
+  record Options(List<Path> sources, Path out, boolean help, Progress.Mode progress) {
 
     static Options parse(String[] args) {
       Set<Path> sources = new LinkedHashSet<>();
       Path out = null;
+      Progress.Mode progress = Progress.Mode.AUTO;
 
       for (int i = 0; i < args.length; i++) {
         String arg = args[i];
         switch (arg) {
           case "--help", "-h" -> {
-            return new Options(List.of(), null, true);
+            return new Options(List.of(), null, true, Progress.Mode.NONE);
           }
           case "--src" -> sources.add(Path.of(value(args, ++i, "--src")));
           case "--out" -> out = Path.of(value(args, ++i, "--out"));
+          case "--progress" -> progress = Progress.Mode.parse(value(args, ++i, "--progress"));
+          case "--no-progress" -> progress = Progress.Mode.NONE;
           default -> throw new IllegalArgumentException("unknown option: " + arg);
         }
       }
@@ -276,7 +316,7 @@ public final class Main {
           throw new IllegalArgumentException("source root does not exist: " + source);
         }
       }
-      return new Options(List.copyOf(sources), out, false);
+      return new Options(List.copyOf(sources), out, false, progress);
     }
 
     private static String value(String[] args, int index, String option) {

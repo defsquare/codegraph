@@ -121,7 +121,7 @@ final class ExtractorHarness {
     return run(fixtureCorpus(), outFile);
   }
 
-  static Run run(Path corpus, Path outFile) {
+  static Run run(Path corpus, Path outFile, String... extraArgs) {
     List<String> command = new ArrayList<>();
     command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
     command.add("-cp");
@@ -131,6 +131,7 @@ final class ExtractorHarness {
     command.add(corpus.toString());
     command.add("--out");
     command.add(outFile.toString());
+    command.addAll(List.of(extraArgs));
 
     // Both streams go to files rather than pipes: draining two pipes from one
     // thread deadlocks as soon as either fills, and stderr here is machine-read.
@@ -150,7 +151,8 @@ final class ExtractorHarness {
       }
       // The classpath is omitted from the reported invocation on purpose: it is
       // thirty absolute jar paths and would bury the diagnostics under itself.
-      String invocation = "Main --src " + corpus + " --out " + outFile;
+      String invocation =
+          "Main --src " + corpus + " --out " + outFile + " " + String.join(" ", extraArgs);
       return new Run(process.exitValue(), read(stdoutFile), read(stderrFile), outFile, invocation);
     } catch (IOException e) {
       throw new UncheckedIOException(e);

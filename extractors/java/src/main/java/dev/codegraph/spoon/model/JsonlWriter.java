@@ -58,7 +58,7 @@ public final class JsonlWriter {
   public String toJsonl(Model model) {
     StringWriter out = new StringWriter();
     try {
-      write(model, out);
+      write(model, out, Observer.NONE);
     } catch (IOException e) {
       throw new IllegalStateException("failed to serialize model", e);
     }
@@ -66,42 +66,85 @@ public final class JsonlWriter {
   }
 
   public void write(Model model, Path out) throws IOException {
+    write(model, out, Observer.NONE);
+  }
+
+  /** Writes while reporting record counts — the caller decides what to do with them. */
+  public void write(Model model, Path out, Observer observer) throws IOException {
     Path parent = out.toAbsolutePath().getParent();
     if (parent != null) {
       Files.createDirectories(parent);
     }
     try (BufferedWriter writer = Files.newBufferedWriter(out, StandardCharsets.UTF_8)) {
-      write(model, writer);
+      write(model, writer, observer);
     }
+  }
+
+  /**
+   * How a caller watches a write. The total is announced late on purpose: the
+   * record count is only known once the writer has planned the file (the file
+   * table and the surrogates are part of it), and a progress bar must never be
+   * given a total the writer had to guess.
+   *
+   * <p>Declared here rather than taking a {@code Progress} so the model package
+   * keeps no dependency on the extractor's CLI concerns.
+   */
+  public interface Observer {
+
+    Observer NONE =
+        new Observer() {
+          @Override
+          public void total(long records) {}
+
+          @Override
+          public void written(long records) {}
+        };
+
+    /** The number of records this write will produce. */
+    void total(long records);
+
+    /** How many have been written so far. */
+    void written(long records);
   }
 
   public void write(Model model, OutputStream out) throws IOException {
     Writer writer = new BufferedWriter(new java.io.OutputStreamWriter(out, StandardCharsets.UTF_8));
-    write(model, writer);
+    write(model, writer, Observer.NONE);
     writer.flush();
   }
 
   // ------------------------------------------------------------------ the encoding
 
-  private void write(Model model, Writer out) throws IOException {
+  private void write(Model model, Writer out, Observer observer) throws IOException {
     List<Keyed> entities = canonical(model.entities());
     Surrogates surrogates = Surrogates.of(entities);
     FileTable files = FileTable.of(model.entities(), model.edges());
     Dictionaries dict = Dictionaries.of(model.entities(), model.edges());
     List<Edge> edges = sortedEdges(model.edges(), surrogates, files);
 
+    // header + file table + entities + edges + eof: the file is now planned, so
+    // the total is a fact rather than an estimate.
+    long total = 2L + files.paths.size() + entities.size() + edges.size();
+    observer.total(total);
+    long written = 0;
+
     try (JsonGenerator generator = factory.createGenerator(out)) {
       writeHeader(generator, model, dict);
+      observer.written(++written);
       for (int i = 0; i < files.paths.size(); i++) {
         writeFile(generator, i, files.paths.get(i));
+        observer.written(++written);
       }
       for (int i = 0; i < entities.size(); i++) {
         writeEntity(generator, i, entities.get(i), surrogates, files, dict);
+        observer.written(++written);
       }
       for (Edge edge : edges) {
         writeEdge(generator, edge, surrogates, files, dict);
+        observer.written(++written);
       }
       writeEof(generator, files.paths.size(), entities.size(), edges.size());
+      observer.written(++written);
     }
   }
 

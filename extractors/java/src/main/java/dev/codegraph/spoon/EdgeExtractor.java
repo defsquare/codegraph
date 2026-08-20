@@ -168,19 +168,39 @@ public final class EdgeExtractor {
    * target invented here becomes a stub entity that should not exist.
    */
   public List<Edge> extract(CtModel model) {
+    return extract(model, Progress.none());
+  }
+
+  /**
+   * PASS 3, reporting one step per emitter. The unit is the emitter, not the
+   * edge: each one sweeps the whole model with its own filter, and there is no
+   * count of what it will find until it has found it.
+   */
+  public List<Edge> extract(CtModel model, Progress progress) {
     reset();
     List<DeclaredType> types = corpusTypes(model);
     indexSubtypes(types);
 
-    emitImports(types);
-    emitSupertypes(types);
-    emitInvocations(model);
-    emitMethodReferences(model);
-    emitAccesses(model);
-    emitAnnotations(model);
-    emitTypeReferences(model);
+    try (Progress.Phase phase = progress.phase("edges", EMITTERS, "relation kinds")) {
+      emit(phase, "imports", () -> emitImports(types));
+      emit(phase, "supertypes", () -> emitSupertypes(types));
+      emit(phase, "invocations", () -> emitInvocations(model));
+      emit(phase, "method refs", () -> emitMethodReferences(model));
+      emit(phase, "accesses", () -> emitAccesses(model));
+      emit(phase, "annotations", () -> emitAnnotations(model));
+      emit(phase, "type refs", () -> emitTypeReferences(model));
+    }
 
     return assemble();
+  }
+
+  /** Kept beside the emitter calls above: the two must agree or the bar lies. */
+  private static final int EMITTERS = 7;
+
+  private static void emit(Progress.Phase phase, String what, Runnable emitter) {
+    phase.detail(what);
+    emitter.run();
+    phase.step();
   }
 
   // -------------------------------------------------------------- statistics

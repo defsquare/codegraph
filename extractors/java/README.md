@@ -32,14 +32,15 @@ Go or .NET extractor would use.
 ## Run
 
 ```bash
-java -jar target/codegraph-java.jar --src src/main/java --out model.json [--pretty]
+java -jar target/codegraph-java.jar --src src/main/java --out model.jsonl
 ```
 
 | Option | Meaning |
 |---|---|
 | `--src <dir>` | source root to analyze. Repeatable; at least one required. With several roots, anchors are relativized against their deepest common ancestor, which becomes the model's `root`. |
-| `--out <file>` | where to write `model.json` (required) |
-| `--pretty` | indent the output (default: one dense line) |
+| `--out <file>` | where to write `model.jsonl` (required) |
+| `--progress <mode>` | `auto` (default), `plain` or `none` — see below |
+| `--no-progress` | same as `--progress none` |
 | `--help` | usage |
 
 Exit codes: `0` success, `1` failure, `2` bad usage, `3` an extraction pass is
@@ -49,6 +50,43 @@ Two runs over the same corpus produce **byte-identical** output: entities are
 sorted by id, edges by `(edge, from, to, anchor.file, anchor.span[0])`, trait
 lists are emitted in the canonical vocabulary order, indentation is LF, and no
 `HashMap`/`HashSet` iteration order reaches the file.
+
+## Progress
+
+A long extraction says what it is doing. `--progress auto` — the default — draws
+a single-line bar on `stderr` **only when stderr is a terminal**; redirected or
+piped, the run is byte-identical to one built without progress at all, because
+`stderr` is a read format here, not a log. `--progress plain` prints one line per
+phase with no control characters (the CI form), and `--progress none` prints
+nothing.
+
+```
+✓ compile      2,466 files  2.4s
+✓ comments     2,466 files  0.3s
+✓ model        2,466 files  3.3s
+✓ imports      2,466 files  1.2s
+✓ link doc     2,466 files  0.3s
+✓ whitelist    3,847 types  1.1s
+✓ entities     4,442 types & lambdas  0.5s
+✓ edges        7 relation kinds  4.4s
+✓ stubs        3,893 references  0.0s
+✓ write        307,264 records  0.8s
+```
+
+The first five phases are Spoon's own build (pass 0), reported per compilation
+unit through `Environment.setSpoonProgress` — on a real corpus that is most of
+the wall clock. The rest are the extractor's passes, in the order `Main`
+documents. Two rules the bar keeps:
+
+- **A total is claimed only when it is measured.** A phase whose size is not
+  known up front shows a spinner and a running count, never a percentage against
+  a guess. `write` learns its total once the writer has planned the file.
+- **The unit is what is walked, not what is emitted.** `entities 4,442 types &
+  lambdas` is the number of declaration sites traversed; each yields a subtree,
+  which is why the summary below reports far more entities.
+
+Redraws are throttled to ~12/s, so a per-file callback over a large corpus
+cannot turn stderr into the bottleneck.
 
 ## The stderr summary
 

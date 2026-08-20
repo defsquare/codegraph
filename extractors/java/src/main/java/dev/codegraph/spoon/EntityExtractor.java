@@ -140,7 +140,12 @@ public final class EntityExtractor {
    * writing — but the same corpus must always yield the same set.
    */
   public List<Entity> extract(CtModel model) {
-    return new Walk().run(model);
+    return extract(model, Progress.none());
+  }
+
+  /** PASS 2, reporting one step per declared type and per lambda. */
+  public List<Entity> extract(CtModel model, Progress progress) {
+    return new Walk().run(model, progress);
   }
 
   /**
@@ -160,14 +165,24 @@ public final class EntityExtractor {
     /** Id memo. Values may be null ("this element has no expressible id"), hence containsKey. */
     private final Map<CtElement, String> ids = new IdentityHashMap<>();
 
-    List<Entity> run(CtModel model) {
+    List<Entity> run(CtModel model, Progress progress) {
       List<CtType<?>> types = declaredTypes(model);
-      packages(types);
-      for (CtType<?> type : types) {
-        type(type);
-      }
-      for (CtLambda<?> lambda : lambdas(model)) {
-        lambda(lambda);
+      List<CtLambda<?>> lambdas = lambdas(model);
+      // Both traversals are collected before the phase opens so the bar counts
+      // toward a measured total rather than one it revises halfway through. The
+      // unit is what is walked, not what is emitted — one type yields a whole
+      // subtree of entities, so this count is not the entity count.
+      try (Progress.Phase phase =
+          progress.phase("entities", (long) types.size() + lambdas.size(), "types & lambdas")) {
+        packages(types);
+        for (CtType<?> type : types) {
+          type(type);
+          phase.step();
+        }
+        for (CtLambda<?> lambda : lambdas) {
+          lambda(lambda);
+          phase.step();
+        }
       }
       pruneOrphans();
       return build();

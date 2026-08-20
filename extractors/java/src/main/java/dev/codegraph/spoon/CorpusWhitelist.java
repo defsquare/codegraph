@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
@@ -109,8 +110,14 @@ public final class CorpusWhitelist {
 
   /** PASS 1 with the pipeline's own {@link Anchors} — the form to prefer. */
   public static CorpusWhitelist build(CtModel model, Anchors anchors) {
+    return build(model, anchors, Progress.none());
+  }
+
+  /** PASS 1, reporting its progress; the type scan is the part worth a bar. */
+  public static CorpusWhitelist build(CtModel model, Anchors anchors, Progress progress) {
     Objects.requireNonNull(model, "model");
     Objects.requireNonNull(anchors, "anchors");
+    Objects.requireNonNull(progress, "progress");
 
     Set<String> ids = new TreeSet<>();
 
@@ -120,7 +127,10 @@ public final class CorpusWhitelist {
       addSafely(ids, () -> EntityIds.forPackage(topLevel.getPackage()));
     }
 
-    for (CtType<?> type : model.getElements(new TypeFilter<>(CtType.class))) {
+    List<CtType<?>> types = model.getElements(new TypeFilter<>(CtType.class));
+    Progress.Phase phase = progress.phase("whitelist", types.size(), "types");
+    for (CtType<?> type : types) {
+      phase.step();
       if (type instanceof CtTypeParameter) {
         continue;
       }
@@ -180,6 +190,7 @@ public final class CorpusWhitelist {
       }
     }
 
+    phase.close();
     return of(ids);
   }
 
