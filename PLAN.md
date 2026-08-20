@@ -520,8 +520,8 @@ Motivation (M4 aftermath): extracting apache/fineract produced a 559.5MB
 analyzer cannot read it at all. Profiling showed ≈76% of the bytes are
 repeated strings (edge endpoint ids 186MB, anchor paths 117MB, entity ids +
 parents 88MB) with tiny value sets. Design docs, which this phase executes:
-**`docs/model-v2-metamodel.md`** (MM-1…MM-5, format-independent) and
-**`docs/model-v2-encoding.md`** (JSONL contract + SQLite cache). Clean break
+**`docs/model-metamodel.md`** (MM-1…MM-5, format-independent) and
+**`docs/model-encoding.md`** (JSONL contract + SQLite cache). Clean break
 **in place**: `schemaVersion` stays `"1.0.0"` — the format is entirely
 internal for now, there is no external consumer to negotiate with, so the
 contract changes under the same version and old files are simply
@@ -533,19 +533,49 @@ additive on top of M6.
 
 ### 9.1 M5 — Metamodel v2 (non-breaking preparation)
 
-- [ ] METAMODEL.md amendments: invariant 7 restated — identity is the
-      structured key `(lang, module, symbol, disambiguator?)`, rendered ids
-      display-only (MM-1); invariant 4 extended to name `parent`/`children`
-      (MM-2); vocabularies stated as closed referential sets (MM-3); profile
-      validity stated as a function of `(kind, trait set)` (MM-4); §8 split
-      into model vs. encodings (MM-5).
-- [ ] `core`: `NaturalKey` type + `renderId`; canonical model order defined
-      as sort by natural key.
-- [ ] `core`: `validateEntity` memoized per `(kind, sorted trait list)` —
-      pure speedup, no wire support (MM-4).
-- [ ] Property suite: natural-key uniqueness added generatively.
-- **DoD**: METAMODEL.md v2 merged; core exports the identity vocabulary;
-  the entire v1 suite still green.
+✅ Shipped. The wire format is untouched (`schemas/` regenerated to a byte-identical
+file); what changed is what the vocabulary MEANS, so M6 has something to encode.
+
+- [x] METAMODEL.md amendments: §1.1 restated — identity is the structured key
+      `(lang, module, symbol, disambiguator?)`, rendered ids display-only
+      (MM-1); §4 extended to name `parent`/`children` (MM-2); §5.1 vocabularies
+      as closed referential sets (MM-3); §5.2 profile validity as a function of
+      `(kind, trait set)` (MM-4); §8 split into 8a model vs. 8b encodings
+      (MM-5). CLAUDE.md invariants 4 and 7 restated to match.
+- [x] `core`: `packages/core/src/identity.ts` — `NaturalKey` (type + Zod
+      schema), `renderId`, `naturalKeyIndex`, `naturalKeysEqual`,
+      `compareNaturalKeys`/`sortByNaturalKey` (canonical order),
+      `duplicateNaturalKeys`, `naturalKeyIssues`.
+- [x] `core`: `validateEntity` split into a memoized `(kind, trait set, isStub)`
+      verdict and the per-entity value checks (MM-4).
+- [x] Property suite: natural-key uniqueness generatively, plus rendering
+      injectivity and canonical order as a total order.
+- **DoD met**: METAMODEL.md v2 merged; core exports the identity vocabulary;
+  the entire v1 suite still green (1 089 TS tests, `pnpm -r build` clean,
+  `./mvnw package` clean, `schemas/` unchanged).
+
+**Decision (M5) — separators are reserved so rendering is injective.** A key
+whose `module` contained `/`, or whose `symbol` contained `#`, would render as
+some *other* key's id, and the two entities would silently merge — the M2
+`archive(List)` collision (§4.6) one level up, where it again costs a whole
+entity with no error. `renderId` therefore validates and throws rather than
+rendering a lossy id. Pinned by an exhaustive test over an alphabet built from
+the separators themselves plus their concatenations: an alphabet of unrelated
+words let a deliberately broken renderer pass, which is why the generated
+pieces are `a`, `b`, `a.b`, `a/b`, `ab`.
+
+**Decision (M5) — a module names ITSELF in the `module` component**, with an
+empty `symbol`, rather than referencing its parent module as the design doc's
+MM-1 first drafted. The parent form renders `java:com.acme.order` as
+`java:com.acme/order`, breaking the frozen id scheme, and needs a fabricated
+`java` module to place the stub package `java:java.util` whose parent no corpus
+declares — the fabrication METAMODEL §6 exists to prevent. Consequence for M6:
+a package record's `m` surrogate points at its own row.
+
+**Note — MM-4's memo key carries `isStub` and the profile.** Validity is a
+function of `(kind, trait set)` only *within* one profile and one side of the
+stub exemption (§6 waives the lower bound for stubs). Both bounds are pinned by
+tests that fail if the key is narrowed.
 
 ### 9.2 M6 — JSONL interchange (the breaking change)
 
@@ -619,7 +649,7 @@ Documented static limits (all languages, per profile `notes`): reflection,
 | M2 | Java extractor | ✅ fixture corpus → valid `model.json`, schema-validated **and profile-validated across the language boundary**, closed graph, 94.1% resolution on the fixtures |
 | M3 | Analyzer | ✅ import graph, type deps, cycles, coupling metrics, DOT/CSV/JSON exports; 252 tests; verified end to end on google/gson (3 624 entities) and apache/commons-lang (15 338 entities) |
 | M4 | CLI + properties | ✅ `validate`/`analyze`/`export`/`profiles` shipped; conformance gate + property suite green; 1 007 TS tests; verified end to end on apache/commons-lang (15 338 entities / 24 631 edges, every command < 1 s) |
-| M5 | Metamodel v2 | METAMODEL.md invariants 4/7 restated + §8 model/encoding split; core natural-key vocabulary, `renderId`, memoized validation; entire v1 suite still green |
+| M5 | Metamodel v2 | ✅ METAMODEL.md §1.1/§4 restated + §5.1/§5.2 added + §8 model/encoding split; core natural-key vocabulary, `renderId`, memoized validation; 1 089 TS tests, wire format and `schemas/` byte-identical |
 | M6 | JSONL interchange | in-place clean break (`schemaVersion` unchanged): streaming reader/writer, per-record schemas, extractor emits `.jsonl`, fixtures regenerated, v1 deleted; fineract (559MB → ~90MB) analyzable end to end |
 | M7 | SQLite store | `codegraph import` → `model.db` cache; DB-backed analyzer facade; repeat runs skip parsing; reports byte-identical to M6 outputs |
 | M8 | 2nd language | clj-kondo adapter; cross-language import-graph query works |
@@ -641,4 +671,6 @@ Documented static limits (all languages, per profile `notes`): reflection,
 | Interchange v2 | JSONL: surrogate ints for all intra-model refs, header dictionaries for closed vocabularies, file-path table, `eof` count trailer; in-place clean break, `schemaVersion` kept at 1.0.0, no old-format reader | streaming in both directions kills the ceiling; ~6× smaller; extractor bar stays "anything that prints JSON lines"; the format is internal-only — bumping a version nobody consumes buys nothing |
 | `children` serialization (v2) | dropped — derived from `parent` like every other inverse index | invariant 4 already forbade serialized inverses; v1 carrying it was an inherited inconsistency (and 12MB on fineract) |
 | SQLite (v2) | `model.db` is a derived, disposable analyzer cache built by `codegraph import` — never the contract, never committed | queryable/incremental/random access for CLI + future viz without sacrificing diffable fixtures, byte-determinism, or the any-language extractor bar |
+| Key separators (M5) | `/` and `#` reserved in the key's components; `renderId` validates and throws | rendering must be injective, or two distinct keys merge into one entity with no error — the M2 overload collision one level up |
+| Module component (M5) | a module names ITSELF, with an empty symbol — not its parent module | the parent form breaks the frozen `java:com.acme.order` id shape and needs a fabricated `java` module to place the stub package `java:java.util` |
 | Trait-set interning (v2) | rejected — traits ride inline as int arrays; MM-4's validate-once-per-set is reader-side memoization | set indirection saved ~4MB on a ~90MB file but cost a record type, a dedup pass in every extractor, and lines unreadable in isolation |

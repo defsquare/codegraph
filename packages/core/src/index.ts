@@ -10,6 +10,9 @@ export * from "./primitives.js";
 // The closed trait and edge-kind vocabularies (METAMODEL.md §3, §4).
 export * from "./names.js";
 
+// Structured identity and canonical order (METAMODEL.md §1.1, MM-1/MM-5).
+export * from "./identity.js";
+
 // Per-trait partial schemas (METAMODEL.md §3).
 export * from "./traits.js";
 

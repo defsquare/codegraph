@@ -83,26 +83,84 @@ function formatIssues(issues: readonly ZodIssueLike[]): string {
     .join("; ");
 }
 
+/** A verdict without its subject: the same issues, whatever entity carries them. */
+type IssueTemplate = { readonly code: ValidationCode; readonly message: string };
+
+interface CompositionVerdict {
+  /** An unknown kind makes the trait rules unenforceable — stop after it. */
+  readonly terminal: boolean;
+  readonly issues: readonly IssueTemplate[];
+}
+
 /**
- * Validates one entity against its profile. Never throws: issues accumulate so
- * a whole model can be reported in a single pass.
+ * MM-4: profile validity is a function of `(kind, trait set)` — nothing about
+ * the entity carrying them enters into it, so each distinct composition is
+ * decided once and the verdict shared. Fineract: a few dozen distinct pairs
+ * across 240 910 entities. Reader-side only; trait sets are deliberately not a
+ * wire concept (docs/model-encoding.md).
+ *
+ * `isStub` joins the key because it is the one entity-level fact the rule reads
+ * (the lower bound is waived for stubs, METAMODEL.md §6). Keyed per profile in
+ * a WeakMap so a throwaway profile in a test cannot leak.
  */
-export function validateEntity(profile: Profile, entity: Entity): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
+const COMPOSITION_VERDICTS = new WeakMap<Profile, Map<string, CompositionVerdict>>();
+
+/**
+ * Injective: traits come from the closed vocabulary (no NUL), the count is
+ * prefixed, and `kind` — the one free-form component — comes last, so a NUL
+ * inside it cannot fake a field boundary.
+ */
+function compositionCacheKey(kind: string, sortedTraits: readonly string[], isStub: boolean): string {
+  const sep = "\u0000";
+  return `${isStub ? "1" : "0"}${sep}${sortedTraits.length}${sep}${sortedTraits.join(sep)}${sep}${kind}`;
+}
+
+function compositionVerdict(
+  profile: Profile,
+  kind: string,
+  traits: readonly string[],
+  isStub: boolean,
+): CompositionVerdict {
+  const sorted = [...traits].sort();
+  const cacheKey = compositionCacheKey(kind, sorted, isStub);
+  let perProfile = COMPOSITION_VERDICTS.get(profile);
+  if (perProfile === undefined) {
+    perProfile = new Map<string, CompositionVerdict>();
+    COMPOSITION_VERDICTS.set(profile, perProfile);
+  }
+  const cached = perProfile.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const verdict = judgeComposition(profile, kind, sorted, isStub);
+  perProfile.set(cacheKey, verdict);
+  return verdict;
+}
+
+/** The `(kind, trait set)` rules themselves — called once per distinct pair. */
+function judgeComposition(
+  profile: Profile,
+  kind: string,
+  sortedTraits: readonly string[],
+  isStub: boolean,
+): CompositionVerdict {
   // Own-property lookup only: kind names like `constructor` and `toString`
   // (Java/C# do declare a `constructor` kind) would otherwise resolve to
   // Object.prototype members on any profile that does NOT declare them.
-  const spec = Object.hasOwn(profile.kinds, entity.kind) ? profile.kinds[entity.kind] : undefined;
+  const spec = Object.hasOwn(profile.kinds, kind) ? profile.kinds[kind] : undefined;
 
   if (spec === undefined) {
-    // Without a kind spec the trait rules below are unenforceable, so stop here.
-    issues.push({
-      code: "unknown-kind",
-      path: entity.id,
-      message: `kind "${entity.kind}" is not declared by profile "${profile.lang}"`,
-    });
-    return issues;
+    return {
+      terminal: true,
+      issues: [
+        {
+          code: "unknown-kind",
+          message: `kind "${kind}" is not declared by profile "${profile.lang}"`,
+        },
+      ],
+    };
   }
+
+  const issues: IssueTemplate[] = [];
 
   // THE LOCKED RULE (METAMODEL.md §5, PLAN.md §4.4):
   //   required(kind) ⊆ entity.traits ⊆ required(kind) ∪ optional(kind).
@@ -115,29 +173,46 @@ export function validateEntity(profile: Profile, entity: Entity): ValidationIssu
   // no parent, no anchor, usually just TNamed + TType (PLAN.md §5.2). Demanding
   // the full composition of a declared type would make stubs unrepresentable.
   // The upper bound still applies: a stub may not carry unlicensed traits.
-  const declared = new Set<string>(entity.traits);
-  if (!isStubEntity(entity)) {
+  const declared = new Set<string>(sortedTraits);
+  if (!isStub) {
     for (const required of spec.required) {
       if (!declared.has(required)) {
         issues.push({
           code: "missing-required-trait",
-          path: entity.id,
-          message: `kind "${entity.kind}" requires trait ${required}`,
+          message: `kind "${kind}" requires trait ${required}`,
         });
       }
     }
   }
 
   const allowed = new Set<string>([...spec.required, ...spec.optional]);
-  for (const trait of entity.traits) {
+  for (const trait of sortedTraits) {
     if (!allowed.has(trait)) {
       issues.push({
         code: "trait-not-allowed",
-        path: entity.id,
-        message: `trait ${trait} is not licensed for kind "${entity.kind}" by profile "${profile.lang}"`,
+        message: `trait ${trait} is not licensed for kind "${kind}" by profile "${profile.lang}"`,
       });
     }
   }
+
+  return { terminal: false, issues };
+}
+
+/**
+ * Validates one entity against its profile. Never throws: issues accumulate so
+ * a whole model can be reported in a single pass.
+ *
+ * Two halves, per MM-4: the `(kind, trait set)` verdict is memoized, while the
+ * checks that read the entity's own VALUES — declaration spaces and every
+ * trait's contributed keys — necessarily run per entity.
+ */
+export function validateEntity(profile: Profile, entity: Entity): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const verdict = compositionVerdict(profile, entity.kind, entity.traits, isStubEntity(entity));
+  for (const issue of verdict.issues) {
+    issues.push({ code: issue.code, path: entity.id, message: issue.message });
+  }
+  if (verdict.terminal) return issues;
 
   // The type/value split is TypeScript-family only (METAMODEL.md §1.4): a
   // profile that does not declare `space` licenses no space at all.

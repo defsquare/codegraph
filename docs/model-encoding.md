@@ -1,7 +1,7 @@
 # Model v2 — physical encodings (JSONL interchange + SQLite analysis store)
 
 Status: **accepted 2026-08-20 — planned as M6/M7 (PLAN.md §9.2–9.3)**. Companion doc:
-[`model-v2-metamodel.md`](model-v2-metamodel.md) — the format-independent
+[`model-metamodel.md`](model-metamodel.md) — the format-independent
 metamodel changes (structured identity MM-1, `children` removal MM-2,
 referential vocabularies MM-3/MM-4). This doc assumes those and decides only
 how bytes hit disk.

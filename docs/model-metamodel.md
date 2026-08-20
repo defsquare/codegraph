@@ -1,7 +1,7 @@
 # Model v2 — metamodel changes (format-independent)
 
-Status: **accepted 2026-08-20 — planned as M5 (PLAN.md §9.1)**. Companion doc:
-[`model-v2-encoding.md`](model-v2-encoding.md) — the physical file formats.
+Status: **accepted 2026-08-20 — shipped as M5 (PLAN.md §9.1)**. Companion doc:
+[`model-encoding.md`](model-encoding.md) — the physical file formats.
 Everything in THIS doc must hold for *any* encoding (JSONL, SQLite, or a
 future one); nothing in it mentions bytes, records, or tables.
 
@@ -17,14 +17,24 @@ parses them." Restate as:
 > display-only projection produced by `core`'s `renderId`, never stored,
 > never compared.
 
-- `module` is a reference to the containing module entity (packages form a
-  tree; a module's own key references its parent module).
+- `module` is a reference to the containing module entity. **Amended when
+  implemented (M5): a module's own key names ITSELF here, with an empty
+  `symbol`** — not its parent. The parent form renders `java:com.acme.order`
+  as `java:com.acme/order`, breaking the frozen id scheme, and would need a
+  fabricated `java` module to place the stub package `java:java.util`, whose
+  parent no corpus declares (METAMODEL §6). In M6 a package record's `m`
+  surrogate therefore points at its own row.
 - `symbol` is the path below the module — dots for nesting, existing lambda
   markers unchanged.
 - `disambiguator` is optional; for Java invocables it is the erased-FQN
   parameter list. The M2 collision rule (erased FQNs, not simple names)
   carries over verbatim.
 - Uniqueness: no two entities in a model share `(module, symbol, disambiguator)`.
+- **Added in M5**: `/` and `#` are reserved in the components (`module` may
+  contain neither, `symbol` may not contain `#`, a present `disambiguator` is
+  non-empty) so that rendering is *injective*. Without that, two distinct keys
+  can render as one id and one entity silently absorbs the other; `renderId`
+  validates and throws rather than emitting a lossy id.
 - Cross-model joins (multi-language analyses, stub-whitelist membership,
   snapshot comparison) operate on this tuple. Any encoding-level shorthand
   (integer surrogates, rowids) is **explicitly not identity** and never
@@ -78,7 +88,7 @@ sets are deliberately NOT a wire-level concept (see the encoding doc's
   integrity properties (closure, `from !== to`, provenance set, profile
   validity, natural-key uniqueness, deterministic canonical order defined as
   sort by natural key).
-- **§8b Encodings** — points at `docs/model-v2-encoding.md`. A file conforms
+- **§8b Encodings** — points at `docs/model-encoding.md`. A file conforms
   to the metamodel iff its decoded content satisfies §8a; several encodings
   may conform simultaneously.
 
@@ -88,11 +98,20 @@ decides how order manifests physically.
 
 ## Task list (metamodel track)
 
-- [ ] METAMODEL.md: restate invariant 7 (MM-1), extend invariant 4 (MM-2),
-      add MM-3/MM-4 statements, split §8 (MM-5).
-- [ ] `core`: natural-key type + `renderId`; remove `children` from `Entity`;
-      keep `TWithChildren` trait declaration.
-- [ ] `core`: uniqueness + closure properties restated over the structured key.
-- [ ] Property suite: reformulate closure / determinism / self-reference over
-      the new identity; add natural-key-uniqueness property.
-- [ ] PLAN.md §11: record the decisions once confirmed.
+- [x] METAMODEL.md: restate identity as the natural key (MM-1, §1.1), extend the
+      outgoing-only rule to name `parent`/`children` (MM-2, §4), add MM-3/MM-4
+      as §5.1/§5.2, split §8 into 8a/8b (MM-5). CLAUDE.md invariants 4 and 7
+      restated to match.
+- [x] `core`: natural-key type + `renderId` (`packages/core/src/identity.ts`),
+      canonical order, uniqueness helper, memoized profile verdicts.
+- [x] `core`: uniqueness restated over the structured key
+      (`duplicateNaturalKeys`), with rendering injectivity as the bridge that
+      makes v1's rendered-id uniqueness a *consequence* of it.
+- [x] Property suite: natural-key uniqueness, injectivity, and canonical order
+      as a total order, generatively (`packages/core/test/properties.test.ts`).
+- [x] PLAN.md §9.1/§11/§12: decisions recorded.
+
+Deferred to M6 with the rest of the breaking change (PLAN.md §9.2), since M5 is
+non-breaking preparation: **removing the `children` key from `Entity`** — the
+trait declaration stays either way — and reformulating closure / determinism /
+self-reference over surrogates, which do not exist until the JSONL encoding does.

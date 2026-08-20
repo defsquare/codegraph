@@ -6,6 +6,15 @@ import { Edge, isSelfReference } from "../src/edges.js";
 import { Model, SCHEMA_VERSION, parseModel } from "../src/model.js";
 import { PROVENANCES } from "../src/primitives.js";
 import { EDGE_KINDS, TRAIT_NAMES, type TraitName } from "../src/names.js";
+import {
+  NaturalKey,
+  compareNaturalKeys,
+  duplicateNaturalKeys,
+  naturalKeyIssues,
+  naturalKeysEqual,
+  renderId,
+  sortByNaturalKey,
+} from "../src/identity.js";
 import { MARKER_TRAITS } from "../src/traits.js";
 import { ENTITY_REFERENCE_KEYS, selfReferences, unknownReferences } from "../src/integrity.js";
 import { validateEntity, validateModel, type Profile } from "../src/profile.js";
@@ -428,6 +437,133 @@ describe("profile validity holds for whole generated models (PLAN §8)", () => {
         },
       ),
       { numRuns: 120 },
+    );
+  });
+});
+
+/**
+ * Structured identity (MM-1). The whole point of promoting identity from an
+ * opaque string to a tuple is that uniqueness becomes checkable component-wise;
+ * these properties say the tuple and its display projection never disagree.
+ */
+describe("natural keys (MM-1)", () => {
+  const NUL = "\u0000";
+
+  // Drawn from an alphabet made of the separators themselves, then sanitized to
+  // the component's own rules: random text would never produce a near-collision.
+  const pieceArb = fc.oneof(
+    // `a`/`b` together with `a.b`, `a/b`, `ab` make every separator collision
+    // reachable: drop or weaken one and two distinct keys render identically.
+    fc.constantFrom("a", "b", "a.b", "a/b", "ab", "a:b", "S.f(a.b.C)", "<unnamed>", "#", ""),
+    fc.string({ maxLength: 4 }),
+  );
+
+  function strip(value: string, reserved: readonly string[]): string {
+    return [...value].filter((char) => !reserved.includes(char)).join("");
+  }
+
+  const naturalKeyArb: fc.Arbitrary<NaturalKey> = fc
+    .tuple(pieceArb, pieceArb, pieceArb, fc.option(pieceArb, { nil: undefined }))
+    .map(([lang, module, symbol, disambiguator]) => {
+      const cleaned = disambiguator === undefined ? undefined : strip(disambiguator, [NUL]);
+      return {
+        lang: strip(lang, [":", NUL]) || "java",
+        module: strip(module, ["/", "#", NUL]) || "m",
+        symbol: strip(symbol, ["#", NUL]),
+        disambiguator: cleaned === undefined || cleaned === "" ? undefined : cleaned,
+      };
+    });
+
+  it("generates only keys core considers well-formed", () => {
+    fc.assert(
+      fc.property(naturalKeyArb, (key) => {
+        expect(naturalKeyIssues(key)).toEqual([]);
+        expect(NaturalKey.safeParse(key).success).toBe(true);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it("renders two keys alike exactly when they ARE alike", () => {
+    fc.assert(
+      fc.property(naturalKeyArb, naturalKeyArb, (a, b) => {
+        expect(renderId(a) === renderId(b)).toBe(naturalKeysEqual(a, b));
+      }),
+      { numRuns: 500 },
+    );
+  });
+
+  /**
+   * The migration statement: v1 asserts uniqueness of the rendered id, v2
+   * asserts it of the key. This is what makes the second imply the first, so no
+   * entity can vanish when M6 switches identity over to the tuple.
+   */
+  it("unique keys imply unique rendered ids", () => {
+    fc.assert(
+      fc.property(fc.array(naturalKeyArb, { maxLength: 40 }), (keys) => {
+        fc.pre(duplicateNaturalKeys(keys).length === 0);
+        expect(new Set(keys.map(renderId)).size).toBe(keys.length);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it("reports duplicates exactly where component-wise comparison finds them", () => {
+    fc.assert(
+      fc.property(fc.array(naturalKeyArb, { maxLength: 25 }), (keys) => {
+        // Deliberately naive O(n²) oracle: it uses only naturalKeysEqual, so it
+        // cannot share a bug with the index-based grouping it is checking.
+        const naive = keys
+          .map((key, index) => ({ key, index }))
+          .filter(({ key }) => keys.filter((other) => naturalKeysEqual(key, other)).length > 1)
+          .map(({ index }) => index);
+
+        const reported = duplicateNaturalKeys(keys)
+          .flatMap((duplicate) => duplicate.positions)
+          .sort((a, b) => a - b);
+        expect(reported).toEqual(naive);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it("orders keys totally, and agrees with equality", () => {
+    fc.assert(
+      fc.property(naturalKeyArb, naturalKeyArb, (a, b) => {
+        const forward = compareNaturalKeys(a, b);
+        expect(Math.sign(compareNaturalKeys(b, a))).toBe(-Math.sign(forward));
+        expect(forward === 0).toBe(naturalKeysEqual(a, b));
+      }),
+      { numRuns: 400 },
+    );
+  });
+
+  it("is transitive, so sorting is well defined", () => {
+    fc.assert(
+      fc.property(naturalKeyArb, naturalKeyArb, naturalKeyArb, (a, b, c) => {
+        fc.pre(compareNaturalKeys(a, b) <= 0 && compareNaturalKeys(b, c) <= 0);
+        expect(compareNaturalKeys(a, c)).toBeLessThanOrEqual(0);
+      }),
+      { numRuns: 400 },
+    );
+  });
+
+  it("puts a model in canonical order regardless of the order it arrived in", () => {
+    fc.assert(
+      fc.property(
+        fc.array(naturalKeyArb, { maxLength: 30 }),
+        fc.array(fc.nat(), { maxLength: 30 }),
+        (keys, seed) => {
+          // A deterministic reshuffle: same multiset, different arrival order.
+          const shuffled = keys
+            .map((key, i) => ({ key, at: (seed[i] ?? i) % (keys.length + 1) }))
+            .sort((x, y) => x.at - y.at)
+            .map(({ key }) => key);
+          const ordered = (input: NaturalKey[]) => sortByNaturalKey(input, (k) => k).map(renderId);
+          expect(ordered(shuffled)).toEqual(ordered(keys));
+        },
+      ),
+      { numRuns: 200 },
     );
   });
 });

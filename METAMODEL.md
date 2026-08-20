@@ -10,7 +10,7 @@ Concept map:
 
 ```mermaid
 graph TB
-  subgraph Model["Model (model.json)"]
+  subgraph Model["Model (one extraction run)"]
     E[Entity]
     ED[Edge]
   end
@@ -29,24 +29,51 @@ graph TB
 
 ## 1. Primitives
 
-### 1.1 EntityId
+### 1.1 Identity — the natural key
 
-Opaque string identifying an entity. Written as
-`<lang>:<module>/<symbol>[#<disambiguator>]` but **consumers never parse it** —
-they only compare it for equality. Uniqueness is per model union.
+**Identity is the structured key `(lang, module, symbol, disambiguator?)`**
+(MM-1). It is compared **component-wise**, never by parsing a rendered string.
+Uniqueness is per model union: no two entities share
+`(lang, module, symbol, disambiguator)`.
 
 | Component | Role |
 |---|---|
-| `lang` | language prefix (`java`, `ts`, `clj`, …) |
-| `module` | owning module path |
-| `symbol` | entity name path within the module |
-| `disambiguator` | signature for overloads/receivers; `(file, startLine)` for anonymous entities (lambdas, impl blocks); absent when the symbol is unique |
+| `lang` | language id, frozen per profile (`java`, `ts`, `clj`, …) |
+| `module` | the owning module's path. A **module names itself here**, with an empty `symbol` |
+| `symbol` | the path below the module — dots for nesting; empty only for a module |
+| `disambiguator` | optional: `file:startLine` for anonymous entities (lambdas, impl blocks), `param:`/`local:` markers for sub-members; absent when the symbol is already unique. For Java invocables the erased-FQN parameter list is part of `symbol`, not of this component (§10) |
 
-Multi-declaration tolerant: one id may be declared in several places
+A **rendered id** — `java:com.acme.order/OrderService.bill(com.acme.order.Order)`,
+produced by core's `renderId` as `<lang>:<module>[/<symbol>][#<disambiguator>]` —
+is a **display projection**: written into v1 files and shown to users, and
+**never parsed**. v1 carries nothing else, so the analyzer compares those
+strings as opaque tokens; from M6 the key travels structurally and comparison is
+component-wise. Because the id is a projection it must not lose information, so
+`/` and `#` are **reserved**: a `module` may contain neither, a `symbol` may not
+contain `#`, and a present `disambiguator` is non-empty. Under those rules rendering is injective — two distinct keys can
+never produce one id — which is the property that keeps an entity from silently
+vanishing into another (the overload collision of §10, one level up).
+
+*Why a module names itself rather than its parent:* the alternative renders the
+package `java:com.acme.order` as `java:com.acme/order` and, worse, needs a
+fabricated `java` module to place the stub package `java:java.util`, whose
+parent no corpus declares — exactly the fabrication §6 exists to prevent.
+
+Multi-declaration tolerant: one key may be declared in several places
 (TypeScript declaration merging, C# partial classes).
 
+**Canonical order** is sort by natural key, component by component, a missing
+disambiguator before any present one. It belongs to the model, not to an
+encoding: it is what makes snapshot diffs reviewable and extractor
+cross-validation meaningful. It is deliberately *not* the same as sorting the
+rendered ids as strings, where `/` and `.` are ordinary characters.
+
 **Relations:** every reference between concepts (edge endpoints, `parent`,
-`children`, `attachedTo`, `declaredType`, `candidates`) is an EntityId.
+`children`, `attachedTo`, `declaredType`, `candidates`) identifies an entity by
+its natural key. The v1 file format spells each of those as the rendered id
+string (`EntityId` in core); an encoding is free to spell them otherwise — M6
+uses file-scoped integer surrogates — as long as they resolve to the same key.
+A surrogate is **not** identity and never crosses a file boundary.
 
 ### 1.2 SourceAnchor
 
@@ -103,7 +130,7 @@ kind plus a *sum of traits*, and each trait contributes attributes.
 
 | Attribute | Type | Always present | Meaning |
 |---|---|---|---|
-| `id` | EntityId | yes | identity, opaque |
+| `id` | EntityId | yes | the natural key of §1.1, rendered — compared, never parsed |
 | `kind` | string | yes | language-profile-defined classification (`class`, `method`, `function`, `namespace`, …) |
 | `traits` | TraitName[] | yes | the capabilities this entity composes |
 | `space` | Space[] | no | TS-family only, see §1.4 |
@@ -147,12 +174,19 @@ both are kept.
 
 | Trait | Attributes contributed | Relation expressed |
 |---|---|---|
-| `TWithChildren` | `children: EntityId[]` | lexical containment, downward |
-| `TChildOf` | `parent: EntityId` | lexical containment, upward (inverse of `TWithChildren` — both stored, must agree) |
+| `TWithChildren` | `children: EntityId[]` **(v1 only, see below)** | lexical containment, downward |
+| `TChildOf` | `parent: EntityId` | lexical containment, upward — the STORED direction |
 | `TAttachedTo` | `attachedTo: EntityId` | semantic attachment. Required by: Go receiver methods, Rust `impl` blocks, C# extension methods, Clojure `extend-type`/`defmethod` |
 
 Example where they diverge: a Go method with receiver `(o *Order)` is a
 *child* of its file/package (where it is written) but *attached* to `Order`.
+
+**`children` is an inverse index, not a fact** (MM-2). It is the exact inverse
+of `parent`, and §4's rule — inverse views are derived in memory, never
+serialized — has always applied to it; v1 carrying the key was an inherited
+inconsistency (11.6MB of it on fineract). `TWithChildren` stays a declared
+trait: it says an entity is a container, which is what §5's containment ≠
+attachment distinction needs. Only the serialized key goes, in M6.
 
 ### 3.3 Modularity
 
@@ -208,8 +242,10 @@ The single relationship concept. Every edge, regardless of kind, carries:
 | `sourceFile` | string | no | disambiguates which declaration site produced the edge (C# partial classes, TS declaration merging) |
 
 Rules:
-- **Outgoing only, stored once.** All inverse views (callers of X, subtypes of
-  Y, importers of M) are derived in memory, never serialized.
+- **Outgoing only, stored once.** All inverse views — callers of X, subtypes
+  of Y, importers of M, and `children` (the inverse of `parent`, §3.2) — are
+  derived in memory, never serialized. Only `parent` is a stored fact; v1 files
+  still carry `children` and M6 drops the key (MM-2).
 - **Closure:** `from` and `to` must resolve to a known entity or a stub —
   a tested property of every model.
 - **No self-reference:** `from ≠ to`.
@@ -257,6 +293,31 @@ implemented* (robustness test of the schema).
 **Relations:** licenses Entities and Edges; cross-language analyses operate on
 the **intersection** of the profiles involved (in practice: the `import` layer
 plus whatever both profiles share).
+
+### 5.1 Vocabularies are closed referential sets (MM-3)
+
+Kinds, trait names, edge kinds and provenance values are **finite sets owned by
+core**. The consequence, stated so encodings need not each invent it: an
+encoding may represent a member **by reference** — an index into a dictionary, a
+foreign key — as long as the reference resolves to a canonical name that core
+validates. An unknown name is a hard error, never a passthrough.
+
+This is what licenses the header dictionaries of the M6 JSONL encoding and the
+lookup tables of the M7 store without either of them redefining the vocabulary.
+
+### 5.2 Validity is a function of `(kind, trait set)` (MM-4)
+
+The rule above reads only the kind and the *set* of traits — never the entity
+carrying them. So a consumer may decide each distinct `(kind, trait set)` pair
+**once** and share the verdict across every entity with that composition
+(fineract: a few dozen pairs across 240 910 entities). Step 3 — the trait-key
+check — still runs per entity, because the keys' *values* differ.
+
+Two bounds on that licence, both load-bearing: a stub's exemption from the
+lower bound (§6) is an entity-level fact, so it is part of what the verdict is
+keyed on; and the verdict is per profile, since two profiles may name the same
+kind under different rules. It is a **reader-side** optimisation and requires no
+encoding support — trait sets are deliberately not a wire-level concept.
 
 ---
 
@@ -319,10 +380,12 @@ reified as an anonymous entity:
 
 ---
 
-## 8. Model (the interchange file)
+## 8. Model and encodings
 
-The unit of exchange between an extractor and the analyzer: one JSON document
-per extraction run.
+### 8a. The model — logical content
+
+The unit of exchange between an extractor and the analyzer: the result of one
+extraction run. Its content is format-independent.
 
 | Attribute | Type | Meaning |
 |---|---|---|
@@ -333,21 +396,42 @@ per extraction run.
 | `entities` | Entity[] | all nodes, stubs included |
 | `edges` | Edge[] | all relations, outgoing direction |
 
+The integrity properties a model must satisfy, whatever encodes it:
+
+- **closure** — every reference resolves to a declared entity or a stub (§4, §6);
+- **no self-reference** — `from ≠ to` on every edge;
+- **provenance set** on every edge, from the closed set of §1.3;
+- **profile validity** for every entity (§5);
+- **natural-key uniqueness** — no two entities share `(lang, module, symbol,
+  disambiguator)` (§1.1);
+- **canonical order** — entities and edges sorted by natural key (§1.1), so two
+  runs over one corpus are diffable.
+
 **Relations:** a model conforms to exactly one Language Profile; multi-language
-analysis is the union of models (ids are globally unique thanks to the `lang`
-prefix), queried through profile intersection.
+analysis is the union of models (keys are globally unique thanks to the `lang`
+component), queried through profile intersection.
+
+### 8b. Encodings — how a model hits disk
+
+A file **conforms to this metamodel iff its decoded content satisfies §8a**, so
+several encodings may conform at once and each decides for itself how the
+canonical order manifests physically and how references are spelled (rendered
+ids, integer surrogates, rowids). The formats themselves are specified in
+[`docs/model-encoding.md`](docs/model-encoding.md): today's single JSON document,
+the M6 streaming `model.jsonl` interchange, and the M7 `model.db` analysis
+store — a derived, disposable cache that is never the contract.
 
 ---
 
 ## 9. Derived concepts (never serialized)
 
 Computed by the analyzer from the stored model; listed here because they are
-part of the conceptual vocabulary even though they never appear in
-`model.json`:
+part of the conceptual vocabulary even though no encoding stores them:
 
 | Concept | Derived from | Definition |
 |---|---|---|
 | Incoming indexes | all edges | callers-of, importers-of, subtypes-of, accessors-of — inverse of stored outgoing edges |
+| Children index | `parent` | children-of — the inverse of the stored containment link (§3.2, MM-2) |
 | Type-level dependency graph | all edge kinds | edges folded up to the containing `TType` entities |
 | Module import graph | `import` edges | the cross-language comparison layer |
 | Coupling metrics | folded graphs | fan-in/fan-out, afferent/efferent coupling, instability |
@@ -373,6 +457,18 @@ part of the conceptual vocabulary even though they never appear in
   "anchor": { "file": "OrderService.java", "span": [15, 22] }
 }
 ```
+
+The `id` shown is the rendering of the natural key (§1.1)
+
+| component | value |
+|---|---|
+| `lang` | `java` |
+| `module` | `com.acme.order` |
+| `symbol` | `OrderService.bill(com.acme.order.Order)` |
+| `disambiguator` | *(absent — the symbol is already unique)* |
+
+and it is the key, not the string, that decides whether two entities are the
+same. The string is what a v1 file carries and what a report prints.
 
 Note the id's parameter types: **erased fully-qualified names**, not simple
 names. Simple names genuinely collide — `archive(java.util.List)` and

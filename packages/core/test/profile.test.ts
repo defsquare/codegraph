@@ -346,3 +346,88 @@ describe("validateProfile", () => {
     expect(issues[0]?.path).toBe("kinds.class");
   });
 });
+
+/**
+ * MM-4: profile validity is a function of `(kind, trait set)`, so the verdict
+ * is computed once per distinct pair and shared. These tests exist for the
+ * failure modes memoization ADDS — a verdict leaking across entities, across
+ * the stub boundary, or across profiles — none of which the rules themselves
+ * could ever exhibit.
+ */
+describe("verdicts are shared per (kind, trait set), never across their bounds", () => {
+  it("names each entity in its own issues on a cache hit", () => {
+    const first = entity("demo:acme/A", "class", ["TNamed"], { name: "A" });
+    const second = entity("demo:acme/B", "class", ["TNamed"], { name: "B" });
+
+    const one = validateEntity(demo, first);
+    const two = validateEntity(demo, second);
+    expect(codes(one)).toEqual(["missing-required-trait"]);
+    expect(codes(two)).toEqual(["missing-required-trait"]);
+    // The shared half is the verdict, not the subject.
+    expect(one[0]!.path).toBe("demo:acme/A");
+    expect(two[0]!.path).toBe("demo:acme/B");
+    expect(one[0]!.message).toBe(two[0]!.message);
+  });
+
+  it("does not let a stub's exemption leak to a non-stub with the same traits", () => {
+    const strict: Profile = {
+      lang: "demo",
+      kinds: { class: { required: ["TNamed", "TType", "TSourceAnchor"], optional: [] } },
+      edges: [],
+    };
+    const traits: TraitName[] = ["TNamed", "TType"];
+    const stub = entity("demo:jdk/String", "class", traits, { name: "String", isStub: true });
+    const internal = entity("demo:acme/Order", "class", traits, { name: "Order", isStub: false });
+
+    // Stub first, so a verdict keyed on (kind, traits) alone would wrongly
+    // exempt the internal type on the second lookup — and the other way round.
+    expect(validateEntity(strict, stub)).toEqual([]);
+    expect(codes(validateEntity(strict, internal))).toEqual(["missing-required-trait"]);
+    expect(validateEntity(strict, stub)).toEqual([]);
+  });
+
+  it("does not share verdicts between two profiles that name the same kind", () => {
+    const lenient: Profile = {
+      lang: "demo",
+      kinds: { class: { required: ["TNamed"], optional: ["TType"] } },
+      edges: [],
+    };
+    const strict: Profile = {
+      lang: "demo",
+      kinds: { class: { required: ["TNamed", "TType", "TSourceAnchor"], optional: [] } },
+      edges: [],
+    };
+    const subject = entity("demo:acme/Order", "class", ["TNamed", "TType"], {
+      name: "Order",
+      isStub: false,
+    });
+
+    expect(validateEntity(lenient, subject)).toEqual([]);
+    expect(codes(validateEntity(strict, subject))).toEqual(["missing-required-trait"]);
+    expect(validateEntity(lenient, subject)).toEqual([]);
+  });
+
+  it("reaches the same verdict however the trait array is ordered", () => {
+    const forward = entity("demo:acme/A", "class", ["TNamed", "TType", "TInvocable"], {
+      name: "A",
+      isStub: false,
+      signature: "A()",
+    });
+    const backward = entity("demo:acme/B", "class", ["TInvocable", "TType", "TNamed"], {
+      name: "B",
+      isStub: false,
+      signature: "B()",
+    });
+    expect(codes(validateEntity(demo, forward))).toEqual(["trait-not-allowed"]);
+    expect(codes(validateEntity(demo, backward))).toEqual(["trait-not-allowed"]);
+  });
+
+  it("still checks trait KEYS per entity — the values differ even when the set does not", () => {
+    const traits: TraitName[] = ["TNamed", "TType"];
+    const wellFormed = entity("demo:acme/A", "class", traits, { name: "A", isStub: false });
+    const nameless = entity("demo:acme/B", "class", traits, { isStub: false });
+
+    expect(validateEntity(demo, wellFormed)).toEqual([]);
+    expect(codes(validateEntity(demo, nameless))).toEqual(["trait-keys-invalid"]);
+  });
+});

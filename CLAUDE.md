@@ -76,16 +76,24 @@ java -jar target/codegraph-java.jar --src <dir> --out model.json
    dynamic-candidate | generated`. Never mix facts and inferences — an analysis
    that needs facts only filters on `declared`.
 3. **Evidence everywhere:** entities and edges carry `anchor {file, span}`.
-4. **Outgoing edges only.** Inverse indexes (incoming invocations, subtypes,
-   importers…) are derived in memory by the analyzer, never serialized.
+4. **Outgoing edges only.** Inverse indexes — incoming invocations, subtypes,
+   importers, and `children` (the inverse of the stored `parent`) — are derived
+   in memory by the analyzer, never serialized. v1 files still carry `children`;
+   M6 drops the key while `TWithChildren` stays a declared trait.
 5. **Containment ≠ attachment.** `TChildOf`/`TWithChildren` = where it is
    written; `TAttachedTo` = what it semantically belongs to. Distinct, both kept.
 6. **Stub discipline:** external types are degraded `isStub` nodes; their edges
    are kept. Internal-only view = filter stubs. Membership is decided by a
    **whitelist of corpus-declared ids — never by package/name prefix**
    (Spoon noClasspath invents plausible FQNs).
-7. **Ids are opaque strings** (`lang:module/symbol#disambiguator`). The
-   analyzer compares them, never parses them.
+7. **Identity is the natural key** `(lang, module, symbol, disambiguator?)`.
+   A rendered id (`lang:module/symbol#disambiguator`, from core's `renderId`)
+   is a display projection and is **never parsed** — v1 files carry only the
+   rendered form, so the analyzer compares those strings as opaque tokens;
+   from M6 the key is carried structurally and compared component-wise. `/` and
+   `#` are reserved in the key's components so rendering stays injective (two
+   keys can never collide into one id); encoding-level surrogates are not
+   identity and never leave the file that assigns them.
 8. **Profiles are data.** A language profile must be specifiable without being
    implemented. Validation: `required ⊆ traits ⊆ required ∪ optional` per kind.
 9. **Import graph is the first-class layer** — the only one comparable across
