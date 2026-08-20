@@ -513,7 +513,89 @@ Cross-validation strategy (later, when a 2nd Java extractor exists, e.g.
 Tree-sitter): Spoon output is the **oracle**; property = Tree-sitter edge set
 ⊆ Spoon edge set; any gap = a missed resolution case.
 
-## 9. Phase 6+ — Next languages (deferred, contract-ready from day 1)
+## 9. Phase 6 — Model v2: structured identity, JSONL interchange, SQLite store
+
+Motivation (M4 aftermath): extracting apache/fineract produced a 559.5MB
+`model.json` — over Node's string ceiling (`0x1fffffe8` ≈ 512MB), so the
+analyzer cannot read it at all. Profiling showed ≈76% of the bytes are
+repeated strings (edge endpoint ids 186MB, anchor paths 117MB, entity ids +
+parents 88MB) with tiny value sets. Design docs, which this phase executes:
+**`docs/model-v2-metamodel.md`** (MM-1…MM-5, format-independent) and
+**`docs/model-v2-encoding.md`** (JSONL contract + SQLite cache). Clean break
+**in place**: `schemaVersion` stays `"1.0.0"` — the format is entirely
+internal for now, there is no external consumer to negotiate with, so the
+contract changes under the same version and old files are simply
+regenerated. No old-format reader (decision below).
+
+The three milestones are sequenced so every one lands green: M5 adds v2
+concepts to core while v1 keeps building; M6 is the breaking change; M7 is
+additive on top of M6.
+
+### 9.1 M5 — Metamodel v2 (non-breaking preparation)
+
+- [ ] METAMODEL.md amendments: invariant 7 restated — identity is the
+      structured key `(lang, module, symbol, disambiguator?)`, rendered ids
+      display-only (MM-1); invariant 4 extended to name `parent`/`children`
+      (MM-2); vocabularies stated as closed referential sets (MM-3); profile
+      validity stated as a function of `(kind, trait set)` (MM-4); §8 split
+      into model vs. encodings (MM-5).
+- [ ] `core`: `NaturalKey` type + `renderId`; canonical model order defined
+      as sort by natural key.
+- [ ] `core`: `validateEntity` memoized per `(kind, sorted trait list)` —
+      pure speedup, no wire support (MM-4).
+- [ ] Property suite: natural-key uniqueness added generatively.
+- **DoD**: METAMODEL.md v2 merged; core exports the identity vocabulary;
+  the entire v1 suite still green.
+
+### 9.2 M6 — JSONL interchange (the breaking change)
+
+- [ ] `core`: record schemas `Header`/`FileRec`/`EntityRec`/`EdgeRec`/`Eof`
+      discriminated on `t`; streaming `readModel`/`writeModel` (line at a
+      time, never a whole-document string); `children` key removed from
+      `Entity` (`TWithChildren` stays a marker trait); traits inline as int
+      arrays into the header's `dict.traits`; every `EntityId`-typed field
+      becomes a surrogate int (driven by the `TRAITS` table).
+- [ ] `gen:schemas`: one JSON Schema per record type + a prose container
+      contract (section order `header → files → entities → edges → eof`,
+      reference rules) in `schemas/` — still sufficient for a non-TS
+      extractor to self-validate line-by-line.
+- [ ] `extractors/java`: canonical sort → surrogate assignment → Jackson
+      streaming JSONL writer (removes whole-document buffering); `eof`
+      trailer carries counts so truncated runs are detectable.
+- [ ] Property suite reformulated over surrogates: closure becomes
+      `ref < entities count` checked streaming; truncation detection;
+      determinism stays byte-identical output.
+- [ ] Fixtures regenerated to `.jsonl`; v1 code path and schema deleted.
+- [ ] CLI commands read `.jsonl` streaming.
+- **DoD**: fineract extracts to ~90MB `model.jsonl` (~6× smaller) and every
+  CLI command completes on it; property suite green on the fixtures,
+  commons-lang and fineract.
+
+### 9.3 M7 — SQLite analysis store (`model.db`)
+
+Role split (encoding doc §1): `.jsonl` is the CONTRACT — schema-validated,
+diffable, language-agnostic; `model.db` is the WORKBENCH — a derived,
+disposable cache, regenerable at any time, never committed, never the
+interchange.
+
+- [ ] `analyzer`: `importModel(jsonlPath) → model.db` — DDL of encoding doc
+      §3.1 (natural-key unique index, `entity_trait` join table, outgoing
+      facts only with `edge_to`/`entity_parent` as storage-level derived
+      indexes, rare trait keys in an `extra` JSON column); single
+      transaction, prepared statements; `node:sqlite` first,
+      `better-sqlite3` fallback.
+- [ ] DB-backed graph facade behind the existing analyzer API; metrics
+      migrate to SQL (recursive CTEs for cycles/reachability)
+      opportunistically, not big-bang.
+- [ ] `cli`: `codegraph import`; `analyze`/`export` given a `.jsonl`
+      auto-build a sibling `.db` cache (`--no-cache` escape hatch);
+      `dbVersion` mismatch in `meta` ⇒ re-import from JSONL — migration is
+      regeneration, because the DB is a cache.
+- **DoD**: a second `analyze` run on fineract opens the cache without
+  re-parsing; every report byte-identical to its M6 (JSONL-only) output;
+  ad-hoc SQL cookbook (fan-in, facts-only view, reachability) documented.
+
+## 10. Phase 7+ — Next languages (deferred, contract-ready from day 1)
 
 1. **Clojure** via `clj-kondo --analysis` → thin JSON adapter (near-free; first
    cross-language test on the Import layer; exercises the fn-var case for real).
@@ -528,7 +610,7 @@ Tree-sitter): Spoon output is the **oracle**; property = Tree-sitter edge set
 Documented static limits (all languages, per profile `notes`): reflection,
 `Class.forName`/Spring XML, service loaders, pre-expansion macro code.
 
-## 10. Milestones
+## 11. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -537,9 +619,12 @@ Documented static limits (all languages, per profile `notes`): reflection,
 | M2 | Java extractor | ✅ fixture corpus → valid `model.json`, schema-validated **and profile-validated across the language boundary**, closed graph, 94.1% resolution on the fixtures |
 | M3 | Analyzer | ✅ import graph, type deps, cycles, coupling metrics, DOT/CSV/JSON exports; 252 tests; verified end to end on google/gson (3 624 entities) and apache/commons-lang (15 338 entities) |
 | M4 | CLI + properties | ✅ `validate`/`analyze`/`export`/`profiles` shipped; conformance gate + property suite green; 1 007 TS tests; verified end to end on apache/commons-lang (15 338 entities / 24 631 edges, every command < 1 s) |
-| M5 | 2nd language | clj-kondo adapter; cross-language import-graph query works |
+| M5 | Metamodel v2 | METAMODEL.md invariants 4/7 restated + §8 model/encoding split; core natural-key vocabulary, `renderId`, memoized validation; entire v1 suite still green |
+| M6 | JSONL interchange | in-place clean break (`schemaVersion` unchanged): streaming reader/writer, per-record schemas, extractor emits `.jsonl`, fixtures regenerated, v1 deleted; fineract (559MB → ~90MB) analyzable end to end |
+| M7 | SQLite store | `codegraph import` → `model.db` cache; DB-backed analyzer facade; repeat runs skip parsing; reports byte-identical to M6 outputs |
+| M8 | 2nd language | clj-kondo adapter; cross-language import-graph query works |
 
-## 11. Decisions made in this plan (deltas vs. the design doc)
+## 12. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -552,3 +637,8 @@ Documented static limits (all languages, per profile `notes`): reflection,
 | Stub containment (M3 review) | a stub type carries `TChildOf` → its stub **module**; never a corpus one, and never for primitives or in-corpus phantoms | the analyzer folds to module level by walking `parent` and may not parse ids; the alternative — a stub being its own container at every level — put classes and primitives into module graphs (88% of gson's module nodes were not modules) |
 | Profile `space` (M1 audit) | `space?` declared per kind on the Profile, not only on the Entity | METAMODEL §1.4's "only meaningful in profiles that declare it" is otherwise unenforceable |
 | Trait keys in the published schema (M1 audit) | re-stated as `if/then` conditionals generated from `TRAITS` | Zod refinements do not survive `z.toJSONSchema()`; without them the contract accepted `{traits:["TNamed"]}` with no `name` |
+| Identity v2 (fineract audit) | structured key `(lang, module, symbol, disambiguator?)`; rendered id strings are display-only, never stored or compared | 559MB model.json broke Node's 512MB string ceiling; ≈76% of the bytes were repeated id/path strings |
+| Interchange v2 | JSONL: surrogate ints for all intra-model refs, header dictionaries for closed vocabularies, file-path table, `eof` count trailer; in-place clean break, `schemaVersion` kept at 1.0.0, no old-format reader | streaming in both directions kills the ceiling; ~6× smaller; extractor bar stays "anything that prints JSON lines"; the format is internal-only — bumping a version nobody consumes buys nothing |
+| `children` serialization (v2) | dropped — derived from `parent` like every other inverse index | invariant 4 already forbade serialized inverses; v1 carrying it was an inherited inconsistency (and 12MB on fineract) |
+| SQLite (v2) | `model.db` is a derived, disposable analyzer cache built by `codegraph import` — never the contract, never committed | queryable/incremental/random access for CLI + future viz without sacrificing diffable fixtures, byte-determinism, or the any-language extractor bar |
+| Trait-set interning (v2) | rejected — traits ride inline as int arrays; MM-4's validate-once-per-set is reader-side memoization | set indirection saved ~4MB on a ~90MB file but cost a record type, a dedup pass in every extractor, and lines unreadable in isolation |
