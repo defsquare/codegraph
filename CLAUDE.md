@@ -64,7 +64,7 @@ java -jar target/codegraph-java.jar --src <dir> --out model.json
 # needs a JDK on PATH; non-interactive shells do not source sdkman:
 #   export JAVA_HOME="$HOME/.sdkman/candidates/java/25.0.4-tem"
 
-pnpm --filter @codegraph/cli exec codegraph analyze model.json --report deps
+./bin/codegraph analyze model.json --report deps   # after `pnpm -r build`
 ```
 
 ## Metamodel invariants (violating these is a bug, not a style choice)

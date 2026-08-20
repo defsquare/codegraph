@@ -88,9 +88,15 @@ codegraph export   model.json --format dot|json|csv
 codegraph profiles [--lang java] [--json]
 ```
 
-Run it from the workspace with
-`pnpm --filter @codegraph/cli exec codegraph …`, or directly as
-`node packages/cli/dist/index.js …` after `pnpm -r build`.
+After `pnpm -r build`, run it from the clone as `./bin/codegraph …` — an
+executable that finds its own `dist/`, so it works from a worktree and from a
+symlink on your `PATH`:
+
+```bash
+ln -s "$PWD/bin/codegraph" ~/.local/bin/codegraph
+```
+
+`pnpm --filter @codegraph/cli exec codegraph …` works too.
 
 ```bash
 # is this extractor output conformant?
