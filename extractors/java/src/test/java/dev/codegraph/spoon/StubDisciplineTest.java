@@ -31,11 +31,20 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class StubDisciplineTest {
 
-  /** METAMODEL.md §6: a stub type is a degraded TYPE node — a name and nothing more. */
-  private static final Set<String> TYPE_STUB_TRAITS = Set.of("TNamed", "TType");
+  /** METAMODEL.md §6: a stub type is a degraded TYPE node — a name, and nothing it cannot evidence. */
+  private static final Set<String> TYPE_STUB_REQUIRED = Set.of("TNamed", "TType");
 
   /**
-   * A stub PACKAGE is the module-level counterpart. It keeps TWithChildren (empty)
+   * The ONLY thing a stub type may add: which external module it belongs to. The
+   * analyzer folds to module level by walking {@code parent} and may not parse
+   * ids, so without this an external type could not be placed in a module at all
+   * — and the workaround (folding it onto itself) put classes, and even
+   * primitives, into module dependency graphs as if they were modules.
+   */
+  private static final Set<String> TYPE_STUB_ALLOWED = Set.of("TNamed", "TType", "TChildOf");
+
+  /**
+   * A stub PACKAGE is the module-level counterpart. It keeps TWithChildren
    * because the import graph is module-level (METAMODEL.md §9) and an import edge
    * needs an endpoint that exists; {@code definedIn: []} is what marks it external.
    */
@@ -72,11 +81,22 @@ class StubDisciplineTest {
         assertTrue(
             entity.path("definedIn").isEmpty(),
             () -> "package stub " + id + " claims a corpus file — then it would not be external");
-        assertTrue(entity.path("children").isEmpty(), () -> "package stub " + id + " claims children");
+        // Children are the external types this corpus referenced, never corpus
+        // entities: a stub module may not claim to contain declared code.
+        for (JsonNode child : entity.path("children")) {
+          JsonNode target = byId.get(child.asText());
+          assertTrue(
+              target != null && target.path("isStub").asBoolean(),
+              () -> "package stub " + id + " claims a non-stub child " + child.asText());
+        }
       } else {
-        assertEquals(
-            TYPE_STUB_TRAITS, traits, () -> "type stub " + id + " must carry exactly [TNamed, TType]");
         assertEquals("class", kind, () -> "type stub " + id + " must be kind class");
+        assertTrue(
+            traits.containsAll(TYPE_STUB_REQUIRED),
+            () -> "type stub " + id + " must carry at least " + TYPE_STUB_REQUIRED + ", has " + traits);
+        assertTrue(
+            TYPE_STUB_ALLOWED.containsAll(traits),
+            () -> "type stub " + id + " carries a trait it cannot evidence: " + traits);
         assertFalse(entity.has("children"), () -> "stub " + id + " carries children");
       }
 
@@ -84,7 +104,26 @@ class StubDisciplineTest {
       assertFalse(
           entity.has("anchor"),
           () -> "stub " + id + " carries an anchor — a stub is not declared anywhere in the corpus");
-      assertFalse(entity.has("parent"), () -> "stub " + id + " carries a parent");
+
+      // THE PROPERTY THE OLD "a stub has no parent" ASSERTION WAS REALLY GUARDING:
+      // an external type must never be attributed to a CORPUS module, which would
+      // make it look internal to every module-level analysis. Having a parent is
+      // fine; having a non-stub one is the actual violation. Containment must also
+      // agree in both directions (METAMODEL.md §3.2).
+      if (entity.has("parent")) {
+        String parentId = entity.path("parent").asText();
+        JsonNode parent = byId.get(parentId);
+        assertTrue(
+            parent != null && parent.path("isStub").asBoolean(),
+            () -> "stub " + id + " is attributed to non-stub " + parentId + " — it would read as internal");
+        assertEquals(
+            "package", parent.path("kind").asText(), () -> "stub " + id + " must hang off a module");
+        List<String> siblings = new ArrayList<>();
+        parent.path("children").forEach(child -> siblings.add(child.asText()));
+        assertTrue(
+            siblings.contains(id),
+            () -> "containment disagrees: " + id + " claims parent " + parentId + " which disowns it");
+      }
     }
   }
 

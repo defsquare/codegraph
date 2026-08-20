@@ -7,6 +7,9 @@
   "engines": {
     "node": ">=22"
   },
+  "bin": {
+    "codegraph": "./bin/codegraph"
+  },
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",

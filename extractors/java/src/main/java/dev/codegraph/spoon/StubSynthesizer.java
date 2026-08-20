@@ -3,7 +3,9 @@ package dev.codegraph.spoon;
 import dev.codegraph.spoon.model.Entity;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
@@ -12,10 +14,20 @@ import java.util.TreeSet;
  * <p>A stub is not a separate node type (METAMODEL.md §6): it is an entity with
  * {@code TType} and {@code isStub: true}, deliberately degraded —
  * {@code {kind: "class", traits: ["TNamed", "TType"], isStub: true}} — with no
- * children, no parent and no anchor, because there is no corpus evidence to
- * anchor it to. Core exempts stubs from the profile's required-trait lower bound
- * for exactly this reason; the upper bound still applies, so a stub may not
- * carry traits the {@code class} kind does not license.
+ * anchor, because there is no corpus evidence to anchor it to. Core exempts stubs
+ * from the profile's required-trait lower bound for exactly this reason; the
+ * upper bound still applies, so a stub may not carry traits the {@code class}
+ * kind does not license.
+ *
+ * <p>ONE THING A STUB DOES CARRY: a {@code parent}, when its package is itself
+ * external. The analyzer folds entities to module level by walking {@code parent}
+ * and is forbidden to parse ids (CLAUDE.md 7), so a parentless external type
+ * could only be placed in a module by guessing — and the analyzer's earlier
+ * workaround, treating such a stub as its own module, put {@code java.io/PrintStream}
+ * and even {@code int} into module dependency graphs as if they were modules.
+ * The extractor owns the id scheme and knows the package for free, so the
+ * knowledge belongs here. See {@link #attachableParent} for the two cases where
+ * no honest parent exists.
  *
  * <p>Edges to stubs are KEPT. The internal-only view is the analyzer filtering
  * {@code isStub}, not the extractor dropping facts.
@@ -74,7 +86,10 @@ public final class StubSynthesizer {
     }
 
     List<String> reported = new ArrayList<>();
-    List<Entity> stubs = new ArrayList<>();
+    List<String> typeIds = new ArrayList<>();
+    // TreeSet everywhere: the emitted set must not depend on the caller's iteration order.
+    Set<String> packageIds = new TreeSet<>();
+
     // TreeSet: deduplicated by id and sorted, whatever the caller handed over.
     for (String id : new TreeSet<>(referencedIds)) {
       if (id == null || id.isBlank()) {
@@ -87,19 +102,50 @@ public final class StubSynthesizer {
         continue;
       }
       if (isTypeShaped(id)) {
-        stubs.add(
-            Entity.builder(id, STUB_KIND).named(EntityIds.typeSimpleName(id)).type(true).build());
+        typeIds.add(id);
       } else if (isPackageShaped(id)) {
-        // definedIn is empty BECAUSE it is external: no corpus file declares it.
-        stubs.add(
-            Entity.builder(id, PACKAGE_STUB_KIND)
-                .named(packageName(id))
-                .definedIn(List.of(), true)
-                .withChildren(List.of())
-                .build());
+        packageIds.add(id);
       } else {
         reported.add("not a type or package id, so it cannot be a stub (METAMODEL.md §6): " + id);
       }
+    }
+
+    // Attach each external type to its external package, so the analyzer can fold
+    // it to module level by walking `parent` — the only way it is allowed to ask,
+    // since parsing an id is forbidden outside this extractor (CLAUDE.md 7).
+    Map<String, String> parentOf = new TreeMap<>();
+    Map<String, Set<String>> childrenOf = new TreeMap<>();
+    for (String typeId : typeIds) {
+      String packageId = attachableParent(typeId, whitelist);
+      if (packageId == null) {
+        continue;
+      }
+      parentOf.put(typeId, packageId);
+      packageIds.add(packageId);
+      childrenOf.computeIfAbsent(packageId, unused -> new TreeSet<>()).add(typeId);
+    }
+
+    List<Entity> stubs = new ArrayList<>();
+    for (String id : packageIds) {
+      // definedIn is empty BECAUSE it is external: no corpus file declares it.
+      // `children` lists the external types this corpus actually referenced — a
+      // record of what was observed, not a claim about the module's contents,
+      // which `definedIn: []` already marks as unknown.
+      stubs.add(
+          Entity.builder(id, PACKAGE_STUB_KIND)
+              .named(packageName(id))
+              .definedIn(List.of(), true)
+              .withChildren(List.copyOf(childrenOf.getOrDefault(id, Set.of())))
+              .build());
+    }
+    for (String id : typeIds) {
+      Entity.Builder builder =
+          Entity.builder(id, STUB_KIND).named(EntityIds.typeSimpleName(id)).type(true);
+      String packageId = parentOf.get(id);
+      if (packageId != null) {
+        builder.childOf(packageId);
+      }
+      stubs.add(builder.build());
     }
 
     anomalies = List.copyOf(reported);
@@ -152,6 +198,30 @@ public final class StubSynthesizer {
         && body.indexOf('(') < 0
         && body.indexOf(')') < 0
         && body.indexOf('#') < 0;
+  }
+
+  /**
+   * The external package a stub type belongs to, or {@code null} when it has none
+   * we may honestly claim.
+   *
+   * <p>Two refusals, both deliberate. A type whose derived package is
+   * CORPUS-DECLARED gets no parent: Spoon in noClasspath mode invents FQNs inside
+   * the corpus's own packages (PLAN.md §5.2), so attaching such a phantom to the
+   * real package would fold it into the corpus at module level and manufacture a
+   * module self-dependency out of a type that does not exist. A type in the
+   * UNNAMED package gets none either — that bucket holds the primitives
+   * ({@code java:<unnamed>/int}), which genuinely have no module, and attaching
+   * them to a corpus default package would count {@code int} as internal.
+   *
+   * <p>Both cases leave the stub parentless, which the analyzer reports as
+   * unplaceable at module level rather than silently mislabelling its granularity.
+   */
+  private static String attachableParent(String typeId, CorpusWhitelist whitelist) {
+    String packageId = EntityIds.packageIdOfTypeId(typeId);
+    if (packageId.equals(EntityIds.PREFIX + EntityIds.UNNAMED_PACKAGE)) {
+      return null;
+    }
+    return whitelist.declares(packageId) ? null : packageId;
   }
 
   /** A package entity's TNamed name is its full dotted FQN, as pass 2 emits it. */

@@ -1,0 +1,42 @@
+#!/usr/bin/env node
+// The `codegraph` command as a program: `./bin/codegraph analyze model.json`.
+//
+// Extensionless on purpose — the name IS the command — which leaves the module
+// system to Node's syntax detection: `import.meta` below is ESM-only syntax, so
+// this file loads as ESM wherever it is copied, independent of any package.json
+// `type` field above it.
+//
+// It resolves the built CLI relative to ITSELF rather than to the working
+// directory, so a git worktree, a moved checkout, or a symlink on PATH all
+// reach their own `dist/` and not another tree's.
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const cli = new URL("../packages/cli/dist/index.js", import.meta.url);
+const root = fileURLToPath(new URL("..", import.meta.url));
+
+// 1 = EXIT.INTERNAL in packages/cli/src/exit.ts: "the tool is broken", which an
+// unbuilt checkout is. Not 2 — the command line was fine.
+const NOT_BUILT = 1;
+
+function notBuilt(reason) {
+  process.stderr.write(
+    `codegraph: ${reason}\n` + `Run \`pnpm install && pnpm -r build\` in ${root} and try again.\n`,
+  );
+  process.exitCode = NOT_BUILT;
+}
+
+// Importing the bin module RUNS the CLI — it owns argv, both streams and
+// `process.exitCode` from here on. Nothing below may touch them.
+if (existsSync(fileURLToPath(cli))) {
+  try {
+    await import(cli.href);
+  } catch (error) {
+    // The bundle leaves @codegraph/core and @codegraph/analyzer external, so a
+    // half-built workspace fails here, at load, with the same fix as above.
+    if (error?.code !== "ERR_MODULE_NOT_FOUND") throw error;
+    notBuilt(`a workspace package it imports is not built (${error.message.split("\n")[0]})`);
+  }
+} else {
+  notBuilt(`packages/cli/dist/index.js is missing`);
+}

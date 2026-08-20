@@ -3599,7 +3599,9 @@
       ],
       "name" : "com.megacorp.ledger",
       "isStub" : true,
-      "children" : [ ],
+      "children" : [
+        "java:com.megacorp.ledger/LedgerClient"
+      ],
       "definedIn" : [ ]
     },
     {
@@ -3607,20 +3609,60 @@
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "LedgerClient",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:com.megacorp.ledger"
+    },
+    {
+      "id" : "java:java.io",
+      "kind" : "package",
+      "traits" : [
+        "TNamed",
+        "TWithChildren",
+        "TModule"
+      ],
+      "name" : "java.io",
+      "isStub" : true,
+      "children" : [
+        "java:java.io/PrintStream"
+      ],
+      "definedIn" : [ ]
     },
     {
       "id" : "java:java.io/PrintStream",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "PrintStream",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.io"
+    },
+    {
+      "id" : "java:java.lang",
+      "kind" : "package",
+      "traits" : [
+        "TNamed",
+        "TWithChildren",
+        "TModule"
+      ],
+      "name" : "java.lang",
+      "isStub" : true,
+      "children" : [
+        "java:java.lang/Comparable",
+        "java:java.lang/Object",
+        "java:java.lang/Override",
+        "java:java.lang/Runnable",
+        "java:java.lang/String",
+        "java:java.lang/StringBuilder",
+        "java:java.lang/System"
+      ],
+      "definedIn" : [ ]
     },
     {
       "id" : "java:java.lang.annotation",
@@ -3632,7 +3674,10 @@
       ],
       "name" : "java.lang.annotation",
       "isStub" : true,
-      "children" : [ ],
+      "children" : [
+        "java:java.lang.annotation/Retention",
+        "java:java.lang.annotation/RetentionPolicy"
+      ],
       "definedIn" : [ ]
     },
     {
@@ -3640,90 +3685,108 @@
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "Retention",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.lang.annotation"
     },
     {
       "id" : "java:java.lang.annotation/RetentionPolicy",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "RetentionPolicy",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.lang.annotation"
     },
     {
       "id" : "java:java.lang/Comparable",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "Comparable",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.lang"
     },
     {
       "id" : "java:java.lang/Object",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "Object",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.lang"
     },
     {
       "id" : "java:java.lang/Override",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "Override",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.lang"
     },
     {
       "id" : "java:java.lang/Runnable",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "Runnable",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.lang"
     },
     {
       "id" : "java:java.lang/String",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "String",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.lang"
     },
     {
       "id" : "java:java.lang/StringBuilder",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "StringBuilder",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.lang"
     },
     {
       "id" : "java:java.lang/System",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "System",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.lang"
     },
     {
       "id" : "java:java.time",
@@ -3735,7 +3798,9 @@
       ],
       "name" : "java.time",
       "isStub" : true,
-      "children" : [ ],
+      "children" : [
+        "java:java.time/LocalDate"
+      ],
       "definedIn" : [ ]
     },
     {
@@ -3743,10 +3808,12 @@
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "LocalDate",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.time"
     },
     {
       "id" : "java:java.util",
@@ -3758,7 +3825,11 @@
       ],
       "name" : "java.util",
       "isStub" : true,
-      "children" : [ ],
+      "children" : [
+        "java:java.util/ArrayList",
+        "java:java.util/Arrays",
+        "java:java.util/List"
+      ],
       "definedIn" : [ ]
     },
     {
@@ -3771,7 +3842,10 @@
       ],
       "name" : "java.util.function",
       "isStub" : true,
-      "children" : [ ],
+      "children" : [
+        "java:java.util.function/Consumer",
+        "java:java.util.function/IntFunction"
+      ],
       "definedIn" : [ ]
     },
     {
@@ -3779,50 +3853,60 @@
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "Consumer",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.util.function"
     },
     {
       "id" : "java:java.util.function/IntFunction",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "IntFunction",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.util.function"
     },
     {
       "id" : "java:java.util/ArrayList",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "ArrayList",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.util"
     },
     {
       "id" : "java:java.util/Arrays",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "Arrays",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.util"
     },
     {
       "id" : "java:java.util/List",
       "kind" : "class",
       "traits" : [
         "TNamed",
+        "TChildOf",
         "TType"
       ],
       "name" : "List",
-      "isStub" : true
+      "isStub" : true,
+      "parent" : "java:java.util"
     }
   ],
   "edges" : [

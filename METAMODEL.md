@@ -268,13 +268,34 @@ Not a separate node type — an Entity with `isStub: true`, representing somethi
 
 | Stub of | Trait | Shape | Why it must exist |
 |---|---|---|---|
-| a **type** | `TType` | usually only `TNamed + TType`, no children, no anchor | every corpus references types it does not declare |
-| a **module** | `TModule` | `TNamed + TModule + TWithChildren`, `definedIn: []`, no children | the import graph is module-level (§9), so `import java.util.List` points at the *package* `java:java.util` — with no module stub the first-class import layer could never satisfy closure (§11 invariant) |
+| a **type** | `TType` | `TNamed + TType`, optionally `TChildOf`; no children, no anchor | every corpus references types it does not declare |
+| a **module** | `TModule` | `TNamed + TModule + TWithChildren`, `definedIn: []` | the import graph is module-level (§9), so `import java.util.List` points at the *package* `java:java.util` — with no module stub the first-class import layer could never satisfy closure (§11 invariant) |
 
 A **member** (method, field) is deliberately *not* stubbable: an external member
 folds up to its declaring type's stub. Fabricating a `class` named `bill(Order)`
 to close an endpoint is the one thing stub synthesis exists to prevent — an
 unresolvable member id is reported and left dangling instead.
+
+### 6.1 Why a stub may carry a parent
+
+The one non-degraded thing a stub type may hold is `TChildOf` — the external
+**module** it belongs to — and a stub module lists such types in its `children`.
+Two rules bound it, and both are extractor-side obligations:
+
+1. **A stub's parent must itself be a stub.** Attributing an external type to a
+   *corpus* module would make it read as internal to every module-level
+   analysis. Where the parent cannot honestly be named — a static-analysis
+   artefact invented inside the corpus's own package (§6, and the `noClasspath`
+   note in the Java profile), or a primitive, which has no module at all — the
+   stub stays **parentless** and is reported as unplaceable at module level.
+2. **Only the extractor may derive it.** Ids are opaque to everything
+   downstream (§1.1); the extractor owns the id scheme and already knows the
+   package, so the knowledge is recorded here rather than re-derived by parsing.
+
+Without this, an external type could not be folded to module level at all, and
+the tempting workaround — treating such a stub as its own module — silently
+changes the *granularity* of the result: classes, and even primitives, become
+nodes of a module dependency graph.
 
 - Edges *to* stubs are kept; the internal-only view is obtained by filtering
   stubs out at analysis time — uniformly, for types and modules alike.

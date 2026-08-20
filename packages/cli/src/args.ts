@@ -1,0 +1,524 @@
+import { parseArgs } from "node:util";
+import { FOLD_LEVELS, type FoldLevel } from "@codegraph/analyzer";
+import { UsageError } from "./exit.js";
+
+export { UsageError } from "./exit.js";
+
+/**
+ * Argument parsing, with ZERO dependencies (M4 decision 1): Node 22 ships
+ * `parseArgs` in `node:util`, so commander/yargs/minimist buy nothing here. The
+ * CLI's dependency list stays exactly `@codegraph/core` + `@codegraph/analyzer`.
+ *
+ * THE OPTION SPECS ARE DATA. Help text, `parseArgs` configuration, required-ness
+ * and value validation are all derived from the same `CommandSpec` objects, so
+ * what `--help` promises and what the parser accepts cannot drift apart. Adding
+ * an option means adding one entry to one array.
+ */
+
+export const COMMAND_NAMES = ["validate", "analyze", "export", "profiles"] as const;
+export type CommandName = (typeof COMMAND_NAMES)[number];
+
+/** `analyze --report` values. */
+export const REPORTS = ["deps", "cycles", "coupling"] as const;
+export type ReportName = (typeof REPORTS)[number];
+
+/** `export --format` values. */
+export const FORMATS = ["dot", "json", "csv", "plantuml"] as const;
+export type FormatName = (typeof FORMATS)[number];
+
+/**
+ * `--level` values come from the analyzer's `FOLD_LEVELS`, never from a local
+ * copy: a level the CLI offers but the analyzer cannot fold is a lie in the
+ * help text.
+ */
+export const LEVELS: readonly FoldLevel[] = FOLD_LEVELS;
+export const DEFAULT_LEVEL: FoldLevel = "module";
+
+export interface OptionSpec {
+  /** The long flag exactly as typed, without `--` (`internal-only`). */
+  readonly name: string;
+  /** `boolean` takes no value; `string` takes one. Mirrors `parseArgs`. */
+  readonly type: "boolean" | "string";
+  readonly describe: string;
+  readonly short?: string | undefined;
+  /** Closed value set; anything else is a usage error naming these. */
+  readonly choices?: readonly string[] | undefined;
+  /** Missing it is a usage error. */
+  readonly required?: boolean | undefined;
+  /** Help placeholder for a free-form value (`FILE`, `N`). Ignored when `choices` is set. */
+  readonly placeholder?: string | undefined;
+  /** Parse the value as an integer >= 1; a non-integer is a usage error. */
+  readonly integer?: boolean | undefined;
+  /** Value used when the flag is absent, shown in the help text. */
+  readonly defaultValue?: string | undefined;
+}
+
+export interface PositionalSpec {
+  /** Displayed name, e.g. `model.json`. */
+  readonly name: string;
+  readonly describe: string;
+  /** One or more (`<model.json...>`). */
+  readonly variadic: boolean;
+  /** At least one must be given. */
+  readonly required: boolean;
+}
+
+export interface CommandSpec {
+  readonly name: CommandName;
+  readonly summary: string;
+  /** Absent means the command takes no positional arguments at all. */
+  readonly positional?: PositionalSpec | undefined;
+  readonly options: readonly OptionSpec[];
+}
+
+const MODELS_POSITIONAL: PositionalSpec = {
+  name: "model.json",
+  describe: "One or more model.json paths, loaded together as ONE union (decision 5).",
+  variadic: true,
+  required: true,
+};
+
+const JSON_OPTION: OptionSpec = {
+  name: "json",
+  type: "boolean",
+  describe: "Print the same information as a machine-readable JSON object on stdout.",
+};
+
+const VIEW_OPTIONS: readonly OptionSpec[] = [
+  {
+    name: "internal-only",
+    type: "boolean",
+    describe: "Drop stub (external) entities and every edge touching one.",
+  },
+  {
+    name: "declared-only",
+    type: "boolean",
+    describe: "Keep only `declared` facts; drop derived and dynamic-candidate edges.",
+  },
+];
+
+const LEVEL_OPTION: OptionSpec = {
+  name: "level",
+  type: "string",
+  describe: "Fold the graph to this level before reporting.",
+  choices: LEVELS,
+  defaultValue: DEFAULT_LEVEL,
+};
+
+export const VALIDATE_SPEC: CommandSpec = {
+  name: "validate",
+  summary: "Check models against their language profile and the graph invariants.",
+  positional: MODELS_POSITIONAL,
+  options: [JSON_OPTION],
+};
+
+export const ANALYZE_SPEC: CommandSpec = {
+  name: "analyze",
+  summary: "Report dependencies, cycles or coupling over the loaded models.",
+  positional: MODELS_POSITIONAL,
+  options: [
+    {
+      name: "report",
+      type: "string",
+      describe: "Which analysis to run.",
+      choices: REPORTS,
+      required: true,
+    },
+    LEVEL_OPTION,
+    ...VIEW_OPTIONS,
+    {
+      name: "top",
+      type: "string",
+      describe: "Show only the N highest-ranked rows.",
+      placeholder: "N",
+      integer: true,
+    },
+    JSON_OPTION,
+  ],
+};
+
+export const EXPORT_SPEC: CommandSpec = {
+  name: "export",
+  summary: "Write the folded graph as DOT, JSON or CSV.",
+  positional: MODELS_POSITIONAL,
+  options: [
+    {
+      name: "format",
+      type: "string",
+      describe: "Output format.",
+      choices: FORMATS,
+      required: true,
+    },
+    LEVEL_OPTION,
+    ...VIEW_OPTIONS,
+    {
+      name: "out",
+      type: "string",
+      describe: "Write the artifact to this file instead of stdout.",
+      placeholder: "FILE",
+    },
+  ],
+};
+
+export const PROFILES_SPEC: CommandSpec = {
+  name: "profiles",
+  summary: "Print the language profiles core ships.",
+  options: [
+    {
+      name: "lang",
+      type: "string",
+      describe: "Print only this language's profile (the EntityId prefix, e.g. java).",
+      placeholder: "LANG",
+    },
+    JSON_OPTION,
+  ],
+};
+
+export const COMMAND_SPECS: readonly CommandSpec[] = [
+  VALIDATE_SPEC,
+  ANALYZE_SPEC,
+  EXPORT_SPEC,
+  PROFILES_SPEC,
+];
+
+export function commandSpec(name: string): CommandSpec | undefined {
+  return COMMAND_SPECS.find((spec) => spec.name === name);
+}
+
+/** Options shared by every command that reads models. */
+export interface ModelInputOptions {
+  /** Positional paths in argument order; loaded as one union. */
+  readonly models: readonly string[];
+}
+
+/** The two view flags, resolved into a `View` by `resolveView` (view.ts). */
+export interface ViewOptions {
+  readonly internalOnly: boolean;
+  readonly declaredOnly: boolean;
+}
+
+export interface ValidateOptions extends ModelInputOptions {
+  readonly json: boolean;
+}
+
+export interface AnalyzeOptions extends ModelInputOptions, ViewOptions {
+  readonly report: ReportName;
+  readonly level: FoldLevel;
+  readonly json: boolean;
+  /** `--top N`; undefined means "no limit", the command picks its own default. */
+  readonly top: number | undefined;
+}
+
+export interface ExportOptions extends ModelInputOptions, ViewOptions {
+  readonly format: FormatName;
+  readonly level: FoldLevel;
+  /** `--out FILE`; undefined means stdout. */
+  readonly out: string | undefined;
+}
+
+export interface ProfilesOptions {
+  readonly lang: string | undefined;
+  readonly json: boolean;
+}
+
+/**
+ * What the argv asked for. `help` and `version` are outcomes in their own right
+ * (exit 0, printed on stdout because they are what the user requested), not
+ * side effects of parsing.
+ */
+export type Invocation =
+  | { readonly kind: "help"; readonly command: CommandSpec | undefined }
+  | { readonly kind: "version" }
+  | { readonly kind: "run"; readonly command: "validate"; readonly options: ValidateOptions }
+  | { readonly kind: "run"; readonly command: "analyze"; readonly options: AnalyzeOptions }
+  | { readonly kind: "run"; readonly command: "export"; readonly options: ExportOptions }
+  | { readonly kind: "run"; readonly command: "profiles"; readonly options: ProfilesOptions };
+
+const HELP_FLAGS = new Set(["--help", "-h"]);
+const VERSION_FLAGS = new Set(["--version", "-v", "-V"]);
+
+function commandList(): string {
+  return COMMAND_NAMES.join(", ");
+}
+
+/** `--report <deps|cycles|coupling>`, `--out FILE`, `--json` — one flag, rendered. */
+export function flagSyntax(option: OptionSpec): string {
+  const flag = `--${option.name}`;
+  if (option.type === "boolean") return flag;
+  if (option.choices !== undefined) return `${flag} <${option.choices.join("|")}>`;
+  return `${flag} ${option.placeholder ?? "VALUE"}`;
+}
+
+/** The one-line usage string, generated so it cannot contradict the spec. */
+export function usageLine(spec: CommandSpec): string {
+  const parts = [`codegraph ${spec.name}`];
+  if (spec.positional !== undefined) {
+    const name = spec.positional.variadic ? `${spec.positional.name}...` : spec.positional.name;
+    parts.push(spec.positional.required ? `<${name}>` : `[${name}]`);
+  }
+  for (const option of spec.options) {
+    parts.push(option.required === true ? flagSyntax(option) : `[${flagSyntax(option)}]`);
+  }
+  return parts.join(" ");
+}
+
+/** The options a command accepts, as one line — used by every usage error. */
+export function optionSummary(spec: CommandSpec): string {
+  const flags = spec.options.map(flagSyntax);
+  flags.push("--help");
+  return `Valid options for 'codegraph ${spec.name}': ${flags.join(", ")}`;
+}
+
+function pad(text: string, width: number): string {
+  return text.length >= width ? text : text + " ".repeat(width - text.length);
+}
+
+function optionLines(spec: CommandSpec): readonly string[] {
+  const rendered = spec.options.map((option) => {
+    const left = option.short === undefined
+      ? `  ${flagSyntax(option)}`
+      : `  -${option.short}, ${flagSyntax(option)}`;
+    const notes: string[] = [];
+    if (option.required === true) notes.push("required");
+    if (option.defaultValue !== undefined) notes.push(`default: ${option.defaultValue}`);
+    const right = notes.length === 0 ? option.describe : `${option.describe} (${notes.join("; ")})`;
+    return [left, right] as const;
+  });
+  rendered.push(["  -h, --help", "Show this help."] as const);
+  const width = Math.max(...rendered.map(([left]) => left.length)) + 2;
+  return rendered.map(([left, right]) => `${pad(left, width)}${right}`);
+}
+
+/** Help for one command, or the global help when `spec` is undefined. */
+export function renderHelp(spec: CommandSpec | undefined): string {
+  const lines: string[] = [];
+  if (spec === undefined) {
+    lines.push("codegraph — dependency analysis over codegraph model.json files.");
+    lines.push("");
+    lines.push("usage: codegraph <command> [options]");
+    lines.push("");
+    lines.push("commands:");
+    const width = Math.max(...COMMAND_SPECS.map((s) => s.name.length)) + 4;
+    for (const s of COMMAND_SPECS) lines.push(`  ${pad(s.name, width)}${s.summary}`);
+    lines.push("");
+    lines.push("global options:");
+    lines.push("  -h, --help      Show this help.");
+    lines.push("  -v, --version   Print the codegraph version.");
+    lines.push("");
+    lines.push("Run `codegraph <command> --help` for a command's own options.");
+  } else {
+    lines.push(`codegraph ${spec.name} — ${spec.summary}`);
+    lines.push("");
+    lines.push(`usage: ${usageLine(spec)}`);
+    if (spec.positional !== undefined) {
+      lines.push("");
+      lines.push("arguments:");
+      const name = spec.positional.variadic ? `<${spec.positional.name}...>` : `<${spec.positional.name}>`;
+      lines.push(`  ${name}   ${spec.positional.describe}`);
+    }
+    lines.push("");
+    lines.push("options:");
+    lines.push(...optionLines(spec));
+  }
+  lines.push("");
+  lines.push("exit codes: 0 ok · 1 internal error (a bug) · 2 usage error · 3 findings.");
+  return lines.join("\n");
+}
+
+type ParsedValues = Record<string, string | boolean | (string | boolean)[] | undefined>;
+
+function parseArgsConfig(spec: CommandSpec): {
+  readonly [flag: string]: { readonly type: "boolean" | "string"; readonly short?: string };
+} {
+  const config: Record<string, { type: "boolean" | "string"; short?: string }> = {
+    help: { type: "boolean", short: "h" },
+  };
+  for (const option of spec.options) {
+    config[option.name] =
+      option.short === undefined ? { type: option.type } : { type: option.type, short: option.short };
+  }
+  return config;
+}
+
+function stringOf(values: ParsedValues, name: string): string | undefined {
+  const value = values[name];
+  return typeof value === "string" ? value : undefined;
+}
+
+function flagOf(values: ParsedValues, name: string): boolean {
+  return values[name] === true;
+}
+
+/**
+ * Spec-driven validation: required-ness, closed value sets and integer values
+ * are checked from the SAME data the help text is rendered from. Returns the
+ * validated string values by flag name; booleans are read with `flagOf`.
+ */
+function validateValues(spec: CommandSpec, values: ParsedValues): void {
+  for (const option of spec.options) {
+    if (option.type === "boolean") continue;
+    const value = stringOf(values, option.name);
+    if (value === undefined) {
+      if (option.required === true) {
+        throw new UsageError(
+          `${spec.name} requires ${flagSyntax(option)}`,
+          `${usageLine(spec)}\n${option.describe}`,
+        );
+      }
+      continue;
+    }
+    if (option.choices !== undefined && !option.choices.includes(value)) {
+      throw new UsageError(
+        `invalid value '${value}' for --${option.name}`,
+        `Valid values: ${option.choices.join(", ")}.`,
+      );
+    }
+    if (option.integer === true) {
+      const parsed = Number(value);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        throw new UsageError(
+          `invalid value '${value}' for --${option.name}`,
+          `Expected a whole number >= 1.`,
+        );
+      }
+    }
+  }
+}
+
+function integerOf(values: ParsedValues, name: string): number | undefined {
+  const value = stringOf(values, name);
+  return value === undefined ? undefined : Number(value);
+}
+
+function levelOf(values: ParsedValues): FoldLevel {
+  const value = stringOf(values, "level");
+  return value === undefined ? DEFAULT_LEVEL : (value as FoldLevel);
+}
+
+function viewOf(values: ParsedValues): ViewOptions {
+  return {
+    internalOnly: flagOf(values, "internal-only"),
+    declaredOnly: flagOf(values, "declared-only"),
+  };
+}
+
+function positionalsOf(spec: CommandSpec, positionals: readonly string[]): readonly string[] {
+  if (spec.positional === undefined) {
+    if (positionals.length > 0) {
+      throw new UsageError(
+        `${spec.name} takes no positional arguments (got '${positionals[0] ?? ""}')`,
+        `${usageLine(spec)}\n${optionSummary(spec)}`,
+      );
+    }
+    return [];
+  }
+  if (spec.positional.required && positionals.length === 0) {
+    throw new UsageError(
+      `${spec.name} needs at least one ${spec.positional.name} path`,
+      `${usageLine(spec)}\n${spec.positional.describe}`,
+    );
+  }
+  if (!spec.positional.variadic && positionals.length > 1) {
+    throw new UsageError(
+      `${spec.name} takes a single ${spec.positional.name}`,
+      usageLine(spec),
+    );
+  }
+  return positionals;
+}
+
+/**
+ * `parseArgs` states the problem well ("Unknown option '--repot'") and then
+ * appends advice about `--` that is noise for a flag typo. Keep the first
+ * sentence, drop the lecture, and let the hint name what IS valid.
+ */
+function usageFromParseArgs(spec: CommandSpec, error: unknown): UsageError {
+  const raw = error instanceof Error ? error.message : String(error);
+  const cut = raw.indexOf(". To specify");
+  const trimmed = cut === -1 ? raw : raw.slice(0, cut);
+  const message = trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
+  return new UsageError(`${message} for 'codegraph ${spec.name}'`, optionSummary(spec), { cause: error });
+}
+
+/**
+ * Parse an argv tail (`process.argv.slice(2)`) into an {@link Invocation}.
+ * Throws {@link UsageError} — never writes, never exits: `main` owns both.
+ */
+export function parseInvocation(argv: readonly string[]): Invocation {
+  const first = argv[0];
+  if (first === undefined) {
+    throw new UsageError("no command given", `Commands: ${commandList()}. Try 'codegraph --help'.`);
+  }
+  if (HELP_FLAGS.has(first)) return { kind: "help", command: undefined };
+  if (VERSION_FLAGS.has(first)) return { kind: "version" };
+  if (first.startsWith("-")) {
+    throw new UsageError(
+      `unknown global option '${first}'`,
+      `Global options: --help, --version. Commands: ${commandList()}.`,
+    );
+  }
+
+  const spec = commandSpec(first);
+  if (spec === undefined) {
+    throw new UsageError(`unknown command '${first}'`, `Valid commands: ${commandList()}.`);
+  }
+
+  const rest = argv.slice(1);
+  // `--help` wins over every other check: asking for help must work even when
+  // the rest of the line is wrong — that is usually WHY it is being asked for.
+  if (rest.some((token) => HELP_FLAGS.has(token))) return { kind: "help", command: spec };
+
+  let parsed: { values: ParsedValues; positionals: string[] };
+  try {
+    parsed = parseArgs({
+      args: [...rest],
+      options: parseArgsConfig(spec),
+      // Always allowed at the parser level so `positionalsOf` can say WHY a
+      // stray argument is wrong, in the command's own words.
+      allowPositionals: true,
+      strict: true,
+    });
+  } catch (error) {
+    throw usageFromParseArgs(spec, error);
+  }
+
+  validateValues(spec, parsed.values);
+  const models = positionalsOf(spec, parsed.positionals);
+  const values = parsed.values;
+
+  switch (spec.name) {
+    case "validate":
+      return { kind: "run", command: "validate", options: { models, json: flagOf(values, "json") } };
+    case "analyze":
+      return {
+        kind: "run",
+        command: "analyze",
+        options: {
+          models,
+          report: stringOf(values, "report") as ReportName,
+          level: levelOf(values),
+          ...viewOf(values),
+          json: flagOf(values, "json"),
+          top: integerOf(values, "top"),
+        },
+      };
+    case "export":
+      return {
+        kind: "run",
+        command: "export",
+        options: {
+          models,
+          format: stringOf(values, "format") as FormatName,
+          level: levelOf(values),
+          ...viewOf(values),
+          out: stringOf(values, "out"),
+        },
+      };
+    case "profiles":
+      return {
+        kind: "run",
+        command: "profiles",
+        options: { lang: stringOf(values, "lang"), json: flagOf(values, "json") },
+      };
+  }
+}

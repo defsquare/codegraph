@@ -1,0 +1,167 @@
+import type { EntityId } from "@codegraph/core";
+import { foldGraph, folderFor, type FoldedGraph } from "./fold.js";
+import { hasTrait, type CodeGraph } from "./graph.js";
+import { compareIds, sortedUnique } from "./order.js";
+import { identityView, includesEdge, type View } from "./views.js";
+
+/**
+ * Stage 5 of the pipeline: QUERIES.
+ *
+ *   load -> CodeGraph -> view -> fold -> (queries | metrics) -> export
+ *
+ * Every query is a pure read. Nothing here mutates the model, and the derived
+ * neighbourhoods below are rebuilt in memory on every run — they are never
+ * serialized (CLAUDE.md invariant 4).
+ */
+
+/** An import endpoint that was not a module and had to be folded onto one. */
+export interface NonModuleImportEndpoint {
+  readonly edgeFrom: EntityId;
+  readonly edgeTo: EntityId;
+  readonly role: "from" | "to";
+  readonly endpoint: EntityId;
+  /** The module it folded onto, or undefined when it has none at all. */
+  readonly foldedTo: EntityId | undefined;
+}
+
+export interface ImportGraphDiagnostics {
+  /** Base `import` edges the view kept — the population that was folded. */
+  readonly importEdges: number;
+  /**
+   * Endpoints that did not carry TModule. Empty for a conforming model; a
+   * non-empty list means the extractor wrote the import layer below module
+   * granularity, which is a fact about the extractor, not noise to swallow.
+   */
+  readonly nonModuleEndpoints: readonly NonModuleImportEndpoint[];
+}
+
+/** A folded graph plus the audit of how its endpoints reached module level. */
+export interface ImportGraph extends FoldedGraph {
+  readonly importDiagnostics: ImportGraphDiagnostics;
+}
+
+/**
+ * The module→module import graph — the only layer comparable across every
+ * language (CLAUDE.md invariant 9), which is why one code path serves every
+ * extractor.
+ *
+ * Endpoints are normally already modules, so folding is the identity; when one
+ * is not, it is folded to its containing module and reported. Stub modules are
+ * kept when the view permits: an import of an external module is a real
+ * dependency, and dropping it silently understates efferent coupling.
+ */
+export function importGraph(graph: CodeGraph, view?: View): ImportGraph {
+  const resolved = view ?? identityView;
+  const folded = foldGraph(graph, { level: "module", edgeKinds: ["import"], view: resolved });
+  const folder = folderFor(graph);
+
+  let importEdges = 0;
+  const seen = new Set<string>();
+  const nonModuleEndpoints: NonModuleImportEndpoint[] = [];
+
+  for (const edge of graph.edges) {
+    if (edge.edge !== "import") continue;
+    if (!includesEdge(resolved, graph, edge)) continue;
+    importEdges += 1;
+    for (const role of ["from", "to"] as const) {
+      const endpoint = role === "from" ? edge.from : edge.to;
+      const entity = graph.entity(endpoint);
+      if (entity === undefined || hasTrait(entity, "TModule")) continue;
+      // JSON-encoded, not a raw separator: a NUL byte here makes git treat
+      // this SOURCE file as binary (no diffs, no merges), and any printable
+      // separator can occur inside an opaque id.
+      const key = JSON.stringify([edge.from, edge.to, role]);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      nonModuleEndpoints.push({
+        edgeFrom: edge.from,
+        edgeTo: edge.to,
+        role,
+        endpoint,
+        foldedTo: folder.containingModule(endpoint),
+      });
+    }
+  }
+
+  nonModuleEndpoints.sort(
+    (a, b) =>
+      compareIds(a.edgeFrom, b.edgeFrom) ||
+      compareIds(a.edgeTo, b.edgeTo) ||
+      compareIds(a.role, b.role),
+  );
+
+  return {
+    ...folded,
+    importDiagnostics: {
+      importEdges,
+      nonModuleEndpoints: Object.freeze(nonModuleEndpoints),
+    },
+  };
+}
+
+/**
+ * Every edge kind folded to the containing TYPE of each endpoint. inheritance,
+ * interfaceImplementation, invocation, access and reference all contribute, and
+ * the aggregated `kinds`/`provenances` survive, so a caller can still ask
+ * whether a dependency is a fact or an inference.
+ */
+export function typeDependencyGraph(graph: CodeGraph, view?: View): FoldedGraph {
+  return foldGraph(graph, { level: "type", view: view ?? identityView });
+}
+
+/**
+ * Distinct nodes `id` depends on, sorted. The folding self-loop is excluded — a
+ * node is not its own dependency — which keeps this equal to the default
+ * `fanOut`. The loop itself stays visible on `folded.outgoing(id)`.
+ */
+export function dependenciesOf(folded: FoldedGraph, id: EntityId): readonly EntityId[] {
+  return sortedUnique(
+    folded
+      .outgoing(id)
+      .filter((edge) => !edge.selfLoop)
+      .map((edge) => edge.to),
+  );
+}
+
+/** Distinct nodes depending on `id`, sorted. Self-loops excluded, as above. */
+export function dependentsOf(folded: FoldedGraph, id: EntityId): readonly EntityId[] {
+  return sortedUnique(
+    folded
+      .incoming(id)
+      .filter((edge) => !edge.selfLoop)
+      .map((edge) => edge.from),
+  );
+}
+
+/**
+ * The derived concepts of METAMODEL.md §9 for one entity. Every list is an
+ * inverse index the model does not store: computed in memory from the outgoing
+ * edges, on every run, and never written anywhere (CLAUDE.md invariant 4).
+ */
+export interface Neighbourhood {
+  readonly id: EntityId;
+  /** False when the graph does not declare `id`; every list is then empty. */
+  readonly exists: boolean;
+  /** Containment as written (TChildOf) — not attachment (TAttachedTo). */
+  readonly parent: EntityId | undefined;
+  readonly children: readonly EntityId[];
+  readonly callers: readonly EntityId[];
+  readonly accessors: readonly EntityId[];
+  readonly subtypes: readonly EntityId[];
+  readonly implementers: readonly EntityId[];
+  readonly importers: readonly EntityId[];
+}
+
+export function neighboursOf(graph: CodeGraph, id: EntityId): Neighbourhood {
+  return {
+    id,
+    exists: graph.has(id),
+    parent: graph.parentOf(id),
+    children: graph.childrenOf(id),
+    callers: graph.callersOf(id),
+    accessors: graph.accessorsOf(id),
+    subtypes: graph.subtypesOf(id),
+    implementers: graph.implementersOf(id),
+    importers: graph.importersOf(id),
+  };
+}

@@ -59,10 +59,12 @@ pnpm -r build                 # build all TS packages
 pnpm -r test                  # all tests (unit + property)
 pnpm run gen:schemas          # regenerate schemas/*.schema.json from core (commit the result)
 
-cd extractors/java && mvn package
+cd extractors/java && ./mvnw package    # Maven Wrapper — `mvn` is NOT installed
 java -jar target/codegraph-java.jar --src <dir> --out model.json
+# needs a JDK on PATH; non-interactive shells do not source sdkman:
+#   export JAVA_HOME="$HOME/.sdkman/candidates/java/25.0.4-tem"
 
-pnpm --filter @codegraph/cli exec codegraph analyze model.json --report deps
+./bin/codegraph analyze model.json --report deps   # after `pnpm -r build`
 ```
 
 ## Metamodel invariants (violating these is a bug, not a style choice)
@@ -122,7 +124,7 @@ pnpm --filter @codegraph/cli exec codegraph analyze model.json --report deps
 
 ### Verify the deliverable
 - Before handing off: `pnpm -r test`, `pnpm -r build`, typecheck green; for the
-  Java extractor, `mvn package` + schema validation of its output.
+  Java extractor, `./mvnw package` + schema validation of its output.
 - Verify new code is actually **imported, constructed, and called** — an
   unwired subsystem is not delivered.
 - If `schemas/` changed, it was regenerated (`pnpm run gen:schemas`) and
