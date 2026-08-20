@@ -30,6 +30,11 @@ export * from "./order.js";
 // Stage 1: load, validate, unify (schema errors fatal, profile issues collected).
 export * from "./load.js";
 
+// The acceptance gate: the PLAN.md §8 invariants checked over a loaded union.
+// Composes core's integrity and profile validation; adds the candidates, anchor
+// and union-wide redeclaration rules nothing else checks.
+export * from "./conformance.js";
+
 // Stage 2: the indexed model and its derived, never-serialized inverse indexes.
 export * from "./graph.js";
 
