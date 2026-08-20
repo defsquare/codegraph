@@ -78,7 +78,8 @@ function renderText(loaded: LoadedModels, report: ConformanceReport): readonly s
     lines.push("");
     lines.push(`unreadable as a model (${loaded.diagnostics.schemaErrors.length}):`);
     for (const error of sortedSchemaErrors(loaded.diagnostics.schemaErrors)) {
-      lines.push(`  ${error.label}: ${firstLine(error.message)}`);
+      lines.push(`  ${error.label}:`);
+      lines.push(...schemaErrorLines(error.message));
     }
   }
 
@@ -180,10 +181,29 @@ function sortedSchemaErrors(errors: readonly SchemaError[]): readonly SchemaErro
   return [...errors].sort((a, b) => compareIds(a.label, b.label) || a.modelIndex - b.modelIndex);
 }
 
-/** Zod's aggregate message is a paragraph; the report shows its first line. */
-function firstLine(message: string): string {
-  const cut = message.indexOf("\n");
-  return cut === -1 ? message : `${message.slice(0, cut)} ...`;
+/**
+ * Zod's aggregate message is a paragraph whose FIRST line is boilerplate
+ * ("invalid model.json:") and whose remaining lines carry the only thing an
+ * extractor author needs — which key, and what was wrong with it. Showing the
+ * first line alone (as this did) reported a failure without its reason, so the
+ * text form silently held less than `--json`, against decision 8. Bounded so a
+ * catastrophically wrong file cannot bury the verdict; `--json` always has all.
+ */
+const TEXT_SCHEMA_DETAIL_LIMIT = 12;
+
+function schemaErrorLines(message: string): readonly string[] {
+  const all = message.split("\n").filter((line) => line.trim() !== "");
+  let cut = Math.min(TEXT_SCHEMA_DETAIL_LIMIT, all.length);
+  // Zod emits each issue as a "✖ <what>" line followed by its "→ at <path>"
+  // line. Cutting between them would print a complaint with no location, which
+  // is the failure this whole function exists to stop, so keep the pair whole.
+  if (cut < all.length && all[cut - 1]?.startsWith("✖")) cut -= 1;
+  const shown = all.slice(0, cut);
+  const lines = shown.map((line) => `    ${line}`);
+  if (all.length > shown.length) {
+    lines.push(`    ... ${all.length - shown.length} more; run with --json for the whole message`);
+  }
+  return lines;
 }
 
 function pad(text: string, width: number): string {

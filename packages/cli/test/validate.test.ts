@@ -205,6 +205,50 @@ describe("codegraph validate keeps the failure classes apart (decision 2)", () =
     expect(result.stdout).toContain(path);
   });
 
+  // Regression: the text form used to print Zod's FIRST line only, which is the
+  // boilerplate "invalid model.json:" — a failure reported without its reason,
+  // and strictly less than `--json` held, against decision 8.
+  it("says WHICH key is wrong, not just that the file is unreadable", () => {
+    const model = JSON.parse(readFileSync(FIXTURE, "utf8")) as {
+      entities: { anchor?: { span: [number, number] } }[];
+    };
+    const anchored = model.entities.find((e) => e.anchor !== undefined);
+    if (anchored?.anchor === undefined) throw new Error("fixture has no anchored entity");
+    anchored.anchor.span = [0, anchored.anchor.span[1]];
+    const path = join(scratch, "span-zero.json");
+    writeFileSync(path, JSON.stringify(model), "utf8");
+
+    const result = invoke(["validate", path]);
+
+    expect(result.code).toBe(EXIT.FINDINGS);
+    expect(result.stdout).toContain("unreadable as a model");
+    // The reason and its location, both of which the first-line form dropped.
+    expect(result.stdout).toContain("TSourceAnchor");
+    expect(result.stdout).toMatch(/→ at entities\[\d+]\.anchor\.span\[0]/);
+  });
+
+  it("never orphans a schema complaint from its location when it truncates", () => {
+    // An object missing every required key produces more issues than the text
+    // form prints; the cut must not strand a "✖" line without its "→ at" line.
+    const path = join(scratch, "empty-object.json");
+    writeFileSync(path, "{}", "utf8");
+
+    const result = invoke(["validate", path]);
+
+    expect(result.code).toBe(EXIT.FINDINGS);
+    const detail = result.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("✖") || line.startsWith("→"));
+    expect(detail.length).toBeGreaterThan(0);
+    // Every complaint is immediately followed by its location.
+    for (let i = 0; i < detail.length; i += 2) {
+      expect(detail[i]?.startsWith("✖")).toBe(true);
+      expect(detail[i + 1]?.startsWith("→")).toBe(true);
+    }
+    expect(result.stdout).toContain("run with --json for the whole message");
+  });
+
   it("still validates the readable models alongside an unreadable one", () => {
     const bad = join(scratch, "broken.json");
     writeFileSync(bad, "nope", "utf8");
