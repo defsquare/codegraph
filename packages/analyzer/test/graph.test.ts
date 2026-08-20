@@ -14,8 +14,8 @@ describe("buildGraph over the committed Java snapshot", () => {
   const graph = javaGraph();
 
   it("indexes every declared entity, stubs included", () => {
-    expect(graph.entities.size).toBe(166);
-    expect(graph.ids()).toHaveLength(166);
+    expect(graph.entities.size).toBe(167);
+    expect(graph.ids()).toHaveLength(167);
     expect(graph.has(STRING)).toBe(true);
     expect(graph.isStub(STRING)).toBe(true);
     expect(graph.isStub(ORDER)).toBe(false);
@@ -66,7 +66,7 @@ describe("buildGraph over the committed Java snapshot", () => {
   it("derives inverse indexes the model never stores", () => {
     // Inheritance is stored subtype -> supertype; subtypesOf is the inverse.
     expect(graph.subtypesOf(ABSTRACT_ORDER)).toContain(ORDER);
-    expect(graph.callersOf(ABSTRACT_ORDER_REFERENCE)).toHaveLength(5);
+    expect(graph.callersOf(ABSTRACT_ORDER_REFERENCE)).toHaveLength(6);
 
     // Every derived index agrees with a brute-force scan of the stored edges.
     for (const id of graph.ids()) {

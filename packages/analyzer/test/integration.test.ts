@@ -35,19 +35,19 @@ import { edge, javaFixture, javaGraph, pkg, toyModel, type } from "./fixture.js"
  *
  *   loadModels -> buildGraph -> view -> foldGraph -> queries/metrics -> exports
  *
- * Every number below was MEASURED against `fixtures/java/expected/model.json`,
+ * Every number below was MEASURED against `fixtures/java/expected/model.jsonl`,
  * not assumed. This is the first place a disagreement between the extractor and
  * the analyzer surfaces: if the extractor's output shifts, the failures land
  * here with the stage that noticed, rather than as a silent metric drift.
  */
 
-const ENTITIES = 166;
-const EDGES = 173;
+const ENTITIES = 167;
+const EDGES = 175;
 const STUBS = 26;
-/** 75 of the 173 edges touch a stub; the internal-only corpus keeps 98. */
-const INTERNAL_EDGES = 98;
+/** 75 of the 175 edges touch a stub; the internal-only corpus keeps 100. */
+const INTERNAL_EDGES = 100;
 /** Exactly two edges are the extractor's inference, both module→module imports. */
-const DECLARED_EDGES = 171;
+const DECLARED_EDGES = 173;
 
 const ORDER = "java:com.acme.order";
 const ADAPTER = "java:com.acme.order.adapter";
@@ -164,7 +164,7 @@ describe("stage 4/5 — folding and the queries built on it", () => {
       "java:java.util.function",
     ]);
     expect(query.diagnostics.droppedEdges).toBe(10);
-    expect(query.diagnostics.foldedEdges).toBe(163);
+    expect(query.diagnostics.foldedEdges).toBe(165);
     expect(query.diagnostics.foldedEdges + query.diagnostics.droppedEdges).toBe(EDGES);
   });
 

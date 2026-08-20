@@ -276,7 +276,7 @@ class EntityExtractorTest {
   }
 
   @Test
-  void lambdasAndAnonymousClassesAreNamelessInvocablesKeyedByFileAndLine() {
+  void lambdasAndAnonymousClassesAreNamelessInvocablesKeyedByFileLineAndColumn() {
     List<Entity> nameless =
         entities.stream().filter(e -> e.kind().equals("lambda")).toList();
     assertEquals(3, nameless.size(), () -> "expected two lambdas and one anonymous class: " + ids(nameless));
@@ -286,7 +286,7 @@ class EntityExtractorTest {
       assertNull(entity.name());
       assertNotNull(entity.signature(), "TInvocable brings a signature even when there is no name");
       assertTrue(
-          entity.id().matches("\\Qjava:com.acme.order/OrderService\\E#[^#]+\\.java:\\d+"),
+          entity.id().matches("\\Qjava:com.acme.order/OrderService\\E#[^#]+\\.java:\\d+:\\d+"),
           () -> "unexpected lambda id: " + entity.id());
     }
 

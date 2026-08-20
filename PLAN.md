@@ -331,16 +331,35 @@ of hundreds would distort every coupling metric the analyzer computes.
       loads the snapshot, `parseModel`s it and runs `validateModel` against
       `javaProfile` expecting zero issues. This is the M2 acceptance gate — the
       first check that runs both halves of the system against each other.
-- [ ] **KNOWN GAP carried into M3 — the lambda id disambiguator is too coarse.**
-      `Type#file:startLine` cannot separate two lambdas that START ON THE SAME
-      LINE (`chain(() -> a, () -> b)`). The extractor deduplicates
-      deterministically (first in AST order wins) rather than letting a hash
-      decide, but one real lambda is then absent from the model and nothing
-      distinguishes that from a lambda never written. Measured on the fixtures:
-      5 nameless invocables in source, 4 in the model; pinned by
-      `StubDisciplineTest.lambdasSharingALineCollapseIntoOneEntityAndTheLossIsBounded`.
-      The fix is a column or an in-line ordinal in the disambiguator — an
-      id-scheme change, hence M3 and not a seam-level bug.
+- [x] **CLOSED (M7) — the lambda id disambiguator was too coarse.**
+      `Type#file:startLine` could not separate two nameless entities that START
+      ON THE SAME LINE (`chain(() -> a, () -> b)`), so they shared an id and the
+      first in AST order won: one real entity was absent from the model and
+      nothing distinguished that from an entity never written.
+
+      **It was worse than a missing entity.** A nameless entity written INSIDE
+      another on the same line took the outer one's id as its `parent`, so the
+      model contained an entity that was ITS OWN PARENT — a containment cycle no
+      analysis walking `parent` survives, and one `validate` could not see.
+      Found on apache/fineract at
+      `json -> gson.fromJson(json, new TypeToken<HashSet<JobParameterDTO>>() {})`:
+      a lambda and an anonymous class, both starting on line 79.
+
+      The id now carries the COLUMN — `Type#file:line:column`. A column is a
+      source FACT; an ordinal would have made the id depend on the order the
+      extractor happens to walk the AST, so an unrelated change could renumber
+      a corpus. What the corpora recovered:
+
+      | corpus | entities | edges |
+      |---|---|---|
+      | fixtures/java | 166 → 167 | 173 → 175 |
+      | apache/commons-lang | 15 338 → 15 362 | 24 631 → 24 648 |
+      | apache/fineract | 240 929 → 241 101 | 782 032 → 782 046 |
+
+      Both corpora still validate clean, and fineract now has zero containment
+      cycles. `StubDisciplineTest.everyNamelessEntityOnASharedLineGetsItsOwnIdentity`
+      replaced the pinned-loss test, as that test's own doc instructed, and
+      `noEntityIsItsOwnParent` guards the consequence.
 - [x] Graph closure and self-reference asserted on the snapshot from both sides
       (`StubDisciplineTest` in Java, `unknownReferences`/`selfReferences` in TS).
 - [x] Measure resolution rate in noClasspath on a real corpus; report unresolved

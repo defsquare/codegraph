@@ -195,15 +195,22 @@ class EntityTraitConformanceTest {
     }
   }
 
-  /** The disambiguator of a nameless entity is (file, startLine) — its anchor must agree. */
+  /** The disambiguator of a nameless entity is (file, line, column) — its anchor must agree. */
   @Test
   void aLambdaIsAnchoredWhereItsIdSaysItIs() {
     for (JsonNode lambda : ofKind("lambda")) {
       String id = lambda.path("id").asText();
       JsonNode anchor = lambda.path("anchor");
       assertTrue(anchor.isObject(), () -> "lambda " + id + " has no anchor");
+      // The column completes the id, so the agreement is on the prefix: the
+      // file and the start line, with the column following.
       assertTrue(
-          id.endsWith("#" + anchor.path("file").asText() + ":" + anchor.path("span").path(0).asInt()),
+          id.matches(
+              ".*#"
+                  + java.util.regex.Pattern.quote(anchor.path("file").asText())
+                  + ":"
+                  + anchor.path("span").path(0).asInt()
+                  + ":\\d+"),
           () -> "lambda id " + id + " disagrees with its anchor " + anchor);
     }
   }

@@ -32,7 +32,7 @@ import spoon.reflect.reference.CtTypeReference;
  *   nested type    java:&lt;packageFqn&gt;/&lt;Outer&gt;.&lt;Inner&gt;               java:com.acme.order/OrderService.Inner
  *   method         java:&lt;pkg&gt;/&lt;Type&gt;.&lt;name&gt;(&lt;paramTypeFqn,...&gt;)     java:com.acme.order/OrderService.bill(com.acme.order.Order)
  *   constructor    java:&lt;pkg&gt;/&lt;Type&gt;.&lt;init&gt;(&lt;paramTypeFqn,...&gt;)
- *   lambda / anon  java:&lt;pkg&gt;/&lt;Type&gt;#&lt;file&gt;:&lt;startLine&gt;
+ *   lambda / anon  java:&lt;pkg&gt;/&lt;Type&gt;#&lt;file&gt;:&lt;line&gt;:&lt;column&gt;
  *   field          java:&lt;pkg&gt;/&lt;Type&gt;.&lt;fieldName&gt;
  *   parameter      java:&lt;pkg&gt;/&lt;Type&gt;.&lt;methodSig&gt;#param:&lt;name&gt;
  *   local variable java:&lt;pkg&gt;/&lt;Type&gt;.&lt;methodSig&gt;#local:&lt;name&gt;:&lt;startLine&gt;
@@ -113,7 +113,7 @@ public final class EntityIds {
   /**
    * Id of a declared type, nested types included. Anonymous classes are
    * rejected: they have no name to be identified by, so they take the
-   * {@code #file:line} form via {@link #forAnonymousClass}.
+   * {@code #file:line:column} form via {@link #forAnonymousClass}.
    */
   public static String forType(CtType<?> type) {
     if (type == null) {
@@ -178,22 +178,54 @@ public final class EntityIds {
     return typeId(pkgFqn, typePath);
   }
 
-  /** {@code java:<pkg>/<Type>#<file>:<startLine>} — lambdas and anonymous classes. */
-  public static String forAnonymous(String enclosingTypeId, String relativeFile, int startLine) {
+  /**
+   * {@code java:<pkg>/<Type>#<file>:<startLine>:<startColumn>} — lambdas and
+   * anonymous classes, the entities with no name to be identified by.
+   *
+   * <p><b>The column is what makes the id unique, and it is not decoration.</b>
+   * One line can hold several nameless entities:
+   *
+   * <pre>
+   *   .map(json -&gt; gson.fromJson(json, new TypeToken&lt;Set&lt;T&gt;&gt;() {}.getType()));
+   * </pre>
+   *
+   * a lambda and an anonymous class, both starting on that line. Under the
+   * {@code file:line} form they were ONE id, so the second entity vanished into
+   * the first — and because the anonymous class is written INSIDE the lambda, it
+   * took the lambda as its parent and the model gained an entity that is its own
+   * parent. Measured on apache/fineract before this fix: exactly one such
+   * containment cycle, which no analysis walking {@code parent} can survive and
+   * which {@code validate} could not see.
+   *
+   * <p>A column is a source FACT, which is why it is used rather than an ordinal:
+   * an ordinal would depend on the order the extractor happens to walk the AST,
+   * so the same corpus could produce different ids after an unrelated change.
+   */
+  public static String forAnonymous(
+      String enclosingTypeId, String relativeFile, int startLine, int startColumn) {
     requireText(enclosingTypeId, "enclosing type id");
     requireText(relativeFile, "relative file");
     if (startLine < 1) {
       throw new IllegalArgumentException("anonymous entities need a 1-based line, got " + startLine);
     }
-    return enclosingTypeId + "#" + relativeFile + ":" + startLine;
+    if (startColumn < 1) {
+      throw new IllegalArgumentException(
+          "anonymous entities need a 1-based column, got " + startColumn);
+    }
+    return enclosingTypeId + "#" + relativeFile + ":" + startLine + ":" + startColumn;
   }
 
   public static String forLambda(CtLambda<?> lambda, String relativeFile) {
-    return forAnonymous(forType(enclosingNamedType(lambda)), relativeFile, startLineOf(lambda));
+    return forAnonymous(
+        forType(enclosingNamedType(lambda)), relativeFile, startLineOf(lambda), startColumnOf(lambda));
   }
 
   public static String forAnonymousClass(CtClass<?> anonymous, String relativeFile) {
-    return forAnonymous(forType(enclosingNamedType(anonymous)), relativeFile, startLineOf(anonymous));
+    return forAnonymous(
+        forType(enclosingNamedType(anonymous)),
+        relativeFile,
+        startLineOf(anonymous),
+        startColumnOf(anonymous));
   }
 
   // ----------------------------------------------------------------- members
@@ -469,9 +501,18 @@ public final class EntityIds {
   }
 
   private static int startLineOf(spoon.reflect.declaration.CtElement element) {
+    return positionOf(element).getLine();
+  }
+
+  private static int startColumnOf(spoon.reflect.declaration.CtElement element) {
+    return positionOf(element).getColumn();
+  }
+
+  private static spoon.reflect.cu.SourcePosition positionOf(
+      spoon.reflect.declaration.CtElement element) {
     spoon.reflect.cu.SourcePosition position = element.getPosition();
     if (position != null && position.isValidPosition()) {
-      return position.getLine();
+      return position;
     }
     throw new IllegalArgumentException(
         "no valid source position for " + element.getClass().getSimpleName() + " — ids must not invent one");

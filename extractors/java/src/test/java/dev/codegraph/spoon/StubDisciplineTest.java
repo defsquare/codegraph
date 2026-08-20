@@ -242,23 +242,21 @@ class StubDisciplineTest {
   }
 
   /**
-   * A KNOWN LOSS, pinned so it cannot quietly get worse or quietly get fixed.
+   * THE LOSS THAT WAS PINNED HERE IS FIXED, and this is its successor.
    *
-   * <p>The lambda/anonymous id is {@code Type#file:startLine} (PLAN.md §4.6,
-   * locked for M2). {@code Notifications.java:11} starts TWO lambdas, so they
-   * share an id and the extractor keeps the first in AST order. The corpus holds
-   * 5 nameless invocables; the model holds 4.
+   * <p>The lambda/anonymous id was {@code Type#file:startLine}, so the two
+   * lambdas of {@code chain(() -> …, () -> …)} on {@code Notifications.java:11}
+   * shared one id and the extractor kept the first in AST order: one real
+   * lambda was absent from the model, indistinguishable from a lambda nobody
+   * wrote. The id now carries the COLUMN, and the old test said what to do when
+   * it did — "assert two distinct ids on line 11, never delete the assertion".
    *
-   * <p>Stated as the PROPERTY rather than as a corpus-wide count, so that adding
-   * a fixture file (as the array/anonymous audit did) does not read as the id
-   * scheme changing. The property: the id
-   * {@code Notifications#…/Notifications.java:11} is emitted exactly once even
-   * though line 11 starts two lambdas, and no lambda id is emitted twice. When
-   * the disambiguator gains a column or an ordinal, THIS test fails — and the
-   * fix is to assert two distinct ids on line 11, never to delete the assertion.
+   * <p>What this guards now: a line may hold several nameless entities, and each
+   * gets its own identity. The column is the reason; an ordinal would have made
+   * the id depend on AST walk order instead of on the source.
    */
   @Test
-  void lambdasSharingALineCollapseIntoOneEntityAndTheLossIsBounded() {
+  void everyNamelessEntityOnASharedLineGetsItsOwnIdentity() {
     List<String> nameless =
         run.entities().stream()
             .filter(entity -> "lambda".equals(entity.path("kind").asText()))
@@ -266,18 +264,37 @@ class StubDisciplineTest {
             .sorted()
             .toList();
 
-    String collision = "java:com.acme.order/Notifications#com/acme/order/Notifications.java:11";
+    String sharedLine = "java:com.acme.order/Notifications#com/acme/order/Notifications.java:11:";
+    List<String> onThatLine = nameless.stream().filter(id -> id.startsWith(sharedLine)).toList();
     assertEquals(
-        1,
-        nameless.stream().filter(collision::equals).count(),
+        2,
+        onThatLine.size(),
         () ->
-            "Notifications.java:11 starts TWO lambdas: `chain(() -> …, () -> …)`. The id scheme is "
-                + "Type#file:startLine (PLAN.md §4.6, locked for M2), so they share an id and the "
-                + "first in AST order wins — one real lambda is absent from the model and nothing "
-                + "distinguishes that from a lambda never written. Nameless invocables emitted: "
+            "Notifications.java:11 starts TWO lambdas: `chain(() -> …, () -> …)`. Each must have "
+                + "its own id, distinguished by the column. Emitted on that line: "
+                + onThatLine
+                + "; all nameless invocables: "
                 + nameless);
     assertEquals(
         nameless.size(), Set.copyOf(nameless).size(), "lambda ids must still be unique: " + nameless);
+  }
+
+  /**
+   * The consequence that made the collision more than a missing entity: a
+   * nameless entity written INSIDE another one on the same line took the outer
+   * one's id as its parent, so the model contained an entity that was its own
+   * parent — a containment cycle no analysis walking `parent` survives, and one
+   * `validate` could not see. Measured on apache/fineract before the fix:
+   * exactly one, at a `json -> gson.fromJson(json, new TypeToken<…>() {})`.
+   */
+  @Test
+  void noEntityIsItsOwnParent() {
+    List<String> selfParents =
+        run.entities().stream()
+            .filter(entity -> entity.path("id").asText().equals(entity.path("parent").asText()))
+            .map(entity -> entity.path("id").asText())
+            .toList();
+    assertTrue(selfParents.isEmpty(), () -> "entities that are their own parent: " + selfParents);
   }
 
   // --------------------------------------------------------- graph closure

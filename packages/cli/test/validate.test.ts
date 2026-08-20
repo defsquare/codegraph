@@ -81,8 +81,8 @@ describe("codegraph validate on clean output", () => {
 
     expect(result.code).toBe(EXIT.OK);
     expect(result.stdout).toContain("OK — every model conforms");
-    expect(result.stdout).toContain("166 entities");
-    expect(result.stdout).toContain("173 edges");
+    expect(result.stdout).toContain("167 entities");
+    expect(result.stdout).toContain("175 edges");
     expect(result.stdout).not.toContain("FAILED");
   });
 
@@ -106,7 +106,7 @@ describe("codegraph validate on clean output", () => {
     expect(report.ok).toBe(true);
     expect(report.findings).toEqual([]);
     expect(report.counts.errors).toBe(0);
-    expect(report.subject).toMatchObject({ entities: 166, stubs: 26, edges: 173 });
+    expect(report.subject).toMatchObject({ entities: 167, stubs: 26, edges: 175 });
   });
 
   it("is deterministic — the same invocation twice is byte-identical (decision 6)", () => {
@@ -311,7 +311,7 @@ describe("codegraph validate keeps the failure classes apart (decision 2)", () =
     const result = invoke(["validate", bad, FIXTURE]);
 
     expect(result.code).toBe(EXIT.FINDINGS);
-    expect(result.stdout).toContain("166 entities");
+    expect(result.stdout).toContain("167 entities");
     expect(result.stdout).toContain("unreadable as a model");
   });
 
@@ -331,7 +331,7 @@ describe("codegraph validate keeps the failure classes apart (decision 2)", () =
     };
 
     expect(report.subject.models).toBe(2);
-    expect(report.subject.entities).toBe(332);
+    expect(report.subject.entities).toBe(334);
     // The same file twice redeclares every id identically, which is legal.
     expect(report.counts.byCode["duplicate-id-conflict"]).toBeUndefined();
   });

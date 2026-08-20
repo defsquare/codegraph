@@ -177,7 +177,7 @@ class CorpusWhitelistTest {
         () -> "no local class in " + whitelist.ids());
     assertTrue(
         whitelist.ids().stream()
-            .anyMatch(id -> id.matches("\\Q" + TYPE + "\\E#com/acme/order/OrderService\\.java:\\d+\\.run\\(\\)")),
+            .anyMatch(id -> id.matches("\\Q" + TYPE + "\\E#com/acme/order/OrderService\\.java:\\d+:\\d+\\.run\\(\\)")),
         () -> "no anonymous-class method in " + whitelist.ids());
   }
 
@@ -233,7 +233,7 @@ class CorpusWhitelistTest {
   void lambdasAreDeclaredUnderTheirEnclosingNamedType() {
     assertTrue(
         whitelist.ids().stream()
-            .anyMatch(id -> id.matches("\\Q" + TYPE + "\\E#com/acme/order/OrderService\\.java:\\d+")),
+            .anyMatch(id -> id.matches("\\Q" + TYPE + "\\E#com/acme/order/OrderService\\.java:\\d+:\\d+")),
         () -> "no lambda id in " + whitelist.ids());
   }
 

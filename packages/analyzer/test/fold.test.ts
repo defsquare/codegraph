@@ -118,7 +118,7 @@ describe("foldGraph", () => {
     // Nothing is lost: the aggregated weights account for every folded edge.
     const total = folded.edges.reduce((sum, e) => sum + e.count, 0);
     expect(total).toBe(folded.diagnostics.foldedEdges);
-    expect(total + folded.diagnostics.droppedEdges).toBe(173);
+    expect(total + folded.diagnostics.droppedEdges).toBe(175);
 
     // Aggregation is real on this fixture: some pair carries more than one edge.
     expect(folded.edges.some((e) => e.count > 1)).toBe(true);
@@ -155,7 +155,7 @@ describe("foldGraph", () => {
     expect(stubNode?.isStub).toBe(true);
     // Every entity is either a member of exactly one node or reported unfoldable.
     const members = folded.nodes.reduce((sum, n) => sum + n.members, 0);
-    expect(members + folded.diagnostics.unfoldableEntities.length).toBe(166);
+    expect(members + folded.diagnostics.unfoldableEntities.length).toBe(167);
   });
 
   it("is deterministic: nodes and edges are sorted, and two runs agree", () => {

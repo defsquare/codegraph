@@ -186,12 +186,12 @@ describe("typeDependencyGraph over the committed Java snapshot", () => {
     expect(folded.edges).toHaveLength(71);
     expect(folded.nodes).toHaveLength(36);
     const weight = folded.edges.reduce((sum, e) => sum + e.count, 0);
-    expect(weight).toBe(163);
+    expect(weight).toBe(165);
     expect(weight).toBe(folded.diagnostics.foldedEdges);
     // The 10 dropped edges are the module-level imports: a package has no
     // containing TYPE. Reported, never silently discarded.
     expect(folded.diagnostics.droppedEdges).toBe(10);
-    expect(weight + folded.diagnostics.droppedEdges).toBe(173);
+    expect(weight + folded.diagnostics.droppedEdges).toBe(175);
     // Packages have no containing TYPE — the corpus's three plus the seven
     // external modules external types now hang off. Reported, never hidden.
     expect(folded.diagnostics.unfoldableEntities).toEqual([

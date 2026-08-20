@@ -307,13 +307,28 @@ class EntityIdsTest {
   }
 
   @Test
-  void lambdaIsIdentifiedByFileAndLineBecauseItHasNoName() {
+  void lambdaIsIdentifiedByFileLineAndColumnBecauseItHasNoName() {
     CtLambda<?> lambda = model.getElements(new TypeFilter<>(CtLambda.class)).get(0);
     String id = EntityIds.forLambda(lambda, "OrderService.java");
     assertTrue(
-        id.matches("\\Qjava:com.acme.order/OrderService\\E#OrderService\\.java:\\d+"),
+        id.matches("\\Qjava:com.acme.order/OrderService\\E#OrderService\\.java:\\d+:\\d+"),
         "unexpected lambda id: " + id);
     assertEquals("()", EntityIds.signatureOf(lambda));
+  }
+
+  /** The column is what separates two nameless entities that share a line. */
+  @Test
+  void twoNamelessEntitiesOnOneLineGetDifferentIds() {
+    String first = EntityIds.forAnonymous("java:p/T", "T.java", 11, 22);
+    String second = EntityIds.forAnonymous("java:p/T", "T.java", 11, 65);
+    assertEquals("java:p/T#T.java:11:22", first);
+    assertNotEquals(first, second);
+  }
+
+  @Test
+  void anAnonymousEntityNeedsABase1Column() {
+    assertThrows(
+        IllegalArgumentException.class, () -> EntityIds.forAnonymous("java:p/T", "T.java", 11, 0));
   }
 
   // ----------------------------------------------------- reading ids back

@@ -41,7 +41,7 @@ Uniqueness is per model union: no two entities share
 | `lang` | language id, frozen per profile (`java`, `ts`, `clj`, …) |
 | `module` | the owning module's path. A **module names itself here**, with an empty `symbol` |
 | `symbol` | the path below the module — dots for nesting; empty only for a module |
-| `disambiguator` | optional: `file:startLine` for anonymous entities (lambdas, impl blocks), `param:`/`local:` markers for sub-members; absent when the symbol is already unique. For Java invocables the erased-FQN parameter list is part of `symbol`, not of this component (§10) |
+| `disambiguator` | optional: `file:line:column` for anonymous entities (lambdas, impl blocks), `param:`/`local:` markers for sub-members; absent when the symbol is already unique. For Java invocables the erased-FQN parameter list is part of `symbol`, not of this component (§10). The COLUMN is load-bearing: one line can start several nameless entities, and without it they collapse into one id — and a nested one then becomes its own parent |
 
 A **rendered id** — `java:com.acme.order/OrderService.bill(com.acme.order.Order)`,
 produced by core's `renderId` as `<lang>:<module>[/<symbol>][#<disambiguator>]` —

@@ -77,9 +77,9 @@ describe("checkConformance on the committed Spoon snapshot", () => {
   it("states what the verdict is a verdict about", () => {
     expect(report.subject).toEqual({
       models: 1,
-      entities: 166,
+      entities: 167,
       stubs: 26,
-      edges: 173,
+      edges: 175,
       langs: ["java"],
       sources: ["fixtures/java"],
       unknownProfiles: [],
@@ -417,8 +417,8 @@ describe("the report is the product", () => {
     const full = checkConformance(union);
     const capped = checkConformance(union, { maxPerRule: 3 });
 
-    expect(full.counts.byCode["candidates-empty"]).toBe(173);
-    expect(capped.counts.byCode["candidates-empty"]).toBe(173);
+    expect(full.counts.byCode["candidates-empty"]).toBe(175);
+    expect(capped.counts.byCode["candidates-empty"]).toBe(175);
     expect(capped.findings).toHaveLength(3);
     expect(capped.counts.suppressed).toBe(full.findings.length - 3);
   });

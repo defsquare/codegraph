@@ -77,8 +77,8 @@ describe("analyze --report deps at module level is the import graph", () => {
   it("lists every module with its member count and marks the external ones", () => {
     const { lines } = analyze({ report: "deps", level: "module" });
     const nodeLines = lines.filter((line) => line.startsWith("  java:"));
-    // com.acme.order holds 125 of the 166 entities; java.lang is a stub package.
-    expect(nodeLines.some((line) => line.includes("java:com.acme.order ") && line.includes("members=125"))).toBe(true);
+    // com.acme.order holds 126 of the 167 entities; java.lang is a stub package.
+    expect(nodeLines.some((line) => line.includes("java:com.acme.order ") && line.includes("members=126"))).toBe(true);
     expect(nodeLines.some((line) => line.includes("java:java.lang ") && line.includes("external (stub)"))).toBe(true);
     // Exactly 7 of the 10 modules are stubs (3 com.acme.* packages are internal).
     expect(nodeLines.filter((line) => line.includes("external (stub)")).length).toBe(7);
@@ -390,10 +390,10 @@ describe("--json carries the same information as the text form (decision 8)", ()
 
   it("reports the fold diagnostics the stderr note states", () => {
     const payload = jsonOf({ report: "coupling", level: "type" });
-    expect(payload["foldDiagnostics"]).toMatchObject({ droppedEdges: 10, foldedEdges: 163 });
+    expect(payload["foldDiagnostics"]).toMatchObject({ droppedEdges: 10, foldedEdges: 165 });
     expect(jsonOf({ report: "coupling", level: "module" })["foldDiagnostics"]).toMatchObject({
       droppedEdges: 5,
-      foldedEdges: 168,
+      foldedEdges: 170,
     });
   });
 
@@ -414,13 +414,13 @@ describe("stream discipline and exit codes (decisions 2 and 3)", () => {
   it("keeps the fold diagnostics on stderr, never in the artifact", () => {
     const result = analyze({ report: "deps", level: "type" });
     expect(result.stderr).toContain("10 dropped (an endpoint has no type container in this view)");
-    expect(result.stderr).toContain("163 base edges aggregated into 71");
+    expect(result.stderr).toContain("165 base edges aggregated into 71");
     expect(result.stdout).not.toContain("dropped (");
   });
 
   it("reports the module fold's 5 dropped edges — a smaller graph is never silent", () => {
     expect(analyze({ report: "coupling", level: "module" }).stderr).toContain(
-      "fold(module): 168 base edges aggregated into 14; 5 dropped",
+      "fold(module): 170 base edges aggregated into 14; 5 dropped",
     );
   });
 

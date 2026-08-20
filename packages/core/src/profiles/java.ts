@@ -113,7 +113,7 @@ export const javaProfile: Profile = {
     },
 
     // Lambdas and anonymous classes: invocable but nameless; the id's
-    // disambiguator is `(file, startLine)`.
+    // disambiguator is `(file, line, column)`.
     lambda: {
       required: [
         "TInvocable",
@@ -165,7 +165,7 @@ export const javaProfile: Profile = {
     "The resolution rate counts neither type variables nor `<nulltype>`: neither names anything that could have a declaration, so counting them measures the corpus's writing style. This is not cosmetic — `<nulltype>`, Spoon's static type for the `null` literal, was ALL 1466 of commons-lang's originally-reported unresolved references, making the headline number a function of how many `return null;` statements the corpus contains.",
     "In noClasspath Spoon promotes an unresolvable RECEIVER to a type in the enclosing package: `typeHint -> typeHint.with(...)` and `cm.setStatisticsEnabled(...)` produced stub classes named `typeHint` and `cm` inside the corpus's own package on spring-petclinic. They are correctly stubbed (membership is the declared-id whitelist), and they are why the whitelist exists — but the stub set of a real corpus therefore contains a tail of entities named after local variables, and a stub count is not a count of external types.",
     "An array type is not an entity, and neither is its component where a member is concerned. `xs.length` and `int[]::new` declare their member on `int[]` / `Money[]`; folding that up names the component and states a fact the source never wrote. Such facts are dropped, not degraded — the dependency on the component is already carried by the written type reference that mentions it.",
-    "An anonymous class has exactly one id, the `#file:line` form pass 1 declared. Spoon names it `Outer$N`, which renders as a plausible nested-type id in the corpus's own package; a reference resolved through that name gives one declared class two ids and launders the second into a stub. Type references must be resolved to their declaration before being named.",
+    "An anonymous class has exactly one id, the `#file:line:column` form pass 1 declared. Spoon names it `Outer$N`, which renders as a plausible nested-type id in the corpus's own package; a reference resolved through that name gives one declared class two ids and launders the second into a stub. Type references must be resolved to their declaration before being named.",
     "Spoon materializes the implicit constructor of an anonymous class with synthetic parameters named `$anonymousN`. They are emitted (implicit members are, deliberately, so that `new Foo()` does not dangle), so the model contains a handful of parameter entities nobody wrote, carrying no anchor of their own — 5 of 15338 entities on commons-lang.",
   ],
 };

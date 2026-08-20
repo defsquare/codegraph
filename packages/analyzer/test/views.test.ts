@@ -17,14 +17,14 @@ describe("views", () => {
 
   it("the identity view keeps everything", () => {
     const projection = projectView(graph, identityView);
-    expect(projection.entities).toHaveLength(166);
-    expect(projection.edges).toHaveLength(173);
+    expect(projection.entities).toHaveLength(167);
+    expect(projection.edges).toHaveLength(175);
     expect(projection.view).toEqual({ name: "all", filters: [] });
   });
 
   it("internalOnly drops stubs and every edge touching one", () => {
     const projection = projectView(graph, internalOnly);
-    expect(projection.entities).toHaveLength(166 - 26);
+    expect(projection.entities).toHaveLength(167 - 26);
     expect(projection.entities.every((entity) => !isStubEntity(entity))).toBe(true);
     for (const edge of projection.edges) {
       expect(graph.isStub(edge.from)).toBe(false);
@@ -38,7 +38,7 @@ describe("views", () => {
     const projection = projectView(graph, declaredOnly);
     expect(projection.edges.every((edge) => edge.provenance === "declared")).toBe(true);
     // The Java module -> module import edges are the extractor's inference.
-    expect(projection.edges).toHaveLength(171);
+    expect(projection.edges).toHaveLength(173);
     expect(
       projection.edges.some(
         (edge) => edge.from === "java:com.acme.order" && edge.to === "java:com.megacorp.ledger",
@@ -83,7 +83,7 @@ describe("views", () => {
     expect(derived.edges).toHaveLength(2);
     expect(derived.view.name).toBe("provenance:derived");
     const both = projectView(graph, provenanceOnly("declared", "derived"));
-    expect(both.edges).toHaveLength(173);
+    expect(both.edges).toHaveLength(175);
   });
 
   it("excludes an edge whose endpoint the graph does not declare", () => {
@@ -101,7 +101,7 @@ describe("views", () => {
     const before = JSON.stringify(graph.union.models[0]);
     projectView(graph, composeViews(internalOnly, declaredOnly));
     expect(JSON.stringify(graph.union.models[0])).toBe(before);
-    expect(graph.edges).toHaveLength(173);
+    expect(graph.edges).toHaveLength(175);
   });
 });
 
@@ -131,7 +131,7 @@ describe("view arithmetic and purity", () => {
     const touching = graph.edges.filter((e) => stubs.has(e.from) || stubs.has(e.to));
     expect(touching).toHaveLength(75);
     const kept = projectView(graph, internalOnly).edges;
-    expect(kept).toHaveLength(173 - touching.length);
+    expect(kept).toHaveLength(175 - touching.length);
     expect(kept.some((e) => touching.includes(e))).toBe(false);
     // Membership is the entity's own isStub flag, never a name or package
     // prefix (CLAUDE.md invariant 6): `java:com.acme.order/Invoice` looks
@@ -149,10 +149,10 @@ describe("view arithmetic and purity", () => {
       ["import", "java:com.acme.order.adapter", "java:com.megacorp.ledger", "derived"],
     ]);
     const kept = projectView(graph, declaredOnly).edges;
-    expect(kept).toHaveLength(171);
+    expect(kept).toHaveLength(173);
     for (const inferred of derived) expect(kept).not.toContain(inferred);
     // Entities are untouched: declaredOnly filters edges only.
-    expect(projectView(graph, declaredOnly).entities).toHaveLength(166);
+    expect(projectView(graph, declaredOnly).entities).toHaveLength(167);
   });
 
   it("composition is a conjunction, in any order and to any depth", () => {
@@ -207,8 +207,8 @@ describe("view arithmetic and purity", () => {
     expect([...fresh.ids()]).toEqual(idsBefore);
     expect([...fresh.edges]).toEqual(edgesBefore);
     // And the untouched second graph still measures the same as the first.
-    expect(projectView(fresh, identityView).edges).toHaveLength(173);
-    expect(projectView(graph, identityView).edges).toHaveLength(173);
+    expect(projectView(fresh, identityView).edges).toHaveLength(175);
+    expect(projectView(graph, identityView).edges).toHaveLength(175);
   });
 
   it("filtering is order-independent because it never consumes the base", () => {

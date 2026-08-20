@@ -8,8 +8,8 @@ describe("loadModels", () => {
 
     expect(union.models).toHaveLength(1);
     expect(union.langs).toEqual(["java"]);
-    expect(union.entities).toHaveLength(166);
-    expect(union.edges).toHaveLength(173);
+    expect(union.entities).toHaveLength(167);
+    expect(union.edges).toHaveLength(175);
     expect(union.sources[0]).toEqual({ index: 0, label: "fixtures/java", lang: "java" });
 
     expect(diagnostics.schemaErrors).toEqual([]);

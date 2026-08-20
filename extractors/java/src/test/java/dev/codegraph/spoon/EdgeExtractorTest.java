@@ -358,7 +358,11 @@ class EdgeExtractorTest {
             .findFirst()
             .orElseThrow(() -> new AssertionError("no access from the lambda body"));
 
-    assertEquals(SERVICE + "#" + SERVICE_FILE + ":" + line, edge.from());
+    // The nameless id carries file:line:column, and the column is a source fact
+    // this test has no business transcribing — the line is what it is about.
+    assertTrue(
+        edge.from().startsWith(SERVICE + "#" + SERVICE_FILE + ":" + line + ":"),
+        () -> "the access is not owned by the lambda written on line " + line + ": " + edge.from());
     assertTrue(edge.isRead() && edge.isWrite());
   }
 
@@ -438,7 +442,15 @@ class EdgeExtractorTest {
   void anAnonymousClassIsReferencedNotImplemented(@TempDir Path root) throws IOException {
     List<Edge> edges = extract(root);
     int line = lineOf(ZOO_FILE, "    Runnable anon = new Runnable() {");
-    String anonymous = ZOO_TYPE + "#" + ZOO_FILE + ":" + line;
+    String prefix = ZOO_TYPE + "#" + ZOO_FILE + ":" + line + ":";
+    // The prefix followed by the column and NOTHING else: `prefix + "36.run()"`
+    // is a member of the anonymous class, not the class.
+    String anonymous =
+        edges.stream()
+            .flatMap(e -> java.util.stream.Stream.of(e.from(), e.to()))
+            .filter(id -> id.matches(java.util.regex.Pattern.quote(prefix) + "\\d+"))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no anonymous-class id on line " + line));
 
     single(edges, EdgeKind.REFERENCE, anonymous, "java:java.lang/Runnable");
     single(edges, EdgeKind.INVOCATION, ZOO_TYPE + ".make()", anonymous);

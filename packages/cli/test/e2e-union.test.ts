@@ -58,8 +58,8 @@ describe("the same model twice is benign, and reported", () => {
     );
     expect(
       counts,
-      `expected a duplicate count of 166, found ${JSON.stringify(counts)}`,
-    ).toContain(166);
+      `expected a duplicate count of 167, found ${JSON.stringify(counts)}`,
+    ).toContain(167);
   });
 
   it("says so in the text form too", () => {
