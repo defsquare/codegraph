@@ -411,24 +411,47 @@ function depsReport(
     return loadCode;
   }
 
+  const limited = ranking.shown !== ranking.total;
+
+  // `--top N` means "the N heaviest dependencies AND their context". Listing every
+  // node anyway buries the answer: on a 3 600-entity corpus at type level, --top 10
+  // put the ten requested rows at line 289 under 280 lines of inventory. When the
+  // dependency list is limited, the node list narrows to the nodes those
+  // dependencies touch — and says how many it left out, so it never reads complete.
+  const participating = new Set<string>();
+  for (const edge of shown) {
+    participating.add(edge.from);
+    participating.add(edge.to);
+  }
+  const nodesShown = limited
+    ? folded.nodes.filter((node) => participating.has(node.id))
+    : folded.nodes;
+
   const lines = [...headerLines(context)];
   lines.push(`nodes: ${folded.nodes.length}`);
   lines.push(`edges: ${rankingLine(ranking, "aggregated dependencies")}`);
-  if (ranking.shown !== ranking.total) {
-    lines.push("        (--top limits the dependency list only; every node stays listed)");
+  if (limited) {
+    lines.push(
+      `        (--top limits the dependency list; the node list narrows to the ${nodesShown.length} nodes those dependencies touch)`,
+    );
   }
   lines.push("");
 
   lines.push("nodes");
-  if (folded.nodes.length === 0) {
+  if (nodesShown.length === 0) {
     lines.push("  (none — nothing folds to this level under this view)");
   } else {
-    const idWidth = maxLength(folded.nodes.map((node) => node.id));
-    const kindWidth = maxLength(folded.nodes.map((node) => node.kind));
-    for (const node of folded.nodes) {
+    const idWidth = maxLength(nodesShown.map((node) => node.id));
+    const kindWidth = maxLength(nodesShown.map((node) => node.kind));
+    for (const node of nodesShown) {
       const external = node.isStub ? "  external (stub)" : "";
       lines.push(
         `  ${padRight(node.id, idWidth)}  ${padRight(node.kind, kindWidth)}  members=${node.members}${external}`,
+      );
+    }
+    if (limited) {
+      lines.push(
+        `  … ${folded.nodes.length - nodesShown.length} other nodes not shown (--top); drop --top for the full inventory.`,
       );
     }
   }

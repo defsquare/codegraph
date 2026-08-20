@@ -114,15 +114,37 @@ describe("analyze --report deps at type level is the type dependency graph", () 
     expect(result.stdout).toContain("layer:  every edge kind folded to type level");
   });
 
-  it("--top limits the dependency list, says so, and keeps every node listed", () => {
+  it("--top narrows the node list to the shown dependencies, and says how many it omitted", () => {
     const result = analyze({ report: "deps", level: "type", top: 5 });
     expect(result.stdout).toContain("edges: 5 of 71 aggregated dependencies (--top 5)");
     expect(result.stdout).toContain("… 66 lower-weight dependencies not shown.");
+    // The header still reports the TRUE total — narrowing the list must not
+    // change what is true about the graph, only how much of it is printed.
     expect(result.stdout).toContain("nodes: 36");
+
     // The heaviest type dependency on the fixture is Batch -> Batch (weight 7).
     const shown = result.lines.filter((line) => line.includes("weight="));
     expect(shown.length).toBe(5);
     expect(shown[0]).toContain("weight=7");
+
+    // Every listed node participates in a shown dependency, and both truncations
+    // are disclosed. Asking for the top 5 and being handed the whole inventory
+    // buried the answer at line 289 of 301 on a real corpus.
+    const listed = result.lines.filter((line) => line.includes("members="));
+    const participating = new Set(shown.flatMap((line) => line.split(/\s+/).filter((t) => t.startsWith("java:"))));
+    expect(listed.length).toBeLessThan(36);
+    for (const line of listed) {
+      const id = line.trim().split(/\s+/)[0]!;
+      expect(participating).toContain(id);
+    }
+    expect(result.stdout).toContain(`other nodes not shown (--top)`);
+    expect(result.stdout).toContain("the node list narrows to the");
+  });
+
+  it("without --top the full node inventory is still printed", () => {
+    const result = analyze({ report: "deps", level: "type" });
+    expect(result.lines.filter((line) => line.includes("members=")).length).toBe(36);
+    expect(result.stdout).not.toContain("other nodes not shown");
   });
 
   it("ranks dependencies by weight, descending, deterministically", () => {
