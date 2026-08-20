@@ -1,0 +1,186 @@
+@startuml traits-metamodel
+' =====================================================================
+' Métamodèle multi-langage par traits (inspiré FamixNG)
+' Les traits sont notés <<trait>> ; les associations réifiées <<edge>>
+' =====================================================================
+skinparam class {
+  BackgroundColor<<trait>> #FDF6E3
+  BorderColor<<trait>> #B58900
+  BackgroundColor<<edge>> #EEE8F8
+  BorderColor<<edge>> #6C71C4
+  BackgroundColor<<support>> #F0F0F0
+}
+hide empty members
+
+' ================= SOCLE =================
+package "Socle" {
+  class TNamed <<trait>> {
+    +name : String
+  }
+  class TSourceAnchor <<trait>> {
+    +file : CodeFile
+    +span : [start, end]
+    ..s'applique aux entités ET aux associations..
+  }
+  class TComment <<trait>> {
+    +comments : Collection<Comment>
+  }
+}
+
+' ================= CONTENANCE / ATTACHEMENT =================
+package "Contenance ≠ Attachement" {
+  class TWithChildren <<trait>> {
+    +children : Collection<Entity>
+    ..contenance lexicale : où c'est écrit..
+  }
+  class TChildOf <<trait>> {
+    +parent : Entity
+  }
+  class TAttachedTo <<trait>> {
+    +attachedTo : Entity
+    ..attachement sémantique..
+    ..Go receiver, Clojure extend-type,..
+    ..C# extension methods..
+  }
+}
+
+' ================= MODULARITÉ =================
+package "Modularité" {
+  class TModule <<trait>> {
+    +definedIn : Collection<CodeFile>
+    ..1-1 : JS/TS/Python (module = fichier)..
+    ..1-N : Java/C#/Go/PHP..
+  }
+}
+
+' ================= TYPES =================
+package "Types" {
+  class TType <<trait>> {
+    +isStub : Boolean
+    ..classe, interface, struct,..
+    ..protocole, trait PHP..
+  }
+  class TWithInheritances <<trait>> {
+    +superTypes : Collection<Inheritance>
+    ..N arêtes → héritage multiple Python..
+  }
+  class TWithImplements <<trait>> {
+    +implements : Collection<InterfaceImplementation>
+  }
+  class TTypedEntity <<trait>> {
+    +declaredType : Type <<optionnel>>
+    ..absent : JS, Python, Clojure,..
+    ..var C#, inférence Go/TS..
+  }
+}
+
+' ================= COMPORTEMENT =================
+package "Comportement" {
+  class TInvocable <<trait>> {
+    +signature : String
+    ..signature ∈ identité (overload,..
+    ..receiver Go)..
+  }
+  class TWithParameters <<trait>> {
+    +parameters : List<Parameter>
+  }
+  class TWithLocalVariables <<trait>> {
+    +localVariables : Collection<LocalVariable>
+  }
+  class TWithInvocations <<trait>> {
+    +outgoingInvocations : Collection<Invocation>
+    ..sortant uniquement,..
+    ..index inverses dérivés..
+  }
+}
+
+' ================= STRUCTURE =================
+package "Structure" {
+  class TStructural <<trait>> {
+    ..porteur de valeur : attribut,..
+    ..variable, paramètre, var Clojure..
+  }
+  class TWithAccesses <<trait>> {
+    +outgoingAccesses : Collection<Access>
+  }
+}
+
+' ================= ASSOCIATIONS =================
+package "Associations (arêtes)" {
+  abstract class AAssociation <<edge>> {
+    +from : Entity
+    +to : Entity
+    +provenance : {declared | derived | dynamic-candidate}
+  }
+  class Import <<edge>> {
+    ..Module → Module..
+    ..couche de 1ère classe, fiable à ~100%..
+  }
+  class Inheritance <<edge>>
+  class InterfaceImplementation <<edge>> {
+    ..declared : Java/C#/PHP..
+    ..derived : Go, TS structurel, Python..
+  }
+  class Invocation <<edge>> {
+    +candidates : Collection<TInvocable>
+    ..dispatch non résolu : multiméthodes,..
+    ..__call PHP, duck typing..
+  }
+  class Access <<edge>> {
+    +isRead : Boolean
+    +isWrite : Boolean
+  }
+  class Reference <<edge>>
+  class Embedding <<edge>> {
+    ..Go : struct { Base } —..
+    ..promotion de méthodes..
+  }
+  class TraitUsage <<edge>> {
+    ..PHP : use TraitX..
+  }
+  class FileInclude <<edge>> {
+    ..PHP : CodeFile → CodeFile..
+  }
+
+  AAssociation <|-- Import
+  AAssociation <|-- Inheritance
+  AAssociation <|-- InterfaceImplementation
+  AAssociation <|-- Invocation
+  AAssociation <|-- Access
+  AAssociation <|-- Reference
+  AAssociation <|-- Embedding
+  AAssociation <|-- TraitUsage
+  AAssociation <|-- FileInclude
+}
+
+' ================= SUPPORT =================
+class CodeFile <<support>> {
+  +url : URL
+  +entities : Collection<Entity>
+  ..N-N avec les entités..
+  ..(classes partielles C#)..
+}
+
+' ================= RELATIONS ENTRE TRAITS =================
+TSourceAnchor ..> CodeFile : ancre dans
+TModule "1" ..> "1..*" CodeFile : definedIn
+TWithInheritances ..> Inheritance : agrège
+TWithImplements ..> InterfaceImplementation : agrège
+TWithInvocations ..> Invocation : émet
+TWithAccesses ..> Access : émet
+TTypedEntity ..> TType : declaredType
+Access ..> TStructural : cible
+Invocation ..> TInvocable : cible
+Import ..> TModule : relie
+AAssociation ..> TSourceAnchor : porte (evidence)
+
+' ================= LÉGENDE =================
+legend bottom
+  **Algèbre de composition** : Entité = Σ traits (somme commutative,
+  conflits explicites). Un profil langage = l'ensemble des compositions
+  licites. Analyses inter-langages = intersection des profils.
+  --
+  Exemple : Var Clojure (fn) = TNamed + TStructural + TInvocable
+  → impossible dans une hiérarchie, trivial en composition.
+end legend
+@enduml
