@@ -66,15 +66,51 @@ pnpm run gen:schemas   # regenerate schemas/*.schema.json (commit the result)
 Java extractor:
 
 ```bash
-cd extractors/java && mvn package
+cd extractors/java && ./mvnw -B package   # the wrapper; no local Maven needed
 java -jar target/codegraph-java.jar --src <dir> --out model.json
 ```
 
-Analysis:
+Analysis — the `codegraph` CLI. Every command takes one or more `model.json`
+paths and loads them as a single union, so multi-language analysis is just a
+longer argument list:
 
 ```bash
-pnpm --filter @codegraph/cli exec codegraph analyze model.json --report deps
+codegraph validate model.json [--json]
+
+codegraph analyze  model.json --report deps|cycles|coupling
+                   [--level module|type] [--internal-only] [--declared-only]
+                   [--json] [--top N]
+
+codegraph export   model.json --format dot|json|csv
+                   [--level module|type] [--internal-only] [--declared-only]
+                   [--out FILE]
+
+codegraph profiles [--lang java] [--json]
 ```
+
+Run it from the workspace with
+`pnpm --filter @codegraph/cli exec codegraph …`, or directly as
+`node packages/cli/dist/index.js …` after `pnpm -r build`.
+
+```bash
+# is this extractor output conformant?
+codegraph validate model.json
+
+# which packages are most coupled?
+codegraph analyze model.json --report coupling --top 20
+
+# a picture, and nothing but the picture, in graph.dot
+codegraph export model.json --format dot > graph.dot
+```
+
+**stdout is the artifact; stderr is everything human.** Warnings, fold
+diagnostics and summaries never touch stdout, so a redirect always yields a
+clean file. There is no ANSI colour, and identical inputs give byte-identical
+output.
+
+**Exit codes** distinguish a broken tool from a broken model — `0` success,
+`1` an internal bug in codegraph, `2` a usage error, `3` findings (the tool
+worked; the input did not). A CI job gating on model quality checks for `3`.
 
 ## Status
 
@@ -84,7 +120,7 @@ pnpm --filter @codegraph/cli exec codegraph analyze model.json --report deps
 | M1 | Core metamodel — traits, 9 profiles, validation, JSON Schema | ✅ |
 | M2 | Java extractor — fixture corpus → schema- and profile-valid `model.json` | ✅ |
 | M3 | Analyzer — import graph, type deps, cycles, coupling, exports | ✅ |
-| M4 | CLI + property suite end-to-end on a real Java repo | ⬜ |
+| M4 | CLI — `validate`, `analyze`, `export`, `profiles` + conformance gate | ✅ |
 | M5 | 2nd language — clj-kondo adapter, cross-language import graph | ⬜ |
 
 The M2 output over the reference corpus is committed as
@@ -98,6 +134,22 @@ verified against two real corpora extracted with the M2 extractor: google/gson
 commons-lang the analyzer stages take ~190 ms end to end and the most
 depended-upon types come out as `StringUtils` (Ca 39), `ArrayUtils` (33),
 `ToStringStyle` and `ObjectUtils` (19) — which is the answer a human would give.
+
+M4 puts that behind the CLI and adds the **conformance gate**: `checkConformance`
+lives in the analyzer — so the CLI, the property suite and CI all ask the same
+question — and checks closure, self-reference, provenance, the `candidates`
+rule, profile validity, anchors and conflicting redeclaration. The suite stands
+at **1 007 TypeScript tests** (plus 146 Java), including an end-to-end suite that
+spawns the real binary and asserts on exit code, stdout and stderr separately.
+
+Verified end to end on apache/commons-lang (15 338 entities / 24 631 edges):
+`validate` returns clean in 0.7 s, and every report runs in under a second.
+`analyze --report coupling` puts `org.apache.commons.lang3` first (Ca 13 / Ce 27)
+ahead of `lang3.builder`, and flags `lang3.time`, `lang3.concurrent` and
+`lang3.event` as maximally unstable leaf consumers — which is the answer a human
+who knows the library would give. `--report cycles` finds the genuine 13-package
+mutually-recursive core (`lang3` ↔ `builder` ↔ `math` ↔ `exception` …) and exits
+`3`, because a dependency cycle is a finding about the architecture.
 
 Every number the analyzer reports carries the **fold level** and the **view** it
 was computed under. `internalOnly` drops stubs, `declaredOnly` drops inferences;

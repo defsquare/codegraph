@@ -101,3 +101,20 @@ export function loadModelFiles(paths: readonly string[]): LoadedModels {
 export function loadExitCode(loaded: LoadedModels): ExitCode {
   return loaded.clean ? EXIT.OK : EXIT.FINDINGS;
 }
+
+/**
+ * Ids declared more than once across the union with IDENTICAL declarations.
+ *
+ * Legal (METAMODEL 1.1), so `isClean` stays true and no exit code moves — but
+ * consequential, and therefore never silent. Entities dedupe by id while EDGES
+ * DO NOT: loading overlapping models leaves every folded edge weight multiplied
+ * by the overlap. A coupling number that is quietly double is exactly the kind
+ * of wrong number decision 3's stderr exists to prevent, so every command that
+ * counts something reports this.
+ *
+ * Conflicting duplicates are excluded: those are a real conformance finding and
+ * are counted as one there.
+ */
+export function benignDuplicateIds(loaded: LoadedModels): number {
+  return loaded.diagnostics.duplicateIds.filter((duplicate) => !duplicate.conflicting).length;
+}

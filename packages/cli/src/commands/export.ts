@@ -12,7 +12,7 @@ import {
 import type { ExportOptions, FormatName } from "../args.js";
 import type { ExitCode } from "../exit.js";
 import { errLine, errLines, type IoSink } from "../io.js";
-import { loadExitCode, loadModelFiles, type LoadedModels } from "../load.js";
+import { benignDuplicateIds, loadExitCode, loadModelFiles, type LoadedModels } from "../load.js";
 import { resolveView } from "../view.js";
 
 /**
@@ -98,6 +98,18 @@ function warnings(loaded: LoadedModels, folded: FoldedGraph): readonly string[] 
     lines.push(
       `warning: the models are not clean (${counts.join(", ")}); exported anyway.`,
       `Run 'codegraph validate ${loaded.paths.join(" ")}' for the detail.`,
+    );
+  }
+
+  // Entities dedupe by id, edges do not: an overlapping union leaves every edge
+  // weight in this artifact multiplied. Legal, so the exit code is unchanged —
+  // but a doubled weight that says nothing about itself is a wrong number.
+  const duplicates = benignDuplicateIds(loaded);
+  if (duplicates > 0) {
+    lines.push(
+      `warning: ${plural(duplicates, "duplicate id", "duplicate ids")} — declared identically in ` +
+        `more than one input model. Entities dedupe by id but edges do not, so the edge weights ` +
+        `in this artifact are inflated by the overlap.`,
     );
   }
 

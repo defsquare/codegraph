@@ -29,7 +29,7 @@ import {
 import type { AnalyzeOptions, ReportName } from "../args.js";
 import { EXIT, type ExitCode } from "../exit.js";
 import { errLine, errLines, outLines, type IoSink } from "../io.js";
-import { loadExitCode, loadModelFiles, type LoadedModels } from "../load.js";
+import { benignDuplicateIds, loadExitCode, loadModelFiles, type LoadedModels } from "../load.js";
 import { resolveView } from "../view.js";
 
 /**
@@ -141,6 +141,19 @@ function isImportGraph(folded: FoldedGraph): folded is ImportGraph {
  * so belongs on stderr so the artifact on stdout stays the artifact.
  */
 function reportLoadHealth(loaded: LoadedModels, io: IoSink): void {
+  // Reported even on a CLEAN load: identical re-declaration across models is
+  // legal, but entities dedupe by id while edges do not, so every weight,
+  // fan-in and fan-out below is multiplied by the overlap. A silently doubled
+  // coupling number is precisely what this stream exists to prevent.
+  const duplicates = benignDuplicateIds(loaded);
+  if (duplicates > 0) {
+    errLine(
+      io,
+      `warning: ${duplicates} duplicate ids — declared identically in more than one input model. ` +
+        `Entities dedupe by id but edges do not, so the counts below are inflated by the overlap.`,
+    );
+  }
+
   if (loaded.clean) return;
   const d = loaded.diagnostics;
   errLines(io, [

@@ -450,24 +450,61 @@ row repeats them as columns (a `#` comment line is data to an RFC 4180 parser).
 
 ## 7. Phase 4 — `@codegraph/cli`
 
+✅ Shipped in M4. Every command takes one or more model paths and loads them as
+a **union** (decision 5).
+
 ```
-codegraph validate model.json
-codegraph analyze  model.json --report deps|cycles|coupling [--internal-only] [--declared-only]
-codegraph export   model.json --format dot|json|csv [--level module|type]
-codegraph profiles [--lang java]        # print a profile spec
+codegraph validate <model.json...> [--json]
+codegraph analyze  <model.json...> --report deps|cycles|coupling [--level module|type]
+                                   [--internal-only] [--declared-only] [--json] [--top N]
+codegraph export   <model.json...> --format dot|json|csv [--level module|type]
+                                   [--internal-only] [--declared-only] [--out FILE]
+codegraph profiles [--lang java] [--json]        # print a profile spec
 ```
+
+- [x] `validate` — runs the analyzer's `checkConformance` gate over the union.
+- [x] `analyze` — deps / cycles / coupling, at module or type level.
+- [x] `export` — DOT, JSON and CSV of the folded graph.
+- [x] `profiles` — prints core's profile data; synthesizes nothing.
+- [x] `--help` per command, `--version`, and a usage error naming the valid
+      values for a bad flag.
+
+Locked behaviour, all covered by the end-to-end binary suite:
+- **Exit codes**: `0` ok · `1` internal bug · `2` usage · `3` findings. 1 and 3
+  are never conflated, so a CI job can gate on model quality alone.
+- **Streams**: stdout is the artifact ONLY; every warning, summary and fold
+  diagnostic is stderr. Verified by real shell redirection, not in-process.
+- **No ANSI**, ever. **Deterministic**: identical inputs give byte-identical
+  stdout.
+- **`--json` on every reporting command**, always a self-describing object with
+  a `kind` stamp — the same facts as the text form, differently printed.
 
 ## 8. Phase 5 — Tests as properties (fast-check)
 
+✅ Shipped in M4 as `checkConformance` (in the analyzer, so the CLI, the property
+suite and CI all ask the same question), plus a fast-check property suite.
+
 Invariants from the design doc, run against every extractor output:
 
-- **Closure**: no edge to an unknown id (stubs count as known).
-- **No self-reference**: `from !== to` on every edge.
-- **Provenance always set**; `candidates` non-empty iff dispatch was uncertain.
-- **Profile validity**: every entity passes `validateEntity`.
-- **Determinism**: two runs on the same corpus produce identical models (sorted output).
-- Generative side: arbitrary entities from a profile always round-trip
-  JSON → validate → JSON.
+- [x] **Closure**: no edge to an unknown id (stubs count as known).
+- [x] **No self-reference**: `from !== to` on every edge.
+- [x] **Provenance always set**; `candidates` non-empty when present, and
+      present only on `dynamic-candidate` edges.
+- [x] **Profile validity**: every entity passes `validateEntity`.
+- [x] **Anchors**: every edge anchored; spans 1-based, ordered.
+- [x] **Duplicate ids**: identical redeclaration is legal (§1.1); only a
+      disagreement on kind or trait set is an error.
+- [x] **Determinism**: two runs on the same corpus produce identical output.
+- [x] Generative side: arbitrary entities from a profile always round-trip
+      JSON → validate → JSON.
+
+**Not asserted, deliberately:** that `to` appears in its own `candidates` list.
+§4 calls `to` the "best candidate", but measured against real Spoon output
+(commons-lang: 361 dynamic-candidate edges) 119 correctly EXCLUDE it — those
+resolve to an interface or abstract method, which cannot itself run, so the
+candidates are the concrete overriders. The model records no abstractness, so
+nothing can distinguish a correct exclusion from a mistaken one; re-instating
+the rule requires an abstractness fact in the metamodel first.
 
 Cross-validation strategy (later, when a 2nd Java extractor exists, e.g.
 Tree-sitter): Spoon output is the **oracle**; property = Tree-sitter edge set
@@ -496,7 +533,7 @@ Documented static limits (all languages, per profile `notes`): reflection,
 | M1 | Core metamodel | traits + 9 profiles + validation + JSON Schema, tested |
 | M2 | Java extractor | ✅ fixture corpus → valid `model.json`, schema-validated **and profile-validated across the language boundary**, closed graph, 94.1% resolution on the fixtures |
 | M3 | Analyzer | ✅ import graph, type deps, cycles, coupling metrics, DOT/CSV/JSON exports; 252 tests; verified end to end on google/gson (3 624 entities) and apache/commons-lang (15 338 entities) |
-| M4 | CLI + properties | end-to-end `codegraph analyze` on a real Java repo; property suite green |
+| M4 | CLI + properties | ✅ `validate`/`analyze`/`export`/`profiles` shipped; conformance gate + property suite green; 1 007 TS tests; verified end to end on apache/commons-lang (15 338 entities / 24 631 edges, every command < 1 s) |
 | M5 | 2nd language | clj-kondo adapter; cross-language import-graph query works |
 
 ## 11. Decisions made in this plan (deltas vs. the design doc)

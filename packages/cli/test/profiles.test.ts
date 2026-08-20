@@ -118,24 +118,39 @@ describe("one language's full spec", () => {
 });
 
 describe("--json prints the profile data as-is", () => {
+  // The artifact is the object `{kind, profiles[]}` in BOTH forms (decision 8
+  // says object; the other commands all stamp a `kind`). `--lang` filters
+  // `profiles` rather than switching to a second shape, so these assertions
+  // read the payload — the "loses and invents nothing" property is unchanged.
+  function payload(argv: readonly string[]): readonly unknown[] {
+    const parsed = JSON.parse(invoke([...argv, "--json"]).io.stdout()) as Record<string, unknown>;
+    expect(parsed["kind"], "the --json artifact must identify itself").toBe("codegraph.profiles/1");
+    const profiles = parsed["profiles"];
+    expect(Array.isArray(profiles)).toBe(true);
+    return profiles as readonly unknown[];
+  }
+
   it("emits one profile object for --lang, losing and inventing nothing", () => {
     const { code, io } = invoke(["profiles", "--lang", "java", "--json"]);
     expect(code).toBe(EXIT.OK);
-    expect(JSON.parse(io.stdout())).toEqual(JSON.parse(JSON.stringify(profileOf("java"))));
+    expect(payload(["profiles", "--lang", "java"])).toEqual([
+      JSON.parse(JSON.stringify(profileOf("java"))),
+    ]);
     expect(io.stderr()).toBe("");
   });
 
   it("emits every profile, in lang order, when no --lang is given", () => {
-    const parsed: unknown = JSON.parse(invoke(["profiles", "--json"]).io.stdout());
-    expect(parsed).toEqual(LANGS.map((lang) => JSON.parse(JSON.stringify(profileOf(lang)))));
+    expect(payload(["profiles"])).toEqual(
+      LANGS.map((lang) => JSON.parse(JSON.stringify(profileOf(lang)))),
+    );
   });
 
   it("says the same thing as the text form (decision 8)", () => {
     const text = invoke(["profiles", "--lang", "go"]).io.stdout();
-    const json = JSON.parse(invoke(["profiles", "--lang", "go", "--json"]).io.stdout()) as Profile;
-    expect(json.lang).toBe("go");
-    for (const kind of Object.keys(json.kinds)) expect(text).toContain(kind);
-    for (const note of json.notes ?? []) expect(text).toContain(note);
+    const [json] = payload(["profiles", "--lang", "go"]) as readonly Profile[];
+    expect(json?.lang).toBe("go");
+    for (const kind of Object.keys(json?.kinds ?? {})) expect(text).toContain(kind);
+    for (const note of json?.notes ?? []) expect(text).toContain(note);
   });
 });
 

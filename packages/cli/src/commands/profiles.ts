@@ -14,8 +14,12 @@ import { errLine, outLines, type IoSink } from "../io.js";
  *    profile's kinds (required/optional traits), edge kinds, spaces and notes.
  *  - An unknown `--lang` is a USAGE error (exit 2) naming the languages that do
  *    exist — no model was involved, so it cannot be a finding.
- *  - `--json` prints the profile object(s) on stdout; deterministic key and
- *    array order.
+ *  - `--json` prints the profile data on stdout; deterministic key and array
+ *    order. The artifact is ALWAYS the object `{kind, profiles[]}` — decision 8
+ *    specifies an object, and every other command stamps a `kind`, so a bare
+ *    top-level array here would be the one artifact a consumer could not
+ *    identify or version. `--lang` is a filter over `profiles`, not a second
+ *    shape: one command emits one shape whatever its flags.
  *  - This command reads no model, so its only success code is `EXIT.OK`.
  *
  * WHO READS THIS: an extractor author deciding what their language's contract
@@ -36,7 +40,7 @@ export function profilesCommand(options: ProfilesOptions, io: IoSink): ExitCode 
 
   if (options.lang === undefined) {
     if (options.json) {
-      io.out(toJsonString(profiles.map(canonicalProfile)));
+      io.out(profilesArtifact(profiles));
     } else {
       outLines(io, summaryLines(profiles));
       // Human, therefore stderr: the table above must survive `| column -t`
@@ -59,9 +63,17 @@ export function profilesCommand(options: ProfilesOptions, io: IoSink): ExitCode 
     );
   }
 
-  if (options.json) io.out(toJsonString(canonicalProfile(profile)));
+  if (options.json) io.out(profilesArtifact([profile]));
   else outLines(io, specLines(profile));
   return EXIT.OK;
+}
+
+/** The `--json` artifact: one identifiable, versionable shape for both forms. */
+function profilesArtifact(profiles: readonly Profile[]): string {
+  return toJsonString({
+    kind: "codegraph.profiles/1",
+    profiles: profiles.map(canonicalProfile),
+  });
 }
 
 /** Every shipped profile, ordered by lang — never by `PROFILES` iteration order. */

@@ -1,9 +1,19 @@
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { EXIT } from "../src/exit.js";
-import { captureIo } from "../src/io.js";
+import { captureIo, type IoSink } from "../src/io.js";
 import { run } from "../src/main.js";
 import { cliVersion } from "../src/version.js";
+
+/** Every .ts file under a directory, recursively. */
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const full = `${dir}/${name}`;
+    if (statSync(full).isDirectory()) return sourceFiles(full);
+    return full.endsWith(".ts") ? [full] : [];
+  });
+}
 
 const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.json", import.meta.url));
 
@@ -77,30 +87,60 @@ describe("usage errors exit 2 and stay off stdout (decisions 2 and 3)", () => {
 });
 
 /**
- * The seams. Every command is WIRED: dispatch reaches the real function, which
- * throws until its slice lands. That the throw arrives as exit 1 — an internal
- * error, never exit 3 — is the property that keeps "the tool broke" and "the
- * model is bad" apart while the slices are being written.
+ * The seams. While M4 was built in slices each command threw
+ * `M4: <name> fills this in`, and this suite proved the throw, so an
+ * unimplemented command could never be mistaken for an empty report. All four
+ * slices have landed, so the seams are gone and what outlasts them is the
+ * property the scaffold was really protecting: dispatch REACHES each command,
+ * and reaching it is never reported as an internal error.
+ *
+ * The old assertion is restated the way M3's `public-api.test.ts` restated its
+ * own — from "this named seam still throws" to "no seam survives anywhere",
+ * which additionally catches a command that landed only halfway and any future
+ * seam that is committed and then forgotten.
  */
-describe("dispatch reaches every command seam", () => {
-  const seams: readonly (readonly [string, readonly string[]])[] = [
+describe("dispatch reaches every command", () => {
+  const commands: readonly (readonly [string, readonly string[]])[] = [
     ["validate", ["validate", FIXTURE]],
     ["analyze", ["analyze", FIXTURE, "--report", "deps"]],
     ["export", ["export", FIXTURE, "--format", "dot"]],
     ["profiles", ["profiles"]],
   ];
 
-  it.each(seams)("%s is wired and reports its seam", (name, argv) => {
+  it.each(commands)("%s is wired and runs", (_name, argv) => {
     const result = invoke(argv);
-    expect(result.stderr).toContain(`M4: ${name} fills this in`);
-    expect(result.code).toBe(EXIT.INTERNAL);
-    expect(result.code).not.toBe(EXIT.FINDINGS);
+    // The fixture is clean, so every command must succeed outright. The point
+    // that matters either way: never exit 1 — "the tool broke" and "the model
+    // is bad" stay distinguishable (decision 2).
+    expect(result.code).toBe(EXIT.OK);
+    expect(result.code).not.toBe(EXIT.INTERNAL);
+    expect(result.stdout.length, `${_name} produced no artifact`).toBeGreaterThan(0);
+  });
+
+  it("has no seam placeholder left anywhere in src", () => {
+    const offenders = sourceFiles(fileURLToPath(new URL("../src", import.meta.url))).filter((file) =>
+      readFileSync(file, "utf8").includes("fills this in"),
+    );
+    expect(offenders).toEqual([]);
   });
 
   it("says an unexpected throw is a bug in codegraph, not in the model", () => {
-    const result = invoke(["validate", FIXTURE]);
-    expect(result.stderr).toContain("this is a bug in codegraph");
-    expect(result.stdout).toBe("");
+    // The seams used to supply the unexpected throw. With them gone, provoke a
+    // real one: a sink that fails mid-write is exactly the kind of internal
+    // fault that must not be reported as a finding about the user's model.
+    const io = captureIo();
+    const boom: IoSink = {
+      out: () => {
+        throw new Error("sink failed");
+      },
+      err: io.err,
+      writeFile: io.writeFile,
+    };
+    const code = run(["profiles"], boom);
+    expect(code).toBe(EXIT.INTERNAL);
+    expect(code).not.toBe(EXIT.FINDINGS);
+    expect(io.stderr()).toContain("this is a bug in codegraph");
+    expect(io.stdout()).toBe("");
   });
 });
 

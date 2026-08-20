@@ -7,7 +7,7 @@ import {
 } from "@codegraph/analyzer";
 import type { ValidateOptions } from "../args.js";
 import { EXIT, type ExitCode } from "../exit.js";
-import { loadModelFiles, type LoadedModels } from "../load.js";
+import { benignDuplicateIds, loadModelFiles, type LoadedModels } from "../load.js";
 import { outLines, type IoSink } from "../io.js";
 
 /**
@@ -57,6 +57,20 @@ function renderText(loaded: LoadedModels, report: ConformanceReport): readonly s
       (subject.langs.length > 0 ? `, lang ${subject.langs.join(", ")}` : ""),
   );
   for (const source of subject.sources) lines.push(`  ${source}`);
+
+  // Re-declaring an id identically is legal (METAMODEL 1.1) and the conformance
+  // `duplicate-id` rule rightly stays silent, so it is NOT a finding and does
+  // not move the exit code. It still has to be SAID: the entity and edge totals
+  // above count records, not distinct ids, so loading overlapping models
+  // inflates them — and every folded edge weight downstream with them.
+  const benign = benignDuplicateIds(loaded);
+  if (benign > 0) {
+    lines.push(
+      `note: ${plural(benign, "duplicate id", "duplicate ids")} — declared in more than one model, ` +
+        `identically, which is legal. The totals above count declarations, not distinct ids, ` +
+        `so they are inflated by the overlap.`,
+    );
+  }
 
   // A file that is not a Model has no entities to report on; say so first, or
   // the counts above read as if it had been checked.
@@ -151,11 +165,15 @@ function renderJson(loaded: LoadedModels, report: ConformanceReport): string {
       counts: report.counts,
       findings: report.findings,
       schemaErrors: sortedSchemaErrors(loaded.diagnostics.schemaErrors),
+      // Same fact as the text form's `note:` line — legal identical
+      // re-declarations, which inflate `subject`'s declaration counts.
+      duplicateIds: benignDuplicateIds(loaded),
     },
     null,
     2,
   );
 }
+
 
 /** Determinism (decision 6): label order, never the order the files happened to fail in. */
 function sortedSchemaErrors(errors: readonly SchemaError[]): readonly SchemaError[] {

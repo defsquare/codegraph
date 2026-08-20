@@ -65,7 +65,6 @@ export const CONFORMANCE_CODES = [
   "invalid-provenance",
   "candidates-empty",
   "candidates-without-uncertainty",
-  "candidates-exclude-target",
   "candidates-missing",
   "missing-anchor",
   "anchor-file-empty",
@@ -322,16 +321,22 @@ export function checkConformance(union: ModelUnion, options: ConformanceOptions 
           `${path} (${edge.from} -> ${edge.to}) lists ${candidates.length} candidates but is provenance "${String(provenance)}"; candidates mean ambiguous dispatch, which is provenance "dynamic-candidate"`,
         );
       }
-      if (candidates !== undefined && candidates.length > 0 && !candidates.includes(edge.to)) {
-        at(
-          "warning",
-          "candidates",
-          "candidates-exclude-target",
-          `${path}.candidates`,
-          edge.to,
-          `${path} lists candidates that do not include its own target "${edge.to}"; \`to\` is the best candidate, so it should be one of them`,
-        );
-      }
+      // NOT CHECKED: `to` among its own `candidates`.
+      //
+      // §4 calls `to` the "best candidate if uncertain", which reads as though
+      // it must appear in the list. Measured against real Spoon output
+      // (commons-lang, 361 dynamic-candidate edges): 242 include `to` and 119
+      // do not, and every one of the 119 resolves to a declaration that cannot
+      // itself execute — an interface method, an abstract method, or an enum
+      // constant body's supertype, whose `candidates` are the concrete
+      // overriders. Excluding it is the MORE precise answer: the list means
+      // "what could actually run".
+      //
+      // The model records no abstractness, so this checker cannot tell a
+      // correct exclusion from a mistaken one. A rule that fired on all 119 of
+      // the reference corpus's correct edges would only teach readers to
+      // ignore warnings, so the honest move is not to assert it at all.
+      // Re-instating it requires a modifier/abstractness fact in the metamodel.
       if (provenance === "dynamic-candidate" && candidates === undefined) {
         at(
           "warning",

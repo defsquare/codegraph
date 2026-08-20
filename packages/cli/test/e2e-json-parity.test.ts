@@ -26,6 +26,30 @@ const FIXTURE = javaFixture();
 beforeAll(ensureCliBinary, 120_000);
 afterAll(() => models.cleanup());
 
+/**
+ * The ids a report PRESENTS as its answer — coupling/deps rows and nodes.
+ *
+ * Deliberately NOT every id-shaped string in the document: `foldDiagnostics`
+ * also names the entities folding could not place (2 at module level, 10 at
+ * type). That diagnostic is required honesty — a silently smaller graph is how
+ * a wrong number gets trusted — but it is not part of the answer, and the text
+ * form correctly keeps it on stderr. Scraping the whole document conflates the
+ * report with the caveat, so parity is asserted on the answer itself.
+ */
+function reportNodeIds(parsed: Record<string, unknown>): Set<string> {
+  const ids = new Set<string>();
+  for (const key of ["rows", "nodes"]) {
+    const list = parsed[key];
+    if (!Array.isArray(list)) continue;
+    for (const row of list) {
+      if (typeof row !== "object" || row === null) continue;
+      const id = (row as Record<string, unknown>)["id"];
+      if (typeof id === "string") ids.add(id);
+    }
+  }
+  return ids;
+}
+
 function bothForms(argv: readonly string[]): { text: ReturnType<typeof runCli>; json: ReturnType<typeof runCli> } {
   return { text: runCli(argv), json: runCli([...argv, "--json"]) };
 }
@@ -62,9 +86,15 @@ describe("validate says the same thing in both forms", () => {
 
     // Verified against `loadModels`: stripping a class down to TNamed produces
     // exactly 6 missing-required-trait issues.
-    const issues = valuesUnderKey(parsed, /profileIssue|issues/i).filter(Array.isArray);
-    const longest = issues.reduce<number>((best, list) => Math.max(best, list.length), 0);
-    expect(longest, "the JSON form must carry the 6 profile issues").toBe(6);
+    // The KEY holding them is the implementer's to name: the merged shape
+    // reports them as `findings[]` entries under the `profile` rule (plus a
+    // rolled-up `counts.byRule.profile`), not under a `profileIssues` key.
+    // Locate them by what they SAY, per this file's spelling-agnostic rule.
+    const findings = valuesUnderKey(parsed, /finding|issue/i)
+      .filter(Array.isArray)
+      .flat()
+      .filter((finding) => JSON.stringify(finding).includes("missing-required-trait"));
+    expect(findings.length, "the JSON form must carry the 6 profile issues").toBe(6);
     expect(text.stdout + text.stderr).toContain("missing-required-trait");
   });
 
@@ -101,7 +131,7 @@ describe("analyze says the same thing in both forms", () => {
 
   it("coupling names the same 10 modules in both forms", () => {
     const { text, json } = bothForms(["analyze", FIXTURE, "--report", "coupling"]);
-    const fromJson = entityIdsIn(json.stdout);
+    const fromJson = reportNodeIds(parseJsonArtifact(json.stdout, "analyze --report coupling --json"));
     const fromText = entityIdsIn(text.stdout);
     expect(fromJson.size, "the module level of the java fixture has 10 nodes").toBe(10);
     expect([...fromText].sort(), "the two forms must name the same modules").toEqual(
@@ -111,14 +141,15 @@ describe("analyze says the same thing in both forms", () => {
 
   it("coupling at type level names the same 36 types in both forms", () => {
     const { text, json } = bothForms(["analyze", FIXTURE, "--report", "coupling", "--level", "type"]);
-    const fromJson = entityIdsIn(json.stdout);
+    const fromJson = reportNodeIds(parseJsonArtifact(json.stdout, "analyze coupling type --json"));
     expect(fromJson.size).toBe(36);
     expect([...entityIdsIn(text.stdout)].sort()).toEqual([...fromJson].sort());
   });
 
   it("deps names the same nodes in both forms", () => {
     const { text, json } = bothForms(["analyze", FIXTURE, "--report", "deps"]);
-    expect([...entityIdsIn(text.stdout)].sort()).toEqual([...entityIdsIn(json.stdout)].sort());
+    const fromJson = reportNodeIds(parseJsonArtifact(json.stdout, "analyze --report deps --json"));
+    expect([...entityIdsIn(text.stdout)].sort()).toEqual([...fromJson].sort());
   });
 
   it("--top limits the rows shown without changing what was computed", () => {
@@ -126,8 +157,8 @@ describe("analyze says the same thing in both forms", () => {
     const topped = runCli(["analyze", FIXTURE, "--report", "coupling", "--top", "3", "--json"]);
     expect(topped.code, describeResult(topped)).toBe(full.code);
 
-    const fullIds = entityIdsIn(full.stdout);
-    const toppedIds = entityIdsIn(topped.stdout);
+    const fullIds = reportNodeIds(parseJsonArtifact(full.stdout, "coupling --json"));
+    const toppedIds = reportNodeIds(parseJsonArtifact(topped.stdout, "coupling --top 3 --json"));
     expect(toppedIds.size, "--top 3 must show 3 rows").toBe(3);
     for (const id of toppedIds) {
       expect(fullIds, `--top invented the row ${id}`).toContain(id);
@@ -136,7 +167,8 @@ describe("analyze says the same thing in both forms", () => {
 
   it("--top agrees between the text and JSON forms", () => {
     const { text, json } = bothForms(["analyze", FIXTURE, "--report", "coupling", "--top", "3"]);
-    expect([...entityIdsIn(text.stdout)].sort()).toEqual([...entityIdsIn(json.stdout)].sort());
+    const fromJson = reportNodeIds(parseJsonArtifact(json.stdout, "coupling --top 3 --json"));
+    expect([...entityIdsIn(text.stdout)].sort()).toEqual([...fromJson].sort());
   });
 
   it("a view flag changes the answer in both forms identically", () => {
