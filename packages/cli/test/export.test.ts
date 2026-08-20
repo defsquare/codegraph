@@ -351,8 +351,50 @@ describe("export: JSON", () => {
   });
 });
 
+describe("export: PlantUML", () => {
+  it("is a single @startuml/@enduml block with one class per module and one arrow per edge", () => {
+    const { io, code } = exportTo({ format: "plantuml", level: "module" });
+    expect(code).toBe(EXIT.OK);
+    const artifact = io.stdout();
+    // Stream purity: the artifact's own first byte opens stdout.
+    expect(artifact.startsWith("@startuml")).toBe(true);
+    expect(artifact.trimEnd().endsWith("@enduml")).toBe(true);
+    expect(artifact).not.toContain("warning");
+    const lines = artifact.split("\n");
+    expect(lines.filter((line) => line === "@startuml")).toHaveLength(1);
+    expect(lines.filter((line) => line === "@enduml")).toHaveLength(1);
+    expect(lines.filter((line) => line.startsWith('class "'))).toHaveLength(MODULE_NODES);
+    // Anchored at column 0: the legend's example arrows are indented.
+    expect(lines.filter((line) => /^\w+ (-->|\.\.>) /.test(line))).toHaveLength(MODULE_EDGES);
+  });
+
+  it("keeps every statement on one physical line at type level, signature ids included", () => {
+    const artifact = exportTo({ format: "plantuml", level: "type" }).io.stdout();
+    const lines = artifact.split("\n");
+    expect(lines.filter((line) => line.startsWith('class "'))).toHaveLength(TYPE_NODES);
+    // A raw newline in a label would orphan a fragment that matches no grammar.
+    for (const line of lines) {
+      expect(/^(@startuml|@enduml|'|title |hide |class "|legend$|end legend$| |[A-Za-z_])/.test(line) || line === "").toBe(
+        true,
+      );
+    }
+    expect(lines.filter((line) => /^\w+ (-->|\.\.>) /.test(line))).toHaveLength(TYPE_EDGES);
+  });
+
+  it("carries the level and the view into the rendered title", () => {
+    const artifact = exportTo({ format: "plantuml", level: "module", internalOnly: true }).io.stdout();
+    const title = artifact.split("\n").find((line) => line.startsWith("title "));
+    expect(title).toContain("module");
+    expect(title).toContain("internalOnly");
+  });
+
+  it("says in the file itself that it is not a model.json", () => {
+    expect(exportTo({ format: "plantuml" }).io.stdout()).toContain("Not a model.json");
+  });
+});
+
 describe("export: determinism (decision 6)", () => {
-  const formats: readonly FormatName[] = ["dot", "json", "csv"];
+  const formats: readonly FormatName[] = ["dot", "json", "csv", "plantuml"];
 
   for (const format of formats) {
     it(`produces byte-identical ${format} on two runs`, () => {
@@ -507,7 +549,7 @@ describe("export: exit codes", () => {
     const code = run(["export", FIXTURE], io);
     expect(code).toBe(EXIT.USAGE);
     expect(io.stdout()).toBe("");
-    expect(io.stderr()).toContain("--format <dot|json|csv>");
+    expect(io.stderr()).toContain("--format <dot|json|csv|plantuml>");
   });
 
   it("exits USAGE for an unknown format, naming the valid ones", () => {

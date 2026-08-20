@@ -48,6 +48,22 @@ describe("a redirected stdout is a usable file on its own", () => {
     expect(table.rows.length).toBe(14);
   });
 
+  it("> modules.puml produces a single, PlantUML-shaped diagram block", () => {
+    const path = scratchPath(models, "modules.puml");
+    const result = runCliRedirectingStdout(["export", FIXTURE, "--format", "plantuml"], path);
+    expect(result.code, describeResult(result)).toBe(EXIT.OK);
+
+    const written = readFileSync(path, "utf8");
+    const lines = written.split("\n");
+    // The file is exactly one diagram: `plantuml modules.puml` reads it whole.
+    expect(lines[0]).toBe("@startuml");
+    expect(lines.filter((line) => line === "@startuml")).toHaveLength(1);
+    expect(lines.filter((line) => line === "@enduml")).toHaveLength(1);
+    expect(written.trimEnd().endsWith("@enduml")).toBe(true);
+    expect(lines.filter((line) => /^\w+ (-->|\.\.>) /.test(line)).length).toBeGreaterThanOrEqual(14);
+    expect(written.endsWith("\n")).toBe(true);
+  });
+
   it("> graph.json produces a file that parses as JSON", () => {
     const path = scratchPath(models, "graph.json");
     const result = runCliRedirectingStdout(["export", FIXTURE, "--format", "json"], path);

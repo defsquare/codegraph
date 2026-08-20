@@ -129,6 +129,7 @@ describe("no ANSI colour anywhere (decision 4)", () => {
     ["validate", models.profileViolation],
     ["analyze", FIXTURE, "--report", "coupling"],
     ["export", FIXTURE, "--format", "dot"],
+    ["export", FIXTURE, "--format", "plantuml"],
     ["frobnicate"],
   ];
 

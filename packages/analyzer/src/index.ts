@@ -56,5 +56,6 @@ export * from "./metrics/cycles.js";
 // Stage 7: renderings. Derived and dynamic-candidate relations stay visually
 // distinguishable from declared facts, and stubs from corpus entities.
 export * from "./exports/dot.js";
+export * from "./exports/plantuml.js";
 export * from "./exports/csv.js";
 export * from "./exports/json.js";

@@ -6,6 +6,7 @@ import {
   foldedGraphToJson,
   toDot,
   toJsonString,
+  toPlantUml,
   type FoldedGraph,
   type LoadDiagnostics,
 } from "@codegraph/analyzer";
@@ -57,6 +58,7 @@ const RENDERERS: Readonly<Record<FormatName, (folded: FoldedGraph) => string>> =
   dot: (folded) => toDot(folded),
   json: (folded) => toJsonString(foldedGraphToJson(folded)),
   csv: (folded) => foldedGraphToCsv(folded),
+  plantuml: (folded) => toPlantUml(folded),
 };
 
 function plural(count: number, noun: string, plural_ = `${noun}s`): string {

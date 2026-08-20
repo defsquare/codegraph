@@ -23,7 +23,7 @@ export const REPORTS = ["deps", "cycles", "coupling"] as const;
 export type ReportName = (typeof REPORTS)[number];
 
 /** `export --format` values. */
-export const FORMATS = ["dot", "json", "csv"] as const;
+export const FORMATS = ["dot", "json", "csv", "plantuml"] as const;
 export type FormatName = (typeof FORMATS)[number];
 
 /**

@@ -2,6 +2,7 @@ import { ENTITY_REFERENCE_KEYS } from "@codegraph/core";
 import { describe, expect, it } from "vitest";
 import { couplingToCsv, cyclesToCsv, foldedGraphToCsv } from "../src/exports/csv.js";
 import { toDot } from "../src/exports/dot.js";
+import { toPlantUml } from "../src/exports/plantuml.js";
 import { couplingToJson, cyclesToJson, foldedGraphToJson, toJsonString } from "../src/exports/json.js";
 import { foldGraph, type FoldedGraph } from "../src/fold.js";
 import { coupling } from "../src/metrics/coupling.js";
@@ -103,6 +104,16 @@ describe("no export serializes an inverse index", () => {
       for (const forbidden of INVERSE_INDEX_KEYS) {
         expect(dot, `${forbidden} leaked into DOT`).not.toContain(`${forbidden}=`);
         expect(dot).not.toContain(`${forbidden}:`);
+      }
+    }
+  });
+
+  it("the PlantUML export names no inverse-index attribute", () => {
+    for (const folded of foldedGraphs()) {
+      const uml = toPlantUml(folded).toLowerCase();
+      for (const forbidden of INVERSE_INDEX_KEYS) {
+        expect(uml, `${forbidden} leaked into PlantUML`).not.toContain(`${forbidden}=`);
+        expect(uml).not.toContain(`${forbidden}:`);
       }
     }
   });

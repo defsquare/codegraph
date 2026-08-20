@@ -43,7 +43,7 @@ describe("help and version are part of the product (decision 9)", () => {
     expect(result.code).toBe(EXIT.OK);
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("usage: codegraph export");
-    expect(result.stdout).toContain("--format <dot|json|csv>");
+    expect(result.stdout).toContain("--format <dot|json|csv|plantuml>");
   });
 
   it("prints the package version on stdout and exits 0", () => {

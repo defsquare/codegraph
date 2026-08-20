@@ -35,6 +35,7 @@ const INVOCATIONS: readonly (readonly string[])[] = [
   ["export", FIXTURE, "--format", "dot"],
   ["export", FIXTURE, "--format", "csv", "--level", "type"],
   ["export", FIXTURE, "--format", "json", "--internal-only"],
+  ["export", FIXTURE, "--format", "plantuml", "--internal-only"],
 ];
 
 describe("stdout is byte-identical across runs", () => {

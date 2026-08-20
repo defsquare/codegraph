@@ -61,6 +61,7 @@ const SUCCESS_CASES: readonly Case[] = [
   { why: "export dot", argv: ["export", FIXTURE, "--format", "dot"], expected: EXIT.OK },
   { why: "export json", argv: ["export", FIXTURE, "--format", "json"], expected: EXIT.OK },
   { why: "export csv", argv: ["export", FIXTURE, "--format", "csv"], expected: EXIT.OK },
+  { why: "export plantuml", argv: ["export", FIXTURE, "--format", "plantuml"], expected: EXIT.OK },
   {
     why: "export at type level, declared only",
     argv: ["export", FIXTURE, "--format", "csv", "--level", "type", "--declared-only"],

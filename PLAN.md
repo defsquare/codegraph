@@ -457,14 +457,17 @@ a **union** (decision 5).
 codegraph validate <model.json...> [--json]
 codegraph analyze  <model.json...> --report deps|cycles|coupling [--level module|type]
                                    [--internal-only] [--declared-only] [--json] [--top N]
-codegraph export   <model.json...> --format dot|json|csv [--level module|type]
+codegraph export   <model.json...> --format dot|json|csv|plantuml [--level module|type]
                                    [--internal-only] [--declared-only] [--out FILE]
 codegraph profiles [--lang java] [--json]        # print a profile spec
 ```
 
 - [x] `validate` — runs the analyzer's `checkConformance` gate over the union.
 - [x] `analyze` — deps / cycles / coupling, at module or type level.
-- [x] `export` — DOT, JSON and CSV of the folded graph.
+- [x] `export` — DOT, JSON, CSV and PlantUML (class diagram) of the folded
+      graph. The PlantUML rendering keeps the DOT encoding: solid arrow =
+      all-`declared`, dashed = contains an inference, label = folded count,
+      `<<stub>>` = external.
 - [x] `profiles` — prints core's profile data; synthesizes nothing.
 - [x] `--help` per command, `--version`, and a usage error naming the valid
       values for a bad flag.

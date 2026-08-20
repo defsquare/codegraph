@@ -244,7 +244,7 @@ describe("export", () => {
 
   it("rejects an unknown format", () => {
     const error = usageErrorFor(["export", "a.json", "--format", "graphml"]);
-    expect(error.hint ?? "").toContain("dot, json, csv");
+    expect(error.hint ?? "").toContain("dot, json, csv, plantuml");
   });
 });
 

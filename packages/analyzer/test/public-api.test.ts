@@ -41,6 +41,8 @@ const PUBLIC_API = {
   exports: [
     "toDot",
     "escapeDot",
+    "toPlantUml",
+    "escapePlantUmlLabel",
     "foldedGraphToCsv",
     "couplingToCsv",
     "cyclesToCsv",
