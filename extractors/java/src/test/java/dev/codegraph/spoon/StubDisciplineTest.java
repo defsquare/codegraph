@@ -57,7 +57,7 @@ class StubDisciplineTest {
 
   @BeforeAll
   static void extract() {
-    run = ExtractorHarness.runOnFixtures(outputDirectory.resolve("model.json")).succeeded();
+    run = ExtractorHarness.runOnFixtures(outputDirectory.resolve("model.jsonl")).succeeded();
     byId = new TreeMap<>();
     for (JsonNode entity : run.entities()) {
       byId.put(entity.path("id").asText(), entity);
@@ -108,8 +108,8 @@ class StubDisciplineTest {
       // THE PROPERTY THE OLD "a stub has no parent" ASSERTION WAS REALLY GUARDING:
       // an external type must never be attributed to a CORPUS module, which would
       // make it look internal to every module-level analysis. Having a parent is
-      // fine; having a non-stub one is the actual violation. Containment must also
-      // agree in both directions (METAMODEL.md §3.2).
+      // fine; having a non-stub one is the actual violation. There is no second
+      // direction to agree with any more (MM-2): `children` is derived.
       if (entity.has("parent")) {
         String parentId = entity.path("parent").asText();
         JsonNode parent = byId.get(parentId);
@@ -118,11 +118,9 @@ class StubDisciplineTest {
             () -> "stub " + id + " is attributed to non-stub " + parentId + " — it would read as internal");
         assertEquals(
             "package", parent.path("kind").asText(), () -> "stub " + id + " must hang off a module");
-        List<String> siblings = new ArrayList<>();
-        parent.path("children").forEach(child -> siblings.add(child.asText()));
         assertTrue(
-            siblings.contains(id),
-            () -> "containment disagrees: " + id + " claims parent " + parentId + " which disowns it");
+            ExtractorHarness.traitsOf(parent).contains("TWithChildren"),
+            () -> "the module " + parentId + " does not declare itself a container");
       }
     }
   }

@@ -4,9 +4,8 @@ package dev.codegraph.spoon.model;
  * The closed, canonical trait vocabulary (METAMODEL.md §3). Constant names are
  * the JSON values verbatim — never rename or alias them locally.
  *
- * <p>Declaration order is the order of the {@code traits} enum in
- * schemas/model.schema.json. It is load-bearing: entity trait lists are emitted
- * in ordinal order (via {@link java.util.EnumSet}), which is what makes two runs
+ * <p>Declaration order is load-bearing: entity trait lists are emitted in
+ * ordinal order (via {@link java.util.EnumSet}), which is what makes two runs
  * over the same corpus byte-identical.
  */
 public enum TraitName {
@@ -36,7 +35,13 @@ public enum TraitName {
    */
   public boolean isMarker() {
     return switch (this) {
-      case TWithInheritances, TWithImplements, TWithInvocations, TStructural, TWithAccesses -> true;
+      case TWithChildren,
+              TWithInheritances,
+              TWithImplements,
+              TWithInvocations,
+              TStructural,
+              TWithAccesses ->
+          true;
       default -> false;
     };
   }

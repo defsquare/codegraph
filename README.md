@@ -8,7 +8,7 @@ cycles, architecture, and eventually a 3D "code city".
 ```
 ┌──────────────────┐    ┌───────────────────┐    ┌──────────────────────┐
 │ Extractors       │    │ JSON interchange  │    │ TypeScript analyzer  │
-│ (native tooling) │ ─▶ │ model.json        │ ─▶ │ validate → graph →   │
+│ (native tooling) │ ─▶ │ model.jsonl       │ ─▶ │ validate → graph →   │
 │ Java: Spoon      │    │ (versioned schema)│    │ queries → exports    │
 └──────────────────┘    └───────────────────┘    └──────────────────────┘
 ```
@@ -47,9 +47,9 @@ Four rules make the model trustworthy rather than merely rich:
 | `packages/analyzer` | `@codegraph/analyzer` — graph construction, derived indexes, queries, metrics |
 | `packages/cli` | `@codegraph/cli` — the `codegraph` command |
 | `packages/viz` | *(future)* Three.js code city — the only package allowed to depend on `three` |
-| `extractors/java` | Maven/Spoon extractor (noClasspath), emits `model.json` |
+| `extractors/java` | Maven/Spoon extractor (noClasspath), emits `model.jsonl` |
 | `schemas/` | Generated JSON Schema — the committed cross-language contract |
-| `fixtures/` | Reference corpora + expected `model.json` snapshots |
+| `fixtures/` | Reference corpora + expected `model.jsonl` snapshots |
 
 ## Getting started
 
@@ -67,21 +67,21 @@ Java extractor:
 
 ```bash
 cd extractors/java && ./mvnw -B package   # the wrapper; no local Maven needed
-java -jar target/codegraph-java.jar --src <dir> --out model.json
+java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 ```
 
-Analysis — the `codegraph` CLI. Every command takes one or more `model.json`
+Analysis — the `codegraph` CLI. Every command takes one or more `model.jsonl`
 paths and loads them as a single union, so multi-language analysis is just a
 longer argument list:
 
 ```bash
-codegraph validate model.json [--json]
+codegraph validate model.jsonl [--json]
 
-codegraph analyze  model.json --report deps|cycles|coupling
+codegraph analyze  model.jsonl --report deps|cycles|coupling
                    [--level module|type] [--internal-only] [--declared-only]
                    [--json] [--top N]
 
-codegraph export   model.json --format dot|json|csv
+codegraph export   model.jsonl --format dot|json|csv
                    [--level module|type] [--internal-only] [--declared-only]
                    [--out FILE]
 
@@ -100,13 +100,13 @@ ln -s "$PWD/bin/codegraph" ~/.local/bin/codegraph
 
 ```bash
 # is this extractor output conformant?
-codegraph validate model.json
+codegraph validate model.jsonl
 
 # which packages are most coupled?
-codegraph analyze model.json --report coupling --top 20
+codegraph analyze model.jsonl --report coupling --top 20
 
 # a picture, and nothing but the picture, in graph.dot
-codegraph export model.json --format dot > graph.dot
+codegraph export model.jsonl --format dot > graph.dot
 ```
 
 **stdout is the artifact; stderr is everything human.** Warnings, fold
@@ -124,15 +124,27 @@ worked; the input did not). A CI job gating on model quality checks for `3`.
 |---|---|---|
 | M0 | Bootstrap — workspace builds, CI green | ✅ |
 | M1 | Core metamodel — traits, 9 profiles, validation, JSON Schema | ✅ |
-| M2 | Java extractor — fixture corpus → schema- and profile-valid `model.json` | ✅ |
+| M2 | Java extractor — fixture corpus → schema- and profile-valid model | ✅ |
 | M3 | Analyzer — import graph, type deps, cycles, coupling, exports | ✅ |
 | M4 | CLI — `validate`, `analyze`, `export`, `profiles` + conformance gate | ✅ |
-| M5 | 2nd language — clj-kondo adapter, cross-language import graph | ⬜ |
+| M5 | Metamodel v2 — structured identity, canonical order, memoized validation | ✅ |
+| M6 | JSONL interchange — streaming, surrogate references, per-record schemas | ✅ |
+| M7 | SQLite analysis store — `codegraph import`, DB-backed analyzer | ⬜ |
+| M8 | 2nd language — clj-kondo adapter, cross-language import graph | ⬜ |
 
-The M2 output over the reference corpus is committed as
-[`fixtures/java/expected/model.json`](fixtures/java/expected/model.json) — 166
-entities (26 stubs) and 173 edges, pretty-printed and sorted so that any change
-to what the extractor claims about known code shows up as a reviewable diff.
+The extractor's output over the reference corpus is committed as
+[`fixtures/java/expected/model.jsonl`](fixtures/java/expected/model.jsonl) — 166
+entities (26 stubs) and 173 edges, one record per line in canonical order, so
+that any change to what the extractor claims about known code shows up as a
+reviewable diff.
+
+M6 replaced the single-JSON-document interchange with JSONL: identity travels as
+the natural key `(module, symbol, disambiguator)` and every reference as a
+file-scoped integer, so no rendered id string appears in a model file and
+neither writer nor reader ever holds the whole document. apache/fineract went
+from a 559.5MB `model.json` that Node could not read at all — one JSON document
+is one JavaScript string, and that is past the ~512MB ceiling — to a 127.4MB
+`model.jsonl` on which every command completes in about twelve seconds.
 
 M3 runs that snapshot through the whole pipeline in the test suite, and was
 verified against two real corpora extracted with the M2 extractor: google/gson

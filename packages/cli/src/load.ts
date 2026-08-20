@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { accessSync, constants } from "node:fs";
+import { readModelFileSync } from "@codegraph/core";
 import {
   isClean,
   loadModels,
@@ -37,10 +38,18 @@ export interface LoadedModels {
   readonly clean: boolean;
 }
 
+/**
+ * Reads one `.jsonl` model. Streaming, a line at a time: a model of a real
+ * corpus does not fit in one JavaScript string, which is the whole reason the
+ * interchange is line-based.
+ *
+ * The two failure classes stay exactly where M4 put them: an unreadable PATH is
+ * a usage error (exit 2), while a readable file that is not a conforming model
+ * is a FINDING (exit 3) reported alongside everything else wrong with the input.
+ */
 function readPayload(path: string, index: number): { payload: unknown } | { error: SchemaError } {
-  let text: string;
   try {
-    text = readFileSync(path, "utf8");
+    accessSync(path, constants.R_OK);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new UsageError(`cannot read ${path}: ${reason}`, "Check the path exists and is a readable file.", {
@@ -48,14 +57,14 @@ function readPayload(path: string, index: number): { payload: unknown } | { erro
     });
   }
   try {
-    return { payload: JSON.parse(text) as unknown };
+    return { payload: readModelFileSync(path) };
   } catch (error) {
     // Not a usage error: the path was fine, the CONTENT is not a model.
     return {
       error: {
         modelIndex: index,
         label: path,
-        message: `not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        message: `not a valid model.jsonl: ${error instanceof Error ? error.message : String(error)}`,
       },
     };
   }

@@ -24,12 +24,6 @@ export function entityParent(entity: Entity): EntityId | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-/** The `children` the entity DECLARES (TWithChildren), not the derived inverse. */
-export function declaredChildren(entity: Entity): readonly EntityId[] {
-  const value = (entity as Record<string, unknown>)["children"];
-  return Array.isArray(value) ? (value.filter((id) => typeof id === "string") as EntityId[]) : EMPTY;
-}
-
 export function entityName(entity: Entity): string | undefined {
   const value = (entity as Record<string, unknown>)["name"];
   return typeof value === "string" ? value : undefined;

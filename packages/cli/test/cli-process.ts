@@ -71,7 +71,7 @@ export function cliBinary(): string {
 
 /** The measured corpus every e2e assertion is written against. */
 export function javaFixture(): string {
-  return join(repoRoot(), "fixtures", "java", "expected", "model.json");
+  return join(repoRoot(), "fixtures", "java", "expected", "model.jsonl");
 }
 
 /** The version `--version` must print, read from the package rather than guessed. */

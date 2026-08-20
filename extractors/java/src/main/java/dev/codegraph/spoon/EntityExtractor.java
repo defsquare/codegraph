@@ -273,7 +273,8 @@ public final class EntityExtractor {
               .markers(TraitName.TWithInvocations, TraitName.TWithAccesses)
               .childOf(parent)
               .anchoredAt(anchor);
-      add(new Draft(id, parent, false, builder));
+      // A container like any type: its own methods and fields claim it as parent.
+      add(new Draft(id, parent, true, builder));
     }
 
     /** Fields, constructors and methods of a type — including an anonymous one. */
@@ -310,7 +311,7 @@ public final class EntityExtractor {
               .childOf(ownerId)
               .anchoredAt(anchor.get());
       comments(builder, method);
-      add(new Draft(id, ownerId, false, builder));
+      add(new Draft(id, ownerId, true, builder));
     }
 
     private void constructor(CtConstructor<?> constructor, String ownerId) {
@@ -330,7 +331,7 @@ public final class EntityExtractor {
               .childOf(ownerId)
               .anchoredAt(anchor.get());
       comments(builder, constructor);
-      add(new Draft(id, ownerId, false, builder));
+      add(new Draft(id, ownerId, true, builder));
     }
 
     private void lambda(CtLambda<?> lambda) {
@@ -348,7 +349,7 @@ public final class EntityExtractor {
               .markers(TraitName.TWithInvocations, TraitName.TWithAccesses)
               .childOf(parent)
               .anchoredAt(anchor.get());
-      add(new Draft(id, parent, false, builder));
+      add(new Draft(id, parent, true, builder));
     }
 
     private void field(CtField<?> field, String ownerId) {
@@ -529,19 +530,13 @@ public final class EntityExtractor {
     }
 
     private List<Entity> build() {
-      Map<String, Set<String>> childrenByParent = new TreeMap<>();
-      for (Draft draft : drafts.values()) {
-        if (draft.parentId() != null) {
-          childrenByParent.computeIfAbsent(draft.parentId(), key -> new TreeSet<>()).add(draft.id());
-        }
-      }
-
       List<Entity> entities = new ArrayList<>(drafts.size());
       for (Draft draft : drafts.values()) {
         if (draft.container()) {
-          // Exactly the ids whose parent is this entity — the two directions of
-          // containment cannot drift because only one of them is observed.
-          draft.builder().withChildren(List.copyOf(childrenByParent.getOrDefault(draft.id(), Set.of())));
+          // TWithChildren is a marker (MM-2): only `parent` is observed, and the
+          // children index is derived from it. Emitting both directions was an
+          // inverse index on the wire, which invariant 4 has always forbidden.
+          draft.builder().marker(TraitName.TWithChildren);
         }
         entities.add(draft.builder().build());
       }

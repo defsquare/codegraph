@@ -182,11 +182,16 @@ export function loadModels(inputs: unknown, options: LoadOptions = {}): LoadResu
     models.push(model);
   });
 
+  // Element by element, NEVER `push(...model.entities)`: a spread passes one
+  // ARGUMENT per element, and a real corpus overflows the call stack long
+  // before it exhausts memory — apache/fineract (240 929 entities) failed here
+  // with `Maximum call stack size exceeded`, reported as an internal error
+  // because that is exactly what it was.
   const entities: Entity[] = [];
   const edges: Edge[] = [];
   for (const model of models) {
-    entities.push(...model.entities);
-    edges.push(...model.edges);
+    for (const entity of model.entities) entities.push(entity);
+    for (const edge of model.edges) edges.push(edge);
   }
 
   const union: ModelUnion = {

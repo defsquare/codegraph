@@ -14,7 +14,7 @@ import com.networknt.schema.SpecificationVersion;
 import dev.codegraph.spoon.model.Entity;
 import dev.codegraph.spoon.model.ExtractorInfo;
 import dev.codegraph.spoon.model.Model;
-import dev.codegraph.spoon.model.ModelWriter;
+import dev.codegraph.spoon.model.JsonlWriter;
 import dev.codegraph.spoon.model.TraitName;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -23,6 +23,7 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -150,6 +151,7 @@ class EntityExtractorTest {
               traits(
                   TraitName.TNamed,
                   TraitName.TInvocable,
+                  TraitName.TWithChildren,
                   TraitName.TWithParameters,
                   TraitName.TWithLocalVariables,
                   TraitName.TWithInvocations,
@@ -161,6 +163,7 @@ class EntityExtractorTest {
               "constructor",
               traits(
                   TraitName.TInvocable,
+                  TraitName.TWithChildren,
                   TraitName.TWithParameters,
                   TraitName.TWithLocalVariables,
                   TraitName.TWithInvocations,
@@ -171,6 +174,7 @@ class EntityExtractorTest {
               "lambda",
               traits(
                   TraitName.TInvocable,
+                  TraitName.TWithChildren,
                   TraitName.TWithParameters,
                   TraitName.TWithLocalVariables,
                   TraitName.TWithInvocations,
@@ -307,7 +311,7 @@ class EntityExtractorTest {
     assertEquals(2, lambdas.size());
     for (Entity lambda : lambdas) {
       assertEquals(TYPE, lambda.parent());
-      assertTrue(entity(TYPE).children().contains(lambda.id()));
+      assertTrue(entity(TYPE).traits().contains(TraitName.TWithChildren));
     }
 
     Entity anonymousClass =
@@ -372,7 +376,6 @@ class EntityExtractorTest {
       assertEquals(entity.traits().contains(TraitName.TInvocable), entity.signature() != null, entity.id());
       assertEquals(entity.traits().contains(TraitName.TSourceAnchor), entity.anchor() != null, entity.id());
       assertEquals(entity.traits().contains(TraitName.TChildOf), entity.parent() != null, entity.id());
-      assertEquals(entity.traits().contains(TraitName.TWithChildren), entity.children() != null, entity.id());
       assertEquals(entity.traits().contains(TraitName.TModule), entity.definedIn() != null, entity.id());
       // `isStub` is contributed by TType AND by TModule: an external package is a
       // degraded module exactly as an external type is a degraded type, which is
@@ -399,24 +402,37 @@ class EntityExtractorTest {
 
   // ------------------------------------------------------------- containment
 
-  /** METAMODEL.md §3.2: both directions are stored, so both must agree. */
+  /**
+   * MM-2: only {@code parent} is stored, so there is no second direction to
+   * disagree with. What is still assertable — and what the analyzer relies on to
+   * derive the children index — is that anything claimed as a parent says it is
+   * a container.
+   */
   @Test
-  void containmentAgreesInBothDirections() {
-    Map<String, Set<String>> childrenByParent = new TreeMap<>();
+  void everythingClaimedAsAParentDeclaresItselfAContainer() {
+    Set<String> claimed = new TreeSet<>();
     for (Entity entity : entities) {
       if (entity.parent() != null) {
-        childrenByParent.computeIfAbsent(entity.parent(), key -> new TreeSet<>()).add(entity.id());
+        claimed.add(entity.parent());
       }
     }
-    for (Entity entity : entities) {
-      if (entity.children() == null) {
-        continue;
-      }
-      assertEquals(
-          List.copyOf(childrenByParent.getOrDefault(entity.id(), Set.of())),
-          entity.children(),
-          () -> "children of " + entity.id() + " disagree with the entities claiming it as parent");
+    assertFalse(claimed.isEmpty(), "the fixture corpus declares no containment at all");
+    for (String id : claimed) {
+      Entity container = byId.get(id);
+      assertNotNull(container, () -> "an entity claims an unknown parent: " + id);
+      assertTrue(
+          container.traits().contains(TraitName.TWithChildren),
+          () -> id + " is claimed as a parent but does not declare TWithChildren");
     }
+  }
+
+  /** The derived children index — what a consumer builds from `parent`. */
+  private static List<String> childrenOf(String id) {
+    return entities.stream()
+        .filter(entity -> id.equals(entity.parent()))
+        .map(Entity::id)
+        .sorted()
+        .toList();
   }
 
   /** Pass 2 must not emit a parent, child, parameter or local nothing declares. */
@@ -426,9 +442,6 @@ class EntityExtractorTest {
       assertTrue(
           entity.parent() == null || byId.containsKey(entity.parent()),
           () -> entity.id() + " has an unknown parent " + entity.parent());
-      for (String id : orEmpty(entity.children())) {
-        assertTrue(byId.containsKey(id), () -> entity.id() + " claims an unknown child " + id);
-      }
       for (String id : orEmpty(entity.parameters())) {
         assertTrue(byId.containsKey(id), () -> entity.id() + " claims an unknown parameter " + id);
       }
@@ -444,14 +457,14 @@ class EntityExtractorTest {
     assertEquals("package", pkg.kind());
     assertEquals("com.acme.order", pkg.name());
     assertEquals(List.of("com/acme/order/OrderService.java"), pkg.definedIn());
-    assertTrue(pkg.children().contains(TYPE));
+    assertTrue(childrenOf(pkg.id()).contains(TYPE));
     assertFalse(
-        pkg.children().stream().anyMatch(id -> id.startsWith(TYPE + ".")),
+        childrenOf(pkg.id()).stream().anyMatch(id -> id.startsWith(TYPE + ".")),
         "a nested type is a child of its outer type, not of the package");
 
     Entity unnamed = entity("java:<unnamed>");
     assertEquals("<unnamed>", unnamed.name());
-    assertEquals(List.of("java:<unnamed>/Loose"), unnamed.children());
+    assertEquals(List.of("java:<unnamed>/Loose"), childrenOf(unnamed.id()));
   }
 
   // ------------------------------------------------------------------ typing
@@ -517,7 +530,7 @@ class EntityExtractorTest {
   @Test
   void implicitMembersAreEmittedAndAnchoredAtTheirDeclaration() {
     Entity record = entity(TYPE + ".Point");
-    assertTrue(record.children().containsAll(List.of(TYPE + ".Point.x", TYPE + ".Point.x()")));
+    assertTrue(childrenOf(record.id()).containsAll(List.of(TYPE + ".Point.x", TYPE + ".Point.x()")));
     Entity accessor = entity(TYPE + ".Point.x()");
     assertEquals(record.anchor().file(), accessor.anchor().file());
     assertEquals(record.anchor().startLine(), accessor.anchor().startLine());
@@ -555,14 +568,8 @@ class EntityExtractorTest {
 
   @Test
   void theEntitiesValidateAgainstThePublishedSchema() throws IOException {
-    Model model =
-        Model.sorted(
-            new ExtractorInfo("codegraph-spoon", "0.1.0", Boolean.TRUE),
-            root.toString(),
-            entities,
-            List.of());
-    List<Error> errors = validate(new ModelWriter(true).toJson(model));
-    assertTrue(errors.isEmpty(), () -> "schema violations: " + errors);
+    List<String> violations = ExtractorHarness.schemaViolations(json(entities));
+    assertTrue(violations.isEmpty(), () -> "schema violations: " + violations);
   }
 
   /** The Java profile declares no `space`, so the key must be absent from the JSON. */
@@ -578,14 +585,49 @@ class EntityExtractorTest {
     return new EntityExtractor(CorpusWhitelist.of(List.of()), anchors).extract(spoonModel);
   }
 
+  /**
+   * Serializes the way the pipeline does — stub pass included. Pass 2 alone
+   * emits references to types it never declares (that is what pass 4 is FOR),
+   * and the interchange cannot write an unclosed model: a reference travels as
+   * a surrogate, and there is no surrogate for an entity nobody declared.
+   */
   private static String json(List<Entity> extracted) {
-    Model model =
-        Model.sorted(
-            new ExtractorInfo("codegraph-spoon", "0.1.0", Boolean.TRUE),
-            root.toString(),
-            extracted,
-            List.of());
-    return new ModelWriter(true).toJson(model);
+    return new JsonlWriter().toJsonl(closedModel(extracted));
+  }
+
+  private static Model closedModel(List<Entity> extracted) {
+    Set<String> known = new TreeSet<>();
+    for (Entity entity : extracted) {
+      known.add(entity.id());
+    }
+    Set<String> referenced = new TreeSet<>();
+    for (Entity entity : extracted) {
+      addIfPresent(referenced, entity.declaredType());
+      addIfPresent(referenced, entity.parent());
+      addIfPresent(referenced, entity.attachedTo());
+      addAll(referenced, entity.parameters());
+      addAll(referenced, entity.localVariables());
+    }
+    referenced.removeAll(known);
+
+    // The whitelist is what pass 2 declared: without it the stub pass would
+    // synthesize a second `java:<unnamed>` and two entities would claim one key.
+    List<Entity> all = new ArrayList<>(extracted);
+    all.addAll(new StubSynthesizer().synthesize(referenced, CorpusWhitelist.of(known)));
+    return Model.sorted(
+        new ExtractorInfo("codegraph-spoon", "0.2.0", Boolean.TRUE), root.toString(), all, List.of());
+  }
+
+  private static void addIfPresent(Set<String> target, String id) {
+    if (id != null && !id.isBlank()) {
+      target.add(id);
+    }
+  }
+
+  private static void addAll(Set<String> target, List<String> ids) {
+    if (ids != null) {
+      ids.forEach(id -> addIfPresent(target, id));
+    }
   }
 
   private static Entity entity(String id) {
@@ -630,22 +672,4 @@ class EntityExtractorTest {
     Files.writeString(file, source);
   }
 
-  private static List<Error> validate(String modelJson) throws IOException {
-    Schema schema =
-        SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
-            .getSchema(Files.readString(schemaFile()), InputFormat.JSON);
-    return schema.validate(modelJson, InputFormat.JSON);
-  }
-
-  private static Path schemaFile() {
-    Path directory = Path.of("").toAbsolutePath();
-    while (directory != null) {
-      Path candidate = directory.resolve("schemas/model.schema.json");
-      if (Files.isRegularFile(candidate)) {
-        return candidate;
-      }
-      directory = directory.getParent();
-    }
-    throw new AssertionError("schemas/model.schema.json not found");
-  }
 }

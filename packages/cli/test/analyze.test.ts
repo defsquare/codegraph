@@ -16,7 +16,7 @@ import type { AnalyzeOptions } from "../src/args.js";
  * dropped; the module IMPORT layer 10 nodes / 6 edges). Asserting "it printed
  * something" would pass against a command that folded the wrong graph.
  */
-const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url));
 
 interface Invocation {
   readonly code: number;

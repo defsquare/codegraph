@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import {
   buildGraph,
   coupling,
@@ -21,10 +20,11 @@ import {
   parsePureDot,
   valuesUnderKey,
 } from "./artifact-grammar.js";
+import { readModelFileSync } from "@codegraph/core";
 import { javaFixture } from "./cli-process.js";
 
 function folded(level: "module" | "type") {
-  const payload: unknown = JSON.parse(readFileSync(javaFixture(), "utf8"));
+  const payload: unknown = readModelFileSync(javaFixture());
   const { union } = loadModels([payload], { onSchemaError: "collect" });
   return foldGraph(buildGraph(union), { level, view: identityView });
 }

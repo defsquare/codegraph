@@ -3,7 +3,7 @@
 Conceptual reference for the trait-based, multi-language code metamodel
 (FamixNG lineage). Every concept is described with its **attributes** and its
 **relations** to other concepts. The executable form of this document is
-`@codegraph/core` (Zod schemas) and the generated `schemas/model.schema.json`;
+`@codegraph/core` (Zod schemas) and the generated `schemas/` contract;
 if they ever disagree, the code is authoritative and this file has a bug.
 
 Concept map:
@@ -415,11 +415,21 @@ component), queried through profile intersection.
 
 A file **conforms to this metamodel iff its decoded content satisfies §8a**, so
 several encodings may conform at once and each decides for itself how the
-canonical order manifests physically and how references are spelled (rendered
-ids, integer surrogates, rowids). The formats themselves are specified in
-[`docs/model-encoding.md`](docs/model-encoding.md): today's single JSON document,
-the M6 streaming `model.jsonl` interchange, and the M7 `model.db` analysis
-store — a derived, disposable cache that is never the contract.
+canonical order manifests physically and how references are spelled (integer
+surrogates, rowids). The interchange is `model.jsonl`, specified by
+[`schemas/`](schemas/README.md) — one JSON Schema per record type plus the
+container contract — and designed in
+[`docs/model-encoding.md`](docs/model-encoding.md), which also covers the
+planned `model.db` analysis store: a derived, disposable cache, never the
+contract.
+
+**What the encoding decides, and what it therefore enforces.** Because a
+reference is a surrogate into the file's own entity section, closure (§8a) is
+not something a reader checks afterwards — a dangling reference is not
+expressible. A producer that cannot close a reference must drop it and say so;
+it cannot write it and hope. The same applies across models: each file is closed
+on its own, so a reference to another language's entity is a stub (§6) that the
+union merges by natural key.
 
 ---
 

@@ -4,7 +4,7 @@ import dev.codegraph.spoon.model.Edge;
 import dev.codegraph.spoon.model.Entity;
 import dev.codegraph.spoon.model.ExtractorInfo;
 import dev.codegraph.spoon.model.Model;
-import dev.codegraph.spoon.model.ModelWriter;
+import dev.codegraph.spoon.model.JsonlWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -16,7 +16,7 @@ import spoon.Launcher;
 import spoon.reflect.CtModel;
 
 /**
- * CLI: {@code java -jar codegraph-java.jar --src <dir> [--src <dir>…] --out model.json [--pretty]}.
+ * CLI: {@code java -jar codegraph-java.jar --src <dir> [--src <dir>…] --out model.jsonl}.
  *
  * <p>THE PASS ORDER, and why it is not negotiable:
  *
@@ -41,7 +41,7 @@ import spoon.reflect.CtModel;
 public final class Main {
 
   private static final String NAME = "codegraph-spoon";
-  private static final String VERSION = "0.1.0";
+  private static final String VERSION = "0.2.0";
   private static final int COMPLIANCE_LEVEL = 17;
 
   private static final int EXIT_USAGE = 2;
@@ -123,13 +123,43 @@ public final class Main {
     entities.addAll(declared);
     entities.addAll(stubs);
 
+    // Pass 4.5 — anything pass 4 refused to fabricate is still dangling, and the
+    // interchange cannot express it: a reference travels as a surrogate, and
+    // there is no surrogate for an entity nobody declared. v1 wrote such an edge
+    // and left the analyzer to report it; the format now forces the choice here,
+    // so the edge is DROPPED and counted rather than silently reinterpreted.
+    // An unresolvable member id is the case this exists for (METAMODEL.md §6).
+    Set<String> declaredIds = new java.util.HashSet<>();
+    for (Entity entity : entities) {
+      declaredIds.add(entity.id());
+    }
+    List<Edge> closed = new ArrayList<>(edges.size());
+    int droppedDanglingEdges = 0;
+    for (Edge edge : edges) {
+      if (declaredIds.contains(edge.from()) && declaredIds.contains(edge.to())) {
+        closed.add(edge);
+      } else {
+        droppedDanglingEdges++;
+        System.err.println(
+            "warning: dropped an edge whose endpoint nothing declares: "
+                + edge.from()
+                + " -> "
+                + edge.to());
+      }
+    }
+    edges = closed;
+
     // Pass 5 — deterministic assembly and output.
     ExtractorInfo extractor = new ExtractorInfo(NAME, VERSION, Boolean.TRUE);
     Model model = Model.sorted(extractor, root.toString(), entities, edges);
-    new ModelWriter(options.pretty()).write(model, options.out());
+    new JsonlWriter().write(model, options.out());
 
     System.err.println(
         stats.withOutput(entities.size(), stubs.size(), edges.size(), droppedSelfEdges).summary());
+    if (droppedDanglingEdges > 0) {
+      System.err.println(
+          "warning: " + droppedDanglingEdges + " edge(s) dropped for an undeclarable endpoint");
+    }
   }
 
   /**
@@ -147,7 +177,6 @@ public final class Main {
       addIfPresent(referenced, entity.declaredType());
       addIfPresent(referenced, entity.parent());
       addIfPresent(referenced, entity.attachedTo());
-      addAll(referenced, entity.children());
       addAll(referenced, entity.parameters());
       addAll(referenced, entity.localVariables());
     }
@@ -203,12 +232,11 @@ public final class Main {
         codegraph-java %s — Spoon-based Java extractor
 
         USAGE
-          java -jar codegraph-java.jar --src <dir> [--src <dir>…] --out <file> [--pretty]
+          java -jar codegraph-java.jar --src <dir> [--src <dir>…] --out <file>
 
         OPTIONS
           --src <dir>    source root to analyze; repeatable, at least one required
-          --out <file>   where to write model.json (required)
-          --pretty       indent the output (default: one dense line)
+          --out <file>   where to write model.jsonl (required)
           --help         print this and exit
 
         The run prints a RESOLUTION SUMMARY to stderr: how many type references
@@ -219,22 +247,20 @@ public final class Main {
   }
 
   /** Hand-rolled parsing: an argument parser is not worth a dependency here. */
-  record Options(List<Path> sources, Path out, boolean pretty, boolean help) {
+  record Options(List<Path> sources, Path out, boolean help) {
 
     static Options parse(String[] args) {
       Set<Path> sources = new LinkedHashSet<>();
       Path out = null;
-      boolean pretty = false;
 
       for (int i = 0; i < args.length; i++) {
         String arg = args[i];
         switch (arg) {
           case "--help", "-h" -> {
-            return new Options(List.of(), null, false, true);
+            return new Options(List.of(), null, true);
           }
           case "--src" -> sources.add(Path.of(value(args, ++i, "--src")));
           case "--out" -> out = Path.of(value(args, ++i, "--out"));
-          case "--pretty" -> pretty = true;
           default -> throw new IllegalArgumentException("unknown option: " + arg);
         }
       }
@@ -250,7 +276,7 @@ public final class Main {
           throw new IllegalArgumentException("source root does not exist: " + source);
         }
       }
-      return new Options(List.copyOf(sources), out, pretty, false);
+      return new Options(List.copyOf(sources), out, false);
     }
 
     private static String value(String[] args, int index, String option) {

@@ -10,10 +10,11 @@ import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.SpecificationVersion;
 import dev.codegraph.spoon.model.Edge;
+import dev.codegraph.spoon.model.Entity;
 import dev.codegraph.spoon.model.EdgeKind;
 import dev.codegraph.spoon.model.ExtractorInfo;
 import dev.codegraph.spoon.model.Model;
-import dev.codegraph.spoon.model.ModelWriter;
+import dev.codegraph.spoon.model.JsonlWriter;
 import dev.codegraph.spoon.model.Provenance;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -503,17 +504,57 @@ class EdgeExtractorTest {
     assertEquals(edgeLines(extract(root)), edgeLines(extract(root)));
   }
 
+  /**
+   * Edges are validated inside a CLOSED model: every endpoint is a surrogate, so
+   * the entity and stub passes have to run too. Serializing edges over an empty
+   * entity list is not a smaller version of the real thing — it is unwritable.
+   */
   @Test
   void theEmittedEdgesValidateAgainstThePublishedSchema(@TempDir Path root) throws IOException {
+    CtModel spoon = model(root);
+    CorpusWhitelist whitelist = whitelistOf(spoon, root);
+    Anchors anchors = new Anchors(root);
+    List<Entity> declared = new EntityExtractor(whitelist, anchors).extract(spoon);
+    List<Edge> edges = new EdgeExtractor(whitelist, anchors).extract(spoon);
+
+    Set<String> known = new TreeSet<>();
+    declared.forEach(entity -> known.add(entity.id()));
+    Set<String> referenced = new TreeSet<>();
+    for (Entity entity : declared) {
+      for (String id : new String[] {entity.declaredType(), entity.parent(), entity.attachedTo()}) {
+        if (id != null) {
+          referenced.add(id);
+        }
+      }
+    }
+    for (Edge edge : edges) {
+      referenced.add(edge.from());
+      referenced.add(edge.to());
+      if (edge.candidates() != null) {
+        referenced.addAll(edge.candidates());
+      }
+    }
+    referenced.removeAll(known);
+
+    List<Entity> entities = new java.util.ArrayList<>(declared);
+    entities.addAll(new StubSynthesizer().synthesize(referenced, whitelist));
+    entities.forEach(entity -> known.add(entity.id()));
+    List<Edge> closed =
+        edges.stream()
+            .filter(edge -> !edge.selfReference())
+            .filter(edge -> known.contains(edge.from()) && known.contains(edge.to()))
+            .toList();
+
     Model model =
         Model.sorted(
-            new ExtractorInfo("codegraph-spoon", "0.1.0", Boolean.TRUE),
+            new ExtractorInfo("codegraph-spoon", "0.2.0", Boolean.TRUE),
             root.toString(),
-            List.of(),
-            extract(root));
+            entities,
+            closed);
 
-    List<Error> errors = validate(new ModelWriter(true).toJson(model));
-    assertTrue(errors.isEmpty(), () -> "schema violations: " + errors);
+    List<String> violations = ExtractorHarness.schemaViolations(new JsonlWriter().toJsonl(model));
+    assertTrue(violations.isEmpty(), () -> "schema violations: " + violations);
+    assertFalse(closed.isEmpty(), "the corpus produced no writable edges at all");
   }
 
   /**
@@ -719,22 +760,4 @@ class EdgeExtractorTest {
     return String.join("\n", lines);
   }
 
-  private static List<Error> validate(String modelJson) throws IOException {
-    Schema schema =
-        SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
-            .getSchema(Files.readString(schemaFile()), InputFormat.JSON);
-    return schema.validate(modelJson, InputFormat.JSON);
-  }
-
-  private static Path schemaFile() {
-    Path directory = Path.of("").toAbsolutePath();
-    while (directory != null) {
-      Path candidate = directory.resolve("schemas/model.schema.json");
-      if (Files.isRegularFile(candidate)) {
-        return candidate;
-      }
-      directory = directory.getParent();
-    }
-    throw new AssertionError("schemas/model.schema.json not found above " + Path.of("").toAbsolutePath());
-  }
 }

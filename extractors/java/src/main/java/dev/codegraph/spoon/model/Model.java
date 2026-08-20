@@ -6,9 +6,9 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * The interchange file (METAMODEL.md §8): one JSON document per extraction run.
- * Conforms to schemas/model.schema.json, which is the whole contract — this
- * extractor holds no metamodel intelligence beyond emitting a conforming shape.
+ * One extraction run (METAMODEL.md §8a). Conforms to schemas/ — the per-record
+ * JSON Schemas plus the container contract are the whole of it; this extractor
+ * holds no metamodel intelligence beyond emitting a conforming file.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder({"schemaVersion", "lang", "extractor", "root", "entities", "edges"})
@@ -32,11 +32,17 @@ public record Model(
   }
 
   /**
-   * Assembles a model in the one order that makes output byte-identical across
-   * runs: entities by id, edges by {@link Edge#DETERMINISTIC_ORDER}.
+   * Assembles a model in canonical order (MM-1): entities by natural key, which
+   * is what {@link JsonlWriter} turns into surrogates. Edges are sorted by their
+   * endpoints' surrogates, so their final order is the writer's to impose —
+   * {@link Edge#DETERMINISTIC_ORDER} here only keeps the in-memory model stable
+   * for anything that inspects it before writing.
    */
   public static Model sorted(ExtractorInfo extractor, String root, List<Entity> entities, List<Edge> edges) {
-    List<Entity> sortedEntities = entities.stream().sorted(Comparator.comparing(Entity::id)).toList();
+    List<Entity> sortedEntities =
+        entities.stream()
+            .sorted(Comparator.comparing(entity -> NaturalKey.parse(entity.id())))
+            .toList();
     List<Edge> sortedEdges = edges.stream().sorted(Edge.DETERMINISTIC_ORDER).toList();
     return new Model(SCHEMA_VERSION, LANG, extractor, root, sortedEntities, sortedEdges);
   }

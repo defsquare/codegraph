@@ -1,6 +1,7 @@
-import { createReadStream } from "node:fs";
+import { closeSync, createReadStream, openSync, readSync } from "node:fs";
 import { open } from "node:fs/promises";
 import { createInterface } from "node:readline";
+import { StringDecoder } from "node:string_decoder";
 import { ModelDecoder, encodeModel } from "./jsonl.js";
 import type { Model } from "./model.js";
 
@@ -44,4 +45,41 @@ export async function writeModelFile(model: Model, path: string): Promise<void> 
   } finally {
     await handle.close().catch(() => undefined);
   }
+}
+
+/** 1MB — big enough that syscalls disappear, small enough to stay off the heap. */
+const CHUNK = 1 << 20;
+
+/**
+ * The same read, synchronously. Chunked on purpose: `readFileSync` would build
+ * one string for the whole file, which is the ceiling M6 exists to escape —
+ * fineract's model is far past it. Sync matters because the CLI is sync all the
+ * way down, and making it async would change every command's signature to buy
+ * nothing the chunking does not already give.
+ */
+export function readModelFileSync(path: string): Model {
+  const decoder = new ModelDecoder();
+  const utf8 = new StringDecoder("utf8");
+  const buffer = Buffer.allocUnsafe(CHUNK);
+  const fd = openSync(path, "r");
+  let carry = "";
+  try {
+    for (;;) {
+      const read = readSync(fd, buffer, 0, CHUNK, null);
+      if (read === 0) break;
+      // The decoder holds back a split multi-byte sequence until its rest arrives.
+      carry += utf8.write(buffer.subarray(0, read));
+      let newline = carry.indexOf("\n");
+      while (newline >= 0) {
+        decoder.push(carry.slice(0, newline));
+        carry = carry.slice(newline + 1);
+        newline = carry.indexOf("\n");
+      }
+    }
+  } finally {
+    closeSync(fd);
+  }
+  carry += utf8.end();
+  if (carry !== "") decoder.push(carry);
+  return decoder.finish();
 }

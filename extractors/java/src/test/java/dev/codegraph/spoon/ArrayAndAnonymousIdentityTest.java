@@ -57,7 +57,7 @@ class ArrayAndAnonymousIdentityTest {
 
   @BeforeAll
   static void extract() {
-    run = ExtractorHarness.runOnFixtures(outputDirectory.resolve("model.json")).succeeded();
+    run = ExtractorHarness.runOnFixtures(outputDirectory.resolve("model.jsonl")).succeeded();
     byId = new TreeMap<>();
     for (JsonNode entity : run.entities()) {
       byId.put(entity.path("id").asText(), entity);

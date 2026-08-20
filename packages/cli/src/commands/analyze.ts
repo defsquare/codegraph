@@ -33,7 +33,7 @@ import { benignDuplicateIds, loadExitCode, loadModelFiles, type LoadedModels } f
 import { resolveView } from "../view.js";
 
 /**
- * `codegraph analyze <model.json...> --report deps|cycles|coupling`.
+ * `codegraph analyze <model.jsonl...> --report deps|cycles|coupling`.
  *
  * A SHELL over the analyzer (decision 7): it loads, picks the analyzer call the
  * report names, and formats. It computes no graph fact of its own — every

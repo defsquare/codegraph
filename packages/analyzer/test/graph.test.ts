@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGraph, compareEdges, declaredChildren, entityName, entityParent } from "../src/graph.js";
+import { buildGraph, compareEdges, entityName, entityParent } from "../src/graph.js";
 import { loadModels } from "../src/load.js";
 import { edge, javaGraph, method, pkg, toyModel, type } from "./fixture.js";
 
@@ -36,10 +36,21 @@ describe("buildGraph over the committed Java snapshot", () => {
     expect(graph.childrenOf(STRING)).toEqual([]);
   });
 
-  it("derives children as the inverse of parent, matching what the model declares", () => {
+  /**
+   * MM-2: `children` is not in the model at all, so the index can only come from
+   * `parent`. What it must equal is therefore stated the only way left — the
+   * entities that claim this one as their parent.
+   */
+  it("derives children as exactly the entities claiming the parent", () => {
     const pkgEntity = graph.entity(PACKAGE);
     expect(pkgEntity).toBeDefined();
-    expect(graph.childrenOf(PACKAGE)).toEqual([...declaredChildren(pkgEntity!)].sort());
+    expect(pkgEntity).not.toHaveProperty("children");
+    const claiming = graph
+      .ids()
+      .filter((id) => entityParent(graph.entity(id)!) === PACKAGE)
+      .sort();
+    expect(graph.childrenOf(PACKAGE)).toEqual(claiming);
+    expect(claiming.length).toBeGreaterThan(0);
     expect(entityName(pkgEntity!)).toBe("com.acme.order");
     expect(entityParent(pkgEntity!)).toBeUndefined();
   });
@@ -107,7 +118,9 @@ describe("buildGraph edge cases", () => {
         toyModel([second], []),
       ]).union,
     );
-    expect(declaredChildren(graph.entity("java:p/C")!)).toEqual(["java:p/C.m()"]);
+    // The first declaration wins, and the derived index still finds the member.
+    expect(graph.entity("java:p/C")).toEqual(first);
+    expect(graph.childrenOf("java:p/C")).toEqual(["java:p/C.m()"]);
   });
 
   it("orders edges deterministically with compareEdges", () => {

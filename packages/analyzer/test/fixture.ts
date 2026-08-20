@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { Edge, Entity, Model } from "@codegraph/core";
+import { readModelFileSync, type Edge, type Entity, type Model } from "@codegraph/core";
 import { buildGraph, type CodeGraph } from "../src/graph.js";
 import { loadModels } from "../src/load.js";
 
@@ -10,11 +9,11 @@ import { loadModels } from "../src/load.js";
  * way to catch a wrong assumption about the shape of extractor output.
  */
 const FIXTURE = fileURLToPath(
-  new URL("../../../fixtures/java/expected/model.json", import.meta.url),
+  new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url),
 );
 
 export function javaFixture(): Model {
-  return JSON.parse(readFileSync(FIXTURE, "utf8")) as Model;
+  return readModelFileSync(FIXTURE);
 }
 
 export function javaGraph(): CodeGraph {
@@ -39,19 +38,23 @@ export function toyModel(
 
 export const ANCHOR = { file: "T.java", span: [1, 1] as [number, number] };
 
-export function pkg(id: string, children: readonly string[], isStub = false): Entity {
+/**
+ * MM-2: a container declares TWithChildren and nothing more — what is inside it
+ * is derived from the members' own `parent`, never listed here. The signature
+ * keeps its second argument so call sites read the same, and ignores it.
+ */
+export function pkg(id: string, _children: readonly string[] = [], isStub = false): Entity {
   return {
     id,
     kind: "package",
     traits: ["TNamed", "TWithChildren", "TModule"],
     name: id,
     isStub,
-    children: [...children],
     definedIn: isStub ? [] : ["T.java"],
   } as Entity;
 }
 
-export function type(id: string, parent?: string, children: readonly string[] = []): Entity {
+export function type(id: string, parent?: string, _children: readonly string[] = []): Entity {
   const base: Record<string, unknown> = {
     id,
     kind: "class",
@@ -59,10 +62,7 @@ export function type(id: string, parent?: string, children: readonly string[] = 
     name: id,
     isStub: parent === undefined,
   };
-  if (parent !== undefined) {
-    base["parent"] = parent;
-    base["children"] = [...children];
-  }
+  if (parent !== undefined) base["parent"] = parent;
   return base as Entity;
 }
 

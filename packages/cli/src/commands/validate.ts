@@ -11,11 +11,11 @@ import { benignDuplicateIds, loadModelFiles, type LoadedModels } from "../load.j
 import { outLines, type IoSink } from "../io.js";
 
 /**
- * `codegraph validate <model.json...> [--json]` — THE ACCEPTANCE GATE.
+ * `codegraph validate <model.jsonl...> [--json]` — THE ACCEPTANCE GATE.
  *
  * CLAUDE.md: "the property suite runs against every extractor output — it is
  * the acceptance gate for any new extractor." Someone writing a Go or .NET
- * extractor points this at their `model.json` and must be told precisely what
+ * extractor points this at their `model.jsonl` and must be told precisely what
  * is wrong: which rule, which entity, which line of their file.
  *
  * The command computes nothing (M4 decision 7). It loads, calls the analyzer's
@@ -123,7 +123,7 @@ function renderText(loaded: LoadedModels, report: ConformanceReport): readonly s
  * Two lines per finding, because one long line is unreadable and an extractor
  * author needs both halves: WHERE it is written, and WHICH rule it broke.
  *
- *   error  closure/dangling-reference  fixtures/model.json edges[12].to
+ *   error  closure/dangling-reference  fixtures/model.jsonl edges[12].to
  *          edges[12].to points at "java:x/Y", which no entity in the corpus declares
  */
 function findingLines(finding: ConformanceFinding): readonly string[] {
@@ -183,7 +183,7 @@ function sortedSchemaErrors(errors: readonly SchemaError[]): readonly SchemaErro
 
 /**
  * Zod's aggregate message is a paragraph whose FIRST line is boilerplate
- * ("invalid model.json:") and whose remaining lines carry the only thing an
+ * ("invalid model.jsonl:") and whose remaining lines carry the only thing an
  * extractor author needs — which key, and what was wrong with it. Showing the
  * first line alone (as this did) reported a failure without its reason, so the
  * text form silently held less than `--json`, against decision 8. Bounded so a

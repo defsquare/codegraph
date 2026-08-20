@@ -116,7 +116,7 @@ export function toPlantUml(folded: FoldedGraph, options?: PlantUmlOptions): stri
   if (withHeader) {
     const diagnostics = folded.diagnostics;
     lines.push(
-      "' codegraph — rendering of a FOLDED ANALYSIS GRAPH. Not a model.json.",
+      "' codegraph — rendering of a FOLDED ANALYSIS GRAPH. Not a model.jsonl.",
       `' level: ${escapeComment(folded.level)}`,
       `' view: ${escapeComment(folded.view.name)}`,
       `' nodes: ${folded.nodes.length}, edges: ${folded.edges.length}`,

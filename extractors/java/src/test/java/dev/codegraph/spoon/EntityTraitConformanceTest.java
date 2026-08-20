@@ -69,23 +69,23 @@ class EntityTraitConformanceTest {
           Map.entry(
               "method",
               kind(
-                  of("TNamed", "TInvocable", "TWithParameters", "TWithLocalVariables", "TWithInvocations",
-                      "TWithAccesses", "TTypedEntity", "TChildOf", "TSourceAnchor"),
+                  of("TNamed", "TInvocable", "TWithChildren", "TWithParameters", "TWithLocalVariables",
+                      "TWithInvocations", "TWithAccesses", "TTypedEntity", "TChildOf", "TSourceAnchor"),
                   of("TComment"))),
           // No TNamed (a constructor has no name of its own) and no
           // TTypedEntity (it has no return type). The id's disambiguator is the signature.
           Map.entry(
               "constructor",
               kind(
-                  of("TInvocable", "TWithParameters", "TWithLocalVariables", "TWithInvocations",
-                      "TWithAccesses", "TChildOf", "TSourceAnchor"),
+                  of("TInvocable", "TWithChildren", "TWithParameters", "TWithLocalVariables",
+                      "TWithInvocations", "TWithAccesses", "TChildOf", "TSourceAnchor"),
                   of("TComment"))),
           // Lambdas and anonymous classes: invocable but nameless.
           Map.entry(
               "lambda",
               kind(
-                  of("TInvocable", "TWithParameters", "TWithLocalVariables", "TWithInvocations",
-                      "TWithAccesses", "TChildOf", "TSourceAnchor"),
+                  of("TInvocable", "TWithChildren", "TWithParameters", "TWithLocalVariables",
+                      "TWithInvocations", "TWithAccesses", "TChildOf", "TSourceAnchor"),
                   of("TTypedEntity"))),
           Map.entry(
               "attribute",
@@ -103,7 +103,7 @@ class EntityTraitConformanceTest {
 
   @BeforeAll
   static void extract() {
-    run = ExtractorHarness.runOnFixtures(outputDirectory.resolve("model.json")).succeeded();
+    run = ExtractorHarness.runOnFixtures(outputDirectory.resolve("model.jsonl")).succeeded();
   }
 
   @Test

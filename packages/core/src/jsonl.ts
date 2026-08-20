@@ -347,7 +347,9 @@ export class ModelDecoder {
   #parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
     const result = schema.safeParse(value);
     if (!result.success) {
-      throw new JsonlError(`invalid ${what}: ${z.prettifyError(result.error)}`, this.#line);
+      // The prettified block starts on its own line: a renderer that indents a
+      // multi-line message then keeps every "✖ reason / → at path" pair intact.
+      throw new JsonlError(`invalid ${what}:\n${z.prettifyError(result.error)}`, this.#line);
     }
     return result.data;
   }

@@ -77,7 +77,7 @@ describe("a usage ERROR goes to stderr and exits 2", () => {
     { why: "a mistyped option", argv: ["analyze", FIXTURE, "--repot", "deps"], names: "--report" },
     { why: "a missing required option", argv: ["export", FIXTURE], names: "--format" },
     { why: "an invalid option value", argv: ["export", FIXTURE, "--format", "svg"], names: "dot" },
-    { why: "a missing positional", argv: ["validate"], names: "model.json" },
+    { why: "a missing positional", argv: ["validate"], names: "model.jsonl" },
   ];
 
   it.each(mistakes)("$why exits 2 with nothing on stdout", ({ argv }) => {

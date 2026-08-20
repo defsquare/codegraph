@@ -12,7 +12,7 @@ import {
 } from "./cli-process.js";
 
 /**
- * `codegraph export model.json --format dot > graph.dot`.
+ * `codegraph export model.jsonl --format dot > graph.dot`.
  *
  * This is the sentence decision 3 exists to make true, so it is tested as
  * written: the child's file descriptor 1 IS the file. No capture, no buffer, no

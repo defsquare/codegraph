@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { EXIT } from "../src/exit.js";
 import { collectStrings, entityIdsIn, parseJsonArtifact, valuesUnderKey } from "./artifact-grammar.js";
-import { UNKNOWN_ID, createBrokenModels } from "./broken-models.js";
+import { SELF_EDGE_ID, createBrokenModels } from "./broken-models.js";
 import { describeResult, ensureCliBinary, javaFixture, runCli } from "./cli-process.js";
 
 /**
@@ -15,7 +15,7 @@ import { describeResult, ensureCliBinary, javaFixture, runCli } from "./cli-proc
  * `valuesUnderKey` finds it by what the key MEANS (`/duplicate/i`), not by
  * spelling.
  *
- * Measured facts about `fixtures/java/expected/model.json`, used as the shared
+ * Measured facts about `fixtures/java/expected/model.jsonl`, used as the shared
  * ground truth for both forms: 166 entities (26 stubs), 173 edges, 171 declared
  * / 2 derived; folded to 10 module nodes / 14 edges and 36 type nodes / 71.
  */
@@ -68,16 +68,19 @@ describe("validate says the same thing in both forms", () => {
     expect(json.code, "--json must not change the exit code").toBe(text.code);
   });
 
+  /**
+   * A self-edge, not a dangling reference: since M6 a reference is a surrogate,
+   * so "points at nothing" is a malformed FILE rather than a finding about a
+   * valid one, and there is no offending id left to name. A self-edge is still
+   * writable and still a finding, which is what this parity check needs.
+   */
   it("names the same offending id in both forms", () => {
-    const { text, json } = bothForms(["validate", models.danglingReference]);
+    const { text, json } = bothForms(["validate", models.selfEdge]);
     const parsed = parseJsonArtifact(json.stdout, "validate --json");
     const strings = collectStrings(parsed);
 
-    expect(
-      strings.has(UNKNOWN_ID),
-      `--json did not report the dangling target ${UNKNOWN_ID}`,
-    ).toBe(true);
-    expect(text.stdout, "the text form did not report the dangling target").toContain(UNKNOWN_ID);
+    expect(strings.has(SELF_EDGE_ID), `--json did not report ${SELF_EDGE_ID}`).toBe(true);
+    expect(text.stdout, "the text form did not report the self-edge").toContain(SELF_EDGE_ID);
   });
 
   it("reports the same number of profile issues in both forms", () => {

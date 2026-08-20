@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { isStubEntity } from "../src/entity.js";
+import { encodeModelToString } from "../src/jsonl.js";
+import { readModelFileSync } from "../src/jsonl-file.js";
 import { parseModel, type Model } from "../src/model.js";
 import { SourceAnchor } from "../src/primitives.js";
 import { validateModel } from "../src/profile.js";
@@ -12,8 +14,9 @@ import { selfReferences, unknownReferences } from "../src/integrity.js";
  * THE M2 ACCEPTANCE GATE — the first check that runs both halves of the system
  * against each other.
  *
- * The Java side already validates its output against `schemas/model.schema.json`,
- * but a JSON Schema can only state what is structurally expressible: an entity's
+ * The Java side already validates every line of its output against the per-record
+ * schemas, but a JSON Schema can only state what is structurally expressible: an
+ * entity's
  * declared traits carry their keys, provenance is one of four strings, spans are
  * 1-based. It cannot state that a `record` may implement but never extend, or
  * that `constructor` carries no `TNamed` — those live in the language PROFILE,
@@ -26,15 +29,30 @@ import { selfReferences, unknownReferences } from "../src/integrity.js";
  * is fixed by relaxing this test.
  */
 
-const SNAPSHOT = fileURLToPath(new URL("../../../fixtures/java/expected/model.json", import.meta.url));
+const SNAPSHOT = fileURLToPath(
+  new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url),
+);
 
 function loadSnapshot(): Model {
-  return parseModel(JSON.parse(readFileSync(SNAPSHOT, "utf8")));
+  // Decoded, then re-parsed as a Model: the decoder validates records, and this
+  // asserts the RESULT is core's Model — not merely record-shaped.
+  return parseModel(readModelFileSync(SNAPSHOT));
 }
 
-describe("fixtures/java/expected/model.json", () => {
-  it("parses as a Model — the extractor's JSON is core's Model, not merely schema-shaped", () => {
+describe("fixtures/java/expected/model.jsonl", () => {
+  it("parses as a Model — the extractor's output is core's Model, not merely schema-shaped", () => {
     expect(() => loadSnapshot()).not.toThrow();
+  });
+
+  /**
+   * The strongest statement M6 can make: canonical order and the encoding live
+   * in the MODEL, not in whoever writes it. Two independent encoders — Jackson
+   * in Java, this one in TypeScript — must produce the same bytes for the same
+   * model, or "canonical" means nothing and a fixture diff would depend on which
+   * half of the system last touched it.
+   */
+  it("is byte-identical to what core's own encoder would write", () => {
+    expect(encodeModelToString(loadSnapshot())).toBe(readFileSync(SNAPSHOT, "utf8"));
   });
 
   it("validates against the Java profile with ZERO issues", () => {

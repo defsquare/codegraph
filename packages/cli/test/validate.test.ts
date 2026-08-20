@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Model } from "@codegraph/core";
+import { encodeModelToString, readModelFileSync, type Model } from "@codegraph/core";
 import { afterAll, describe, expect, it } from "vitest";
 import { EXIT } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
@@ -15,21 +15,43 @@ import { run } from "../src/main.js";
  * and the rule without anyone opening a debugger?
  */
 
-const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url));
 
 const scratch = mkdtempSync(join(tmpdir(), "codegraph-validate-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 function fixture(): Model {
-  return JSON.parse(readFileSync(FIXTURE, "utf8")) as Model;
+  return readModelFileSync(FIXTURE);
 }
 
-/** A copy of the Spoon snapshot on disk with exactly one invariant broken. */
+/**
+ * A copy of the Spoon snapshot on disk with exactly one invariant broken,
+ * written through core's own encoder — so the file stays a real model file and
+ * the finding is about its CONTENT, not about its bytes.
+ */
 function corrupted(name: string, mutate: (model: Model) => void): string {
   const model = fixture();
   mutate(model);
   const path = join(scratch, name);
-  writeFileSync(path, JSON.stringify(model), "utf8");
+  writeFileSync(path, encodeModelToString(model), "utf8");
+  return path;
+}
+
+/** Rewrites one record by hand, for corruptions no encoder would produce. */
+function corruptedRecord(
+  name: string,
+  tag: string,
+  edit: (record: Record<string, unknown>) => void,
+  pick: (record: Record<string, unknown>) => boolean = () => true,
+): string {
+  const lines = readFileSync(FIXTURE, "utf8").split("\n").filter((line) => line !== "");
+  const at = lines.findIndex(
+    (line) => line.startsWith(`{"t":"${tag}"`) && pick(JSON.parse(line) as Record<string, unknown>),
+  );
+  const record = JSON.parse(lines[at]!) as Record<string, unknown>;
+  edit(record);
+  const path = join(scratch, name);
+  writeFileSync(path, `${[...lines.slice(0, at), JSON.stringify(record), ...lines.slice(at + 1)].join("\n")}\n`, "utf8");
   return path;
 }
 
@@ -106,17 +128,8 @@ describe("codegraph validate names what is wrong", () => {
     readonly names: string;
   }[] = [
     {
-      what: "a dangling edge target",
-      file: corrupted("dangling.json", (model) => {
-        const edge = model.edges[0];
-        if (edge !== undefined) edge.to = "java:nowhere/Ghost";
-      }),
-      code: "closure/dangling-reference",
-      names: "java:nowhere/Ghost",
-    },
-    {
       what: "a self-edge",
-      file: corrupted("self-edge.json", (model) => {
+      file: corrupted("self-edge.jsonl", (model) => {
         const edge = model.edges[0];
         if (edge !== undefined) edge.to = edge.from;
       }),
@@ -125,7 +138,7 @@ describe("codegraph validate names what is wrong", () => {
     },
     {
       what: "an empty candidates array",
-      file: corrupted("empty-candidates.json", (model) => {
+      file: corrupted("empty-candidates.jsonl", (model) => {
         const edge = model.edges[0];
         if (edge !== undefined) edge.candidates = [];
       }),
@@ -134,7 +147,7 @@ describe("codegraph validate names what is wrong", () => {
     },
     {
       what: "an entity missing a required trait",
-      file: corrupted("missing-trait.json", (model) => {
+      file: corrupted("missing-trait.jsonl", (model) => {
         const entity = model.entities.find(
           (candidate) => candidate.kind === "class" && (candidate as { isStub?: boolean }).isStub !== true,
         );
@@ -175,19 +188,20 @@ describe("codegraph validate names what is wrong", () => {
   });
 
   it("prints the rule and the location on one line, the sentence on the next", () => {
-    const file = cases[0]?.file ?? "";
+    const self = cases.find((c) => c.code.includes("self-edge"));
+    const file = self?.file ?? "";
     const lines = invoke(["validate", file]).stdout.split("\n");
-    const header = lines.findIndex((line) => line.includes("closure/dangling-reference"));
+    const header = lines.findIndex((line) => line.includes("self-reference/self-edge"));
 
     expect(header).toBeGreaterThan(-1);
     expect(lines[header]).toContain("error");
     expect(lines[header]).toContain(file);
-    expect(lines[header]).toContain("edges[0].to");
-    expect(lines[header + 1]).toContain("java:nowhere/Ghost");
+    expect(lines[header]).toContain("edges[");
+    expect(lines[header + 1]).toContain(self?.names ?? "");
   });
 
   it("counts findings by code before listing them", () => {
-    const file = cases[2]?.file ?? "";
+    const file = cases.find((c) => c.code.includes("candidates-empty"))?.file ?? "";
     const stdout = invoke(["validate", file]).stdout;
     expect(stdout).toContain("findings by code:");
     expect(stdout).toMatch(/\n\s+1\s+candidates-empty\n/);
@@ -196,7 +210,7 @@ describe("codegraph validate names what is wrong", () => {
 
 describe("codegraph validate keeps the failure classes apart (decision 2)", () => {
   it("exits 3 on a file that is not a model at all, and still names it", () => {
-    const path = join(scratch, "not-a-model.json");
+    const path = join(scratch, "not-a-model.jsonl");
     writeFileSync(path, "{ this is not json", "utf8");
     const result = invoke(["validate", path]);
 
@@ -206,32 +220,74 @@ describe("codegraph validate keeps the failure classes apart (decision 2)", () =
   });
 
   // Regression: the text form used to print Zod's FIRST line only, which is the
-  // boilerplate "invalid model.json:" — a failure reported without its reason,
+  // boilerplate "invalid model.jsonl:" — a failure reported without its reason,
   // and strictly less than `--json` held, against decision 8.
   it("says WHICH key is wrong, not just that the file is unreadable", () => {
-    const model = JSON.parse(readFileSync(FIXTURE, "utf8")) as {
-      entities: { anchor?: { span: [number, number] } }[];
-    };
-    const anchored = model.entities.find((e) => e.anchor !== undefined);
-    if (anchored?.anchor === undefined) throw new Error("fixture has no anchored entity");
-    anchored.anchor.span = [0, anchored.anchor.span[1]];
-    const path = join(scratch, "span-zero.json");
-    writeFileSync(path, JSON.stringify(model), "utf8");
+    // A 0 start line: spans are 1-based, so this record cannot be read at all.
+    const path = corruptedRecord(
+      "span-zero.jsonl",
+      "e",
+      (record) => {
+        const anchor = record["anchor"] as [number, number, number];
+        record["anchor"] = [anchor[0], 0, anchor[2]];
+      },
+      (record) => record["anchor"] !== undefined,
+    );
 
     const result = invoke(["validate", path]);
 
     expect(result.code).toBe(EXIT.FINDINGS);
     expect(result.stdout).toContain("unreadable as a model");
     // The reason and its location, both of which the first-line form dropped.
-    expect(result.stdout).toContain("TSourceAnchor");
-    expect(result.stdout).toMatch(/→ at entities\[\d+]\.anchor\.span\[0]/);
+    expect(result.stdout).toContain("anchor");
+    expect(result.stdout).toMatch(/line \d+/);
+  });
+
+  /**
+   * A reference is a surrogate into this file's own entity section, so an edge
+   * that points at nothing is a MALFORMED FILE, not a valid file with a bad
+   * reference. v1 could write one and have the analyzer report it afterwards.
+   */
+  it("refuses a surrogate that resolves to no entity, naming the closure rule", () => {
+    const path = corruptedRecord("dangling.jsonl", "x", (record) => {
+      record["o"] = 999_999;
+    });
+
+    const result = invoke(["validate", path]);
+
+    expect(result.code).toBe(EXIT.FINDINGS);
+    expect(result.stdout).toContain("unreadable as a model");
+    expect(result.stdout).toContain("closure");
   });
 
   it("never orphans a schema complaint from its location when it truncates", () => {
-    // An object missing every required key produces more issues than the text
+    // A record missing every required key produces more issues than the text
     // form prints; the cut must not strand a "✖" line without its "→ at" line.
-    const path = join(scratch, "empty-object.json");
-    writeFileSync(path, "{}", "utf8");
+    const path = join(scratch, "empty-record.jsonl");
+    const header = readFileSync(FIXTURE, "utf8").split("\n")[0]!;
+    // Every key of the wrong type at once, so the report has more to say than
+    // it prints — which is the case the truncation notice exists for.
+    const wrong = {
+      t: "e",
+      i: "x",
+      k: "x",
+      tr: "x",
+      m: "x",
+      s: 1,
+      d: 2,
+      name: 3,
+      signature: 4,
+      parent: "x",
+      declaredType: "x",
+      attachedTo: "x",
+      parameters: "x",
+      localVariables: "x",
+      definedIn: "x",
+      comments: "x",
+      isStub: "x",
+      anchor: "x",
+    };
+    writeFileSync(path, `${header}\n${JSON.stringify(wrong)}\n`, "utf8");
 
     const result = invoke(["validate", path]);
 

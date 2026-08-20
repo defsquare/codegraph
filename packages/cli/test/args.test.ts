@@ -100,7 +100,7 @@ describe("global parsing", () => {
   });
 
   it("rejects an unknown command, naming the valid ones", () => {
-    const error = usageErrorFor(["anlyze", "model.json"]);
+    const error = usageErrorFor(["anlyze", "model.jsonl"]);
     expect(error.message).toContain("anlyze");
     expect(error.hint ?? "").toContain("validate, analyze, export, profiles");
   });
@@ -133,7 +133,7 @@ describe("validate", () => {
 
   it("requires at least one model path", () => {
     const error = usageErrorFor(["validate"]);
-    expect(error.message).toContain("model.json");
+    expect(error.message).toContain("model.jsonl");
     expect(error.hint ?? "").toContain(usageLine(VALIDATE_SPEC));
   });
 
@@ -266,7 +266,7 @@ describe("profiles", () => {
   });
 
   it("rejects a positional argument, in the command's own words", () => {
-    const error = usageErrorFor(["profiles", "model.json"]);
+    const error = usageErrorFor(["profiles", "model.jsonl"]);
     expect(error.message).toContain("no positional arguments");
     expect(error.hint ?? "").toContain(usageLine(PROFILES_SPEC));
   });

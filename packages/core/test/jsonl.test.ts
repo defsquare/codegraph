@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { ModelDecoder, decodeModel, encodeModel, encodeModelToString, JsonlError } from "../src/jsonl.js";
-import { Model, SCHEMA_VERSION, parseModel } from "../src/model.js";
+import { readModelFileSync } from "../src/jsonl-file.js";
+import { SCHEMA_VERSION, parseModel, type Model } from "../src/model.js";
 import { HeaderRec } from "../src/wire.js";
 
 /**
@@ -12,21 +12,29 @@ import { HeaderRec } from "../src/wire.js";
  * purpose, and which malformed files must be refused rather than half-read.
  */
 
-const fixture = fileURLToPath(new URL("../../../fixtures/java/expected/model.json", import.meta.url));
+const fixture = fileURLToPath(new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url));
 
 /** The real extractor output — 166 entities of genuinely awkward Java. */
 function loadFixture(): Model {
-  return parseModel(JSON.parse(readFileSync(fixture, "utf8")) as unknown);
+  return parseModel(readModelFileSync(fixture));
 }
 
-/** v1 models still carry `children`; MM-2 drops the key, so compare without it. */
-function withoutChildren(model: Model): Model {
+/** A v1-era model: the same entities, with the `children` key put back on. */
+function withChildren(model: Model): Model {
+  const childrenOf = new Map<string, string[]>();
+  for (const entity of model.entities) {
+    const parent = (entity as Record<string, unknown>)["parent"];
+    if (typeof parent === "string") {
+      childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), entity.id]);
+    }
+  }
   return {
     ...model,
-    entities: model.entities.map((entity) => {
-      const { children: _children, ...rest } = entity as Record<string, unknown>;
-      return rest as typeof entity;
-    }),
+    entities: model.entities.map((entity) =>
+      entity.traits.includes("TWithChildren")
+        ? ({ ...entity, children: childrenOf.get(entity.id) ?? [] } as typeof entity)
+        : entity,
+    ),
   };
 }
 
@@ -44,7 +52,7 @@ describe("round trip on the real fixture corpus", () => {
   const back = decodeModel(text.split("\n"));
 
   it("preserves every entity, key for key", () => {
-    const before = byId(withoutChildren(model));
+    const before = byId(model);
     const after = byId(back);
     expect(after.size).toBe(before.size);
     for (const [id, entity] of before) expect(after.get(id)).toEqual(entity);
@@ -70,18 +78,27 @@ describe("round trip on the real fixture corpus", () => {
     for (const entity of model.entities) expect(text).not.toContain(entity.id);
   });
 
+  /**
+   * MM-2: `children` is the exact inverse of `parent`. A v1-era model carrying
+   * it is not carrying an extension — the key is DROPPED, or the format would
+   * re-serialize the very index it removed.
+   */
   it("drops `children` — the inverse of `parent` (MM-2)", () => {
-    const hadChildren = model.entities.filter((e) => "children" in (e as object));
-    expect(hadChildren.length).toBeGreaterThan(0);
-    expect(text).not.toContain('"children"');
-    for (const entity of back.entities) expect(entity).not.toHaveProperty("children");
+    const v1 = withChildren(model);
+    expect(v1.entities.filter((e) => "children" in (e as object)).length).toBeGreaterThan(0);
+
+    const encoded = encodeModelToString(v1);
+    expect(encoded).not.toContain('"children"');
+    const decoded = decodeModel(encoded.split("\n"));
+    for (const entity of decoded.entities) expect(entity).not.toHaveProperty("children");
     // The trait itself stays: it says "this is a container".
-    expect(back.entities.some((e) => e.traits.includes("TWithChildren"))).toBe(true);
+    expect(decoded.entities.some((e) => e.traits.includes("TWithChildren"))).toBe(true);
+    // And nothing else changed: dropping a derived key is not losing data.
+    expect(decoded.entities.map((e) => e.id)).toEqual(back.entities.map((e) => e.id));
   });
 
-  it("is smaller than the v1 document it replaces", () => {
-    const v1 = readFileSync(fixture, "utf8").length;
-    expect(text.length).toBeLessThan(v1);
+  it("is smaller than the same model as one JSON document", () => {
+    expect(text.length).toBeLessThan(JSON.stringify(model).length);
   });
 
   it("is byte-identical across runs", () => {

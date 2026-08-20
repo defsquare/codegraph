@@ -54,10 +54,10 @@ export interface OptionSpec {
 }
 
 export interface PositionalSpec {
-  /** Displayed name, e.g. `model.json`. */
+  /** Displayed name, e.g. `model.jsonl`. */
   readonly name: string;
   readonly describe: string;
-  /** One or more (`<model.json...>`). */
+  /** One or more (`<model.jsonl...>`). */
   readonly variadic: boolean;
   /** At least one must be given. */
   readonly required: boolean;
@@ -72,8 +72,8 @@ export interface CommandSpec {
 }
 
 const MODELS_POSITIONAL: PositionalSpec = {
-  name: "model.json",
-  describe: "One or more model.json paths, loaded together as ONE union (decision 5).",
+  name: "model.jsonl",
+  describe: "One or more model.jsonl paths, loaded together as ONE union (decision 5).",
   variadic: true,
   required: true,
 };
@@ -293,7 +293,7 @@ function optionLines(spec: CommandSpec): readonly string[] {
 export function renderHelp(spec: CommandSpec | undefined): string {
   const lines: string[] = [];
   if (spec === undefined) {
-    lines.push("codegraph — dependency analysis over codegraph model.json files.");
+    lines.push("codegraph — dependency analysis over codegraph model.jsonl files.");
     lines.push("");
     lines.push("usage: codegraph <command> [options]");
     lines.push("");

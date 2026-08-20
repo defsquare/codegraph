@@ -13,7 +13,7 @@ import com.networknt.schema.SpecificationVersion;
 import dev.codegraph.spoon.model.Entity;
 import dev.codegraph.spoon.model.ExtractorInfo;
 import dev.codegraph.spoon.model.Model;
-import dev.codegraph.spoon.model.ModelWriter;
+import dev.codegraph.spoon.model.JsonlWriter;
 import dev.codegraph.spoon.model.TraitName;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -52,7 +52,8 @@ class StubSynthesizerTest {
     assertEquals("MissingLib", stub.name());
     assertTrue(stub.stub());
     assertNull(stub.anchor(), "a stub has no source to anchor to");
-    assertNull(stub.children());
+    assertFalse(
+        stub.traits().contains(TraitName.TWithChildren), "a stub type contains nothing we know of");
     assertNull(stub.declaredType());
     assertNull(stub.signature());
 
@@ -60,7 +61,9 @@ class StubSynthesizerTest {
     Entity module = onlyPackage(stubs);
     assertEquals("java:com.nonexistent.external", module.id());
     assertEquals(module.id(), stub.parent());
-    assertEquals(List.of(stub.id()), module.children(), "containment must agree both ways");
+    // MM-2: the module declares itself a container; which types are in it is
+    // derived from their `parent`, never listed here.
+    assertTrue(module.traits().contains(TraitName.TWithChildren));
     assertTrue(module.stub());
   }
 
@@ -75,20 +78,31 @@ class StubSynthesizerTest {
     List<Entity> stubs = synthesize("java:com.acme.order/Invoice");
     Entity stub = onlyType(stubs);
 
-    assertEquals(1, stubs.size(), () -> "no module stub may be invented for a declared package: " + stubs);
+    assertEquals(
+        1,
+        stubs.size(),
+        () -> "no module stub may be invented for a package the corpus declares: " + stubs);
     assertNull(
         stub.parent(),
         "an invented type in a corpus package must stay unplaceable, not be attributed to it");
     assertEquals(Set.of(TraitName.TNamed, TraitName.TType), Set.copyOf(stub.traits()));
   }
 
-  /** A primitive has no module at all; `java:<unnamed>` is not one. */
+  /**
+   * Identity and containment are different questions (MM-1). A type in the
+   * unnamed package still HAS a module in its natural key — the interchange
+   * names it by reference, so it must exist as an entity or the type cannot be
+   * written at all — but it is still given no PARENT, so nothing folds it into a
+   * module-level analysis as though we knew where it lived.
+   */
   @Test
-  void primitivesAreNotGivenAModule() {
+  void aTypeWithNoPackageGetsItsModuleButStillNoParent() {
     List<Entity> stubs = synthesize("java:<unnamed>/int");
 
-    assertEquals(1, stubs.size(), () -> "the unnamed package is not a module stub: " + stubs);
-    assertNull(onlyType(stubs).parent());
+    assertNull(onlyType(stubs).parent(), "an unplaceable type must not be attributed to a module");
+    Entity module = onlyPackage(stubs);
+    assertEquals("java:<unnamed>", module.id());
+    assertTrue(module.stub(), "the unnamed package of an external type is external too");
   }
 
   /**
@@ -198,7 +212,7 @@ class StubSynthesizerTest {
     assertEquals("java.util", pkg.name(), "a package's name is its full dotted FQN");
     assertEquals(Boolean.TRUE, pkg.isStub());
     assertEquals(List.of(), pkg.definedIn(), "no corpus file declares it — that IS the degradation");
-    assertEquals(List.of(), pkg.children());
+    assertTrue(pkg.traits().contains(TraitName.TWithChildren));
     assertTrue(synthesizer.anomalies().isEmpty(), "a package stub is representable, not an anomaly");
   }
 
@@ -217,13 +231,29 @@ class StubSynthesizerTest {
         Model.sorted(
             new ExtractorInfo("codegraph-spoon", "0.1.0", Boolean.TRUE),
             "/corpus",
-            synthesize("java:java.lang/String", "java:com.acme.order/Invoice"),
+            closedOver(synthesize("java:java.lang/String", "java:com.acme.order/Invoice")),
             List.of());
 
-    String json = new ModelWriter(true).toJson(model);
-    List<Error> errors = validate(json);
-    assertTrue(errors.isEmpty(), () -> "schema violations: " + errors);
-    assertFalse(json.contains("null"), () -> "a null key reached a stub: " + json);
+    String jsonl = new JsonlWriter().toJsonl(model);
+    List<String> violations = ExtractorHarness.schemaViolations(jsonl);
+    assertTrue(violations.isEmpty(), () -> "schema violations: " + violations);
+    assertFalse(jsonl.contains("null"), () -> "a null key reached a stub: " + jsonl);
+  }
+
+  /**
+   * The corpus package the whitelist declares, which a stubs-only model would
+   * otherwise be missing: an entity names its module by reference, so a model
+   * that is not closed cannot be written at all.
+   */
+  private static List<Entity> closedOver(List<Entity> stubs) {
+    List<Entity> entities = new java.util.ArrayList<>(stubs);
+    entities.add(
+        Entity.builder("java:com.acme.order", "package")
+            .named("com.acme.order")
+            .definedIn(List.of("com/acme/order/OrderService.java"), false)
+            .marker(TraitName.TWithChildren)
+            .build());
+    return entities;
   }
 
   // ---------------------------------------------------------------- fixtures

@@ -124,6 +124,20 @@ public final class CorpusWhitelist {
       if (type instanceof CtTypeParameter) {
         continue;
       }
+      // WRITTEN HERE, not merely reachable. In noClasspath mode Spoon
+      // materializes shadow CtTypes for types it could not load — measured on
+      // apache/fineract: `jakarta.ws.rs.core.MediaType`, `java.math.BigDecimal`
+      // and hundreds more appear in the model with NO source position. They are
+      // external by definition, and the entity pass already refuses them for
+      // exactly this reason (a type with no evidence is not representable).
+      // Asking the same question here is what keeps the two passes agreeing —
+      // the property this class's own contract calls for. Without it the
+      // whitelist claims a type as corpus-declared, the stub pass then refuses
+      // to degrade it ("declared but never emitted"), and every reference to it
+      // dangles.
+      if (anchors.orEnclosing(type).isEmpty()) {
+        continue;
+      }
       String typeId = typeIdOf(type, anchors);
       if (typeId == null) {
         continue;

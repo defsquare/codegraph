@@ -7,7 +7,7 @@ dependency graphs, coupling, architecture, and eventually a **3D "code city"
 visualization** (Three.js) of the code structure.
 
 Pipeline: per-language **extractors** (Java/Spoon first) → versioned
-**`model.json`** interchange files → TypeScript **analyzer** → reports and the
+**`model.jsonl`** interchange files → TypeScript **analyzer** → reports and the
 **city renderer**.
 
 The full implementation plan, milestones, and locked design decisions live in
@@ -17,15 +17,16 @@ relations is `METAMODEL.md` — read them before structural changes.
 ## Architecture
 
 ```
-extractors/java/     Maven project (Spoon, noClasspath) → emits model.json. JVM code only.
-schemas/             Generated JSON Schema — THE cross-language contract, committed.
+extractors/java/     Maven project (Spoon, noClasspath) → emits model.jsonl. JVM code only.
+schemas/             Generated per-record JSON Schemas + the container contract
+                     (README.md) — THE cross-language contract, committed.
 packages/core/       @codegraph/core — traits, edges, language profiles (data),
                      Zod validation, JSON Schema export. Pure data + validation.
 packages/analyzer/   @codegraph/analyzer — graph construction, derived indexes,
                      queries, metrics (coupling, cycles), exports. Pure computation.
 packages/cli/        @codegraph/cli — `codegraph` command.
 packages/viz/        (future) Three.js code city. The ONLY package that may import three.
-fixtures/            Reference corpora + expected model.json snapshots.
+fixtures/            Reference corpora + expected model.jsonl snapshots.
 ```
 
 ### Hard boundaries (convenience does not override architecture)
@@ -34,9 +35,14 @@ fixtures/            Reference corpora + expected model.json snapshots.
   no DOM. `viz` reads analysis output; it never mutates the model and never
   re-derives graph facts the analyzer already computes.
 - **Extractors contain no metamodel intelligence.** They emit JSON conforming
-  to `schemas/model.schema.json` and nothing else. All trait/profile/validation
+  to `schemas/` — the per-record schemas AND the container contract — and
+  nothing else. All trait/profile/validation
   logic lives once, in `core`. An extractor in any language (Java, Go, .NET…)
   must be able to conform using only the published schema.
+- **The interchange is line-based and closed.** One JSON record per line,
+  sections in order, identity as `(m, s, d)`, every reference a file-scoped
+  surrogate — so a dangling reference is unwritable, not merely reportable. A
+  producer that cannot close a reference drops it and says so.
 - **`core` owns the vocabulary.** Trait names (`TNamed`, `TInvocable`,
   `TAttachedTo`…), edge kinds, and provenance values are canonical — never
   rename or alias them locally.
@@ -60,11 +66,11 @@ pnpm -r test                  # all tests (unit + property)
 pnpm run gen:schemas          # regenerate schemas/*.schema.json from core (commit the result)
 
 cd extractors/java && ./mvnw package    # Maven Wrapper — `mvn` is NOT installed
-java -jar target/codegraph-java.jar --src <dir> --out model.json
+java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 # needs a JDK on PATH; non-interactive shells do not source sdkman:
 #   export JAVA_HOME="$HOME/.sdkman/candidates/java/25.0.4-tem"
 
-./bin/codegraph analyze model.json --report deps   # after `pnpm -r build`
+./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
 ```
 
 ## Metamodel invariants (violating these is a bug, not a style choice)

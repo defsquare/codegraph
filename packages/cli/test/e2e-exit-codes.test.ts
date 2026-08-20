@@ -104,12 +104,12 @@ const USAGE_CASES: readonly Case[] = [
   },
   {
     why: "a model path that does not exist",
-    argv: ["validate", "/no/such/directory/model.json"],
+    argv: ["validate", "/no/such/directory/model.jsonl"],
     expected: EXIT.USAGE,
   },
   {
     why: "one readable and one missing path",
-    argv: ["validate", FIXTURE, "/no/such/directory/model.json"],
+    argv: ["validate", FIXTURE, "/no/such/directory/model.jsonl"],
     expected: EXIT.USAGE,
   },
   { why: "a positional profiles does not take", argv: ["profiles", FIXTURE], expected: EXIT.USAGE },
@@ -120,8 +120,15 @@ const FINDING_CASES: readonly Case[] = [
   { why: "a file that is not JSON", argv: ["validate", models.malformedJson], expected: EXIT.FINDINGS },
   { why: "JSON that is not a model", argv: ["validate", models.notAModel], expected: EXIT.FINDINGS },
   {
-    why: "an edge pointing at an unknown id",
+    // Since M6 a reference is a surrogate, so this is a malformed file rather
+    // than a valid file with a bad reference — still a finding, not a crash.
+    why: "an edge whose surrogate resolves to no entity",
     argv: ["validate", models.danglingReference],
+    expected: EXIT.FINDINGS,
+  },
+  {
+    why: "a file with no eof record — a writer that was killed",
+    argv: ["validate", models.truncated],
     expected: EXIT.FINDINGS,
   },
   { why: "an edge from an id to itself", argv: ["validate", models.selfEdge], expected: EXIT.FINDINGS },
@@ -136,12 +143,12 @@ const FINDING_CASES: readonly Case[] = [
     expected: EXIT.FINDINGS,
   },
   {
-    why: "analyzing a model with a dangling reference",
+    why: "analyzing a model with an unresolvable surrogate",
     argv: ["analyze", models.danglingReference, "--report", "deps"],
     expected: EXIT.FINDINGS,
   },
   {
-    why: "exporting a model with a dangling reference",
+    why: "exporting a model with an unresolvable surrogate",
     argv: ["export", models.danglingReference, "--format", "dot"],
     expected: EXIT.FINDINGS,
   },

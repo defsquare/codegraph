@@ -18,6 +18,10 @@ import java.util.List;
  * {@code TNamed} <i>and</i> {@code name}, and {@link Builder#marker} accepts
  * only traits that contribute no key.
  *
+ * <p>{@code TWithChildren} is a MARKER here (MM-2): {@code children} is the exact
+ * inverse of {@code parent}, and inverse indexes are derived by the consumer,
+ * never serialized. The trait still says "this entity is a container".
+ *
  * <p>Absent keys are OMITTED, never emitted as {@code null}: {@code "name": null}
  * violates the contract. Hence {@code NON_NULL} inclusion here as well as on the
  * writer's mapper.
@@ -37,7 +41,6 @@ import java.util.List;
   "isStub",
   "parent",
   "attachedTo",
-  "children",
   "parameters",
   "localVariables",
   "definedIn",
@@ -54,7 +57,6 @@ public record Entity(
     @JsonProperty("isStub") Boolean isStub,
     String parent,
     String attachedTo,
-    List<String> children,
     List<String> parameters,
     List<String> localVariables,
     List<String> definedIn,
@@ -80,7 +82,6 @@ public record Entity(
     private Boolean isStub;
     private String parent;
     private String attachedTo;
-    private List<String> children;
     private List<String> parameters;
     private List<String> localVariables;
     private List<String> definedIn;
@@ -113,13 +114,6 @@ public record Entity(
     public Builder commented(List<String> comments) {
       this.comments = List.copyOf(comments);
       traits.add(TraitName.TComment);
-      return this;
-    }
-
-    /** TWithChildren → {@code children} (lexical containment, downward). */
-    public Builder withChildren(List<String> children) {
-      this.children = List.copyOf(children);
-      traits.add(TraitName.TWithChildren);
       return this;
     }
 
@@ -229,7 +223,6 @@ public record Entity(
           isStub,
           parent,
           attachedTo,
-          children,
           parameters,
           localVariables,
           definedIn,

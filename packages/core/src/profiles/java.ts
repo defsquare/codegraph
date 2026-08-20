@@ -74,10 +74,15 @@ export const javaProfile: Profile = {
       optional: ["TComment"],
     },
 
+    // TWithChildren: a method lexically contains its parameters and locals, and
+    // they declare it as their parent. Both directions of §3.2 must be licensed
+    // by the same profile or the model states a containment its own contract
+    // does not allow.
     method: {
       required: [
         "TNamed",
         "TInvocable",
+        "TWithChildren",
         "TWithParameters",
         "TWithLocalVariables",
         "TWithInvocations",
@@ -96,6 +101,7 @@ export const javaProfile: Profile = {
     constructor: {
       required: [
         "TInvocable",
+        "TWithChildren",
         "TWithParameters",
         "TWithLocalVariables",
         "TWithInvocations",
@@ -111,6 +117,7 @@ export const javaProfile: Profile = {
     lambda: {
       required: [
         "TInvocable",
+        "TWithChildren",
         "TWithParameters",
         "TWithLocalVariables",
         "TWithInvocations",

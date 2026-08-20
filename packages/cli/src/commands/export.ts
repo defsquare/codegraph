@@ -17,7 +17,7 @@ import { benignDuplicateIds, loadExitCode, loadModelFiles, type LoadedModels } f
 import { resolveView } from "../view.js";
 
 /**
- * `codegraph export <model.json...> --format dot|json|csv`.
+ * `codegraph export <model.jsonl...> --format dot|json|csv`.
  *
  * Same pipeline as `analyze` up to the folded graph, then one renderer. Every
  * byte of the artifact comes from the analyzer's exporters — no escaping, no
@@ -51,7 +51,7 @@ import { resolveView } from "../view.js";
 /**
  * The JSON artefact is stamped by `foldedGraphToJson` — `kind`
  * `codegraph.foldedGraph/1`, `generatedBy`, and deliberately NO `schemaVersion`
- * — so it can never be mistaken for a model.json. Passing the stamped object
+ * — so it can never be mistaken for a model.jsonl. Passing the stamped object
  * through untouched is that guarantee's only requirement here.
  */
 const RENDERERS: Readonly<Record<FormatName, (folded: FoldedGraph) => string>> = {

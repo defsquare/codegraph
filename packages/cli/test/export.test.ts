@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ExportOptions, FormatName } from "../src/args.js";
 import { exportCommand } from "../src/commands/export.js";
+import { encodeModelToString, parseModel } from "@codegraph/core";
 import { EXIT, UsageError } from "../src/exit.js";
 import { captureIo, processIo, type CapturedIo, type IoSink } from "../src/io.js";
 import { run } from "../src/main.js";
@@ -16,7 +17,7 @@ import { run } from "../src/main.js";
  * MEASURED FACTS about the fixture, so the assertions below name them rather
  * than re-deriving them from the same code under test.
  */
-const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url));
 
 const MODULE_NODES = 10;
 const MODULE_EDGES = 14;
@@ -262,8 +263,8 @@ describe("export: DOT", () => {
     expect(dot).toContain("digraph");
   });
 
-  it("says in the file itself that it is not a model.json", () => {
-    expect(exportTo({ format: "dot" }).io.stdout()).toContain("Not a model.json");
+  it("says in the file itself that it is not a model.jsonl", () => {
+    expect(exportTo({ format: "dot" }).io.stdout()).toContain("Not a model.jsonl");
   });
 });
 
@@ -388,8 +389,8 @@ describe("export: PlantUML", () => {
     expect(title).toContain("internalOnly");
   });
 
-  it("says in the file itself that it is not a model.json", () => {
-    expect(exportTo({ format: "plantuml" }).io.stdout()).toContain("Not a model.json");
+  it("says in the file itself that it is not a model.jsonl", () => {
+    expect(exportTo({ format: "plantuml" }).io.stdout()).toContain("Not a model.jsonl");
   });
 });
 
@@ -519,10 +520,16 @@ describe("export: exit codes", () => {
       lang: "java",
       extractor: { name: "test", version: "0.0.0" },
       root: "/tmp/corpus",
-      entities: [{ id: "java:x/Y", kind: "class", traits: ["TNamed"], name: "Y" }],
+      // The module entity is required by the ENCODING (every entity names its
+      // module by reference); the class is still profile-invalid, which is the
+      // finding this test is about.
+      entities: [
+        { id: "java:x", kind: "package", traits: ["TNamed", "TModule"], name: "x", definedIn: [], isStub: false },
+        { id: "java:x/Y", kind: "class", traits: ["TNamed"], name: "Y" },
+      ],
       edges: [],
     };
-    const path = tempFile("invalid-profile.json", JSON.stringify(model));
+    const path = tempFile("invalid-profile.jsonl", encodeModelToString(parseModel(model)));
     const io = captureIo();
     const code = exportCommand(options({ models: [path], format: "dot" }), io);
 

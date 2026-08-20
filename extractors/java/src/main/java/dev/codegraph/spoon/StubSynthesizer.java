@@ -1,6 +1,7 @@
 package dev.codegraph.spoon;
 
 import dev.codegraph.spoon.model.Entity;
+import dev.codegraph.spoon.model.TraitName;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -110,32 +111,43 @@ public final class StubSynthesizer {
       }
     }
 
-    // Attach each external type to its external package, so the analyzer can fold
-    // it to module level by walking `parent` — the only way it is allowed to ask,
-    // since parsing an id is forbidden outside this extractor (CLAUDE.md 7).
+    // Two separate questions per stub type, and conflating them is a bug:
+    //
+    //   IDENTITY  — which module the id lives in. Part of the natural key (MM-1),
+    //               so that module MUST exist as an entity or the type cannot be
+    //               written at all: an interchange record names its module by
+    //               reference, and there is no "unknown module" to point at.
+    //   CONTAINMENT — whether the type gets a `parent`. Refusable, and refused in
+    //               the two cases below, because claiming containment we cannot
+    //               honestly claim is what mislabels a module-level analysis.
+    //
+    // So every stub type's package is materialized, while `parent` stays subject
+    // to attachableParent's refusals.
     Map<String, String> parentOf = new TreeMap<>();
-    Map<String, Set<String>> childrenOf = new TreeMap<>();
     for (String typeId : typeIds) {
+      String owningPackage = EntityIds.packageIdOfTypeId(typeId);
+      if (!whitelist.declares(owningPackage)) {
+        packageIds.add(owningPackage);
+      }
       String packageId = attachableParent(typeId, whitelist);
       if (packageId == null) {
         continue;
       }
       parentOf.put(typeId, packageId);
       packageIds.add(packageId);
-      childrenOf.computeIfAbsent(packageId, unused -> new TreeSet<>()).add(typeId);
     }
 
     List<Entity> stubs = new ArrayList<>();
     for (String id : packageIds) {
       // definedIn is empty BECAUSE it is external: no corpus file declares it.
-      // `children` lists the external types this corpus actually referenced — a
-      // record of what was observed, not a claim about the module's contents,
-      // which `definedIn: []` already marks as unknown.
+      // TWithChildren is a marker (MM-2): the external types this corpus
+      // referenced are recorded by their own `parent`, and the children index is
+      // derived from those. Listing them here would serialize an inverse index.
       stubs.add(
           Entity.builder(id, PACKAGE_STUB_KIND)
               .named(packageName(id))
               .definedIn(List.of(), true)
-              .withChildren(List.copyOf(childrenOf.getOrDefault(id, Set.of())))
+              .marker(TraitName.TWithChildren)
               .build());
     }
     for (String id : typeIds) {

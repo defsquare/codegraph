@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
+import type { z } from "zod";
 
 import { ENTITY_REFERENCE_KEYS } from "../src/integrity.js";
 import { TRAIT_NAMES, type TraitName } from "../src/names.js";

@@ -14,10 +14,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The committed snapshot: {@code fixtures/java/expected/model.json} is what the
- * extractor CLAIMS about a corpus a reviewer can read in full. Pretty-printed and
- * deterministically sorted so that any change to the extractor shows up as a
- * reviewable diff rather than as a number moving in a summary line.
+ * The committed snapshot: {@code fixtures/java/expected/model.jsonl} is what the
+ * extractor CLAIMS about a corpus a reviewer can read in full. One record per
+ * line, in canonical order, so that any change to the extractor shows up as a
+ * reviewable diff rather than as a number moving in a summary line — and so that
+ * a changed entity is one changed line, not a re-indented block.
  *
  * <p>This is documentation with a test attached. When it fails, the question is
  * never "how do I make it green" but "is the new output better?" — and if it is,
@@ -48,7 +49,7 @@ class SnapshotTest {
       or by hand:
 
           java -jar target/codegraph-java.jar \\
-              --src ../../fixtures/java/src --out ../../fixtures/java/expected/model.json --pretty
+              --src ../../fixtures/java/src --out ../../fixtures/java/expected/model.jsonl
           # then replace the absolute "root" with "fixtures/java/src"
 
       A diff here is the extractor changing what it claims about known code. That is
@@ -62,8 +63,8 @@ class SnapshotTest {
 
   @BeforeAll
   static void extract() {
-    run = ExtractorHarness.runOnFixtures(outputDirectory.resolve("model.json")).succeeded();
-    snapshotFile = ExtractorHarness.repoRoot().resolve("fixtures/java/expected/model.json");
+    run = ExtractorHarness.runOnFixtures(outputDirectory.resolve("model.jsonl")).succeeded();
+    snapshotFile = ExtractorHarness.repoRoot().resolve("fixtures/java/expected/model.jsonl");
   }
 
   @Test
@@ -87,15 +88,18 @@ class SnapshotTest {
   }
 
   /**
-   * The snapshot is the pretty, sorted form PLAN.md §5.3 asks for — a reviewer must
-   * be able to read it. A single-line model would technically round-trip and be
-   * worthless in a diff, so the shape itself is asserted.
+   * The snapshot must be readable as a diff: one record per line, so a changed
+   * entity is a changed line. A model on one line would round-trip perfectly and
+   * be worthless to review, so the shape itself is asserted.
    */
   @Test
   void theSnapshotIsReviewable() {
     String snapshot = ExtractorHarness.read(snapshotFile);
-    assertTrue(snapshot.lines().count() > 100, "the snapshot is not pretty-printed — a diff would be one line");
-    assertTrue(snapshot.contains("\"root\" : \"" + CANONICAL_ROOT + "\""), "the snapshot's root is not normalised");
+    assertTrue(snapshot.lines().count() > 100, "the snapshot is one line — a diff would be useless");
+    assertTrue(
+        snapshot.lines().allMatch(line -> line.startsWith("{\"t\":")),
+        "every line must be one record, leading with its type");
+    assertTrue(snapshot.contains("\"root\":\"" + CANONICAL_ROOT + "\""), "the snapshot's root is not normalised");
   }
 
   /** Replaces the machine-specific absolute root; everything else is untouched. */

@@ -15,7 +15,7 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url));
 
 function invoke(argv: readonly string[]): {
   code: number;

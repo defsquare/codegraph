@@ -1,6 +1,6 @@
 # Model v2 — physical encodings (JSONL interchange + SQLite analysis store)
 
-Status: **accepted 2026-08-20 — planned as M6/M7 (PLAN.md §9.2–9.3)**. Companion doc:
+Status: **§2 (JSONL) shipped as M6; §3 (SQLite) planned as M7** (PLAN.md §9.2–9.3). Companion doc:
 [`model-metamodel.md`](model-metamodel.md) — the format-independent
 metamodel changes (structured identity MM-1, `children` removal MM-2,
 referential vocabularies MM-3/MM-4). This doc assumes those and decides only
@@ -111,6 +111,13 @@ Rules:
 Estimated effect (Fineract): edges ~380MB → ~50MB, entities ~180MB → ~35MB,
 tables ~1MB. **Total ≈ 85–95MB (~6×)**, gzip stacks ~5× on top, and no
 whole-file string ever exists in either direction.
+
+**Measured (M6): 559.5MB → 127.4MB (4.4×)** — 240 929 entities / 782 032 edges,
+94 s to extract, 12 s for any CLI command. Short of the estimate, which assumed
+a larger share of the bytes were id strings than actually were; commons-lang
+came in at 2.5× (17.1MB → 6.9MB) for the same reason. The ratio was never the
+point: v1's model could not be read at ALL — one JSON document is one JavaScript
+string, and 559.5MB is past the ~512MB ceiling — and this one can.
 
 ### Why JSONL stays the contract (vs. extractors writing SQLite directly)
 

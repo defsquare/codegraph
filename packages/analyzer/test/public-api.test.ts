@@ -27,7 +27,7 @@ const SEAM_MARKER = "slice fills this in";
 const PUBLIC_API = {
   order: ["compareIds", "sortIds", "sortedUnique", "compareEdges", "comparePairs"],
   load: ["loadModels", "isClean"],
-  graph: ["buildGraph", "hasTrait", "entityName", "entityParent", "declaredChildren"],
+  graph: ["buildGraph", "hasTrait", "entityName", "entityParent"],
   views: ["projectView", "composeViews", "makeView", "provenanceOnly", "includesEntity", "includesEdge"],
   fold: ["foldGraph", "createFolder", "folderFor", "containingType", "containingModule"],
   queries: [

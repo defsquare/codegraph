@@ -55,7 +55,7 @@ class ResolutionRateTest {
 
   @BeforeAll
   static void extract() {
-    run = ExtractorHarness.runOnFixtures(outputDirectory.resolve("model.json")).succeeded();
+    run = ExtractorHarness.runOnFixtures(outputDirectory.resolve("model.jsonl")).succeeded();
     summary = run.stderr();
   }
 

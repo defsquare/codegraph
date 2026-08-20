@@ -3,11 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { encodeModelToString, parseModel } from "@codegraph/core";
 import { EXIT, UsageError } from "../src/exit.js";
 import { loadExitCode, loadModelFiles } from "../src/load.js";
 
 /** The real Spoon output: 166 entities, 173 edges, a clean bill of health. */
-const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url));
 
 function tempFile(name: string, contents: string): string {
   const dir = mkdtempSync(join(tmpdir(), "codegraph-cli-"));
@@ -55,17 +56,18 @@ describe("loading model files", () => {
     expect((thrown as UsageError).message).toContain(missing);
   });
 
-  it("treats malformed JSON as a finding: the tool worked, the file did not", () => {
-    const path = tempFile("not-json.json", "{ this is not json");
+  it("treats a malformed line as a finding: the tool worked, the file did not", () => {
+    const path = tempFile("not-json.jsonl", "{ this is not json\n");
     const loaded = loadModelFiles([path]);
     expect(loaded.clean).toBe(false);
     expect(loadExitCode(loaded)).toBe(EXIT.FINDINGS);
-    expect(loaded.diagnostics.schemaErrors[0]?.message).toContain("not valid JSON");
+    expect(loaded.diagnostics.schemaErrors[0]?.message).toContain("not a valid model.jsonl");
+    expect(loaded.diagnostics.schemaErrors[0]?.message).toContain("line 1");
     expect(loaded.diagnostics.schemaErrors[0]?.label).toBe(path);
   });
 
   it("still reports the good files when one file is broken", () => {
-    const broken = tempFile("broken.json", "nope");
+    const broken = tempFile("broken.jsonl", "nope\n");
     const loaded = loadModelFiles([broken, FIXTURE]);
     expect(loaded.diagnostics.schemaErrors.length).toBe(1);
     expect(loaded.union.entities.length).toBe(166);
@@ -80,12 +82,17 @@ describe("loading model files", () => {
       root: "/tmp/corpus",
       // Schema-valid (TNamed's key is present) but profile-invalid: java's
       // `class` kind requires TType, TChildOf, TSourceAnchor and more.
-      entities: [{ id: "java:x/Y", kind: "class", traits: ["TNamed"], name: "Y" }],
+      // The module entity is required by the ENCODING (an entity names its
+      // module by reference), not by the profile — the class stays invalid.
+      entities: [
+        { id: "java:x", kind: "package", traits: ["TNamed", "TModule"], name: "x", definedIn: [], isStub: false },
+        { id: "java:x/Y", kind: "class", traits: ["TNamed"], name: "Y" },
+      ],
       edges: [],
     };
-    const path = tempFile("invalid-profile.json", JSON.stringify(model));
+    const path = tempFile("invalid-profile.jsonl", encodeModelToString(parseModel(model)));
     const loaded = loadModelFiles([path]);
-    expect(loaded.union.entities.length).toBe(1);
+    expect(loaded.union.entities.length).toBe(2);
     expect(loaded.diagnostics.profileIssues.length).toBeGreaterThan(0);
     expect(loadExitCode(loaded)).toBe(EXIT.FINDINGS);
   });

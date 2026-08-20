@@ -111,7 +111,6 @@ decides how order manifests physically.
       as a total order, generatively (`packages/core/test/properties.test.ts`).
 - [x] PLAN.md §9.1/§11/§12: decisions recorded.
 
-Deferred to M6 with the rest of the breaking change (PLAN.md §9.2), since M5 is
-non-breaking preparation: **removing the `children` key from `Entity`** — the
-trait declaration stays either way — and reformulating closure / determinism /
-self-reference over surrogates, which do not exist until the JSONL encoding does.
+Done in M6 (PLAN.md §9.2), as planned: the `children` key is gone from `Entity`,
+the `TRAITS` table and the wire — the trait declaration stays — and closure,
+determinism and self-reference are reformulated over surrogates.

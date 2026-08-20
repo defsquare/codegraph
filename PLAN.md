@@ -579,27 +579,95 @@ tests that fail if the key is narrowed.
 
 ### 9.2 M6 — JSONL interchange (the breaking change)
 
-- [ ] `core`: record schemas `Header`/`FileRec`/`EntityRec`/`EdgeRec`/`Eof`
-      discriminated on `t`; streaming `readModel`/`writeModel` (line at a
-      time, never a whole-document string); `children` key removed from
-      `Entity` (`TWithChildren` stays a marker trait); traits inline as int
-      arrays into the header's `dict.traits`; every `EntityId`-typed field
-      becomes a surrogate int (driven by the `TRAITS` table).
-- [ ] `gen:schemas`: one JSON Schema per record type + a prose container
-      contract (section order `header → files → entities → edges → eof`,
-      reference rules) in `schemas/` — still sufficient for a non-TS
-      extractor to self-validate line-by-line.
-- [ ] `extractors/java`: canonical sort → surrogate assignment → Jackson
-      streaming JSONL writer (removes whole-document buffering); `eof`
-      trailer carries counts so truncated runs are detectable.
-- [ ] Property suite reformulated over surrogates: closure becomes
-      `ref < entities count` checked streaming; truncation detection;
-      determinism stays byte-identical output.
-- [ ] Fixtures regenerated to `.jsonl`; v1 code path and schema deleted.
-- [ ] CLI commands read `.jsonl` streaming.
-- **DoD**: fineract extracts to ~90MB `model.jsonl` (~6× smaller) and every
-  CLI command completes on it; property suite green on the fixtures,
-  commons-lang and fineract.
+✅ Shipped.
+
+- [x] `core`: record schemas `HeaderRec`/`FileRec`/`EntityRec`/`EdgeRec`/`EofRec`
+      discriminated on `t` (`wire.ts`); streaming codec (`jsonl.ts`) and file
+      I/O (`jsonl-file.ts`); `children` key removed from `Entity`
+      (`TWithChildren` stays a marker trait); traits ride as int arrays into
+      the header's `dict.traits`; every `EntityId`-typed field is a surrogate
+      int, driven by `ENTITY_REFERENCE_KEYS` so a new referencing trait cannot
+      be forgotten.
+- [x] `gen:schemas`: one JSON Schema per record type + a GENERATED container
+      contract (`schemas/README.md`) for what a single line cannot express —
+      section order, dict resolution, trait keys, closure, canonical order.
+      Its trait/key table is printed from `WIRE_TRAITS`, so the published rules
+      cannot drift from the code that enforces them.
+- [x] `extractors/java`: `NaturalKey` + canonical sort → surrogate assignment →
+      streaming `JsonlWriter` (one Jackson generator, one line at a time);
+      `eof` trailer carries counts.
+- [x] Property suite reformulated over surrogates: closure as
+      `ref < entities count` checked as references resolve; truncation
+      detection (every proper prefix must be refused); determinism as
+      byte-identical output *whatever order the extractor emitted*.
+- [x] Fixtures regenerated to `.jsonl`; the v1 document path and
+      `schemas/model.schema.json` deleted.
+- [x] CLI reads `.jsonl` through a CHUNKED SYNC reader — the ceiling is one
+      JavaScript string, not sync I/O, so the CLI stays synchronous end to end
+      instead of every command becoming async to buy nothing.
+- **DoD met**, measured:
+
+  | corpus | v1 | v2 | commands |
+  |---|---|---|---|
+  | fixtures/java | 155KB `model.json` | 41KB `model.jsonl` (3.8×) | all |
+  | apache/commons-lang | 17.1MB | 6.9MB (2.5×) | all, < 1 s each |
+  | apache/fineract | **559.5MB — unreadable** | **127.4MB (4.4×)** | all, 11–12 s, ≤ 1.6GB RSS |
+
+  Fineract extracts in 94 s (240 929 entities / 782 032 edges, 0 edges dropped)
+  and `validate` reports a clean bill of health. The 127MB is short of the
+  ~90MB the encoding doc estimated — the estimate assumed more of the file was
+  id strings than it is — but the number that mattered was never the ratio: v1
+  could not be READ at any size, and now it can.
+
+  Regression check on commons-lang: the v2 model has the **same 15 338 entity
+  ids and the same 24 631 edges** as the v1 extraction, byte-for-byte identical
+  content modulo the two intended metamodel changes below. The format changed;
+  what the extractor claims did not.
+
+**Decision (M6) — closure is enforced at WRITE time, not reported after.** A
+reference is a surrogate into the file's own entity section, so "points at
+nothing" is not expressible. Consequences, all deliberate:
+- the extractor gained a pass 4.5 that DROPS an edge whose endpoint nothing
+  declares, and counts it on stderr (0 on the fixtures, commons-lang and
+  fineract) — v1 wrote such an edge and left the analyzer to report it;
+- a dangling reference in a FILE is now a malformed file (a schema error),
+  not a finding about a valid one. `LoadDiagnostics.danglingReferences`
+  survives for models built in memory, and the CLI still exits 3 either way;
+- cross-model references are gone too: each model is closed on its own, and a
+  reference to another language's entity is a STUB that the union merges by
+  natural key. That is the stub discipline of METAMODEL §6, applied to the
+  multi-language case.
+
+**Decision (M6) — a stub's MODULE is materialized even when its PARENT is
+refused.** Identity names a module (MM-1), so an entity whose module is not
+declared cannot be written at all; containment is a separate claim, and §6.1's
+two refusals (a corpus-declared package, the unnamed package) still stand. The
+two questions were conflated before because nothing forced them apart.
+
+**Bug found by fineract, fixed — the corpus whitelist claimed types the corpus
+never wrote.** `CorpusWhitelist` walked every `CtType` Spoon exposed, including
+the SHADOW types noClasspath materializes for unresolvable references
+(`jakarta.ws.rs.core.MediaType`, `java.math.BigDecimal`, …). The entity pass
+correctly refused them — no source position, so no evidence — and the stub pass
+then refused to degrade them ("declared by the corpus but never emitted"),
+leaving every reference to them dangling. Under v1 those became dangling
+references; under v2 the model could not be written. The whitelist now asks the
+same "is it written here?" question the entity pass asks, which is what its own
+contract already demanded.
+
+**Bug found by fineract, fixed — `entities.push(...model.entities)`.** A spread
+passes one ARGUMENT per element, so the union overflowed the call stack at
+240 929 entities and `validate` reported an internal error. It fails long before
+memory does, and no test-sized graph reaches it; `packages/analyzer/test/scale.test.ts`
+now unions a 200 000-entity model.
+
+**Bug found by MM-2, fixed — executables never declared themselves containers.**
+A method's parameters and locals carry `parent`, but `method`/`constructor`/
+`lambda` carried no `TWithChildren` and no `children`, so METAMODEL §3.2's "both
+stored, must agree" was false for every method with a parameter. v1 could not
+see it: the check only looked at entities that HAD a `children` key. The Java
+profile now licenses `TWithChildren` on the three executable kinds and the
+extractor emits it (4 795 entities on commons-lang).
 
 ### 9.3 M7 — SQLite analysis store (`model.db`)
 
@@ -650,7 +718,7 @@ Documented static limits (all languages, per profile `notes`): reflection,
 | M3 | Analyzer | ✅ import graph, type deps, cycles, coupling metrics, DOT/CSV/JSON exports; 252 tests; verified end to end on google/gson (3 624 entities) and apache/commons-lang (15 338 entities) |
 | M4 | CLI + properties | ✅ `validate`/`analyze`/`export`/`profiles` shipped; conformance gate + property suite green; 1 007 TS tests; verified end to end on apache/commons-lang (15 338 entities / 24 631 edges, every command < 1 s) |
 | M5 | Metamodel v2 | ✅ METAMODEL.md §1.1/§4 restated + §5.1/§5.2 added + §8 model/encoding split; core natural-key vocabulary, `renderId`, memoized validation; 1 089 TS tests, wire format and `schemas/` byte-identical |
-| M6 | JSONL interchange | in-place clean break (`schemaVersion` unchanged): streaming reader/writer, per-record schemas, extractor emits `.jsonl`, fixtures regenerated, v1 deleted; fineract (559MB → ~90MB) analyzable end to end |
+| M6 | JSONL interchange | ✅ in-place clean break (`schemaVersion` unchanged): streaming reader/writer, per-record schemas + generated container contract, extractor emits `.jsonl`, fixtures regenerated, v1 deleted; fineract 559.5MB → 127.4MB and analyzable end to end; 1 149 TS + 153 Java tests |
 | M7 | SQLite store | `codegraph import` → `model.db` cache; DB-backed analyzer facade; repeat runs skip parsing; reports byte-identical to M6 outputs |
 | M8 | 2nd language | clj-kondo adapter; cross-language import-graph query works |
 
@@ -670,6 +738,9 @@ Documented static limits (all languages, per profile `notes`): reflection,
 | Identity v2 (fineract audit) | structured key `(lang, module, symbol, disambiguator?)`; rendered id strings are display-only, never stored or compared | 559MB model.json broke Node's 512MB string ceiling; ≈76% of the bytes were repeated id/path strings |
 | Interchange v2 | JSONL: surrogate ints for all intra-model refs, header dictionaries for closed vocabularies, file-path table, `eof` count trailer; in-place clean break, `schemaVersion` kept at 1.0.0, no old-format reader | streaming in both directions kills the ceiling; ~6× smaller; extractor bar stays "anything that prints JSON lines"; the format is internal-only — bumping a version nobody consumes buys nothing |
 | `children` serialization (v2) | dropped — derived from `parent` like every other inverse index | invariant 4 already forbade serialized inverses; v1 carrying it was an inherited inconsistency (and 12MB on fineract) |
+| Closure (M6) | enforced by the ENCODING: a reference is a surrogate, so a dangling one is unwritable and unreadable | the check moves from "report it afterwards" to "it cannot exist"; the extractor drops and counts what it cannot close |
+| Executable containment (M6) | `method`/`constructor`/`lambda` declare `TWithChildren` | their parameters and locals already carried `parent`; only one direction was licensed, so the model stated a containment its own profile forbade |
+| Sync chunked reader (M6) | `readModelFileSync` reads 1MB at a time rather than making the CLI async | the ceiling is one JavaScript string, not synchronous I/O — going async would change every command signature and fix nothing |
 | SQLite (v2) | `model.db` is a derived, disposable analyzer cache built by `codegraph import` — never the contract, never committed | queryable/incremental/random access for CLI + future viz without sacrificing diffable fixtures, byte-determinism, or the any-language extractor bar |
 | Key separators (M5) | `/` and `#` reserved in the key's components; `renderId` validates and throws | rendering must be injective, or two distinct keys merge into one entity with no error — the M2 overload collision one level up |
 | Module component (M5) | a module names ITSELF, with an empty symbol — not its parent module | the parent form breaks the frozen `java:com.acme.order` id shape and needs a fabricated `java` module to place the stub package `java:java.util` |
