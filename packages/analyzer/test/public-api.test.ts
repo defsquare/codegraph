@@ -26,7 +26,7 @@ const SEAM_MARKER = "slice fills this in";
 /** Every function the pipeline's stages are driven through, by stage. */
 const PUBLIC_API = {
   order: ["compareIds", "sortIds", "sortedUnique", "compareEdges", "comparePairs"],
-  load: ["loadModels", "isClean"],
+  load: ["loadModels", "loadDecodedModels", "isClean"],
   graph: ["buildGraph", "hasTrait", "entityName", "entityParent"],
   views: ["projectView", "composeViews", "makeView", "provenanceOnly", "includesEntity", "includesEdge"],
   fold: ["foldGraph", "createFolder", "folderFor", "containingType", "containingModule"],

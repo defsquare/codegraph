@@ -1,8 +1,8 @@
 import { accessSync, constants } from "node:fs";
-import { readModelFileSync } from "@codegraph/core";
+import { readModelFileSync, type Model } from "@codegraph/core";
 import {
   isClean,
-  loadModels,
+  loadDecodedModels,
   type LoadDiagnostics,
   type ModelUnion,
   type SchemaError,
@@ -47,7 +47,7 @@ export interface LoadedModels {
  * a usage error (exit 2), while a readable file that is not a conforming model
  * is a FINDING (exit 3) reported alongside everything else wrong with the input.
  */
-function readPayload(path: string, index: number): { payload: unknown } | { error: SchemaError } {
+function readPayload(path: string, index: number): { payload: Model } | { error: SchemaError } {
   try {
     accessSync(path, constants.R_OK);
   } catch (error) {
@@ -76,7 +76,7 @@ function readPayload(path: string, index: number): { payload: unknown } | { erro
  * can report all of it at once.
  */
 export function loadModelFiles(paths: readonly string[]): LoadedModels {
-  const payloads: unknown[] = [];
+  const payloads: Model[] = [];
   const labels: string[] = [];
   const jsonErrors: SchemaError[] = [];
 
@@ -90,10 +90,13 @@ export function loadModelFiles(paths: readonly string[]): LoadedModels {
     labels.push(path);
   });
 
-  const { union, diagnostics } = loadModels(payloads, {
-    sources: labels,
-    onSchemaError: "collect",
-  });
+  // `loadDecodedModels`, not `loadModels`: `readModelFileSync` already validated
+  // every line against core's record schemas and enforced the container rules,
+  // so re-running the whole Model through Zod is a second pass that can only
+  // agree — 2.6 s of the 11.7 s a fineract command took. Everything that is NOT
+  // redundant (profile validation, closure over the union, self-edges,
+  // cross-model redeclaration) still runs; `load-equivalence.test.ts` pins that.
+  const { union, diagnostics } = loadDecodedModels(payloads, { sources: labels });
 
   // `modelIndex` on a JSON error is the ARGUMENT position; on an analyzer error
   // it is the position among the payloads that parsed. Labels are the stable

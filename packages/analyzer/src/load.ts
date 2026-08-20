@@ -154,14 +154,17 @@ function toArray(inputs: unknown): unknown[] {
  * Load, validate and unify. `inputs` is one model (parsed `Model` or raw parsed
  * JSON) or an array of them — `parseModel` accepts both, since a `Model` parses
  * to an equal `Model`.
+ *
+ * This is the entry point for a payload NOBODY has validated: raw parsed JSON,
+ * a model a test built by hand, a future extractor's in-memory output. It is
+ * `parseModel` followed by {@link loadDecodedModels}, and nothing else.
  */
 export function loadModels(inputs: unknown, options: LoadOptions = {}): LoadResult {
   const raw = toArray(inputs);
   const labels = options.sources ?? [];
   const onSchemaError = options.onSchemaError ?? "throw";
 
-  const models: Model[] = [];
-  const sources: ModelSource[] = [];
+  const kept: Loaded[] = [];
   const schemaErrors: SchemaError[] = [];
 
   raw.forEach((payload, index) => {
@@ -178,9 +181,59 @@ export function loadModels(inputs: unknown, options: LoadOptions = {}): LoadResu
       });
       return;
     }
-    sources.push({ index, label, lang: model.lang });
-    models.push(model);
+    kept.push({ model, label, index });
   });
+
+  return unify(kept, schemaErrors);
+}
+
+/**
+ * Unify and diagnose models that are ALREADY validated — skipping the schema
+ * pass, and only that.
+ *
+ * Who may call this: a caller that got its models from something which already
+ * enforced core's schemas record by record. `readModelFileSync` is exactly
+ * that: every line is parsed against its record schema, trait keys are checked
+ * against `WIRE_TRAITS`, and the container rules (section order, dense
+ * surrogates, closure, eof counts) are enforced as it reads. Re-running
+ * `parseModel` over the result is a second full Zod pass that can only agree —
+ * measured on apache/fineract: 2.6 s of the 11.7 s a command takes.
+ *
+ * What is NOT skipped, because none of it is redundant: profile validation,
+ * closure OVER THE UNION (one model may reference another's ids), self-edges
+ * and cross-model redeclaration. `loadModels` and this function agree on every
+ * one of those, which `load-equivalence.test.ts` pins over every fixture and
+ * every deliberately-broken model.
+ */
+export function loadDecodedModels(
+  models: readonly Model[],
+  options: Omit<LoadOptions, "onSchemaError"> = {},
+): LoadResult {
+  const labels = options.sources ?? [];
+  return unify(
+    models.map((model, index) => ({ model, label: labels[index] ?? `model[${index}]`, index })),
+    [],
+  );
+}
+
+/** One validated model, with the ARGUMENT position every diagnostic reports. */
+interface Loaded {
+  readonly model: Model;
+  readonly label: string;
+  readonly index: number;
+}
+
+/** The half both entry points share: concatenate, then diagnose. */
+function unify(loaded: readonly Loaded[], schemaErrors: readonly SchemaError[]): LoadResult {
+  const models = loaded.map((one) => one.model);
+  // The argument position is carried, never recomputed: two inputs may share a
+  // label (the same path passed twice is a legal union) and a skipped payload
+  // shifts every position after it.
+  const sources: ModelSource[] = loaded.map((one) => ({
+    index: one.index,
+    label: one.label,
+    lang: one.model.lang,
+  }));
 
   // Element by element, NEVER `push(...model.entities)`: a spread passes one
   // ARGUMENT per element, and a real corpus overflows the call stack long
