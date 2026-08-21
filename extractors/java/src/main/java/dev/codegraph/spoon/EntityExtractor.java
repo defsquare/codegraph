@@ -222,6 +222,7 @@ public final class EntityExtractor {
 
     private void packages(List<CtType<?>> types) {
       Map<String, String> names = new TreeMap<>();
+      Map<String, CtPackage> declared = new TreeMap<>();
       Map<String, Set<String>> files = new TreeMap<>();
       for (CtType<?> type : types) {
         // A package's members are the types written directly in it; a nested,
@@ -233,6 +234,7 @@ public final class EntityExtractor {
         CtPackage pkg = type.getPackage();
         String id = EntityIds.forPackage(pkg);
         names.putIfAbsent(id, packageName(pkg));
+        declared.putIfAbsent(id, pkg);
         String file = anchors.relativeFile(type);
         if (file != null) {
           files.computeIfAbsent(id, key -> new TreeSet<>()).add(file);
@@ -240,14 +242,36 @@ public final class EntityExtractor {
       }
       for (Map.Entry<String, String> entry : names.entrySet()) {
         String id = entry.getKey();
+        // Package containment is walked STRUCTURALLY on Spoon's package tree,
+        // never derived from the dotted name: the parent is the nearest
+        // ancestor package that itself holds corpus types. A pure namespace
+        // prefix (`com`, `org.apache`) is not invented as an entity, so the
+        // chain skips it and the topmost populated packages stay roots.
+        String parent = nearestDeclaredAncestor(declared.get(id), names.keySet());
         Entity.Builder builder =
             Entity.builder(id, PACKAGE)
                 .named(entry.getValue())
                 // Pass 2 only ever emits packages a corpus type is written in,
                 // so these are declared by construction; pass 4 makes the stubs.
                 .definedIn(List.copyOf(files.getOrDefault(id, Set.of())), false);
-        add(new Draft(id, null, true, builder));
+        if (parent != null) {
+          builder.childOf(parent);
+        }
+        add(new Draft(id, parent, true, builder));
       }
+    }
+
+    /** Nearest enclosing package (by Spoon structure) whose id is in {@code emitted}. */
+    private static String nearestDeclaredAncestor(CtPackage pkg, Set<String> emitted) {
+      for (CtElement up = pkg == null ? null : pkg.getParent();
+          up instanceof CtPackage ancestor && !ancestor.isUnnamedPackage();
+          up = ancestor.getParent()) {
+        String id = EntityIds.forPackage(ancestor);
+        if (emitted.contains(id)) {
+          return id;
+        }
+      }
+      return null;
     }
 
     private void type(CtType<?> type) {

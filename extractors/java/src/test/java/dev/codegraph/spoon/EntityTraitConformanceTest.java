@@ -42,7 +42,10 @@ class EntityTraitConformanceTest {
   /** kind → (required, optional). The literal transcription; do not "simplify" it. */
   private static final Map<String, Kind> TABLE =
       Map.ofEntries(
-          Map.entry("package", kind(of("TNamed", "TModule", "TWithChildren"), of("TComment"))),
+          // TChildOf: nearest ancestor package that holds corpus types, walked
+          // structurally (mirrors the core profile; stub packages stay flat).
+          Map.entry(
+              "package", kind(of("TNamed", "TModule", "TWithChildren"), of("TComment", "TChildOf"))),
           Map.entry(
               "class",
               kind(

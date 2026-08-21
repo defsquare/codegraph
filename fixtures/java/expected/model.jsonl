@@ -140,14 +140,14 @@
 {"t":"e","i":124,"k":7,"tr":[4,5,0,8,6],"m":0,"s":"Reporting.max(java.util.List)","d":"local:value:26","name":"value","declaredType":148,"parent":122,"anchor":[11,26,26]}
 {"t":"e","i":125,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Reporting.max(java.util.List)","d":"param:values","name":"values","declaredType":163,"parent":122,"anchor":[11,24,24]}
 {"t":"e","i":126,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Reporting.today()","name":"today","signature":"today()","declaredType":159,"parent":112,"parameters":[],"localVariables":[],"anchor":[11,38,40]}
-{"t":"e","i":127,"k":9,"tr":[4,10,3],"m":127,"s":"com.acme.order.adapter","name":"com.acme.order.adapter","isStub":false,"definedIn":[12]}
+{"t":"e","i":127,"k":9,"tr":[4,10,0,3],"m":127,"s":"com.acme.order.adapter","name":"com.acme.order.adapter","isStub":false,"parent":0,"definedIn":[12]}
 {"t":"e","i":128,"k":2,"tr":[4,7],"m":127,"s":"AuditTrail","name":"AuditTrail","isStub":true}
 {"t":"e","i":129,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":127,"s":"LedgerAdapter","name":"LedgerAdapter","isStub":false,"parent":127,"comments":["Posts to the ledger and keeps a local trail."],"anchor":[12,6,15]}
 {"t":"e","i":130,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":127,"s":"LedgerAdapter.<init>()","signature":"<init>()","parent":129,"parameters":[],"localVariables":[],"anchor":[12,6,15]}
 {"t":"e","i":131,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":127,"s":"LedgerAdapter.post(java.lang.Object)","name":"post","signature":"post(java.lang.Object)","parent":129,"parameters":[132],"localVariables":[],"anchor":[12,11,14]}
 {"t":"e","i":132,"k":10,"tr":[4,5,0,8,6],"m":127,"s":"LedgerAdapter.post(java.lang.Object)","d":"param:document","name":"document","declaredType":149,"parent":131,"anchor":[12,11,11]}
 {"t":"e","i":133,"k":1,"tr":[4,5,0,8,6],"m":127,"s":"LedgerAdapter.trail","name":"trail","declaredType":128,"parent":129,"anchor":[12,8,8]}
-{"t":"e","i":134,"k":9,"tr":[4,10,3],"m":134,"s":"com.acme.order.legacy","name":"com.acme.order.legacy","isStub":false,"definedIn":[13]}
+{"t":"e","i":134,"k":9,"tr":[4,10,0,3],"m":134,"s":"com.acme.order.legacy","name":"com.acme.order.legacy","isStub":false,"parent":0,"definedIn":[13]}
 {"t":"e","i":135,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":134,"s":"List","name":"List","isStub":false,"parent":134,"comments":["A hand-rolled cons list from before java.util was allowed here."],"anchor":[13,4,22]}
 {"t":"e","i":136,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":134,"s":"List.<init>(java.lang.String,com.acme.order.legacy.List)","signature":"<init>(java.lang.String,com.acme.order.legacy.List)","parent":135,"parameters":[137,138],"localVariables":[],"anchor":[13,10,13]}
 {"t":"e","i":137,"k":10,"tr":[4,5,0,8,6],"m":134,"s":"List.<init>(java.lang.String,com.acme.order.legacy.List)","d":"param:head","name":"head","declaredType":152,"parent":136,"anchor":[13,10,10]}

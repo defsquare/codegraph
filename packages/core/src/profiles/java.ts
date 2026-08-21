@@ -11,11 +11,15 @@ export const javaProfile: Profile = {
   lang: "java",
 
   kinds: {
-    // A package is a flat namespace, not a lexical container of other packages:
-    // no TChildOf, and `com.acme.order` is not a child of `com.acme`.
+    // To the JLS a package is a flat namespace, but the source tree nests them,
+    // and Spoon models that structure. TChildOf is optional and, when present,
+    // points at the nearest ANCESTOR package that itself holds corpus types —
+    // walked structurally, never derived from the dotted name, so a pure
+    // namespace prefix (`com`, `org.apache`) is never invented as a container.
+    // Stub packages stay flat: their ancestry is not in the corpus.
     package: {
       required: ["TNamed", "TModule", "TWithChildren"],
-      optional: ["TComment"],
+      optional: ["TComment", "TChildOf"],
     },
 
     class: {
