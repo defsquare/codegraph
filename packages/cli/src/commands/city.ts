@@ -12,6 +12,7 @@ import type { CityOptions } from "../args.js";
 import { UsageError, type ExitCode } from "../exit.js";
 import { errLine, errLines, type IoSink } from "../io.js";
 import { loadExitCode, loadModelFiles, type LoadedModels } from "../load.js";
+import { startCityServer, vizAssetsDir, type CityServerOptions } from "../serve.js";
 import { resolveView } from "../view.js";
 
 /**
@@ -35,25 +36,52 @@ import { resolveView } from "../view.js";
  * A BAD METRIC IS A USAGE ERROR (exit 2), not an internal one: the city package
  * throws `UnknownMetricError` naming what exists, and the CLI's job is to hand
  * that to the user with the flag they typed.
+ *
+ * `--serve` hosts the visualizer on localhost with this city as /city.json.
+ * It implies --layout (the viewer refuses a city with no placement), keeps
+ * stdout empty (the server is the artifact's destination; --out still writes
+ * the file too), and returns immediately — the LIVE SERVER is what keeps the
+ * process running, exactly like any dev server, until Ctrl-C.
  */
-export function cityCommand(options: CityOptions, io: IoSink): ExitCode {
+
+/** The server seam, injectable so tests need no sockets and no built viz. */
+export interface ServeDeps {
+  readonly assetsDir: typeof vizAssetsDir;
+  readonly startServer: (serverOptions: CityServerOptions) => unknown;
+}
+const REAL_SERVE: ServeDeps = { assetsDir: vizAssetsDir, startServer: startCityServer };
+
+export function cityCommand(
+  options: CityOptions,
+  io: IoSink,
+  deps: ServeDeps = REAL_SERVE,
+): ExitCode {
+  // Resolve the assets FIRST: an unbuilt visualizer must fail before a large
+  // model is loaded, not after.
+  const assets = options.serve ? deps.assetsDir() : undefined;
+
   const loaded = loadModelFiles(options.models);
   const graph = buildGraph(loaded.union);
 
   const city = build(graph, options);
-  const artifact = cityToJsonString(options.layout ? layoutCity(city) : city);
+  const laidOut = options.layout || options.serve;
+  const artifact = cityToJsonString(laidOut ? layoutCity(city) : city);
 
   errLines(io, warnings(loaded, city));
 
-  if (options.out === undefined) {
-    io.out(artifact);
-  } else {
+  if (options.out !== undefined) {
     io.writeFile(options.out, artifact);
     errLine(
       io,
       `wrote ${plural(Buffer.byteLength(artifact, "utf8"), "byte")} to ${options.out} ` +
-        `(${describe(city, options.layout)}).`,
+        `(${describe(city, laidOut)}).`,
     );
+  } else if (assets === undefined) {
+    io.out(artifact);
+  }
+
+  if (assets !== undefined) {
+    deps.startServer({ artifact, assets, port: options.port, io });
   }
 
   return loadExitCode(loaded);

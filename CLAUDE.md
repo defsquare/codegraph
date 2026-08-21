@@ -77,6 +77,7 @@ java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 #   export JAVA_HOME="$HOME/.sdkman/candidates/java/25.0.4-tem"
 
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
+./bin/codegraph city model.jsonl --serve           # 3D city at http://localhost:4177
 ```
 
 ## Metamodel invariants (violating these is a bug, not a style choice)

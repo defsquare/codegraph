@@ -112,6 +112,9 @@ importers:
       '@codegraph/core':
         specifier: workspace:*
         version: link:../core
+      '@codegraph/viz':
+        specifier: workspace:*
+        version: link:../viz
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
