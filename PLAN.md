@@ -917,13 +917,59 @@ interchange.
       because deleting the target on failure also "leaves no database". The
       property that separates them is the one users feel: a failed re-import
       must not cost you the cache you had. Now asserted.
-- [ ] DB-backed graph facade behind the existing analyzer API. Step 6's
-      measurement sets the bar: `hydrateModel` is only a 1.8x constant over
-      reading the text, so the facade must push questions DOWN into SQL
-      (recursive CTEs for cycles/reachability, `WHERE module_id IN (...)` for
-      slices) rather than rebuild the whole `Model` and analyze it in JS.
-      Opportunistic, not big-bang — but a facade that hydrates everything has
-      already lost the two orders of magnitude.
+- [x] **Step 7 — fold in SQL.** `foldFromStore(db, options)` answers in SQL
+      what `foldGraph` answers in JavaScript. Fold is the FUNNEL — coupling,
+      cycles, DOT, PlantUML, CSV and JSON all consume a `FoldedGraph` and look
+      at nothing else — so this is the one place worth moving, and everything
+      downstream gets it unchanged.
+
+      Measured on fineract, all eight (level × view) combinations in parity:
+
+      | | in memory | from the store |
+      |---|---|---|
+      | prepare (build graph / open) | 9.0 s | ~0 s |
+      | fold, module level | 0.4 s | 1.4 s |
+      | fold, type level | 0.5–1.0 s | 1.5–1.6 s |
+      | **total** | **9.4 s** | **1.4 s** |
+
+      Stated honestly: the SQL fold is SLOWER per call — the win is entirely in
+      not needing the 9s graph build, so a caller that folded many times would
+      amortize the other way. Each CLI invocation folds once. The 782 046 base
+      edges never enter JavaScript; only the ~20 000 aggregated ones do.
+
+      Containers are resolved by a FIXPOINT over `parent_id`, not a recursive
+      CTE: measured 0.38s against 1.06s, because the CTE re-walks each chain
+      from every descendant. The loop ends when a pass adds nothing, so a
+      malformed parent cycle terminates — its members just never resolve, which
+      is what the in-memory walk also does.
+
+      **It refuses rather than approximates.** A view is an arbitrary predicate
+      pair; SQL cannot run one. `translateView` translates the ones a view
+      NAMES through `ViewDescriptor.filters` (`internalOnly`, `declaredOnly`,
+      `provenance:…`) and returns `undefined` for anything else, so the caller
+      hydrates. A facade that quietly answered a slightly different question
+      would be worse than none: the numbers would still look like numbers.
+
+      `assembleFoldedGraph` was extracted from `foldGraph` so both producers
+      sort, index and freeze through one function — the step-3 rule applied to
+      a second producer.
+
+      `store-fold.test.ts` (22) compares whole graphs — nodes, edges, counts,
+      kind/provenance sets, diagnostics — for both levels × five views, plus
+      self-loop dropping, edge-kind filtering, and the unicode fixture. Then it
+      proves the payoff rather than assuming it: DOT, PlantUML, CSV, JSON,
+      coupling and cycles byte-identical from either fold.
+
+      Four mutations; two exposed gaps rather than confirming coverage.
+      Silently accepting an untranslatable view, and miscounting
+      `droppedEdges`, were caught. Restricting the container walk to
+      view-included entities was caught only after being rewritten to break
+      chains DURING resolution — the first version deleted already-resolved
+      rows and was a no-op. And deciding "is this its own module?" by comparing
+      SYMBOLS instead of surrogates passed everything: no fixture had a type
+      whose symbol equals its module's path. That case now exists, because
+      getting it wrong renders a class as its own package — two entities, one
+      id.
 - [ ] `cli`: `codegraph import`; `analyze`/`export` given a `.jsonl`
       auto-build a sibling `.db` cache (`--no-cache` escape hatch);
       `dbVersion` mismatch in `meta` ⇒ re-import from JSONL — migration is

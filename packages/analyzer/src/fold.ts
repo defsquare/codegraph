@@ -299,6 +299,40 @@ export function foldGraph(graph: CodeGraph, options: FoldOptions): FoldedGraph {
       });
     }
   }
+  return assembleFoldedGraph(level, view.descriptor, nodes, edges, {
+    unfoldableEntities: unfoldable,
+    droppedEdges,
+    foldedEdges,
+  });
+}
+
+const EMPTY_EDGES: readonly FoldedEdge[] = Object.freeze([]);
+
+/**
+ * Sort, index and freeze a folded graph.
+ *
+ * Shared, because there is now a SECOND producer: `foldFromStore` answers the
+ * same question in SQL (`store/fold-sql.ts`). Two assemblers would be two
+ * chances to sort differently or to index one side and not the other, and the
+ * difference would surface as a changed byte in a report rather than as an
+ * error — so both hand their nodes, edges and diagnostics here and neither owns
+ * the shape.
+ *
+ * Ordering is imposed here rather than assumed of the caller: canonical order
+ * belongs to the model, and a SQL producer's rows arrive in the engine's.
+ */
+export function assembleFoldedGraph(
+  level: FoldLevel,
+  view: ViewDescriptor,
+  nodes: FoldedNode[],
+  edges: FoldedEdge[],
+  diagnostics: {
+    unfoldableEntities: readonly EntityId[];
+    droppedEdges: number;
+    foldedEdges: number;
+  },
+): FoldedGraph {
+  nodes.sort((a, b) => compareIds(a.id, b.id));
   edges.sort((a, b) => compareIds(a.from, b.from) || compareIds(a.to, b.to));
 
   const byId = new Map(nodes.map((node) => [node.id, node] as const));
@@ -313,19 +347,18 @@ export function foldGraph(graph: CodeGraph, options: FoldOptions): FoldedGraph {
     else inc.push(edge);
   }
 
-  const empty: readonly FoldedEdge[] = Object.freeze([]);
   return {
     level,
-    view: view.descriptor,
+    view,
     nodes: Object.freeze(nodes),
     edges: Object.freeze(edges),
     diagnostics: {
-      unfoldableEntities: Object.freeze(sortIds(unfoldable)),
-      droppedEdges,
-      foldedEdges,
+      unfoldableEntities: Object.freeze(sortIds(diagnostics.unfoldableEntities)),
+      droppedEdges: diagnostics.droppedEdges,
+      foldedEdges: diagnostics.foldedEdges,
     },
     node: (id) => byId.get(id),
-    outgoing: (id) => outgoing.get(id) ?? empty,
-    incoming: (id) => incoming.get(id) ?? empty,
+    outgoing: (id) => outgoing.get(id) ?? EMPTY_EDGES,
+    incoming: (id) => incoming.get(id) ?? EMPTY_EDGES,
   };
 }

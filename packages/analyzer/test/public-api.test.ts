@@ -63,6 +63,8 @@ const PUBLIC_API = {
     "openStore",
     "readStoreRecords",
     "hydrateModel",
+    "foldFromStore",
+    "translateView",
   ],
 } as const;
 

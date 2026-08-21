@@ -69,3 +69,4 @@ export * from "./exports/json.js";
 export * from "./store/sqlite.js";
 export * from "./store/schema.js";
 export * from "./store/import.js";
+export * from "./store/fold-sql.js";
