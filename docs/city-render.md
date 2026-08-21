@@ -4,7 +4,10 @@ Status: **shipped as the first renderer slice** (`packages/viz`).
 Companion doc: [`city-model.md`](city-model.md) describes the city MODEL this
 package draws; `CLAUDE.md` holds the visualization rules it must obey.
 
-This doc records the choices. The renderer is the END of the pipeline:
+This doc records the choices. The visual reference is
+[`deepencity.png`](deepencity.png) — district plates on dark ground, extruded
+buildings, roof-to-roof arcs, a metrics card on hover. The renderer is the END
+of the pipeline:
 
 ```
 model.jsonl  →  codegraph city --layout  →  city.json  →  @codegraph/viz
