@@ -15,7 +15,8 @@
   "dependencies": {
     "@codegraph/analyzer": "workspace:*",
     "@codegraph/city": "workspace:*",
-    "@codegraph/core": "workspace:*"
+    "@codegraph/core": "workspace:*",
+    "@codegraph/viz": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

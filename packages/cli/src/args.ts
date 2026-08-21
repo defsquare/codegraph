@@ -219,6 +219,20 @@ export const CITY_SPEC: CommandSpec = {
       describe:
         "Lay the city out: positions on buildings, bounds on districts, by recursive shelf packing.",
     },
+    {
+      name: "serve",
+      type: "boolean",
+      describe:
+        "Serve the 3D visualizer on localhost with this city loaded (implies --layout; " +
+        "stdout stays empty; Ctrl-C stops it). Needs the built viz app (pnpm -r build).",
+    },
+    {
+      name: "port",
+      type: "string",
+      describe: "Port for --serve; 0 picks a free one.",
+      placeholder: "N",
+      defaultValue: "4177",
+    },
     ...VIEW_OPTIONS,
     {
       name: "out",
@@ -296,6 +310,10 @@ export interface CityOptions extends ModelInputOptions, ViewOptions {
   readonly carry: readonly string[];
   /** `--layout`: add placement (positions, bounds) to the artifact. */
   readonly layout: boolean;
+  /** `--serve`: host the visualizer on localhost with this city loaded. */
+  readonly serve: boolean;
+  /** `--port N` for `--serve`; 0 = an ephemeral port. */
+  readonly port: number;
   /** `--out FILE`; undefined means stdout. */
   readonly out: string | undefined;
 }
@@ -480,6 +498,20 @@ function levelOf(values: ParsedValues): FoldLevel {
   return value === undefined ? DEFAULT_LEVEL : (value as FoldLevel);
 }
 
+/** `--port N`: a TCP port; 0 is allowed on purpose (the OS picks a free one). */
+function portOf(values: ParsedValues): number {
+  const raw = stringOf(values, "port");
+  if (raw === undefined) return 4177;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new UsageError(
+      `--port must be an integer between 0 and 65535, got '${raw}'`,
+      "0 asks the OS for a free port; the chosen port is printed on stderr.",
+    );
+  }
+  return port;
+}
+
 /** `--carry a,b` → ["a","b"]; blanks dropped so `a,,b` is not a metric named "". */
 function metricList(value: string | undefined): readonly string[] {
   if (value === undefined) return [];
@@ -620,6 +652,8 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           footprintScale: stringOf(values, "footprint-scale") ?? "sqrt",
           carry: metricList(stringOf(values, "carry")),
           layout: flagOf(values, "layout"),
+          serve: flagOf(values, "serve"),
+          port: portOf(values),
           ...viewOf(values),
           out: stringOf(values, "out"),
         },

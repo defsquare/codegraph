@@ -145,10 +145,14 @@ produces a valid one.
 
 ## CR-6 Deliberately absent
 
-- **A `codegraph viz` CLI command.** The CLI must stay free of `three` and the
-  DOM; the handoff is the artifact file, and the viewer is `pnpm --filter
-  @codegraph/viz dev` (or a static `vite build` output with a `city.json`
-  dropped next to it).
+- **Rendering knowledge in the CLI.** `codegraph city --serve` exists, but it
+  is byte movement, not rendering: a `node:http` server on 127.0.0.1 that
+  hands out `@codegraph/viz`'s PREBUILT static bundle plus the in-memory
+  artifact as `/city.json`. Three.js never enters the CLI's import graph — the
+  `@codegraph/viz` dependency is assets-only, resolved at runtime, and an
+  unbuilt visualizer is a usage-shaped error naming the build command. The
+  dev loop (`pnpm --filter @codegraph/viz dev`, drag & drop, `?src=`) is
+  unchanged.
 - **Labels, minimaps, district captions.** Text in WebGL is a rabbit hole;
   the tooltip covers identification for now. Candidate for a later slice.
 - **Color as a metric channel.** The city model reserves color for a future
@@ -160,7 +164,11 @@ produces a valid one.
 ## CR-7 Entry points
 
 ```bash
-# produce the input
+# one command, model to browser (implies --layout; Ctrl-C stops it)
+./bin/codegraph city model.jsonl --serve            # http://localhost:4177
+./bin/codegraph city model.jsonl --serve --port 0   # any free port
+
+# produce the artifact file
 ./bin/codegraph city model.jsonl --layout --out city.json
 
 # develop / view

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Codegraph city renderer: Three.js view of a laid-out city artifact (codegraph city --layout)",
+  "files": ["dist", "index.html"],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
