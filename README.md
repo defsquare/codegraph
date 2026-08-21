@@ -3,7 +3,9 @@
 Extract dependencies between code entities — classes, functions, modules — from
 multi-language corpora, **including non-compilable legacy code**, into a
 trait-based metamodel, and analyze the result: dependency graphs, coupling,
-cycles, architecture, and eventually a 3D "code city".
+cycles, architecture, and a browsable **3D "code city"** — modules as districts
+(nested like the packages they are), types as buildings sized by real metrics,
+dependencies as roof-to-roof arcs.
 
 ```
 ┌──────────────────┐    ┌───────────────────┐    ┌──────────────────────┐
@@ -45,8 +47,9 @@ Four rules make the model trustworthy rather than merely rich:
 |---|---|
 | `packages/core` | `@codegraph/core` — traits, edges, language profiles, Zod validation, JSON Schema export |
 | `packages/analyzer` | `@codegraph/analyzer` — graph construction, derived indexes, queries, metrics |
+| `packages/city` | `@codegraph/city` — the city **model**: districts, buildings, arrows, layout; no rendering |
 | `packages/cli` | `@codegraph/cli` — the `codegraph` command |
-| `packages/viz` | *(future)* Three.js code city — the only package allowed to depend on `three` |
+| `packages/viz` | `@codegraph/viz` — the Three.js code city renderer — the only package allowed to depend on `three` |
 | `extractors/java` | Maven/Spoon extractor (noClasspath), emits `model.jsonl` |
 | `schemas/` | Generated JSON Schema — the committed cross-language contract |
 | `fixtures/` | Reference corpora + expected `model.jsonl` snapshots |
@@ -84,6 +87,10 @@ codegraph analyze  model.jsonl --report deps|cycles|coupling
 codegraph export   model.jsonl --format dot|json|csv|plantuml
                    [--level module|type] [--internal-only] [--declared-only]
                    [--out FILE]
+
+codegraph city     model.jsonl [--serve [--port N]] [--layout] [--out FILE]
+                   [--height METRIC] [--footprint METRIC] [--carry M1,M2]
+                   [--internal-only] [--declared-only]
 
 codegraph profiles [--lang java] [--json]
 ```
@@ -144,6 +151,40 @@ dashed outline is an entity the corpus does not declare, and the title carries
 the level and the view — an analysis picture without its view is not a fact. A
 stereotype that would only repeat the element (`package "x" <<package>>`) is
 dropped, and the legend describes only the encodings the diagram actually drew.
+
+### The code city: from a model file to the browser
+
+One command serves the 3D city for any `model.jsonl`:
+
+```bash
+codegraph city model.jsonl --serve            # → http://localhost:4177, Ctrl-C stops
+codegraph city model.jsonl --serve --port 0   # any free port, printed on stderr
+```
+
+`--serve` binds **localhost only** (a code model can be sensitive), implies
+`--layout`, and needs the built visualizer — `pnpm -r build` covers it. In the
+city: **modules are districts** (nested when the model declares package
+containment), **types are buildings** whose height and footprint follow
+configurable metrics (`--height loc --footprint members` are the defaults —
+`--height sum:cyclomatic` works the day an extractor emits it), and **type
+dependencies are roof-to-roof arcs** — green when every base edge is declared,
+red when any is inferred. Hover a building for its raw metrics; click a
+district for its module-level **fan-in/fan-out** arcs (amber in, blue out, each
+toggleable); the `buildings` toggle (or `?landscape=1`) turns the city into a
+pure module landscape. Orbit, zoom and pan are the mouse.
+
+The picture never claims more than the model: unmeasured metrics are drawn at
+the channel minimum and *labeled* unmeasured, stubs are visibly darker, and the
+on-screen legend is generated from the artifact's own bindings.
+
+Two-step alternative — write the artifact, view it anywhere: the artifact is
+plain JSON, so it travels, diffs, and re-renders without the model:
+
+```bash
+codegraph city model.jsonl --layout --out city.json
+CITY_JSON=$PWD/city.json pnpm --filter @codegraph/viz dev   # or drag city.json
+                                                            # onto the viewer
+```
 
 **stdout is the artifact; stderr is everything human.** Warnings, fold
 diagnostics and summaries never touch stdout, so a redirect always yields a
@@ -220,3 +261,6 @@ fact and a dashed one contains an inference, and stub nodes are dashed and grey.
   its data structures, algorithms and costs, entry points, and the rules behind them
 - [`docs/city-model.md`](docs/city-model.md) — the city model's design: data
   structures, metric sources, algorithms, entry points, and what layout will consume
+- [`docs/city-render.md`](docs/city-render.md) — the renderer's design: the
+  artifact boundary, the pure scene model, semantic channels, the landscape
+  interactions, and `--serve`
