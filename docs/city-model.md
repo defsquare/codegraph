@@ -82,12 +82,25 @@ CityModel {
   diagnostics: CityDiagnostics
 }
 
-District { id, name, kind, isStub, buildings: EntityId[], footprintDemand }
+District { id, name, kind, isStub, parent?, buildings: EntityId[], footprintDemand }
 Building { id, name, kind, isStub, district,
             height, footprint: { width, depth },
             metrics: Record<string, number | null> }
 Arrow    { from, to, count, kinds[], provenances[], inferred, crossDistrict }
 ```
+
+Two later additions to the shape (details in CM-8's nesting note):
+
+- **`District.parent`** — the nearest ancestor module that is itself a district,
+  when the model declares module containment. Absent for roots and for models
+  without containment.
+- **`CityModel.districtArrows`** — module-level dependencies between districts,
+  from the analyzer's fold at `level: "module"` under the same view: the
+  fan-in/fan-out a landscape view renders. Same `Arrow` shape; kept in the
+  artifact so no renderer re-derives module facts by aggregating type arrows
+  (it would get stub folding and view rules wrong). Self-dependencies and
+  arrows whose endpoint is no district are counted in
+  `diagnostics.selfDistrictArrows` / `droppedDistrictArrows`.
 
 Choices worth naming:
 
@@ -262,18 +275,27 @@ including trying several packers and comparing them on the same city.
 *(That pass now exists: `layoutCity` in `layout.ts`, CLI `--layout` — recursive
 shelf packing, readability over density, algorithm and parameters declared in
 the artefact's `layout` block. `buildCity` itself is unchanged: placement stays
-opt-in and separate.)*
+opt-in and separate. With nesting, a child district packs INSIDE its parent as
+one more rectangle among the parent's own buildings — sizing bottom-up over
+the district tree, placement top-down; a missing or cyclic `parent` demotes
+the district to a root rather than failing.)*
 
 Also absent, and why:
 
 - **Colour.** A palette is a rendering decision, and the raw `metrics` on each
   building are what a colour channel will bind to. Adding a `color` field now
   would freeze a choice the renderer has not yet had to make.
-- **District nesting.** Districts are **flat**. Java packages carry no parent
-  package in the model, so nesting `com.acme.order.legacy` under
-  `com.acme.order` means splitting a *name* — the inference invariant 7
-  forbids. Nesting becomes available the day an extractor emits package
-  containment, and the `District` shape can gain a `parent` then.
+- **District nesting.** *Landed, exactly the way this note said it would.*
+  Originally districts were flat because Java packages carried no parent in
+  the model, and nesting `com.acme.order.legacy` under `com.acme.order` would
+  have split a *name* — the inference invariant 7 forbids. The Java extractor
+  now emits package containment walked STRUCTURALLY on Spoon's package tree
+  (`TChildOf`, optional on `package` in the profile): a package's parent is
+  the nearest ancestor package that itself holds corpus types, so a pure
+  namespace prefix (`com`, `org.apache`) is never invented, and stub packages
+  stay flat. `District.parent` is that chain projected onto the city — the
+  nearest ancestor that is also a district — and the layout packs children
+  inside their parent (see CM-10.1).
 - **Geometry.** No meshes, no vertices, no units in metres. `units: "city"`
   says the numbers are ratios within a range and nothing else.
 

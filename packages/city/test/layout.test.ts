@@ -7,6 +7,7 @@ import {
   type Bounds,
   type CityLayout,
   type PlacedBuilding,
+  type PlacedDistrict,
 } from "../src/layout.js";
 import { javaGraph } from "./fixture.js";
 
@@ -60,10 +61,13 @@ function cityOf(
     districts,
     buildings,
     arrows: [],
+    districtArrows: [],
     diagnostics: {
       unplacedBuildings: [],
       droppedArrows: 0,
       selfArrows: 0,
+      droppedDistrictArrows: 0,
+      selfDistrictArrows: 0,
       unmeasured: {},
       fold: { unfoldableEntities: 0, droppedEdges: 0, foldedEdges: 0 },
     },
@@ -127,13 +131,47 @@ function assertWellFormed(laid: CityLayout): void {
     }
   }
 
+  // Nesting rewrote the old "every pair keeps an avenue" promise. The durable
+  // properties: an ancestor CONTAINS its descendants, clear of its sidewalk;
+  // two unrelated districts stay apart — by an avenue when both are roots, by
+  // at least a street when either is nested inside some parent.
+  const isAncestor = (a: PlacedDistrict, b: PlacedDistrict): boolean => {
+    for (let parent = b.parent; parent !== undefined; ) {
+      if (parent === a.id) return true;
+      parent = districtById.get(parent)?.parent;
+    }
+    return false;
+  };
   for (let i = 0; i < laid.districts.length; i += 1) {
     for (let j = i + 1; j < laid.districts.length; j += 1) {
-      const a = laid.districts[i] as (typeof laid.districts)[number];
-      const b = laid.districts[j] as (typeof laid.districts)[number];
+      const a = laid.districts[i] as PlacedDistrict;
+      const b = laid.districts[j] as PlacedDistrict;
+      if (isAncestor(a, b) || isAncestor(b, a)) {
+        const [outer, inner] = isAncestor(a, b) ? [a, b] : [b, a];
+        expect(
+          contains(outer.bounds, inner.bounds, districtPadding),
+          `${inner.id} lies inside ${outer.id}, clear of the sidewalk`,
+        ).toBe(true);
+      } else {
+        const gap = a.parent === undefined && b.parent === undefined ? districtGap : buildingGap;
+        expect(
+          separated(a.bounds, b.bounds, gap),
+          `${a.id} and ${b.id} keep open ground of ${gap}`,
+        ).toBe(true);
+      }
+    }
+  }
+
+  // A district's own buildings and its child districts share one packing, so
+  // they too keep a street open.
+  for (const district of laid.districts) {
+    if (district.parent === undefined) continue;
+    const parent = districtById.get(district.parent);
+    if (parent === undefined) continue;
+    for (const building of laid.buildings.filter((b) => b.district === parent.id)) {
       expect(
-        separated(a.bounds, b.bounds, districtGap),
-        `${a.id} and ${b.id} keep an avenue of ${districtGap} open`,
+        separated(district.bounds, footprintOf(building), buildingGap),
+        `${building.id} keeps a street from nested ${district.id}`,
       ).toBe(true);
     }
   }
@@ -278,6 +316,45 @@ describe("the real fixture", () => {
     for (const building of laid.buildings) {
       expect(building.position.x).toBeGreaterThanOrEqual(0);
       expect(building.position.y).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it("nests the extractor's package containment as districts within districts", () => {
+    const laid = layoutCity(buildCity(javaGraph()));
+    const byId = new Map(laid.districts.map((district) => [district.id, district]));
+    const adapter = byId.get("java:com.acme.order.adapter");
+    const order = byId.get("java:com.acme.order");
+    expect(adapter?.parent).toBe("java:com.acme.order");
+    expect(byId.get("java:com.acme.order.legacy")?.parent).toBe("java:com.acme.order");
+    // The child plot lies physically inside the parent's bounds.
+    expect(adapter && order).toBeTruthy();
+    if (adapter && order) {
+      expect(adapter.bounds.x).toBeGreaterThanOrEqual(order.bounds.x);
+      expect(adapter.bounds.y).toBeGreaterThanOrEqual(order.bounds.y);
+      expect(adapter.bounds.x + adapter.bounds.width).toBeLessThanOrEqual(
+        order.bounds.x + order.bounds.width + 1e-9,
+      );
+      expect(adapter.bounds.y + adapter.bounds.depth).toBeLessThanOrEqual(
+        order.bounds.y + order.bounds.depth + 1e-9,
+      );
+    }
+  });
+
+  it("a cyclic or dangling parent demotes the district to a root, never crashes", () => {
+    const city = buildCity(javaGraph());
+    const twisted = {
+      ...city,
+      districts: city.districts.map((district) =>
+        district.id === "java:com.acme.order"
+          ? { ...district, parent: "java:com.acme.order.adapter" } // cycle with its own child
+          : district.id === "java:com.megacorp.ledger"
+            ? { ...district, parent: "java:not.a.district" } // dangling
+            : district,
+      ),
+    };
+    const laid = layoutCity(twisted);
+    for (const district of laid.districts) {
+      expect(district.bounds.width).toBeGreaterThanOrEqual(0);
     }
   });
 });

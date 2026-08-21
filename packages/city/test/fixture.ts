@@ -28,13 +28,17 @@ export function graphOf(entities: readonly Entity[], edges: readonly Edge[] = []
   return buildGraph(loadModels(model, { sources: ["toy"] }).union);
 }
 
-export function pkg(id: string, isStub = false): Entity {
+export function pkg(id: string, isStub = false, parent?: string): Entity {
   return {
     id,
     kind: "package",
-    traits: ["TNamed", "TWithChildren", "TModule"],
+    traits:
+      parent === undefined
+        ? ["TNamed", "TWithChildren", "TModule"]
+        : ["TNamed", "TWithChildren", "TModule", "TChildOf"],
     name: id,
     isStub,
+    ...(parent === undefined ? {} : { parent }),
     definedIn: isStub ? [] : ["T.java"],
   } as Entity;
 }

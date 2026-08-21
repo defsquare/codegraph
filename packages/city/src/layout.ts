@@ -1,3 +1,4 @@
+import type { EntityId } from "@codegraph/core";
 import type { Building, CityModel, District } from "./city.js";
 import { round } from "./scale.js";
 
@@ -104,66 +105,98 @@ const DEFAULTS: ResolvedLayout = {
 /**
  * Lay the city out. Pure: the input model is read, never mutated, and the same
  * city with the same options lays out byte-identically.
+ *
+ * NESTING. A district whose `parent` names another district is packed INSIDE
+ * it, as one more rectangle among the parent's own buildings (streets between
+ * siblings, the child's own sidewalk marking its border). Sizing runs
+ * bottom-up over the district tree, placement top-down; a flat city (no
+ * `parent` anywhere) lays out exactly as it always has. A `parent` that is
+ * missing from the city or cyclic demotes the district to a root rather than
+ * failing — a malformed artifact still gets an honest, drawable answer.
  */
 export function layoutCity(city: CityModel, options: LayoutOptions = {}): CityLayout {
   const layout = resolveLayout(options);
   const byId = new Map(city.buildings.map((building) => [building.id, building] as const));
+  const districtById = new Map(city.districts.map((district) => [district.id, district] as const));
 
-  // Level 1 — each district packs its own buildings, relative to its corner.
-  const packedByDistrict = new Map(
-    city.districts.map((district) => {
-      const items = district.buildings.flatMap((id) => {
-        const building = byId.get(id);
-        return building === undefined
-          ? []
-          : [{ id, width: building.footprint.width, depth: building.footprint.depth }];
+  const roots: District[] = [];
+  const children = new Map<EntityId, District[]>();
+  for (const district of city.districts) {
+    const parent = district.parent;
+    if (parent === undefined || !districtById.has(parent) || inParentCycle(district, districtById)) {
+      roots.push(district);
+    } else {
+      const bucket = children.get(parent);
+      if (bucket === undefined) children.set(parent, [district]);
+      else bucket.push(district);
+    }
+  }
+
+  // Bottom-up: each district's inner packing (its buildings + its packed
+  // children, sidewalks included) and the outer size that gives it.
+  const inner = new Map<EntityId, PackedPlane>();
+  const outer = new Map<EntityId, { width: number; depth: number }>();
+  const measure = (district: District): { width: number; depth: number } => {
+    const childRects = (children.get(district.id) ?? []).map((child) => ({
+      id: child.id,
+      ...measure(child),
+    }));
+    const buildingRects = district.buildings.flatMap((id) => {
+      const building = byId.get(id);
+      return building === undefined
+        ? []
+        : [{ id, width: building.footprint.width, depth: building.footprint.depth }];
+    });
+    const packed = packShelves([...buildingRects, ...childRects], layout.buildingGap);
+    inner.set(district.id, packed);
+    const size = {
+      width: packed.width + 2 * layout.districtPadding,
+      depth: packed.depth + 2 * layout.districtPadding,
+    };
+    outer.set(district.id, size);
+    return size;
+  };
+  const rootRects = roots.map((district) => ({ id: district.id, ...measure(district) }));
+  const cityPacked = packShelves(rootRects, layout.districtGap);
+
+  // Top-down: absolute corners for every district and building.
+  const boundsById = new Map<EntityId, Bounds>();
+  const positionById = new Map<EntityId, Position>();
+  const place = (district: District, x: number, y: number): void => {
+    const size = outer.get(district.id) ?? { width: 0, depth: 0 };
+    boundsById.set(district.id, {
+      x: round(x),
+      y: round(y),
+      width: round(size.width),
+      depth: round(size.depth),
+    });
+    const packed = inner.get(district.id);
+    for (const child of children.get(district.id) ?? []) {
+      const relative = packed?.placements.get(child.id) ?? { x: 0, y: 0 };
+      place(child, x + layout.districtPadding + relative.x, y + layout.districtPadding + relative.y);
+    }
+    for (const id of district.buildings) {
+      const relative = packed?.placements.get(id);
+      if (relative === undefined) continue;
+      positionById.set(id, {
+        x: round(x + layout.districtPadding + relative.x),
+        y: round(y + layout.districtPadding + relative.y),
       });
-      return [district.id, packShelves(items, layout.buildingGap)] as const;
-    }),
-  );
+    }
+  };
+  for (const root of roots) {
+    const corner = cityPacked.placements.get(root.id) ?? { x: 0, y: 0 };
+    place(root, corner.x, corner.y);
+  }
 
-  // Level 2 — the packed districts, sidewalks included, pack the ground plane
-  // the same way. Recursion by construction: a district is just a rectangle.
-  const cityPacked = packShelves(
-    city.districts.map((district) => {
-      const packed = packedByDistrict.get(district.id);
-      return {
-        id: district.id,
-        width: (packed?.width ?? 0) + 2 * layout.districtPadding,
-        depth: (packed?.depth ?? 0) + 2 * layout.districtPadding,
-      };
-    }),
-    layout.districtGap,
-  );
-
-  const districts: PlacedDistrict[] = city.districts.map((district) => {
-    const corner = cityPacked.placements.get(district.id) ?? { x: 0, y: 0 };
-    const packed = packedByDistrict.get(district.id);
-    return {
-      ...district,
-      bounds: {
-        x: round(corner.x),
-        y: round(corner.y),
-        width: round((packed?.width ?? 0) + 2 * layout.districtPadding),
-        depth: round((packed?.depth ?? 0) + 2 * layout.districtPadding),
-      },
-    };
-  });
-
-  const districtCorner = new Map(
-    districts.map((district) => [district.id, district.bounds] as const),
-  );
-  const buildings: PlacedBuilding[] = city.buildings.map((building) => {
-    const corner = districtCorner.get(building.district);
-    const relative = packedByDistrict.get(building.district)?.placements.get(building.id);
-    return {
-      ...building,
-      position: {
-        x: round((corner?.x ?? 0) + layout.districtPadding + (relative?.x ?? 0)),
-        y: round((corner?.y ?? 0) + layout.districtPadding + (relative?.y ?? 0)),
-      },
-    };
-  });
+  const districts: PlacedDistrict[] = city.districts.map((district) => ({
+    ...district,
+    bounds: boundsById.get(district.id) ?? { x: 0, y: 0, width: 0, depth: 0 },
+  }));
+  const buildings: PlacedBuilding[] = city.buildings.map((building) => ({
+    ...building,
+    position: positionById.get(building.id) ?? { x: 0, y: 0 },
+  }));
 
   return {
     ...city,
@@ -172,6 +205,20 @@ export function layoutCity(city: CityModel, options: LayoutOptions = {}): CityLa
     layout,
     bounds: { x: 0, y: 0, width: round(cityPacked.width), depth: round(cityPacked.depth) },
   };
+}
+
+/** True when following `parent` from this district never terminates. */
+function inParentCycle(district: District, byId: ReadonlyMap<EntityId, District>): boolean {
+  const seen = new Set<EntityId>();
+  for (
+    let cursor: District | undefined = district;
+    cursor !== undefined;
+    cursor = cursor.parent === undefined ? undefined : byId.get(cursor.parent)
+  ) {
+    if (seen.has(cursor.id)) return true;
+    seen.add(cursor.id);
+  }
+  return false;
 }
 
 function resolveLayout(options: LayoutOptions): ResolvedLayout {

@@ -124,6 +124,14 @@ export interface District {
   readonly name: string | undefined;
   readonly kind: string;
   readonly isStub: boolean;
+  /**
+   * The nearest ancestor module that is itself a district of this city, when
+   * the MODEL declares module containment (`TChildOf` on the module — e.g. the
+   * Java extractor emits package nesting walked on Spoon's structure). Absent
+   * for a root district and for models without module containment; never
+   * derived from the id or the name.
+   */
+  readonly parent?: EntityId;
   /** Sorted; every building whose type folds into this module. */
   readonly buildings: readonly EntityId[];
   /**
@@ -155,6 +163,10 @@ export interface CityDiagnostics {
   readonly droppedArrows: number;
   /** Type-level self-dependencies, excluded: a roof-to-roof arrow to itself draws nothing. */
   readonly selfArrows: number;
+  /** District arrows dropped because an endpoint module is not a district here. */
+  readonly droppedDistrictArrows: number;
+  /** Module-level self-dependencies, excluded — internal cohesion, not an arrow. */
+  readonly selfDistrictArrows: number;
   /** Per metric name, how many buildings the model could not measure. */
   readonly unmeasured: Readonly<Record<string, number>>;
   /** Passed through from the fold that produced the buildings. */
@@ -179,6 +191,14 @@ export interface CityModel {
   readonly buildings: readonly Building[];
   /** Sorted by (from, to). */
   readonly arrows: readonly Arrow[];
+  /**
+   * Module-level dependencies between districts, from the analyzer's fold at
+   * `level: "module"` under the same view — the fan-in/fan-out a landscape
+   * renders. Kept beside the type arrows so no renderer has to re-derive
+   * module facts by aggregating (it would get stub and view rules wrong).
+   * `crossDistrict` is trivially true here.
+   */
+  readonly districtArrows: readonly Arrow[];
   readonly diagnostics: CityDiagnostics;
 }
 
@@ -312,7 +332,7 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
   });
 
   const byId = new Map(buildings.map((building) => [building.id, building] as const));
-  const districts = collectDistricts(graph, buildings);
+  const districts = collectDistricts(graph, folder, buildings);
 
   // Arrows: type-level dependencies, roof to roof. A self-dependency is a
   // method calling a sibling of its own class — real, and not an arrow.
@@ -333,6 +353,39 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
     arrows.push(arrowFor(edge, from, to));
   }
 
+  // District arrows: the SAME graph folded at module level, so module facts
+  // (stub folding, view filtering, import edges) come from the analyzer, not
+  // from re-aggregating type arrows here.
+  const moduleFolded = foldGraph(graph, {
+    level: "module",
+    view,
+    ...(options.edgeKinds === undefined ? {} : { edgeKinds: options.edgeKinds }),
+  });
+  const districtIds = new Set(districts.map((district) => district.id));
+  const districtArrows: Arrow[] = [];
+  let selfDistrictArrows = 0;
+  let droppedDistrictArrows = 0;
+  for (const edge of moduleFolded.edges) {
+    if (edge.selfLoop || edge.from === edge.to) {
+      selfDistrictArrows += 1;
+      continue;
+    }
+    if (!districtIds.has(edge.from) || !districtIds.has(edge.to)) {
+      droppedDistrictArrows += 1;
+      continue;
+    }
+    const provenances = [...edge.provenances].sort();
+    districtArrows.push({
+      from: edge.from,
+      to: edge.to,
+      count: edge.count,
+      kinds: [...edge.kinds].sort(),
+      provenances,
+      inferred: provenances.some((provenance) => provenance !== "declared"),
+      crossDistrict: true,
+    });
+  }
+
   return {
     kind: CITY_ARTEFACT_KIND,
     generatedBy: CITY_GENERATOR,
@@ -351,10 +404,13 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
     districts,
     buildings,
     arrows,
+    districtArrows,
     diagnostics: {
       unplacedBuildings: sortIds(unplaced),
       droppedArrows,
       selfArrows,
+      droppedDistrictArrows,
+      selfDistrictArrows,
       unmeasured,
       fold: {
         unfoldableEntities: folded.diagnostics.unfoldableEntities.length,
@@ -427,7 +483,11 @@ function groupMembers(
  * with no building in this view gets no district: empty ground nobody stands on
  * is not part of the city, and drawing it would claim a module the view excluded.
  */
-function collectDistricts(graph: CodeGraph, buildings: readonly Building[]): readonly District[] {
+function collectDistricts(
+  graph: CodeGraph,
+  folder: ReturnType<typeof createFolder>,
+  buildings: readonly Building[],
+): readonly District[] {
   const grouped = new Map<EntityId, Building[]>();
   for (const building of buildings) {
     const bucket = grouped.get(building.district);
@@ -435,6 +495,7 @@ function collectDistricts(graph: CodeGraph, buildings: readonly Building[]): rea
     else bucket.push(building);
   }
 
+  const districtIds = new Set(grouped.keys());
   return sortIds([...grouped.keys()]).map((id) => {
     const entity = graph.entity(id);
     const members = grouped.get(id) ?? [];
@@ -442,15 +503,40 @@ function collectDistricts(graph: CodeGraph, buildings: readonly Building[]): rea
       (total, building) => total + building.footprint.width * building.footprint.depth,
       0,
     );
+    const parent = parentDistrictOf(graph, folder, id, districtIds);
     return {
       id,
       name: (entity as { name?: string } | undefined)?.name,
       kind: entity?.kind ?? "module",
       isStub: graph.isStub(id),
+      ...(parent === undefined ? {} : { parent }),
       buildings: sortIds(members.map((building) => building.id)),
       footprintDemand: round(demand),
     };
   });
+}
+
+/**
+ * Nearest ancestor module — via the MODEL's declared containment, never the
+ * id — that is itself a district of this city. Ancestors the view excluded
+ * (no buildings) are skipped, so nesting never invents an empty plot.
+ */
+function parentDistrictOf(
+  graph: CodeGraph,
+  folder: ReturnType<typeof createFolder>,
+  id: EntityId,
+  districtIds: ReadonlySet<EntityId>,
+): EntityId | undefined {
+  const seen = new Set<EntityId>([id]);
+  let cursor = (graph.entity(id) as { parent?: EntityId } | undefined)?.parent;
+  while (cursor !== undefined) {
+    const module = folder.containingModule(cursor);
+    if (module === undefined || seen.has(module)) return undefined; // dead end or cycle
+    if (districtIds.has(module)) return module;
+    seen.add(module);
+    cursor = (graph.entity(module) as { parent?: EntityId } | undefined)?.parent;
+  }
+  return undefined;
 }
 
 function arrowFor(edge: FoldedEdge, from: Building, to: Building): Arrow {

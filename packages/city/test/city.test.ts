@@ -97,6 +97,40 @@ describe("buildCity: the mapping", () => {
     expect(city.diagnostics.unplacedBuildings).toEqual(["java:Floating"]);
   });
 
+  it("nests a district under the nearest ANCESTOR district the model declares", () => {
+    const graph = graphOf(
+      [
+        pkg("java:a"),
+        pkg("java:a.sub", false, "java:a"),
+        // An intermediate module the view keeps but nobody builds in — it is
+        // no district, so its child must chain PAST it to java:a.
+        pkg("java:a.empty", false, "java:a"),
+        pkg("java:a.empty.deep", false, "java:a.empty"),
+        type("java:a/Top", "java:a", 10),
+        type("java:a.sub/Nested", "java:a.sub", 10),
+        type("java:a.empty.deep/Deep", "java:a.empty.deep", 10),
+      ],
+      [],
+    );
+    const city = buildCity(graph);
+    const parents = new Map(city.districts.map((d) => [d.id, d.parent] as const));
+    expect(parents.get("java:a")).toBeUndefined();
+    expect(parents.get("java:a.sub")).toBe("java:a");
+    expect(parents.get("java:a.empty.deep")).toBe("java:a");
+    // The empty intermediate module produced no district at all.
+    expect(city.districts.map((d) => d.id)).not.toContain("java:a.empty");
+  });
+
+  it("ships module-level dependencies as districtArrows, never re-derived downstream", () => {
+    const city = buildCity(toyGraph());
+    expect(city.districtArrows.map((a) => [a.from, a.to, a.count])).toEqual([
+      ["java:a", "java:b", 1],
+    ]);
+    // The a->a type dependency folded into module cohesion, not an arrow.
+    expect(city.diagnostics.selfDistrictArrows).toBeGreaterThanOrEqual(1);
+    expect(city.districtArrows[0]?.crossDistrict).toBe(true);
+  });
+
   it("drops a type-level self-dependency instead of drawing an arrow to one roof", () => {
     const graph = graphOf(
       [
