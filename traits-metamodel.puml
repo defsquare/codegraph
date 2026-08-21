@@ -1,7 +1,11 @@
 @startuml traits-metamodel
 ' =====================================================================
-' Métamodèle multi-langage par traits (inspiré FamixNG)
+' Métamodèle multi-langage par traits (inspiré FamixNG) — aligné Model v2
+' Lecture de HAUT en BAS : un Model est composé d'Entity[] et d'Edge[] ;
+' dessous, les traits composables regroupés par package thématique et
+' les kinds d'arêtes concrets.
 ' Les traits sont notés <<trait>> ; les associations réifiées <<edge>>
+' Clés = celles contribuées à l'entité par le trait (packages/core/src)
 ' =====================================================================
 skinparam class {
   BackgroundColor<<trait>> #FDF6E3
@@ -11,176 +15,278 @@ skinparam class {
   BackgroundColor<<support>> #F0F0F0
 }
 hide empty members
+skinparam nodesep 14
+skinparam ranksep 40
 
-' ================= SOCLE =================
-package "Socle" {
-  class TNamed <<trait>> {
-    +name : String
+' ================= NIVEAU 1 : MODEL =================
+class Model <<support>> {
+  +schemaVersion : String
+  +lang : String
+  +extractor : {name, version, …}
+  +root : String
+  +entities : Entity[]
+  +edges : Edge[]
+  ..MM-5 : contenu logique (§8a) —..
+  ..les encodages physiques (JSONL, SQLite…)..
+  ..sont décrits à part (model-v2-encoding.md)..
+}
+
+' ================= NIVEAU 2 : ENTITÉS ET ARÊTES =================
+class Entity <<support>> {
+  +key : EntityKey
+  +kind : String <<défini par le profil>>
+  +traits : TraitName[]
+  +space : Space[] <<optionnel>>
+  ..+ les clés de chaque trait déclaré..
+  ..MM-4 : validité de profil = f(kind, traits)..
+}
+abstract class AAssociation <<edge>> {
+  +edge : EdgeKind <<discriminant>>
+  +from : EntityId
+  +to : EntityId
+  +provenance : Provenance
+  +anchor : SourceAnchor
+  +candidates : EntityId[] <<optionnel>>
+  +sourceFile : String <<optionnel>>
+  ..candidates : résolution ambiguë..
+  ..sourceFile : site de déclaration..
+}
+
+Model "1" *-d- "0..*" Entity : entities
+Model "1" *-d- "0..*" AAssociation : edges
+
+note left of Entity
+  Une entité est la **somme** des traits
+  listés dans `traits[]` : chacun
+  contribue ses clés. Aucune hiérarchie
+  de classes d'entités.
+end note
+
+' ================= NIVEAU 3 : TRAITS PAR PACKAGE =================
+package "Traits" as PTraits {
+  package "Socle" as PSocle {
+    class TNamed <<trait>> {
+      +name : String
+    }
+    class TSourceAnchor <<trait>> {
+      +anchor : SourceAnchor
+      ..s'applique aux entités..
+      ..ET aux associations..
+    }
+    class TComment <<trait>> {
+      +comments : String[]
+    }
   }
-  class TSourceAnchor <<trait>> {
-    +file : CodeFile
-    +span : [start, end]
-    ..s'applique aux entités ET aux associations..
+  package "Modularité" as PModularite {
+    class TModule <<trait>> {
+      +definedIn : String[]
+      +isStub : Boolean
+      ..definedIn = chemins de fichiers..
+      ..relatifs à Model.root..
+      ..module non déclaré par le corpus :..
+      ..definedIn = [] et isStub = true..
+    }
   }
-  class TComment <<trait>> {
-    +comments : Collection<Comment>
+  package "Contenance ≠ Attachement" as PContenance {
+    class TWithChildren <<trait>> {
+      ..MM-2 : marqueur, aucune clé sérialisée..
+      ..children = inverse exact de parent,..
+      ..dérivé en mémoire par l'analyzer..
+      ..contenance lexicale : où c'est écrit..
+    }
+    class TChildOf <<trait>> {
+      +parent : EntityId
+    }
+    class TAttachedTo <<trait>> {
+      +attachedTo : EntityId
+      ..attachement sémantique :..
+      ..ce à quoi l'entité appartient..
+    }
+  }
+  package "Types" as PTypes {
+    class TType <<trait>> {
+      +isStub : Boolean
+      ..type externe = nœud dégradé,..
+      ..ses arêtes sont conservées..
+    }
+    class TWithInheritances <<trait>> {
+      ..marqueur : aucune clé..
+      ..capacité portée par edges[]..
+    }
+    class TWithImplements <<trait>> {
+      ..marqueur : aucune clé..
+    }
+    class TTypedEntity <<trait>> {
+      +declaredType : EntityId <<optionnel>>
+      ..optionnel même quand le trait..
+      ..est déclaré (type inféré, absent)..
+    }
+  }
+  package "Comportement" as PComportement {
+    class TInvocable <<trait>> {
+      +signature : String
+      ..signature ∈ identité (surcharge)..
+    }
+    class TWithParameters <<trait>> {
+      +parameters : EntityId[]
+      ..liste ordonnée..
+    }
+    class TWithLocalVariables <<trait>> {
+      +localVariables : EntityId[]
+    }
+    class TWithInvocations <<trait>> {
+      ..marqueur : aucune clé..
+      ..sortant uniquement,..
+      ..index inverses dérivés..
+    }
+  }
+  package "Structure" as PStructure {
+    class TStructural <<trait>> {
+      ..marqueur : aucune clé..
+      ..classification : porteur de valeur..
+    }
+    class TWithAccesses <<trait>> {
+      ..marqueur : aucune clé..
+    }
   }
 }
 
-' ================= CONTENANCE / ATTACHEMENT =================
-package "Contenance ≠ Attachement" {
-  class TWithChildren <<trait>> {
-    +children : Collection<Entity>
-    ..contenance lexicale : où c'est écrit..
-  }
-  class TChildOf <<trait>> {
-    +parent : Entity
-  }
-  class TAttachedTo <<trait>> {
-    +attachedTo : Entity
-    ..attachement sémantique..
-    ..Go receiver, Clojure extend-type,..
-    ..C# extension methods..
-  }
-}
-
-' ================= MODULARITÉ =================
-package "Modularité" {
-  class TModule <<trait>> {
-    +definedIn : Collection<CodeFile>
-    ..1-1 : JS/TS/Python (module = fichier)..
-    ..1-N : Java/C#/Go/PHP..
-  }
-}
-
-' ================= TYPES =================
-package "Types" {
-  class TType <<trait>> {
-    +isStub : Boolean
-    ..classe, interface, struct,..
-    ..protocole, trait PHP..
-  }
-  class TWithInheritances <<trait>> {
-    +superTypes : Collection<Inheritance>
-    ..N arêtes → héritage multiple Python..
-  }
-  class TWithImplements <<trait>> {
-    +implements : Collection<InterfaceImplementation>
-  }
-  class TTypedEntity <<trait>> {
-    +declaredType : Type <<optionnel>>
-    ..absent : JS, Python, Clojure,..
-    ..var C#, inférence Go/TS..
-  }
-}
-
-' ================= COMPORTEMENT =================
-package "Comportement" {
-  class TInvocable <<trait>> {
-    +signature : String
-    ..signature ∈ identité (overload,..
-    ..receiver Go)..
-  }
-  class TWithParameters <<trait>> {
-    +parameters : List<Parameter>
-  }
-  class TWithLocalVariables <<trait>> {
-    +localVariables : Collection<LocalVariable>
-  }
-  class TWithInvocations <<trait>> {
-    +outgoingInvocations : Collection<Invocation>
-    ..sortant uniquement,..
-    ..index inverses dérivés..
-  }
-}
-
-' ================= STRUCTURE =================
-package "Structure" {
-  class TStructural <<trait>> {
-    ..porteur de valeur : attribut,..
-    ..variable, paramètre, var Clojure..
-  }
-  class TWithAccesses <<trait>> {
-    +outgoingAccesses : Collection<Access>
-  }
-}
-
-' ================= ASSOCIATIONS =================
-package "Associations (arêtes)" {
-  abstract class AAssociation <<edge>> {
-    +from : Entity
-    +to : Entity
-    +provenance : {declared | derived | dynamic-candidate}
-  }
+' ================= NIVEAU 3 : KINDS D'ARÊTES =================
+package "Associations (arêtes)" as PEdges {
   class Import <<edge>> {
-    ..Module → Module..
+    ..edge = "import" — Module → Module..
     ..couche de 1ère classe, fiable à ~100%..
   }
-  class Inheritance <<edge>>
+  class Inheritance <<edge>> {
+    ..edge = "inheritance" — Type → Type..
+    ..N arêtes → héritage multiple..
+  }
   class InterfaceImplementation <<edge>> {
-    ..declared : Java/C#/PHP..
-    ..derived : Go, TS structurel, Python..
+    ..edge = "interfaceImplementation"..
+    ..Type → interface / protocole..
   }
   class Invocation <<edge>> {
-    +candidates : Collection<TInvocable>
-    ..dispatch non résolu : multiméthodes,..
-    ..__call PHP, duck typing..
+    ..edge = "invocation"..
+    ..TInvocable → TInvocable..
+    ..dispatch non résolu :..
+    ..dynamic-candidate + candidates..
   }
   class Access <<edge>> {
     +isRead : Boolean
     +isWrite : Boolean
+    ..edge = "access"..
+    ..TInvocable → TStructural..
+    ..read-modify-write : les deux à true..
   }
-  class Reference <<edge>>
+  class Reference <<edge>> {
+    ..edge = "reference" — Entity → Type..
+    ..usage de type non couvert ailleurs..
+  }
   class Embedding <<edge>> {
-    ..Go : struct { Base } —..
+    ..edge = "embedding" — Type → Type..
     ..promotion de méthodes..
   }
   class TraitUsage <<edge>> {
-    ..PHP : use TraitX..
+    ..edge = "traitUsage" — Type → trait..
+    ..jamais aplati dans l'utilisateur..
   }
   class FileInclude <<edge>> {
-    ..PHP : CodeFile → CodeFile..
+    ..edge = "fileInclude"..
+    ..fichier → fichier..
   }
-
-  AAssociation <|-- Import
-  AAssociation <|-- Inheritance
-  AAssociation <|-- InterfaceImplementation
-  AAssociation <|-- Invocation
-  AAssociation <|-- Access
-  AAssociation <|-- Reference
-  AAssociation <|-- Embedding
-  AAssociation <|-- TraitUsage
-  AAssociation <|-- FileInclude
 }
 
 ' ================= SUPPORT =================
-class CodeFile <<support>> {
-  +url : URL
-  +entities : Collection<Entity>
-  ..N-N avec les entités..
-  ..(classes partielles C#)..
+package "Support" as PSupport {
+  class EntityKey <<support>> {
+    +lang : String
+    +module : EntityKey <<réf. module contenant>>
+    +symbol : String
+    +disambiguator : String <<optionnel>>
+    ..MM-1 : clé structurée, comparée composant..
+    ..par composant, jamais parsée ; l'id rendu..
+    ..(renderId) = projection d'affichage,..
+    ..jamais stocké, jamais comparé..
+  }
+  class SourceAnchor <<support>> {
+    +file : String <<relatif à Model.root>>
+    +span : [startLine, endLine]
+    ..1-based, bornes incluses..
+  }
+  enum Provenance <<support>> {
+    declared
+    derived
+    dynamic-candidate
+    generated
+  }
+  enum Space <<support>> {
+    type
+    value
+  }
 }
 
-' ================= RELATIONS ENTRE TRAITS =================
-TSourceAnchor ..> CodeFile : ancre dans
-TModule "1" ..> "1..*" CodeFile : definedIn
-TWithInheritances ..> Inheritance : agrège
-TWithImplements ..> InterfaceImplementation : agrège
+' ================= MISE EN PAGE (liens cachés) =================
+' Entity au-dessus du groupe Traits (1re rangée de packages)
+Entity -[hidden]d- PSocle
+Entity -[hidden]d- PModularite
+Entity -[hidden]d- PContenance
+' grille 2 rangées dans Traits
+PSocle -[hidden]d- PTypes
+PModularite -[hidden]d- PComportement
+PContenance -[hidden]d- PStructure
+' kinds d'arêtes sur 2 rangées sous AAssociation
+Import -[hidden]d- Access
+Inheritance -[hidden]d- Reference
+InterfaceImplementation -[hidden]d- Embedding
+Invocation -[hidden]d- TraitUsage
+TraitUsage -[hidden]r- FileInclude
+' support en dessous
+PEdges -[hidden]d- PSupport
+
+' héritage des kinds
+AAssociation <|-d- Import
+AAssociation <|-d- Inheritance
+AAssociation <|-d- InterfaceImplementation
+AAssociation <|-d- Invocation
+AAssociation <|-d- Access
+AAssociation <|-d- Reference
+AAssociation <|-d- Embedding
+AAssociation <|-d- TraitUsage
+AAssociation <|-d- FileInclude
+
+' ================= RELATIONS SÉMANTIQUES =================
+Entity -[norank,dashed]-> EntityKey : identité (MM-1)
+Entity -[norank,dashed]-> Space : déclare
+AAssociation -[norank,dashed]-> SourceAnchor : porte (evidence)
+AAssociation -[norank,dashed]-> Provenance : qualifie
+TSourceAnchor -[norank,dashed]-> SourceAnchor : ancre dans
+TWithInheritances ..> Inheritance : émet
+TWithImplements ..> InterfaceImplementation : émet
 TWithInvocations ..> Invocation : émet
 TWithAccesses ..> Access : émet
 TTypedEntity ..> TType : declaredType
 Access ..> TStructural : cible
 Invocation ..> TInvocable : cible
 Import ..> TModule : relie
-AAssociation ..> TSourceAnchor : porte (evidence)
 
 ' ================= LÉGENDE =================
 legend bottom
   **Algèbre de composition** : Entité = Σ traits (somme commutative,
   conflits explicites). Un profil langage = l'ensemble des compositions
-  licites. Analyses inter-langages = intersection des profils.
+  licites (required ⊆ traits ⊆ required ∪ optional par kind).
+  Analyses inter-langages = intersection des profils.
   --
-  Exemple : Var Clojure (fn) = TNamed + TStructural + TInvocable
+  **Traits marqueurs** (aucune clé sérialisée) : TWithInheritances,
+  TWithImplements, TWithInvocations, TWithAccesses, TStructural, et
+  TWithChildren (MM-2). La capacité qu'ils déclarent est portée par
+  edges[] (stocké en sortant seul), dérivée en mémoire, ou est une
+  pure classification.
+  --
+  **Vocabulaires fermés** (MM-3) : kinds, noms de traits, edge kinds et
+  provenances sont des référentiels finis possédés par core ;
+  un nom inconnu est une erreur dure.
+  --
+  Exemple : une même entité peut être TNamed + TStructural + TInvocable
   → impossible dans une hiérarchie, trivial en composition.
 end legend
 @enduml
