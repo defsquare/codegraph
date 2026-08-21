@@ -1,0 +1,24 @@
+{
+  "name": "@codegraph/viz",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Codegraph city renderer: Three.js view of a laid-out city artifact (codegraph city --layout)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@codegraph/city": "workspace:*",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "typescript": "catalog:",
+    "vite": "^7.1.0",
+    "vitest": "catalog:"
+  }
+}

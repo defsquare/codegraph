@@ -29,7 +29,9 @@ packages/city/       @codegraph/city — the city MODEL: modules → districts,
                      dependencies → roof-to-roof arrows. No placement, no
                      rendering. Pure computation.
 packages/cli/        @codegraph/cli — `codegraph` command.
-packages/viz/        (future) Three.js code city. The ONLY package that may import three.
+packages/viz/        @codegraph/viz — Three.js code city: renders a laid-out
+                     city.json artifact (its ONLY input; guard-enforced). The
+                     ONLY package that may import three. Vite app, no library.
 fixtures/            Reference corpora + expected model.jsonl snapshots.
 ```
 

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>codegraph — code city</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="city"></canvas>
+    <aside id="legend" class="panel" hidden></aside>
+    <aside id="tooltip" class="panel" hidden></aside>
+    <div id="loader">
+      <h1>codegraph — code city</h1>
+      <p id="loader-message">
+        Drop a <code>city.json</code> here, or pick one. Produce it with<br />
+        <code>codegraph city model.jsonl --layout --out city.json</code>
+      </p>
+      <p><input type="file" id="loader-file" accept=".json,application/json" /></p>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

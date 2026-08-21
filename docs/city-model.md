@@ -315,9 +315,10 @@ The metric help text is generated from the registry, so a source added in the
 package cannot go unmentioned in `--help`, and a name in `--help` cannot outlive
 its source.
 
-**Downstream** — `packages/viz` (future) reads a `CityModel` and renders it. It
-must not re-derive graph facts, and must respect `conventions` and `bindings`
-rather than inventing its own mapping.
+**Downstream** — `packages/viz` (shipped; see
+[`city-render.md`](city-render.md)) reads a laid-out city artifact and renders
+it with Three.js. It does not re-derive graph facts, and respects
+`conventions` and `bindings` rather than inventing its own mapping.
 
 ## CM-10 Open questions for the next slices
 
