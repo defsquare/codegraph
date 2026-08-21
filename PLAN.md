@@ -808,6 +808,60 @@ Steps landed:
       importer assigned restores it. Step 2 proved that with `Buffer.compare`,
       a model of SQLite; this proves it with SQLite.
 
+- [x] **Step 5 — freeze the DDL, against M6 rather than the sketch.**
+      `analyzer/src/store/schema.ts` holds the schema, the open options, the
+      `meta` key set, and the key→storage mapping. Four things the M6 wire
+      changed about docs/model-encoding.md's earlier sketch:
+
+      1. `module_id INTEGER **NOT NULL**` — `m` is required on every entity
+         record and a module names itself, so the sketch's "NULL for root
+         modules" case no longer exists.
+      2. `entity_trait(entity_id, trait_id)` → an interned `trait_set`.
+         Measured: **15 338 entities / 15 distinct trait sets** on commons-lang,
+         **241 101 / 18** on fineract, so the join table would carry ~1.3M rows
+         to say 18 things. Size is the smaller half — MM-4 makes profile
+         validity a function of `(kind, trait set)` and core's validator already
+         memoizes on that key, so the interned id IS the key. `ord` is kept so
+         an entity's `tr` array re-encodes exactly.
+      3. **No UNIQUE natural key and no `CHECK (to_id <> from_id)`.** Duplicate
+         identities and self-edges are conformance FINDINGS; a store that
+         refused to cache them would make `import` fail on exactly the models
+         `validate` exists to report on. Same rule as step 3: two gates on one
+         format drift.
+      4. Array-valued keys get ordered tables (`entity_comment`,
+         `entity_defined_in`, `entity_parameter`, `entity_local_variable`,
+         `edge_candidate`) rather than JSON, so they stay joinable; `extra`
+         holds only keys `core` does not type, since records are loose by design.
+
+      Two things the implementation turned up that reasoning had not.
+      **Foreign keys are a decision, not a default:** SQLite's default is OFF
+      and Node's builtin overrides it to ON, so `STORE_OPEN_OPTIONS` states it —
+      off, because `parent`/`declaredType` legitimately point forward and
+      immediate constraints would reject valid models, while closure is already
+      the reader's guarantee. `PRAGMA foreign_key_check` still audits a suspect
+      cache, which `foreign_keys = ON` would not.
+      And one addition to `core`: **MM-3 says a vocabulary is a SET**, so
+      `RecordReader` now refuses a header dictionary that repeats an entry — a
+      repeat makes two indices name one thing, which any interning store breaks
+      on. It is a property of the file, so it belongs in the reader; stated
+      there, both read routes refuse it identically.
+
+      `store-schema.test.ts` (17) asserts everything against a REAL database
+      created from the DDL, never against its source text: a `sqlite_master`
+      snapshot of the effective schema; the invariant-4 guard (`edge_to` and
+      `entity_parent` are indexes, no table name reads as an inverse); the
+      "caches what the reader accepts" rule as behaviour, by inserting a
+      duplicate natural key and a self-edge; and the drift guard — every key
+      `WIRE_TRAITS` and the record schemas can carry maps to a real column of a
+      real table, so adding a trait key to `core` fails the store until someone
+      decides where it goes.
+
+      Five mutations, each caught by the intended test — and S3 (making the
+      natural key UNIQUE) exposed a defect in the test itself: the duplicate it
+      inserted differed only by a NULL disambiguator, and SQLite treats NULLs as
+      distinct in a unique index, so it would have passed either way. Now the
+      duplicate carries a disambiguator, with the NULL case asserted alongside.
+
 Remaining steps (from the synthesis, unchanged):
 
 
@@ -816,12 +870,11 @@ diffable, language-agnostic; `model.db` is the WORKBENCH — a derived,
 disposable cache, regenerable at any time, never committed, never the
 interchange.
 
-- [ ] `analyzer`: `importModel(jsonlPath) → model.db` — DDL of encoding doc
-      §3.1 (natural-key unique index, `entity_trait` join table, outgoing
-      facts only with `edge_to`/`entity_parent` as storage-level derived
-      indexes, rare trait keys in an `extra` JSON column); single
-      transaction, prepared statements; `node:sqlite` first,
-      `better-sqlite3` fallback.
+- [ ] `analyzer`: `importModel(jsonlPath) → model.db` over the step-5 DDL —
+      single transaction, prepared statements, driven by
+      `readModelRecordsSync` so the corpus is never held. Acid test: hydrating
+      the result equals `readModelFileSync` of the same file, or it is not a
+      cache.
 - [ ] DB-backed graph facade behind the existing analyzer API; metrics
       migrate to SQL (recursive CTEs for cycles/reachability)
       opportunistically, not big-bang.

@@ -48,6 +48,12 @@ function brokenFiles(): { why: string; path: string }[] {
   const forwardModule = JSON.parse(all[firstEntity]!) as Record<string, unknown>;
   forwardModule["m"] = 9_999;
 
+  // MM-3: a vocabulary is a SET. Repeating an entry makes two dictionary
+  // indices name one thing, so `kind → id` stops being a function — which the
+  // SQLite store's interned dictionaries depend on.
+  const repeatedKind = JSON.parse(all[0]!) as { dict: { kinds: string[] } };
+  repeatedKind.dict.kinds = [...repeatedKind.dict.kinds, repeatedKind.dict.kinds[0]!];
+
   return [
     { why: "a line that is not JSON", path: write("malformed.jsonl", `${all[0]!}\n{ nope\n`) },
     { why: "JSON that is not a record", path: write("not-a-record.jsonl", '{"hello":"world"}\n') },
@@ -75,6 +81,13 @@ function brokenFiles(): { why: string; path: string }[] {
       path: write(
         "forward-module.jsonl",
         `${[...all.slice(0, firstEntity), JSON.stringify(forwardModule), ...all.slice(firstEntity + 1)].join("\n")}\n`,
+      ),
+    },
+    {
+      why: "a header dictionary that repeats an entry",
+      path: write(
+        "repeated-kind.jsonl",
+        `${[JSON.stringify(repeatedKind), ...all.slice(1)].join("\n")}\n`,
       ),
     },
     { why: "an empty file", path: write("empty.jsonl", "") },

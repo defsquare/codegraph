@@ -54,7 +54,7 @@ const PUBLIC_API = {
   // The analysis store's single `node:sqlite` load site (PLAN.md §9.3). It is
   // in the barrel for the reason stated above — and because tsup bundles only
   // what the entry reaches, so an unexported module would not ship at all.
-  store: ["loadSqlite"],
+  store: ["loadSqlite", "createSchema", "traitContributedKeys"],
 } as const;
 
 /** Non-function exports that are part of the contract too. */
@@ -65,6 +65,12 @@ const PUBLIC_VALUES = [
   "declaredOnly",
   "FOLDED_GRAPH_ARTEFACT_KIND",
   "ARTEFACT_GENERATOR",
+  "DB_VERSION",
+  "SCHEMA_SQL",
+  "STORE_OPEN_OPTIONS",
+  "META_KEYS",
+  "ENTITY_KEY_STORAGE",
+  "EDGE_KEY_STORAGE",
 ] as const;
 
 const SRC = fileURLToPath(new URL("../src", import.meta.url));

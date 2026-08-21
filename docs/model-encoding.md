@@ -137,61 +137,129 @@ Built once by `codegraph import model.jsonl` (or auto-built and cached by the
 first `analyze`). All subsequent commands — and the future code city — read
 the DB. This is where "better data manipulation" lives.
 
-### 3.1 Schema sketch
+### 3.1 Schema
+
+**Frozen and implemented** in `packages/analyzer/src/store/schema.ts`, which is
+the authority; this section says *why* it looks the way it does. The DDL is
+snapshotted through `sqlite_master` by `store-schema.test.ts`, so a change here
+is a reviewable diff rather than a surprise at the next import.
 
 ```sql
-CREATE TABLE meta      (key TEXT PRIMARY KEY, value TEXT);        -- schemaVersion, lang, extractor, root
-CREATE TABLE kind      (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);
-CREATE TABLE trait     (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);
-CREATE TABLE provenance(id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);
-CREATE TABLE edge_kind (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);
-CREATE TABLE file      (id INTEGER PRIMARY KEY, path TEXT UNIQUE NOT NULL);
+CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
+
+-- Interned vocabularies (MM-3). id = the header dictionary's own index.
+CREATE TABLE kind       (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+CREATE TABLE trait      (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+CREATE TABLE edge_kind  (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+CREATE TABLE provenance (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+CREATE TABLE file       (id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE);
+
+-- Trait sets, interned (MM-4). `ord` keeps the round trip exact.
+CREATE TABLE trait_set (id INTEGER PRIMARY KEY);
+CREATE TABLE trait_set_member (trait_set_id INTEGER NOT NULL REFERENCES trait_set,
+                               ord INTEGER NOT NULL,
+                               trait_id INTEGER NOT NULL REFERENCES trait,
+                               PRIMARY KEY (trait_set_id, ord)) WITHOUT ROWID;
 
 CREATE TABLE entity (
-  id            INTEGER PRIMARY KEY,             -- the JSONL surrogate, imported verbatim
-  kind_id       INTEGER NOT NULL REFERENCES kind,
-  module_id     INTEGER REFERENCES entity,       -- natural key (MM-1); NULL for root modules
-  symbol        TEXT    NOT NULL,
-  disambiguator TEXT,
-  name          TEXT, signature TEXT,
-  parent_id     INTEGER REFERENCES entity,
+  id               INTEGER PRIMARY KEY,             -- the JSONL surrogate, verbatim
+  kind_id          INTEGER NOT NULL REFERENCES kind,
+  trait_set_id     INTEGER NOT NULL REFERENCES trait_set,
+  module_id        INTEGER NOT NULL REFERENCES entity,   -- a module names ITSELF
+  symbol           TEXT NOT NULL, disambiguator TEXT,    -- with lang, the natural key
+  name TEXT, signature TEXT,
+  parent_id INTEGER REFERENCES entity, attached_to_id INTEGER REFERENCES entity,
   declared_type_id INTEGER REFERENCES entity,
-  is_stub       INTEGER NOT NULL DEFAULT 0,
-  file_id       INTEGER REFERENCES file,
-  span_start    INTEGER, span_end INTEGER,
-  extra         TEXT                              -- JSON: rare trait keys (parameters, localVariables, …)
+  is_stub INTEGER,
+  anchor_file_id INTEGER REFERENCES file, anchor_start INTEGER, anchor_end INTEGER,
+  space TEXT,                                       -- JSON array; no extractor emits it yet
+  extra TEXT                                        -- JSON: keys core does not type
 );
-CREATE UNIQUE INDEX entity_natural_key ON entity(module_id, symbol, ifnull(disambiguator,''));
-CREATE TABLE entity_trait(entity_id INTEGER NOT NULL REFERENCES entity,
-                          trait_id  INTEGER NOT NULL REFERENCES trait,
-                          PRIMARY KEY (entity_id, trait_id)) WITHOUT ROWID;
-CREATE INDEX entity_trait_by_trait ON entity_trait(trait_id);  -- "all TInvocable entities"
+
+-- The array-valued keys, ordered so they re-encode exactly as written.
+CREATE TABLE entity_comment       (entity_id, ord, text,         PRIMARY KEY (entity_id, ord)) WITHOUT ROWID;
+CREATE TABLE entity_defined_in    (entity_id, ord, file_id,      PRIMARY KEY (entity_id, ord)) WITHOUT ROWID;
+CREATE TABLE entity_parameter     (entity_id, ord, parameter_id, PRIMARY KEY (entity_id, ord)) WITHOUT ROWID;
+CREATE TABLE entity_local_variable(entity_id, ord, variable_id,  PRIMARY KEY (entity_id, ord)) WITHOUT ROWID;
 
 CREATE TABLE edge (
-  id INTEGER PRIMARY KEY,
-  kind_id       INTEGER NOT NULL REFERENCES edge_kind,
-  from_id       INTEGER NOT NULL REFERENCES entity,
-  to_id         INTEGER NOT NULL REFERENCES entity CHECK (to_id <> from_id),
+  id INTEGER PRIMARY KEY,                           -- position in the edge section
+  kind_id INTEGER NOT NULL REFERENCES edge_kind,
+  from_id INTEGER NOT NULL REFERENCES entity,
+  to_id   INTEGER NOT NULL REFERENCES entity,
   provenance_id INTEGER NOT NULL REFERENCES provenance,
-  file_id       INTEGER REFERENCES file, span_start INTEGER, span_end INTEGER,
-  is_read INTEGER, is_write INTEGER,              -- access edges only
-  source_file_id INTEGER REFERENCES file
+  anchor_file_id INTEGER NOT NULL REFERENCES file,
+  anchor_start INTEGER NOT NULL, anchor_end INTEGER NOT NULL,
+  is_read INTEGER, is_write INTEGER,                -- access edges only
+  source_file_id INTEGER REFERENCES file,
+  extra TEXT
 );
-CREATE TABLE edge_candidate(edge_id INTEGER NOT NULL REFERENCES edge,
-                            entity_id INTEGER NOT NULL REFERENCES entity,
-                            PRIMARY KEY (edge_id, entity_id)) WITHOUT ROWID;
+CREATE TABLE edge_candidate (edge_id, ord, candidate_id, PRIMARY KEY (edge_id, ord)) WITHOUT ROWID;
 
+CREATE INDEX entity_natural_key ON entity(module_id, symbol, disambiguator);  -- NOT unique
+CREATE INDEX entity_parent ON entity(parent_id);    -- the derived children index
 CREATE INDEX edge_from ON edge(from_id, kind_id);
-CREATE INDEX edge_to   ON edge(to_id,   kind_id);   -- the derived inverse index, as a DB index
-CREATE INDEX entity_parent ON entity(parent_id);    -- derived children index
-CREATE INDEX entity_file   ON entity(file_id);
+CREATE INDEX edge_to   ON edge(to_id, kind_id);     -- the derived inverse index
+-- plus entity_kind, entity_trait_set, entity_anchor_file, edge_provenance,
+--      trait_set_member_by_trait, and one per reference-list target column.
 ```
 
-Invariant-4 note: the *model data* still contains outgoing facts only;
-`edge_to` / `entity_parent` are storage-level indexes over those facts —
-the DB equivalent of "derived in memory by the analyzer," not serialized
-inverse data. Rare trait keys ride in an `extra` JSON column (SQLite's
-`json_*` functions reach into it) rather than 20 sparse columns.
+**Ids are the model's own numbers.** `entity.id` is the JSONL surrogate and
+every dictionary id is that vocabulary's header index, so importing is a copy
+and hydrating is a lookup. Nothing is renumbered on the way in — and a bug that
+renumbered the corpus would show up as a changed id rather than as a silently
+repointed edge. Surrogates remain file-scoped and are never identity (MM-1).
+
+**NULL means the key was absent**, which is lossless rather than lax: which keys
+an entity carries is decided by its trait set, so `signature IS NULL` and "this
+entity has no `TInvocable`" are the same statement. Re-encoding therefore puts
+back exactly the keys that were there.
+
+**Trait sets are interned, not joined.** An `entity_trait(entity_id, trait_id)`
+table would carry roughly 1.3M rows on fineract to say 18 different things:
+
+| | commons-lang | fineract |
+|---|---|---|
+| entities | 15 338 | 241 101 |
+| **distinct trait sets** | **15** | **18** |
+
+Size is the smaller half of the argument. MM-4 states that profile validity is a
+function of `(kind, trait set)`, and core's validator already memoizes on
+exactly that key — so the interned id *is* that key, and the storage mirrors the
+model's own idea instead of flattening it.
+
+**The store caches what the reader accepts.** No UNIQUE index on the natural key
+and no `CHECK (to_id <> from_id)`, both of which an earlier sketch of this
+section had. Duplicate identities and self-edges are *conformance findings* that
+`codegraph validate` exists to report; a store that refused to cache them would
+make `import` fail on precisely the models the report is about. This is the rule
+the record stream already follows: two gates on one format drift, and the drift
+stays invisible until a file one accepts and the other refuses reaches a user.
+
+**Invariant 4, in a relational store.** The model data is outgoing facts only.
+`edge_to` and `entity_parent` are INDEXES over those facts — the database's
+version of "derived in memory by the analyzer", storing no fact the model did
+not already state and unable to go stale against it. No table may hold an
+inverse, and `store-schema.test.ts` reads `sqlite_master` to enforce that.
+
+**The REFERENCES clauses are not enforced**, and that is stated rather than
+inherited: SQLite's default for `PRAGMA foreign_keys` is OFF while Node's SQLite
+builtin overrides it to ON, so the store sets it explicitly. Off, because entity
+records legitimately reference entities that sort later (`parent`,
+`declaredType`), so immediate constraints would reject valid models — and
+closure is already the record reader's guarantee. The clauses still say what
+points at what, and `PRAGMA foreign_key_check` audits an existing cache against
+them regardless of the setting.
+
+**Rare and unknown keys** ride in an `extra` JSON column (SQLite's `json_*`
+functions reach into it) rather than in 20 sparse columns. Records are loose by
+design, so an extractor-specific key must survive a round trip rather than be
+silently stripped. Both corpora currently produce none.
+
+**Nothing drifts silently from `core`.** `ENTITY_KEY_STORAGE` / `EDGE_KEY_STORAGE`
+map every key the wire can carry to the column or table that holds it, and the
+test checks that mapping against `WIRE_TRAITS` *and* against the live schema. So
+adding a trait key to `core` fails the store until someone decides where it goes.
 
 ### 3.2 What this buys
 
@@ -263,8 +331,10 @@ moment versioning starts meaning something.)
 1. Confirm the two-artifact split (JSONL contract + SQLite cache) vs.
    SQLite-only. SQLite-only is defensible but sacrifices diffable fixtures,
    byte-determinism as a tested property, and the any-language extractor bar.
-2. `node:sqlite` vs `better-sqlite3` — decide at implementation time on
-   Node 22's actual API surface.
+2. ~~`node:sqlite` vs `better-sqlite3`~~ — **settled**: the builtin, loaded at
+   one site (`analyzer/src/store/sqlite.ts`) behind an interface written from
+   the store's needs, so a fallback is a matter of satisfying one type at one
+   place. Node 22.5+ has everything the store uses, `iterate()` included.
 3. Does `codegraph analyze foo.jsonl` auto-build `foo.db` next to it
    (recommended: yes, with a `--no-cache` escape hatch)?
 4. `.jsonl.gz` support in `readModel` — cheap follow-up, not part of M6.

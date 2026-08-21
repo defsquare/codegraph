@@ -435,7 +435,27 @@ export class RecordReader {
     if (this.#header !== undefined) throw new JsonlError("a second header record", this.#line);
     if (this.#line !== 1) throw new JsonlError("the header must be the first record", this.#line);
     this.#enter(0, "header");
-    this.#header = this.#parse(HeaderRec, value, "header");
+    const header = this.#parse(HeaderRec, value, "header");
+
+    // MM-3: a vocabulary is a referential SET, and records address it by index.
+    // A repeated entry makes two indices name one thing, so `kind → id` stops
+    // being a function and any store that interns the dictionary — the SQLite
+    // analysis store does — either loses a row or invents a name collision.
+    // Cheap to state here, and it belongs here: it is a property of the file.
+    for (const [vocabulary, entries] of Object.entries(header.dict)) {
+      const seen = new Set<string>();
+      for (const entry of entries as string[]) {
+        if (seen.has(entry)) {
+          throw new JsonlError(
+            `header dictionary \`${vocabulary}\` repeats ${JSON.stringify(entry)} — a vocabulary is a set`,
+            this.#line,
+          );
+        }
+        seen.add(entry);
+      }
+    }
+
+    this.#header = header;
     return this.#header;
   }
 

@@ -67,3 +67,4 @@ export * from "./exports/json.js";
 // allowed to NAME it — `source-hygiene.test.ts` enforces that as a substring
 // count, which is why this comment spells it out the long way.
 export * from "./store/sqlite.js";
+export * from "./store/schema.js";

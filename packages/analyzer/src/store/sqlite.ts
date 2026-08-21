@@ -76,6 +76,12 @@ export interface SqliteOpenOptions {
   readOnly?: boolean;
   /** Create the file if absent. `node:sqlite` defaults this to true. */
   open?: boolean;
+  /**
+   * SQLite's own default is OFF; `node:sqlite` overrides it to ON. Two
+   * different defaults for one setting is reason enough for the store never to
+   * inherit either — see `STORE_OPEN_OPTIONS` in `schema.ts`.
+   */
+  enableForeignKeyConstraints?: boolean;
 }
 
 /**
