@@ -81,7 +81,7 @@ codegraph analyze  model.jsonl --report deps|cycles|coupling
                    [--level module|type] [--internal-only] [--declared-only]
                    [--json] [--top N]
 
-codegraph export   model.jsonl --format dot|json|csv
+codegraph export   model.jsonl --format dot|json|csv|plantuml
                    [--level module|type] [--internal-only] [--declared-only]
                    [--out FILE]
 
@@ -107,7 +107,43 @@ codegraph analyze model.jsonl --report coupling --top 20
 
 # a picture, and nothing but the picture, in graph.dot
 codegraph export model.jsonl --format dot > graph.dot
+
+# the package dependencies, as a PlantUML package diagram
+codegraph export model.jsonl --format plantuml --level module > modules.puml
 ```
+
+### PlantUML: the element follows the fold level
+
+`--format plantuml` renders **what the node is**, because the node's nature
+differs by level:
+
+| `--level` | Element | Why |
+|---|---|---|
+| `module` | `package` | every node carries `TModule` — it *is* a package |
+| `type` | `class` | every node carries `TType` |
+
+So a module-level diagram contains **no `class` statement at all**: its boxes
+are PlantUML packages, and they are exactly the modules the fold selected —
+walking `TChildOf` to the nearest `TModule` ancestor, never splitting a name or
+an id (invariant 7).
+
+```plantuml
+title codegraph — module-level dependencies, view all
+package "com.acme.order" as java_com_acme_order {
+}
+package "java.util" as java_java_util <<stub>> #line.dashed {
+}
+java_com_acme_order --> java_java_util : 15
+java_com_acme_order ..> java_com_megacorp_ledger : 6
+```
+
+Every channel is a documented fact and nothing else: a solid `-->` means all
+aggregated base edges are `declared`, a dashed `..>` means at least one is an
+inference, the label is how many base edges were folded, `<<stub>>` plus a
+dashed outline is an entity the corpus does not declare, and the title carries
+the level and the view — an analysis picture without its view is not a fact. A
+stereotype that would only repeat the element (`package "x" <<package>>`) is
+dropped, and the legend describes only the encodings the diagram actually drew.
 
 **stdout is the artifact; stderr is everything human.** Warnings, fold
 diagnostics and summaries never touch stdout, so a redirect always yields a
