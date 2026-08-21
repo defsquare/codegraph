@@ -59,3 +59,11 @@ export * from "./exports/dot.js";
 export * from "./exports/plantuml.js";
 export * from "./exports/csv.js";
 export * from "./exports/json.js";
+
+// M7: the analysis store. `model.db` is a DERIVED, DISPOSABLE cache of a
+// `.jsonl` model — regenerable at any time, never committed, never the
+// interchange (PLAN.md §9.3). `store/sqlite.ts` is the only module in the
+// workspace allowed to load Node's SQLite builtin, and it is the only one
+// allowed to NAME it — `source-hygiene.test.ts` enforces that as a substring
+// count, which is why this comment spells it out the long way.
+export * from "./store/sqlite.js";

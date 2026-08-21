@@ -51,6 +51,10 @@ const PUBLIC_API = {
     "cyclesToJson",
     "toJsonString",
   ],
+  // The analysis store's single `node:sqlite` load site (PLAN.md §9.3). It is
+  // in the barrel for the reason stated above — and because tsup bundles only
+  // what the entry reaches, so an unexported module would not ship at all.
+  store: ["loadSqlite"],
 } as const;
 
 /** Non-function exports that are part of the contract too. */

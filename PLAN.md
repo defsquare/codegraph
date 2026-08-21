@@ -767,6 +767,47 @@ Steps landed:
       processes: **stream 4.6 s at 140 MB peak; materialize 6.8 s at 555 MB.**
       Validating costs a quarter of the memory of keeping.
 
+- [x] **Step 4 — one load site for Node's SQLite builtin.** `loadSqlite()` in
+      `analyzer/src/store/sqlite.ts` patches `process.emitWarning`, loads via
+      `createRequire(import.meta.url)`, restores in a `finally`, and memoizes.
+      Three independent reasons it cannot be a static import, in increasing
+      severity:
+
+      1. ESM evaluates every `import` declaration before any statement of the
+         importing module body, so the ExperimentalWarning is already on stderr
+         by the time a patch could exist — and several CLI end-to-end tests
+         assert `stderr === ""` on the built binary.
+      2. `await import()` loads late enough but is async, and the read path is
+         synchronous end to end; one `await` would reach `main`.
+      3. esbuild rewrites a static `from "node:sqlite"` to `from "sqlite"` in
+         the tsup output, stripping the `node:` prefix. Harmless for most
+         builtins — `node:fs` and `fs` both resolve — and fatal for this one,
+         which is prefix-only. **Verified by mutation: the built CLI then does
+         not start at all.** The specifier inside `require()` is opaque to the
+         bundler and survives verbatim.
+
+      The returned `SqliteApi` is written from the store's needs (`exec`,
+      `prepare`, `run`/`get`/`all`/`iterate`, `close`) rather than re-exporting
+      the builtin's types, so PLAN's `better-sqlite3` fallback stays a matter of
+      satisfying one interface at one site. `open()` passes `options ?? {}`:
+      the builtin validates by ARITY, so an explicit `undefined` is not an
+      omitted argument and throws.
+
+      Two tests, because neither sees the other's failure. `store-sqlite.test.ts`
+      spawns processes — stderr is only observable in one — and asserts the load
+      is silent, that a static import of the same builtin is NOT silent (the
+      control, so the guard cannot die quietly on a future Node), and that
+      `emitWarning` is restored identically. `source-hygiene.test.ts` asserts
+      that exactly one source file in the workspace names the builtin at all,
+      which is the failure a stderr assertion cannot see: a second, equally
+      quiet loader free to drift from the first.
+
+      Also stated against the real engine for the first time: `ORDER BY` under
+      BINARY collation really does return the unicode fixture's ids in a
+      different order than `compareIds`, and ordering by the surrogate the
+      importer assigned restores it. Step 2 proved that with `Buffer.compare`,
+      a model of SQLite; this proves it with SQLite.
+
 Remaining steps (from the synthesis, unchanged):
 
 
