@@ -216,5 +216,7 @@ fact and a dashed one contains an inference, and stub nodes are dashed and grey.
 - [`PLAN.md`](PLAN.md) — implementation plan, phases, milestones, locked decisions
 - [`METAMODEL.md`](METAMODEL.md) — conceptual reference: every concept, its attributes and relations
 - [`CLAUDE.md`](CLAUDE.md) — architecture boundaries and metamodel invariants
+- [`docs/analyzer.md`](docs/analyzer.md) — the analyzer's design: the pipeline,
+  its data structures, algorithms and costs, entry points, and the rules behind them
 - [`docs/city-model.md`](docs/city-model.md) — the city model's design: data
   structures, metric sources, algorithms, entry points, and what layout will consume
