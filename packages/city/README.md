@@ -33,13 +33,51 @@ codegraph city model.jsonl --height sum:cyclomatic --footprint fanIn --out city.
 }
 ```
 
-## Placement is NOT here
+## Placement is a separate pass
 
-No building has a position, no district has bounds. The layout and 2D
-bin-packing pass is separate and not yet written; each district carries the base
-area its buildings demand (`footprintDemand`), which is that pass's input.
-Publishing a model with no coordinates is what keeps the layout replaceable —
-nothing here has to be undone to lay the city out differently.
+`buildCity` emits no coordinates: no building has a position, no district has
+bounds. `layoutCity` (CLI: `--layout`) is the 2D bin-packing pass that adds
+them — `position` on every building, `bounds` on every district and on the
+city — and changes nothing else. Keeping the passes apart is what keeps the
+packer replaceable: nothing in the model has to be undone to lay the city out
+differently.
+
+```bash
+codegraph city model.jsonl --internal-only --layout > city.json
+```
+
+```json
+{
+  "layout": { "algorithm": "shelf-rows", "order": "area-desc,id-asc",
+              "buildingGap": 2, "districtPadding": 3, "districtGap": 6 },
+  "bounds": { "x": 0, "y": 0, "width": 214.3, "depth": 198.6 },
+  "districts": [{ "id": "java:com.acme.order", "bounds": { "x": 0, "y": 0, "width": 48.2, "depth": 41.5 } }],
+  "buildings": [{ "id": "java:com.acme.order/OrderService", "position": { "x": 3, "y": 3 } }]
+}
+```
+
+The packer favours the READER, not the square metre, and runs recursively —
+buildings into their district, then the packed districts onto the ground plane,
+with the same algorithm at both levels:
+
+- **Shelves, not mosaics.** Rows aligned at the top, filled left to right —
+  straight streets, like city blocks. An optimal packer (MaxRects, skyline)
+  would be denser and visually chaotic.
+- **Big first, stable.** Items sort by footprint area descending (id ascending
+  on ties): landmarks stand at a district's corner, and a small metric change
+  moves one building among its peers instead of reshuffling the city.
+- **Near-square.** Each strip targets `sqrt(total padded area)` wide, so
+  districts and the city settle close to 1:1 — the shape a camera frames — not
+  a ribbon.
+- **Open ground is declared.** Streets between buildings (`buildingGap`),
+  sidewalks inside a district border (`districtPadding`), avenues between
+  districts (`districtGap`) — all parameters, all shipped in the artefact's
+  `layout` block, the same honesty `bindings` gives dimensions.
+
+Coordinates are 2D on the ground plane, `(x, y)`, in city units; under the
+model's conventions (`groundPlane: "xz"`, `heightAxis: "y"`) a renderer maps
+layout `y` onto world `z`. A building's `position` is the minimum corner of its
+footprint, absolute in city coordinates.
 
 ## Configurable dimensions
 

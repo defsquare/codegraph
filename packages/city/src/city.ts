@@ -24,12 +24,12 @@ import { resolveScale, round, scaleValue, type Domain, type Range, type ScaleNam
  *   type   (TType)     ->  BUILDING   dimensions from configurable metrics
  *   type dependency    ->  ARROW      drawn roof to roof, weighted by count
  *
- * WHAT THIS TRANSFORM DOES NOT DO — deliberately, and to be added later:
- * placement. No building has a position and no district has bounds; a district
- * carries the total base area its buildings demand, which is the input a layout
- * and 2D bin-packing pass will consume. Publishing a model with no coordinates
- * is what keeps that pass replaceable: nothing here has to be undone to lay the
- * city out differently.
+ * WHAT THIS TRANSFORM DOES NOT DO — deliberately: placement. No building has a
+ * position and no district has bounds; a district carries the total base area
+ * its buildings demand, which is the input the layout pass (`layoutCity`,
+ * layout.ts) consumes. Publishing a model with no coordinates is what keeps
+ * that pass replaceable: nothing here has to be undone to lay the city out
+ * differently.
  *
  * HONESTY RULES IT INHERITS (CLAUDE.md, "meaning controls appearance"):
  *  - Every dimension names the metric and the scale that produced it, in

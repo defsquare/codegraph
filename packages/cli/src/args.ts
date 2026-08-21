@@ -213,6 +213,12 @@ export const CITY_SPEC: CommandSpec = {
       describe: "Extra metrics to measure onto every building, comma-separated, bound to nothing.",
       placeholder: "M1,M2",
     },
+    {
+      name: "layout",
+      type: "boolean",
+      describe:
+        "Lay the city out: positions on buildings, bounds on districts, by recursive shelf packing.",
+    },
     ...VIEW_OPTIONS,
     {
       name: "out",
@@ -288,6 +294,8 @@ export interface CityOptions extends ModelInputOptions, ViewOptions {
   readonly footprintScale: string;
   /** Extra metrics carried on every building; empty when `--carry` was absent. */
   readonly carry: readonly string[];
+  /** `--layout`: add placement (positions, bounds) to the artifact. */
+  readonly layout: boolean;
   /** `--out FILE`; undefined means stdout. */
   readonly out: string | undefined;
 }
@@ -611,6 +619,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           footprint: stringOf(values, "footprint") ?? "members",
           footprintScale: stringOf(values, "footprint-scale") ?? "sqrt",
           carry: metricList(stringOf(values, "carry")),
+          layout: flagOf(values, "layout"),
           ...viewOf(values),
           out: stringOf(values, "out"),
         },

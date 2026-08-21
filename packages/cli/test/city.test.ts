@@ -27,6 +27,7 @@ function options(overrides: Partial<CityOptions> = {}): CityOptions {
     carry: [],
     internalOnly: false,
     declaredOnly: false,
+    layout: false,
     out: undefined,
     ...overrides,
   };
@@ -186,5 +187,51 @@ describe("city: through the real dispatcher", () => {
     const io = captureIo();
     expect(run(["--help"], io)).toBe(EXIT.OK);
     expect(io.stdout()).toContain("city");
+  });
+});
+
+describe("city: --layout", () => {
+  it("adds placement — positions, bounds and the declared packer — to the artifact", () => {
+    const { io, code } = cityTo({ layout: true });
+    expect(code).toBe(EXIT.OK);
+    const city = JSON.parse(io.stdout()) as CityJson & {
+      layout: { algorithm: string; buildingGap: number };
+      bounds: { width: number; depth: number };
+      buildings: { position: { x: number; y: number } }[];
+      districts: { bounds: { x: number; y: number; width: number; depth: number } }[];
+    };
+    expect(city.layout.algorithm).toBe("shelf-rows");
+    expect(city.bounds.width).toBeGreaterThan(0);
+    for (const building of city.buildings) {
+      expect(building.position.x).toBeTypeOf("number");
+      expect(building.position.y).toBeTypeOf("number");
+    }
+    for (const district of city.districts) {
+      expect(district.bounds.width).toBeGreaterThan(0);
+    }
+  });
+
+  it("says so in the --out confirmation", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "codegraph-cli-city-")), "city.json");
+    const { io } = cityTo({ layout: true, out: path });
+    expect(io.stderr()).toContain("laid out");
+  });
+
+  it("without the flag, the artifact stays placement-free", () => {
+    const { io } = cityTo();
+    const city = JSON.parse(io.stdout()) as {
+      layout?: unknown;
+      buildings: { position?: unknown }[];
+    };
+    expect(city.layout).toBeUndefined();
+    expect(city.buildings.every((building) => building.position === undefined)).toBe(true);
+  });
+
+  it("runs from argv through the real dispatcher", () => {
+    const io = captureIo();
+    const code = run(["city", FIXTURE, "--internal-only", "--layout"], io);
+    expect(code).toBe(EXIT.OK);
+    const city = JSON.parse(io.stdout()) as { layout: { algorithm: string } };
+    expect(city.layout.algorithm).toBe("shelf-rows");
   });
 });

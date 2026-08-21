@@ -259,6 +259,11 @@ consuming `footprintDemand` and `footprint`, and has **nothing here to undo**.
 Publishing a model with no coordinates is what keeps that pass replaceable —
 including trying several packers and comparing them on the same city.
 
+*(That pass now exists: `layoutCity` in `layout.ts`, CLI `--layout` — recursive
+shelf packing, readability over density, algorithm and parameters declared in
+the artefact's `layout` block. `buildCity` itself is unchanged: placement stays
+opt-in and separate.)*
+
 Also absent, and why:
 
 - **Colour.** A palette is a rendering decision, and the raw `metrics` on each
@@ -316,12 +321,13 @@ rather than inventing its own mapping.
 
 ## CM-10 Open questions for the next slices
 
-1. **Layout / 2D bin packing.** Packing buildings within a district, then
-   districts within the ground plane. Open: aspect-ratio target, padding as a
-   function of district size, whether `crossDistrict` arrow weight should pull
-   districts together (a force step after packing), and stability — a small
-   model change should not reshuffle the whole city, or nobody can compare two
-   runs visually.
+1. **Layout / 2D bin packing.** *Landed*: `layoutCity` packs buildings within
+   each district, then districts within the ground plane — recursive shelf
+   packing, area-descending order for stability, a `sqrt(total area)` strip
+   target for near-square aspect, declared gaps for streets/sidewalks/avenues.
+   Still open: whether `crossDistrict` arrow weight should pull coupled
+   districts together (a force step after packing), and padding as a function
+   of district size rather than a constant.
 2. **Colour binding.** Most likely `kind` (categorical) with provenance or
    staleness as a second channel. Needs the same "state the metric" discipline
    `bindings` already gives dimensions.

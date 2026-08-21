@@ -3,6 +3,7 @@ import { buildGraph } from "@codegraph/analyzer";
 import {
   buildCity,
   cityToJsonString,
+  layoutCity,
   UnknownMetricError,
   UnknownScaleError,
   type CityModel,
@@ -25,11 +26,11 @@ import { resolveView } from "../view.js";
  * nothing else, so `codegraph city m.jsonl > city.json` yields a file a JSON
  * parser accepts. Warnings and the `--out` confirmation are stderr.
  *
- * NO LAYOUT. The artifact has no coordinates by design — dimensions, not
- * placement. A later layout / bin-packing pass consumes each district's
- * `footprintDemand`; this command will not grow a `--layout` flag until that
- * pass exists, because a flag that positions nothing would be a promise the
- * model cannot keep.
+ * LAYOUT IS OPT-IN. Without `--layout` the artifact has no coordinates —
+ * dimensions, not placement. With it, `layoutCity` adds `position` to every
+ * building and `bounds` to every district (recursive shelf packing, readability
+ * over density); the packer and its parameters ship in the artifact's `layout`
+ * block. The city model itself is unchanged either way.
  *
  * A BAD METRIC IS A USAGE ERROR (exit 2), not an internal one: the city package
  * throws `UnknownMetricError` naming what exists, and the CLI's job is to hand
@@ -40,7 +41,7 @@ export function cityCommand(options: CityOptions, io: IoSink): ExitCode {
   const graph = buildGraph(loaded.union);
 
   const city = build(graph, options);
-  const artifact = cityToJsonString(city);
+  const artifact = cityToJsonString(options.layout ? layoutCity(city) : city);
 
   errLines(io, warnings(loaded, city));
 
@@ -51,7 +52,7 @@ export function cityCommand(options: CityOptions, io: IoSink): ExitCode {
     errLine(
       io,
       `wrote ${plural(Buffer.byteLength(artifact, "utf8"), "byte")} to ${options.out} ` +
-        `(${describe(city)}).`,
+        `(${describe(city, options.layout)}).`,
     );
   }
 
@@ -79,11 +80,12 @@ function plural(count: number, noun: string, plural_ = `${noun}s`): string {
 }
 
 /** What the artifact is, for the human stream only. */
-function describe(city: CityModel): string {
+function describe(city: CityModel, laidOut: boolean): string {
   const channels = city.bindings.map((binding) => `${binding.channel}=${binding.metric}`).join(", ");
   return (
     `city, view ${city.view.name}, ${plural(city.districts.length, "district")}, ` +
-    `${plural(city.buildings.length, "building")}, ${plural(city.arrows.length, "arrow")}, ${channels}`
+    `${plural(city.buildings.length, "building")}, ${plural(city.arrows.length, "arrow")}, ` +
+    `${channels}${laidOut ? ", laid out" : ""}`
   );
 }
 
