@@ -74,6 +74,15 @@ export function javaFixture(): string {
   return join(repoRoot(), "fixtures", "java", "expected", "model.jsonl");
 }
 
+/**
+ * The collation fixture: identifiers where UTF-16 code-unit order (codegraph's
+ * canonical order) and UTF-8 byte order (SQLite's BINARY collation) disagree.
+ * See fixtures/unicode/README.md.
+ */
+export function unicodeFixture(): string {
+  return join(repoRoot(), "fixtures", "unicode", "expected", "model.jsonl");
+}
+
 /** The version `--version` must print, read from the package rather than guessed. */
 export function packageVersion(): string {
   const parsed: unknown = JSON.parse(readFileSync(join(cliPackageDir(), "package.json"), "utf8"));

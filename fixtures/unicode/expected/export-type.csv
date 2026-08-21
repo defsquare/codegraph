@@ -1,0 +1,4 @@
+from,to,count,kinds,provenances,selfLoop,level,view
+java:sorting/Ascii,java:sorting/𠀀Supplementary,1,inheritance,declared,false,type,all
+java:sorting/𠀀Supplementary,java:sorting/ＡFullwidth,1,reference,declared,false,type,all
+java:sorting/ＡFullwidth,java:sorting/Ascii,1,reference,declared,false,type,all

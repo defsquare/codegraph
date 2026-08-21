@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createBrokenModels, scratchPath } from "./broken-models.js";
-import { describeArgv, ensureCliBinary, javaFixture, runCli } from "./cli-process.js";
+import { describeArgv, ensureCliBinary, javaFixture, runCli, unicodeFixture } from "./cli-process.js";
 
 /**
  * DETERMINISM (decision 6): identical inputs and flags produce byte-identical
@@ -16,6 +16,7 @@ import { describeArgv, ensureCliBinary, javaFixture, runCli } from "./cli-proces
 
 const models = createBrokenModels();
 const FIXTURE = javaFixture();
+const UNICODE = unicodeFixture();
 
 beforeAll(ensureCliBinary, 120_000);
 afterAll(() => models.cleanup());
@@ -36,6 +37,13 @@ const INVOCATIONS: readonly (readonly string[])[] = [
   ["export", FIXTURE, "--format", "csv", "--level", "type"],
   ["export", FIXTURE, "--format", "json", "--internal-only"],
   ["export", FIXTURE, "--format", "plantuml", "--internal-only"],
+  // The collation fixture: its identifiers order differently under UTF-16 code
+  // units (what codegraph uses) than under UTF-8 bytes (what a database would),
+  // so it is the one input where "sorted" is not a single answer.
+  ["validate", UNICODE],
+  ["analyze", UNICODE, "--report", "deps", "--level", "type"],
+  ["export", UNICODE, "--format", "csv", "--level", "type"],
+  ["export", UNICODE, "--format", "json", "--level", "type"],
 ];
 
 describe("stdout is byte-identical across runs", () => {

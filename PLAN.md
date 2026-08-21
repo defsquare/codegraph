@@ -690,6 +690,62 @@ extractor emits it (4 795 entities on commons-lang).
 
 ### 9.3 M7 — SQLite analysis store (`model.db`)
 
+Work in progress. Design settled by a scout-and-judge pass over the code
+(4 readers → 3 independent proposals → one synthesis); the recommendation is
+**cache the parse, not the graph** — `model.db` replaces the JSONL decoder and
+nothing above it, so byte-identity is arithmetic rather than vigilance.
+
+Measured on apache/fineract, which is why:
+
+| stage | time | |
+|---|---|---|
+| decode JSONL | 7.1 s | the dominant cost |
+| `parseModel` (Zod over the whole Model) | 2.6 s | redundant — the decoder already validated every record |
+| `validateModel` (profile) | 1.3 s | real work |
+| `unknownReferences` (closure) | 0.8 s | redundant since M6 — a dangling surrogate is unreadable |
+| `buildGraph` | 0.6 s | real |
+| fold + coupling + cycles + export | 0.2–0.6 s each | real |
+
+**≈93% of a command is decode-and-revalidate; the analysis itself is under a
+second.** Pushing metrics into SQL would optimise the 6% that is not the
+problem.
+
+Steps landed:
+
+- [x] **Step 1 — split parse from unify** (`12c07f6`). `loadDecodedModels` runs
+      the unify and diagnose halves only; `loadModels` keeps its signature as
+      `parseModel` then that, for raw JSON and in-memory models. The CLI reads
+      through core's decoder, so it uses the new entry point. Profile
+      validation, closure over the union, self-edges and cross-model
+      redeclaration all still run — `load-equivalence.test.ts` pins that both
+      entry points agree, and catches divergence (verified by mutation).
+      fineract `analyze`: **11.50 s → 9.13 s, 1 438 MB → 1 099 MB**, all 32
+      baseline outputs byte-identical.
+- [x] **Step 2 — freeze the two order contracts**, on pre-DB code, because the
+      store is what will break them.
+      - `fold-order-contract.test.ts`: no rendering depends on the order edges
+        ARRIVED in. A `FoldedEdge` aggregates `kinds`/`provenances` into Sets,
+        and a Set iterates in insertion order; today that is the decoder's
+        canonical order, and a query planner's order is not. Asserted over the
+        real pipeline at both levels and under a view, for DOT, PlantUML, CSV,
+        JSON, cycles and coupling — and pinned as non-vacuous, since a
+        single-member Set has no order to get wrong. Unsorting any of the four
+        exporters fails it.
+      - `fixtures/unicode/` + `collation-contract.test.ts`: canonical order is
+        by UTF-16 CODE UNIT (`compareIds`), SQLite's `BINARY` collation is by
+        UTF-8 BYTE. They agree across the BMP and invert above it — `𠀀…`
+        (U+20000) leads with code unit `D840` but byte `F0`, while `Ａ…`
+        (U+FF21) leads with `FF21` but `EF`. Both are legal Java identifier
+        letters, so it is a corpus someone could write. The committed reference
+        report is the artefact every later step is diffed against.
+
+      **The rule both contracts state: sorting belongs to the model, never to
+      the storage engine.** A query needing canonical order sorts in TypeScript
+      or `ORDER BY`s a column the importer wrote in canonical order.
+
+Remaining steps (from the synthesis, unchanged):
+
+
 Role split (encoding doc §1): `.jsonl` is the CONTRACT — schema-validated,
 diffable, language-agnostic; `model.db` is the WORKBENCH — a derived,
 disposable cache, regenerable at any time, never committed, never the

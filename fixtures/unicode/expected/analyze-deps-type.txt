@@ -1,0 +1,19 @@
+codegraph analyze — deps
+models: fixtures/unicode/expected/model.jsonl
+level:  type
+view:   all (nothing filtered — stubs and inferred edges included)
+layer:  every edge kind folded to type level
+
+nodes: 3
+edges: 3 aggregated dependencies, ranked by weight descending (base edges aggregated), ties by (from, to)
+
+nodes
+  java:sorting/Ascii            class  members=1
+  java:sorting/𠀀Supplementary  class  members=1
+  java:sorting/ＡFullwidth       class  members=1
+
+dependencies
+  legend: '->' a declared fact · '~>' carries a derived or dynamic-candidate inference
+  java:sorting/Ascii           -> java:sorting/𠀀Supplementary  weight=1  kinds=inheritance  provenance=declared
+  java:sorting/𠀀Supplementary -> java:sorting/ＡFullwidth       weight=1  kinds=reference  provenance=declared
+  java:sorting/ＡFullwidth      -> java:sorting/Ascii            weight=1  kinds=reference  provenance=declared
