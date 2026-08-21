@@ -1,5 +1,6 @@
 import { commandSpec, parseInvocation, renderHelp, type Invocation } from "./args.js";
 import { analyzeCommand } from "./commands/analyze.js";
+import { cityCommand } from "./commands/city.js";
 import { exportCommand } from "./commands/export.js";
 import { profilesCommand } from "./commands/profiles.js";
 import { validateCommand } from "./commands/validate.js";
@@ -60,6 +61,8 @@ function dispatch(invocation: Invocation, io: IoSink): ExitCode {
           return analyzeCommand(invocation.options, io);
         case "export":
           return exportCommand(invocation.options, io);
+        case "city":
+          return cityCommand(invocation.options, io);
         case "profiles":
           return profilesCommand(invocation.options, io);
       }

@@ -30,7 +30,12 @@ export default tseslint.config(
   // Architectural boundary: core and analyzer must run in plain Node, no DOM.
   // three.js is only ever allowed in packages/viz.
   {
-    files: ["packages/core/**/*.ts", "packages/analyzer/**/*.ts", "packages/cli/**/*.ts"],
+    files: [
+      "packages/core/**/*.ts",
+      "packages/analyzer/**/*.ts",
+      "packages/city/**/*.ts",
+      "packages/cli/**/*.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",

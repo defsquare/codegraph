@@ -1,11 +1,16 @@
 {
-  "name": "@codegraph/cli",
+  "name": "@codegraph/city",
   "version": "0.1.0",
   "type": "module",
-  "description": "codegraph command-line interface",
-  "bin": {
-    "codegraph": "./dist/index.js"
+  "description": "Codegraph city model: modules as districts, types as buildings, dependencies as roof-to-roof arrows",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": ["dist"],
   "scripts": {
     "build": "tsup",
@@ -14,11 +19,11 @@
   },
   "dependencies": {
     "@codegraph/analyzer": "workspace:*",
-    "@codegraph/city": "workspace:*",
     "@codegraph/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "fast-check": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

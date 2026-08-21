@@ -24,6 +24,10 @@ packages/core/       @codegraph/core — traits, edges, language profiles (data)
                      Zod validation, JSON Schema export. Pure data + validation.
 packages/analyzer/   @codegraph/analyzer — graph construction, derived indexes,
                      queries, metrics (coupling, cycles), exports. Pure computation.
+packages/city/       @codegraph/city — the city MODEL: modules → districts,
+                     types → buildings (dimensions from configurable metrics),
+                     dependencies → roof-to-roof arrows. No placement, no
+                     rendering. Pure computation.
 packages/cli/        @codegraph/cli — `codegraph` command.
 packages/viz/        (future) Three.js code city. The ONLY package that may import three.
 fixtures/            Reference corpora + expected model.jsonl snapshots.
@@ -31,8 +35,8 @@ fixtures/            Reference corpora + expected model.jsonl snapshots.
 
 ### Hard boundaries (convenience does not override architecture)
 
-- **`core` and `analyzer` never import Three.js** — they must run in Node with
-  no DOM. `viz` reads analysis output; it never mutates the model and never
+- **`core`, `analyzer` and `city` never import Three.js** — they must run in
+  Node with no DOM. `viz` reads the city model; it never mutates the model and never
   re-derives graph facts the analyzer already computes.
 - **Extractors contain no metamodel intelligence.** They emit JSON conforming
   to `schemas/` — the per-record schemas AND the container contract — and

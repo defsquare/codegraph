@@ -12,6 +12,7 @@ export default defineConfig({
     alias: {
       "@codegraph/core": fileURLToPath(new URL("../core/src/index.ts", import.meta.url)),
       "@codegraph/analyzer": fileURLToPath(new URL("../analyzer/src/index.ts", import.meta.url)),
+      "@codegraph/city": fileURLToPath(new URL("../city/src/index.ts", import.meta.url)),
     },
   },
 });

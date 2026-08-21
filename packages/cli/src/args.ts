@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { FOLD_LEVELS, type FoldLevel } from "@codegraph/analyzer";
+import { METRIC_PREFIXES, SCALES, metricNames } from "@codegraph/city";
 import { UsageError } from "./exit.js";
 
 export { UsageError } from "./exit.js";
@@ -15,7 +16,7 @@ export { UsageError } from "./exit.js";
  * an option means adding one entry to one array.
  */
 
-export const COMMAND_NAMES = ["validate", "analyze", "export", "profiles"] as const;
+export const COMMAND_NAMES = ["validate", "analyze", "export", "city", "profiles"] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 /** `analyze --report` values. */
@@ -139,7 +140,7 @@ export const ANALYZE_SPEC: CommandSpec = {
 
 export const EXPORT_SPEC: CommandSpec = {
   name: "export",
-  summary: "Write the folded graph as DOT, JSON or CSV.",
+  summary: "Write the folded graph as DOT, JSON, CSV or PlantUML.",
   positional: MODELS_POSITIONAL,
   options: [
     {
@@ -150,6 +151,68 @@ export const EXPORT_SPEC: CommandSpec = {
       required: true,
     },
     LEVEL_OPTION,
+    ...VIEW_OPTIONS,
+    {
+      name: "out",
+      type: "string",
+      describe: "Write the artifact to this file instead of stdout.",
+      placeholder: "FILE",
+    },
+  ],
+};
+
+/**
+ * `codegraph city --height / --footprint` take a metric NAME, not a closed set:
+ * `attribute:` and `sum:` are open by design (an extractor may measure anything,
+ * complexity included). The help therefore lists what exists rather than
+ * constraining what may be typed, and lists it from the registry itself.
+ */
+function metricHelp(channel: string): string {
+  return (
+    `Metric driving ${channel}. Built in: ${metricNames().join(", ")}. ` +
+    `Open forms: ${METRIC_PREFIXES.map((form) => `${form.prefix}<key>`).join(", ")}.`
+  );
+}
+
+export const CITY_SPEC: CommandSpec = {
+  name: "city",
+  summary: "Write the code city: modules as districts, types as buildings.",
+  positional: MODELS_POSITIONAL,
+  options: [
+    {
+      name: "height",
+      type: "string",
+      describe: metricHelp("building height"),
+      placeholder: "METRIC",
+      defaultValue: "loc",
+    },
+    {
+      name: "height-scale",
+      type: "string",
+      describe: "How height follows its metric.",
+      choices: SCALES,
+      defaultValue: "linear",
+    },
+    {
+      name: "footprint",
+      type: "string",
+      describe: metricHelp("building footprint"),
+      placeholder: "METRIC",
+      defaultValue: "members",
+    },
+    {
+      name: "footprint-scale",
+      type: "string",
+      describe: "How the footprint SIDE follows its metric; sqrt makes the AREA proportional.",
+      choices: SCALES,
+      defaultValue: "sqrt",
+    },
+    {
+      name: "carry",
+      type: "string",
+      describe: "Extra metrics to measure onto every building, comma-separated, bound to nothing.",
+      placeholder: "M1,M2",
+    },
     ...VIEW_OPTIONS,
     {
       name: "out",
@@ -178,6 +241,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   VALIDATE_SPEC,
   ANALYZE_SPEC,
   EXPORT_SPEC,
+  CITY_SPEC,
   PROFILES_SPEC,
 ];
 
@@ -216,6 +280,18 @@ export interface ExportOptions extends ModelInputOptions, ViewOptions {
   readonly out: string | undefined;
 }
 
+export interface CityOptions extends ModelInputOptions, ViewOptions {
+  /** Metric name; validated by the city package, which owns the registry. */
+  readonly height: string;
+  readonly heightScale: string;
+  readonly footprint: string;
+  readonly footprintScale: string;
+  /** Extra metrics carried on every building; empty when `--carry` was absent. */
+  readonly carry: readonly string[];
+  /** `--out FILE`; undefined means stdout. */
+  readonly out: string | undefined;
+}
+
 export interface ProfilesOptions {
   readonly lang: string | undefined;
   readonly json: boolean;
@@ -232,6 +308,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "validate"; readonly options: ValidateOptions }
   | { readonly kind: "run"; readonly command: "analyze"; readonly options: AnalyzeOptions }
   | { readonly kind: "run"; readonly command: "export"; readonly options: ExportOptions }
+  | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
   | { readonly kind: "run"; readonly command: "profiles"; readonly options: ProfilesOptions };
 
 const HELP_FLAGS = new Set(["--help", "-h"]);
@@ -395,6 +472,15 @@ function levelOf(values: ParsedValues): FoldLevel {
   return value === undefined ? DEFAULT_LEVEL : (value as FoldLevel);
 }
 
+/** `--carry a,b` → ["a","b"]; blanks dropped so `a,,b` is not a metric named "". */
+function metricList(value: string | undefined): readonly string[] {
+  if (value === undefined) return [];
+  return value
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+}
+
 function viewOf(values: ParsedValues): ViewOptions {
   return {
     internalOnly: flagOf(values, "internal-only"),
@@ -510,6 +596,21 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           models,
           format: stringOf(values, "format") as FormatName,
           level: levelOf(values),
+          ...viewOf(values),
+          out: stringOf(values, "out"),
+        },
+      };
+    case "city":
+      return {
+        kind: "run",
+        command: "city",
+        options: {
+          models,
+          height: stringOf(values, "height") ?? "loc",
+          heightScale: stringOf(values, "height-scale") ?? "linear",
+          footprint: stringOf(values, "footprint") ?? "members",
+          footprintScale: stringOf(values, "footprint-scale") ?? "sqrt",
+          carry: metricList(stringOf(values, "carry")),
           ...viewOf(values),
           out: stringOf(values, "out"),
         },

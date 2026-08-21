@@ -27,15 +27,22 @@ const manifest = JSON.parse(readFileSync(PACKAGE_JSON, "utf8")) as {
 
 describe("the CLI's package surface", () => {
   /**
-   * ZERO DEPENDENCIES FOR ARGUMENT PARSING (decision 1). Node 22 ships
-   * `parseArgs`; a parser dependency here would be the first crack in a
-   * dependency list that is meant to stay exactly two workspace packages.
+   * ZERO THIRD-PARTY DEPENDENCIES (decision 1). Node 22 ships `parseArgs`; a
+   * parser dependency here would be the first crack in a dependency list meant
+   * to hold nothing but codegraph's own packages. The set of workspace packages
+   * grows (core, analyzer, city…) — what may never appear is anything outside
+   * the workspace.
    */
-  it("depends on nothing but the two workspace packages", () => {
-    expect(Object.keys(manifest.dependencies).sort()).toEqual([
-      "@codegraph/analyzer",
-      "@codegraph/core",
-    ]);
+  it("depends on nothing outside the codegraph workspace", () => {
+    const dependencies = Object.keys(manifest.dependencies).sort();
+    expect(dependencies).toContain("@codegraph/core");
+    expect(dependencies).toContain("@codegraph/analyzer");
+    for (const dependency of dependencies) {
+      expect(dependency.startsWith("@codegraph/"), `${dependency} is not a workspace package`).toBe(
+        true,
+      );
+      expect(manifest.dependencies[dependency]).toBe("workspace:*");
+    }
   });
 
   it("imports no third-party argument parser", () => {

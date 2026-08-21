@@ -102,7 +102,9 @@ describe("global parsing", () => {
   it("rejects an unknown command, naming the valid ones", () => {
     const error = usageErrorFor(["anlyze", "model.jsonl"]);
     expect(error.message).toContain("anlyze");
-    expect(error.hint ?? "").toContain("validate, analyze, export, profiles");
+    // Against COMMAND_NAMES, not a literal: a command added to the CLI must
+    // appear in the hint automatically, or the hint is a stale map.
+    expect(error.hint ?? "").toContain(COMMAND_NAMES.join(", "));
   });
 
   it("rejects an unknown global option, naming what is global", () => {
