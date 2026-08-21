@@ -164,7 +164,7 @@ export const EDGE_KEY_STORAGE = {
   o: { table: "edge", columns: ["to_id"] },
   p: { table: "edge", columns: ["provenance_id"] },
   anchor: { table: "edge", columns: ["anchor_file_id", "anchor_start", "anchor_end"] },
-  candidates: { table: "edge_candidate", columns: ["candidate_id"] },
+  candidates: { table: "edge_candidate", columns: ["candidate_id"] },  // presence: edge.candidate_count
   isRead: { table: "edge", columns: ["is_read"] },
   isWrite: { table: "edge", columns: ["is_write"] },
   sourceFile: { table: "edge", columns: ["source_file_id"] },
@@ -188,7 +188,7 @@ export function traitContributedKeys(): string[] {
  * makes any change to this constant a reviewable diff rather than a surprise
  * at the next import.
  */
-export const SCHEMA_SQL = `
+export const SCHEMA_TABLES_SQL = `
 -- ── Provenance of the cache itself ───────────────────────────────────────────
 CREATE TABLE meta (
   key   TEXT PRIMARY KEY,
@@ -275,6 +275,10 @@ CREATE TABLE edge (
   is_read        INTEGER,
   is_write       INTEGER,
   source_file_id INTEGER REFERENCES file,
+  -- NULL = the key was absent; N = present with N rows in edge_candidate.
+  -- Unlike the entity lists, candidates is contributed by no trait, so nothing
+  -- else could tell an EMPTY array from an absent one.
+  candidate_count INTEGER,
   extra          TEXT
 );
 
@@ -285,6 +289,15 @@ CREATE TABLE edge_candidate (
   PRIMARY KEY (edge_id, ord)
 ) WITHOUT ROWID;
 
+`;
+
+/**
+ * The indexes, separately, because the importer creates them AFTER its inserts:
+ * building a B-tree once from sorted data beats maintaining seventeen of them
+ * across a million inserts. `createSchema` still applies both, so the schema a
+ * reader sees is the same either way.
+ */
+export const SCHEMA_INDEXES_SQL = `
 -- ── Indexes ──────────────────────────────────────────────────────────────────
 -- Not unique: a repeated natural key is a conformance FINDING, not a read
 -- error, and the store caches whatever the reader accepted.
@@ -308,5 +321,6 @@ CREATE INDEX edge_candidate_target     ON edge_candidate(candidate_id);
 
 /** Create every table and index. The caller owns the transaction. */
 export function createSchema(db: SqliteDatabase): void {
-  db.exec(SCHEMA_SQL);
+  db.exec(SCHEMA_TABLES_SQL);
+  db.exec(SCHEMA_INDEXES_SQL);
 }

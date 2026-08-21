@@ -63,6 +63,14 @@ export interface SqliteStatement {
   all(...params: SqliteValue[]): SqliteRow[];
   /** Row-at-a-time. The import and hydrate paths use this, never `all()`. */
   iterate(...params: SqliteValue[]): IterableIterator<SqliteRow>;
+  /**
+   * Return each row as a positional array instead of an object. Measured on
+   * fineract's 1 023 147 entity and edge rows: **3.83s as objects, 1.46s as
+   * arrays.** Naming a column costs a property per row, and at a million rows
+   * that is most of the read. Only worth it where the column list is written
+   * out explicitly — see `readStoreRecords`.
+   */
+  setReturnArrays(enabled: boolean): void;
 }
 
 export interface SqliteDatabase {

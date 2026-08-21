@@ -870,14 +870,60 @@ diffable, language-agnostic; `model.db` is the WORKBENCH — a derived,
 disposable cache, regenerable at any time, never committed, never the
 interchange.
 
-- [ ] `analyzer`: `importModel(jsonlPath) → model.db` over the step-5 DDL —
-      single transaction, prepared statements, driven by
-      `readModelRecordsSync` so the corpus is never held. Acid test: hydrating
-      the result equals `readModelFileSync` of the same file, or it is not a
-      cache.
-- [ ] DB-backed graph facade behind the existing analyzer API; metrics
-      migrate to SQL (recursive CTEs for cycles/reachability)
-      opportunistically, not big-bang.
+- [x] **Step 6 — `importModel(jsonlPath) → model.db`, and its exact inverse.**
+      Driven by `readModelRecordsSync`, one transaction, prepared statements;
+      the corpus is never held. `readStoreRecords(db)` yields the wire records
+      back out, so losslessness is an EQUALITY rather than a checklist:
+      `[...readStoreRecords(db)]` must equal `[...readModelRecordsSync(path)]`,
+      record for record. **1 029 842 records identical on fineract.**
+      `hydrateModel` is that stream fed to core's own `ModelBuilder` — the same
+      one `readModelFileSync` uses, so a model from the cache cannot diverge
+      from one off disk.
+
+      The acid test earned its name on the first run, finding two real bugs of
+      one kind: **an empty array and an absent key are the same rows.**
+      `definedIn: []` writes nothing to `entity_defined_in`, exactly like an
+      entity with no `TModule` — and the fixture has a stub module that proves
+      it. Presence now comes from the TRAIT SET, which is where the wire keeps
+      it (`TComment` contributes `comments`, so carrying the trait IS carrying
+      the key). `candidates` is the one array-valued key no trait contributes,
+      so `edge.candidate_count` records its presence: NULL absent, 0 empty.
+
+      Measured on fineract (241 101 entities / 782 046 edges):
+
+      | | time | peak RSS |
+      |---|---|---|
+      | import (once) | 9.0 s | 289 MB |
+      | read the model from `.jsonl` | 6.4 s | 701 MB |
+      | hydrate the model from `.db` | 3.6 s | 592 MB |
+      | fan-in top 20, in SQL | 0.04 s | — |
+
+      **The finding that redirects step 7: the win is not hydrating faster, it
+      is not hydrating at all.** Full hydration was first measured at 7.6s —
+      SLOWER than reading the text — and only beats it after switching the bulk
+      queries to `setReturnArrays(true)` (1 023 147 rows: 3.83s as objects,
+      1.46s as arrays). Even at 3.6s that is a 1.8× constant, where the same
+      question asked in SQL is 0.04s against 6.4s. A DB-backed facade that
+      begins by rebuilding the whole `Model` gives up the actual win.
+
+      Two smaller decisions, both measured: indexes are created AFTER the
+      inserts (10.75s → 9.0s, 178.4MB → 169.8MB), and atomicity comes from a
+      rename rather than from the journal, which is what makes
+      `journal_mode = OFF` safe.
+
+      Four mutations. Dropping `space`, inferring list presence from rows, and
+      ordering entities by `symbol` instead of by surrogate were all caught.
+      The fourth — writing straight to the target with no temp file — was NOT,
+      because deleting the target on failure also "leaves no database". The
+      property that separates them is the one users feel: a failed re-import
+      must not cost you the cache you had. Now asserted.
+- [ ] DB-backed graph facade behind the existing analyzer API. Step 6's
+      measurement sets the bar: `hydrateModel` is only a 1.8x constant over
+      reading the text, so the facade must push questions DOWN into SQL
+      (recursive CTEs for cycles/reachability, `WHERE module_id IN (...)` for
+      slices) rather than rebuild the whole `Model` and analyze it in JS.
+      Opportunistic, not big-bang — but a facade that hydrates everything has
+      already lost the two orders of magnitude.
 - [ ] `cli`: `codegraph import`; `analyze`/`export` given a `.jsonl`
       auto-build a sibling `.db` cache (`--no-cache` escape hatch);
       `dbVersion` mismatch in `meta` ⇒ re-import from JSONL — migration is

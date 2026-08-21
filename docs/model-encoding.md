@@ -274,9 +274,29 @@ adding a trait key to `core` fails the store until someone decides where it goes
   WITH RECURSIVE reach(id) AS (VALUES(?) UNION SELECT to_id FROM edge JOIN reach ON from_id=reach.id) ...
   ```
   Plus the whole ecosystem: `sqlite3` CLI, Datasette, DBeaver, DuckDB attach.
-- **Amortized cost**: import once (~seconds for 90MB JSONL), then every
-  `analyze`/`export` run opens instantly and touches only what it queries —
-  instead of re-parsing 559MB (or even 90MB) per invocation.
+- **Amortized cost**: import once, then every `analyze`/`export` run opens
+  instantly and touches only what it queries. Measured on apache/fineract
+  (241 101 entities / 782 046 edges), and the numbers matter more than the
+  slogan:
+
+  | | time | peak RSS |
+  |---|---|---|
+  | `importModel` (once) | 9.0 s | 289 MB |
+  | read the whole model from `.jsonl` | 6.4 s | 701 MB |
+  | hydrate the whole model from `.db` | 3.6 s | 592 MB |
+  | **fan-in top 20, in SQL** | **0.04 s** | — |
+  | **one module's entities** | **< 0.01 s** | — |
+
+  **The win is not hydrating faster — it is not hydrating at all.** Full
+  hydration beats the text reader by 1.8×, which is worth having and makes the
+  fallback path honest, but it is the wrong number to design around: the same
+  question answered in SQL costs 0.04s against 6.4s, because it never
+  materializes a row it does not need. A DB-backed analyzer that begins by
+  rebuilding the entire `Model` has bought a 1.8× constant; one that pushes the
+  question down has bought two orders of magnitude. (Getting hydration from
+  7.6s to 3.6s was itself a row-shape decision: `setReturnArrays(true)` on the
+  bulk queries, since naming a column costs a property per row and there are a
+  million of them.)
 - **Viz-shaped access**: the 3D city can query level-of-detail slices
   (`WHERE module_id IN (...)`), stream neighborhoods on camera moves, and
   never hold 1M rows in JS objects. This was the weakest point of

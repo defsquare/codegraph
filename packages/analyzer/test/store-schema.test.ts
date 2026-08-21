@@ -81,7 +81,7 @@ function digest(db: SqliteDatabase): string {
  * diff — which is the entire point. Bump `DB_VERSION` alongside any change:
  * migration is regeneration, so an old cache must be recognised as old.
  */
-const EXPECTED = `edge(id INTEGER PK1, kind_id INTEGER NOT NULL, from_id INTEGER NOT NULL, to_id INTEGER NOT NULL, provenance_id INTEGER NOT NULL, anchor_file_id INTEGER NOT NULL, anchor_start INTEGER NOT NULL, anchor_end INTEGER NOT NULL, is_read INTEGER, is_write INTEGER, source_file_id INTEGER, extra TEXT)
+const EXPECTED = `edge(id INTEGER PK1, kind_id INTEGER NOT NULL, from_id INTEGER NOT NULL, to_id INTEGER NOT NULL, provenance_id INTEGER NOT NULL, anchor_file_id INTEGER NOT NULL, anchor_start INTEGER NOT NULL, anchor_end INTEGER NOT NULL, is_read INTEGER, is_write INTEGER, source_file_id INTEGER, candidate_count INTEGER, extra TEXT)
   index edge_from (from_id, kind_id)
   index edge_provenance (provenance_id)
   index edge_to (to_id, kind_id)
