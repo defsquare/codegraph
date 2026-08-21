@@ -2,7 +2,8 @@ import { closeSync, createReadStream, openSync, readSync } from "node:fs";
 import { open } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { StringDecoder } from "node:string_decoder";
-import { ModelDecoder, encodeModel } from "./jsonl.js";
+import { ModelBuilder, ModelDecoder, RecordReader, encodeModel } from "./jsonl.js";
+import type { ModelRecord } from "./wire.js";
 import type { Model } from "./model.js";
 
 /**
@@ -58,7 +59,26 @@ const CHUNK = 1 << 20;
  * nothing the chunking does not already give.
  */
 export function readModelFileSync(path: string): Model {
-  const decoder = new ModelDecoder();
+  const builder = new ModelBuilder();
+  for (const record of readModelRecordsSync(path)) builder.add(record);
+  return builder.finish();
+}
+
+/**
+ * The same file, as a stream of VALIDATED RECORDS rather than a model.
+ *
+ * This is what the analysis-store importer consumes: it writes rows as the
+ * records go by and never holds the corpus, but it enforces the identical
+ * contract because the enforcement is {@link RecordReader}'s, not its own. An
+ * importer that hand-rolled `JSON.parse` would accept a truncated file this
+ * refuses — and core would stop being the only owner of the vocabulary.
+ *
+ * Chunked, like {@link readModelFileSync}, and for the same reason: a model of
+ * a real corpus does not fit in one JavaScript string. The file descriptor is
+ * closed even if the consumer abandons the loop.
+ */
+export function* readModelRecordsSync(path: string): Generator<ModelRecord> {
+  const reader = new RecordReader();
   const utf8 = new StringDecoder("utf8");
   const buffer = Buffer.allocUnsafe(CHUNK);
   const fd = openSync(path, "r");
@@ -71,15 +91,21 @@ export function readModelFileSync(path: string): Model {
       carry += utf8.write(buffer.subarray(0, read));
       let newline = carry.indexOf("\n");
       while (newline >= 0) {
-        decoder.push(carry.slice(0, newline));
+        const record = reader.accept(carry.slice(0, newline));
+        if (record !== undefined) yield record;
         carry = carry.slice(newline + 1);
         newline = carry.indexOf("\n");
       }
     }
+    carry += utf8.end();
+    if (carry !== "") {
+      const record = reader.accept(carry);
+      if (record !== undefined) yield record;
+    }
+    // Only reached when the consumer drained the stream: a caller that breaks
+    // out early has not read a whole file and is not owed the trailer's verdict.
+    reader.finish();
   } finally {
     closeSync(fd);
   }
-  carry += utf8.end();
-  if (carry !== "") decoder.push(carry);
-  return decoder.finish();
 }

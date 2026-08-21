@@ -3,7 +3,7 @@ import type { Edge } from "./edges.js";
 import type { Entity } from "./entity.js";
 import { ENTITY_REFERENCE_KEYS } from "./integrity.js";
 import { type NaturalKey, compareNaturalKeys, naturalKeyIndex, parseRenderedId, renderId } from "./identity.js";
-import type { EdgeKind } from "./names.js";
+import type { EdgeKind, TraitName } from "./names.js";
 import type { Model } from "./model.js";
 import type { Provenance, SourceAnchor } from "./primitives.js";
 import {
@@ -13,6 +13,7 @@ import {
   FileRec,
   HeaderRec,
   WIRE_TRAITS,
+  type ModelRecord,
   type WireAnchor,
 } from "./wire.js";
 
@@ -45,6 +46,21 @@ const ENTITY_KEY_ORDER = [
 ] as const;
 
 const EDGE_KEY_ORDER = ["candidates", "isRead", "isWrite", "sourceFile", "anchor"] as const;
+
+/** The record's own fields — everything else on a line is an extension key. */
+const ENTITY_RECORD_KEYS: readonly string[] = ["t", "i", "k", "tr", "m", "s", "d"];
+const EDGE_RECORD_KEYS: readonly string[] = [
+  "t",
+  "k",
+  "f",
+  "o",
+  "p",
+  "anchor",
+  "candidates",
+  "isRead",
+  "isWrite",
+  "sourceFile",
+];
 
 /** Which trait keys hold entity references, from the one table that knows. */
 const REF_KEYS = new Map<string, boolean>(
@@ -286,27 +302,61 @@ function compareText(a: string, b: string): number {
 // ---------------------------------------------------------------- decoding
 
 /**
- * Feed lines in, get a model out. Incremental so a reader can stream a file of
- * any size; `finish()` is where the whole-file properties (eof counts, closure)
- * are decided.
+ * THE WIRE VALIDATOR — everything that makes a sequence of lines a conforming
+ * model file, and nothing about what a model MEANS.
+ *
+ * Split out from {@link ModelDecoder} because two consumers need it and only
+ * one of them wants a `Model`: the reader materializes entities and edges with
+ * rendered ids, while the analysis-store importer writes rows straight to disk
+ * and must never hold the corpus in memory. Both must enforce the identical
+ * contract, so it is written once, here — an importer that re-implemented the
+ * wire would accept a truncated file the reader refuses, and core would no
+ * longer own the vocabulary (CLAUDE.md).
+ *
+ * What it decides, all of schemas/README.md except what needs a whole model:
+ * per-record schema, section order, dense surrogates, dictionary bounds, the
+ * trait-key rule, file and edge reference bounds, and the eof counts.
  */
-export class ModelDecoder {
+export class RecordReader {
   #line = 0;
   #section = -1;
   #header?: HeaderRec;
-  #files: string[] = [];
-  #records: EntityRec[] = [];
-  #edges: Edge[] = [];
-  /** Rendered id per surrogate — built once, then SHARED by every reference. */
-  #ids: string[] = [];
-  #keys: NaturalKey[] = [];
-  #entities: Entity[] = [];
+  #files = 0;
+  #entities = 0;
+  #edges = 0;
   #eof?: EofRec;
+  /**
+   * The largest entity reference an ENTITY record made, and where. Entity
+   * references may legitimately point forward (`declaredType` at an entity that
+   * sorts later), so they can only be decided once the count is final — but
+   * remembering the largest costs nothing, where remembering every record would
+   * cost the corpus.
+   */
+  #maxEntityRef = -1;
+  #maxEntityRefAt = "";
 
-  push(text: string): void {
+  /** The header, once seen. */
+  get header(): HeaderRec | undefined {
+    return this.#header;
+  }
+
+  /** Records accepted so far, by section. */
+  get counts(): { files: number; entities: number; edges: number } {
+    return { files: this.#files, entities: this.#entities, edges: this.#edges };
+  }
+
+  get line(): number {
+    return this.#line;
+  }
+
+  /**
+   * Validates one line. Returns the typed record, or `undefined` for a blank
+   * line. Throws {@link JsonlError} — naming the line — for anything else.
+   */
+  accept(text: string): ModelRecord | undefined {
     this.#line += 1;
     const trimmed = text.trim();
-    if (trimmed === "") return;
+    if (trimmed === "") return undefined;
 
     let parsed: unknown;
     try {
@@ -322,18 +372,45 @@ export class ModelDecoder {
 
     switch (tag) {
       case "header":
-        return this.#pushHeader(parsed);
+        return this.#acceptHeader(parsed);
       case "f":
-        return this.#pushFile(parsed);
+        return this.#acceptFile(parsed);
       case "e":
-        return this.#pushEntity(parsed);
+        return this.#acceptEntity(parsed);
       case "x":
-        return this.#pushEdge(parsed);
+        return this.#acceptEdge(parsed);
       case "eof":
-        return this.#pushEof(parsed);
+        return this.#acceptEof(parsed);
       default:
         throw new JsonlError(`unknown record type ${JSON.stringify(tag)}`, this.#line);
     }
+  }
+
+  /** The whole-file properties: the trailer exists, and it tells the truth. */
+  finish(): EofRec {
+    const header = this.#header;
+    if (header === undefined) throw new JsonlError("empty file: no header record", 0);
+    if (this.#eof === undefined) {
+      throw new JsonlError("no eof record — the file is truncated, or the writer died mid-run", 0);
+    }
+    const counts = this.#eof.counts;
+    const actual = this.counts;
+    for (const section of ["files", "entities", "edges"] as const) {
+      if (counts[section] !== actual[section]) {
+        throw new JsonlError(
+          `eof declares ${counts[section]} ${section} but the file carries ${actual[section]}`,
+          0,
+        );
+      }
+    }
+    // Closure for the references that were allowed to point forward.
+    if (this.#maxEntityRef >= this.#entities) {
+      throw new JsonlError(
+        `${this.#maxEntityRefAt} ${this.#maxEntityRef} resolves to no entity (closure)`,
+        0,
+      );
+    }
+    return this.#eof;
   }
 
   /** Section order is contractual: one pass, no rewinding, no lookahead. */
@@ -354,11 +431,12 @@ export class ModelDecoder {
     return result.data;
   }
 
-  #pushHeader(value: unknown): void {
+  #acceptHeader(value: unknown): HeaderRec {
     if (this.#header !== undefined) throw new JsonlError("a second header record", this.#line);
     if (this.#line !== 1) throw new JsonlError("the header must be the first record", this.#line);
     this.#enter(0, "header");
     this.#header = this.#parse(HeaderRec, value, "header");
+    return this.#header;
   }
 
   #need(): HeaderRec {
@@ -368,30 +446,30 @@ export class ModelDecoder {
     return this.#header;
   }
 
-  #pushFile(value: unknown): void {
+  #acceptFile(value: unknown): FileRec {
     this.#need();
     this.#enter(1, "f");
     const record = this.#parse(FileRec, value, "file record");
-    if (record.i !== this.#files.length) {
+    if (record.i !== this.#files) {
       throw new JsonlError(
-        `file index ${record.i} out of order — expected ${this.#files.length}`,
+        `file index ${record.i} out of order — expected ${this.#files}`,
         this.#line,
       );
     }
-    this.#files.push(record.path);
+    this.#files += 1;
+    return record;
   }
 
-  #pushEntity(value: unknown): void {
-    this.#need();
+  #acceptEntity(value: unknown): EntityRec {
+    const header = this.#need();
     this.#enter(2, "e");
     const record = this.#parse(EntityRec, value, "entity record");
-    if (record.i !== this.#records.length) {
+    if (record.i !== this.#entities) {
       throw new JsonlError(
-        `entity surrogate ${record.i} out of order — expected ${this.#records.length}`,
+        `entity surrogate ${record.i} out of order — expected ${this.#entities}`,
         this.#line,
       );
     }
-    this.#records.push(record);
     // The module reference must already be defined: canonical order puts a
     // module before everything inside it, so this can never need lookahead.
     if (record.m > record.i) {
@@ -400,50 +478,59 @@ export class ModelDecoder {
         this.#line,
       );
     }
-    const modulePath = record.m === record.i ? record.s : this.#records[record.m]!.s;
-    const key: NaturalKey = {
-      lang: this.#need().lang,
-      module: modulePath,
-      symbol: record.m === record.i ? "" : record.s,
-      disambiguator: record.d,
-    };
-    this.#keys.push(key);
-    this.#ids.push(renderId(key));
+    this.#entities += 1;
+
+    // The trait-key rule (METAMODEL §2) over WIRE shapes — resolved through the
+    // header's dictionary, which is why no per-record JSON Schema can state it.
+    const traits = record.tr.map((ref) => this.#fromDict(header.dict.traits, ref, "trait"));
+    this.#fromDict(header.dict.kinds, record.k, "kind");
+    for (const trait of traits) {
+      const result = WIRE_TRAITS[trait].safeParse(record);
+      if (!result.success) {
+        throw new JsonlError(
+          `entity ${record.i} declares ${trait}:\n${z.prettifyError(result.error)}`,
+          this.#line,
+        );
+      }
+    }
+
+    // File references are decidable now; entity references may point forward.
+    if (record.anchor !== undefined) this.#requireFile(record.anchor[0]);
+    if (record.definedIn !== undefined) for (const ref of record.definedIn) this.#requireFile(ref);
+    for (const [key, spec] of REF_KEYS) {
+      const value_ = (record as Record<string, unknown>)[key];
+      if (value_ === undefined) continue;
+      const refs = spec ? (value_ as number[]) : [value_ as number];
+      for (const ref of refs) this.#noteEntityRef(ref, `entity ${record.i} ${key}`);
+    }
+    this.#noteEntityRef(record.m, `entity ${record.i} module`);
+    return record;
   }
 
-  #pushEdge(value: unknown): void {
+  #acceptEdge(value: unknown): EdgeRec {
     const header = this.#need();
     this.#enter(3, "x");
     const record = this.#parse(EdgeRec, value, "edge record");
-    const kind = this.#fromDict(header.dict.edges, record.k, "edge kind");
-    const provenance = this.#fromDict(header.dict.provenance, record.p, "provenance");
-
-    const edge: Record<string, unknown> = {
-      edge: kind satisfies EdgeKind,
-      from: this.#id(record.f, "edge from"),
-      to: this.#id(record.o, "edge to"),
-      provenance: provenance satisfies Provenance,
-      anchor: this.#anchor(record.anchor),
-    };
+    this.#fromDict(header.dict.edges, record.k, "edge kind");
+    this.#fromDict(header.dict.provenance, record.p, "provenance");
+    // Edges follow every entity, so their references are decidable on arrival.
+    this.#requireEntity(record.f, "edge from");
+    this.#requireEntity(record.o, "edge to");
     if (record.candidates !== undefined) {
-      edge["candidates"] = record.candidates.map((ref) => this.#id(ref, "edge candidate"));
+      for (const ref of record.candidates) this.#requireEntity(ref, "edge candidate");
     }
-    if (record.isRead !== undefined) edge["isRead"] = record.isRead;
-    if (record.isWrite !== undefined) edge["isWrite"] = record.isWrite;
-    if (record.sourceFile !== undefined) edge["sourceFile"] = this.#path(record.sourceFile);
-    for (const [extra, extraValue] of Object.entries(record)) {
-      if (["t", "k", "f", "o", "p", "anchor", "candidates", "isRead", "isWrite", "sourceFile"].includes(extra))
-        continue;
-      edge[extra] = extraValue;
-    }
-    this.#edges.push(edge as unknown as Edge);
+    this.#requireFile(record.anchor[0]);
+    if (record.sourceFile !== undefined) this.#requireFile(record.sourceFile);
+    this.#edges += 1;
+    return record;
   }
 
-  #pushEof(value: unknown): void {
+  #acceptEof(value: unknown): EofRec {
     this.#need();
     if (this.#eof !== undefined) throw new JsonlError("a second eof record", this.#line);
     this.#enter(4, "eof");
     this.#eof = this.#parse(EofRec, value, "eof record");
+    return this.#eof;
   }
 
   #fromDict<T extends string>(dict: readonly T[], index: number, what: string): T {
@@ -455,10 +542,131 @@ export class ModelDecoder {
   }
 
   /** Closure, checked as a reference resolves: a surrogate names a known row. */
-  #id(ref: number, what: string): string {
+  #requireEntity(ref: number, what: string): void {
+    if (ref >= this.#entities) {
+      throw new JsonlError(`${what} ${ref} resolves to no entity (closure)`, this.#line);
+    }
+  }
+
+  #noteEntityRef(ref: number, what: string): void {
+    if (ref > this.#maxEntityRef) {
+      this.#maxEntityRef = ref;
+      this.#maxEntityRefAt = what;
+    }
+  }
+
+  #requireFile(ref: number): void {
+    if (ref >= this.#files) {
+      throw new JsonlError(`file reference ${ref} resolves to no path`, this.#line);
+    }
+  }
+}
+
+/**
+ * Feed lines in, get a model out. Incremental so a reader can stream a file of
+ * any size; `finish()` is where the whole-file properties (eof counts, closure)
+ * are decided.
+ *
+ * Validation is {@link RecordReader}'s; this class only turns validated records
+ * into entities and edges — surrogates back into rendered ids, file references
+ * back into paths, dictionary indices back into names.
+ */
+export class ModelDecoder {
+  readonly #reader = new RecordReader();
+  readonly #builder = new ModelBuilder();
+
+  push(text: string): void {
+    const record = this.#reader.accept(text);
+    if (record !== undefined) this.#builder.add(record);
+  }
+
+  finish(): Model {
+    this.#reader.finish();
+    return this.#builder.finish();
+  }
+
+  /** The natural keys, by surrogate — what an importer needs and a reader checks. */
+  get keys(): readonly NaturalKey[] {
+    return this.#builder.keys;
+  }
+}
+
+/**
+ * Validated records in, a `Model` out. No validation of its own: it trusts
+ * {@link RecordReader}, which is the only place the wire contract is stated.
+ */
+export class ModelBuilder {
+  #header_?: HeaderRec;
+  #files: string[] = [];
+  #records: EntityRec[] = [];
+  #edges: Edge[] = [];
+  /** Rendered id per surrogate — built once, then SHARED by every reference. */
+  #ids: string[] = [];
+  #keys: NaturalKey[] = [];
+  #entities: Entity[] = [];
+  #done = false;
+
+  add(record: ModelRecord): void {
+    switch (record.t) {
+      case "header":
+        this.#header_ = record;
+        return;
+      case "f":
+        this.#files.push(record.path);
+        return;
+      case "e":
+        return this.#addEntity(record);
+      case "x":
+        return this.#addEdge(record);
+      default:
+        return;
+    }
+  }
+
+  #addEntity(record: EntityRec): void {
+    this.#records.push(record);
+    const modulePath = record.m === record.i ? record.s : this.#records[record.m]!.s;
+    const key: NaturalKey = {
+      lang: this.#header().lang,
+      module: modulePath,
+      symbol: record.m === record.i ? "" : record.s,
+      disambiguator: record.d,
+    };
+    this.#keys.push(key);
+    this.#ids.push(renderId(key));
+  }
+
+  #addEdge(record: EdgeRec): void {
+    const header = this.#header();
+    const edge: Record<string, unknown> = {
+      edge: header.dict.edges[record.k] satisfies EdgeKind | undefined as EdgeKind,
+      from: this.#id(record.f),
+      to: this.#id(record.o),
+      provenance: header.dict.provenance[record.p] satisfies Provenance | undefined as Provenance,
+      anchor: this.#anchor(record.anchor),
+    };
+    if (record.candidates !== undefined) {
+      edge["candidates"] = record.candidates.map((ref) => this.#id(ref));
+    }
+    if (record.isRead !== undefined) edge["isRead"] = record.isRead;
+    if (record.isWrite !== undefined) edge["isWrite"] = record.isWrite;
+    if (record.sourceFile !== undefined) edge["sourceFile"] = this.#path(record.sourceFile);
+    for (const [extra, extraValue] of Object.entries(record)) {
+      if (EDGE_RECORD_KEYS.includes(extra)) continue;
+      edge[extra] = extraValue;
+    }
+    this.#edges.push(edge as unknown as Edge);
+  }
+
+  #header(): HeaderRec {
+    if (this.#header_ === undefined) throw new JsonlError("record before the header", 0);
+    return this.#header_;
+  }
+
+  #id(ref: number): string {
     const id = this.#ids[ref];
     if (id === undefined) {
-      throw new JsonlError(`${what} ${ref} resolves to no entity (closure)`, this.#line);
+      throw new JsonlError(`reference ${ref} resolves to no entity (closure)`, 0);
     }
     return id;
   }
@@ -466,7 +674,7 @@ export class ModelDecoder {
   #path(ref: number): string {
     const path = this.#files[ref];
     if (path === undefined) {
-      throw new JsonlError(`file reference ${ref} resolves to no path`, this.#line);
+      throw new JsonlError(`file reference ${ref} resolves to no path`, 0);
     }
     return path;
   }
@@ -481,37 +689,15 @@ export class ModelDecoder {
    * point at an entity that sorts later.
    */
   finish(): Model {
-    if (this.#entities.length > 0) {
-      throw new JsonlError("finish() was already called on this decoder", 0);
-    }
-    const header = this.#header;
-    if (header === undefined) throw new JsonlError("empty file: no header record", 0);
-    if (this.#eof === undefined) {
-      throw new JsonlError(
-        "no eof record — the file is truncated, or the writer died mid-run",
-        0,
-      );
-    }
-    const counts = this.#eof.counts;
-    const actual = {
-      files: this.#files.length,
-      entities: this.#records.length,
-      edges: this.#edges.length,
-    };
-    for (const section of ["files", "entities", "edges"] as const) {
-      if (counts[section] !== actual[section]) {
-        throw new JsonlError(
-          `eof declares ${counts[section]} ${section} but the file carries ${actual[section]}`,
-          0,
-        );
-      }
-    }
+    if (this.#done) throw new JsonlError("finish() was already called on this decoder", 0);
+    this.#done = true;
+    const header = this.#header();
 
     for (const [index, record] of this.#records.entries()) {
-      const traits = record.tr.map((ref) => this.#fromDict(header.dict.traits, ref, "trait"));
+      const traits = record.tr.map((ref) => header.dict.traits[ref] as TraitName);
       const entity: Record<string, unknown> = {
         id: this.#ids[index]!,
-        kind: this.#fromDict(header.dict.kinds, record.k, "kind"),
+        kind: header.dict.kinds[record.k] as string,
         traits,
       };
       for (const key of ENTITY_KEY_ORDER) {
@@ -520,25 +706,14 @@ export class ModelDecoder {
         entity[key] = this.#decodeValue(key, value);
       }
       for (const [extra, value] of Object.entries(record)) {
-        if (["t", "i", "k", "tr", "m", "s", "d"].includes(extra)) continue;
+        if (ENTITY_RECORD_KEYS.includes(extra)) continue;
         if ((ENTITY_KEY_ORDER as readonly string[]).includes(extra)) continue;
         entity[extra] = value;
-      }
-      // The trait-key rule (METAMODEL §2) over WIRE shapes, so a malformed
-      // reference is named as such instead of surfacing later as a type error.
-      for (const trait of traits) {
-        const result = WIRE_TRAITS[trait].safeParse(record);
-        if (!result.success) {
-          throw new JsonlError(
-            `entity ${index} declares ${trait}: ${z.prettifyError(result.error)}`,
-            0,
-          );
-        }
       }
       this.#entities.push(entity as unknown as Entity);
     }
 
-    const model: Model = {
+    return {
       schemaVersion: header.schemaVersion,
       lang: header.lang,
       extractor: header.extractor,
@@ -546,7 +721,6 @@ export class ModelDecoder {
       entities: this.#entities,
       edges: this.#edges,
     };
-    return model;
   }
 
   /** The natural keys, by surrogate — what an importer needs and a reader checks. */
@@ -559,9 +733,7 @@ export class ModelDecoder {
     if (key in PATH_KEYS) return (value as number[]).map((ref) => this.#path(ref));
     const many = REF_KEYS.get(key);
     if (many === undefined) return value;
-    return many
-      ? (value as number[]).map((ref) => this.#id(ref, key))
-      : this.#id(value as number, key);
+    return many ? (value as number[]).map((ref) => this.#id(ref)) : this.#id(value as number);
   }
 }
 
@@ -570,6 +742,20 @@ export function decodeModel(lines: Iterable<string>): Model {
   const decoder = new ModelDecoder();
   for (const line of lines) decoder.push(line);
   return decoder.finish();
+}
+
+/**
+ * Lines in, VALIDATED RECORDS out — the wire without the model. Every rule of
+ * schemas/README.md that a single pass can decide is enforced as the records go
+ * by, and the trailer is checked when the input ends.
+ */
+export function* decodeRecords(lines: Iterable<string>): Generator<ModelRecord> {
+  const reader = new RecordReader();
+  for (const line of lines) {
+    const record = reader.accept(line);
+    if (record !== undefined) yield record;
+  }
+  reader.finish();
 }
 
 /** Model → one JSONL document. For tests and small models; large ones stream. */

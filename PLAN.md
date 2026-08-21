@@ -743,6 +743,30 @@ Steps landed:
       the storage engine.** A query needing canonical order sorts in TypeScript
       or `ORDER BY`s a column the importer wrote in canonical order.
 
+- [x] **Step 3 — expose core's validated wire-record stream.** `ModelDecoder`
+      did two jobs: validating the wire, and materializing a `Model`. They are
+      now `RecordReader` and `ModelBuilder`, and `readModelRecordsSync(path)`
+      yields validated records without building anything — the importer writes
+      rows as they go by and never holds the corpus. `readModelFileSync` is a
+      consumer of that same stream, which is what makes the two readers ONE
+      reader rather than two that drift.
+
+      The trait-key rule moved from materialization into the reader, so it is
+      now reported with its line number and holds for every consumer.
+
+      `record-stream.test.ts` states the property as equivalence: nine broken
+      files — not JSON, not a record, truncated, miscounted eof, dangling edge
+      surrogate, missing trait key, forward module reference, empty, headerless
+      — must be refused by BOTH routes with the identical message on the
+      identical line. Plus the case that motivates the whole step: a truncated
+      file is still a sequence of perfectly good JSON lines, so a hand-rolled
+      `JSON.parse`-per-line importer accepts it happily and stores a corpus
+      silently missing its tail.
+
+      Measured on fineract (241 101 entities / 782 046 edges), separate
+      processes: **stream 4.6 s at 140 MB peak; materialize 6.8 s at 555 MB.**
+      Validating costs a quarter of the memory of keeping.
+
 Remaining steps (from the synthesis, unchanged):
 
 
