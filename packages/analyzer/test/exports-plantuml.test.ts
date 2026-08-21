@@ -14,10 +14,12 @@ import { javaGraph } from "./fixture.js";
  * parser throws.
  */
 interface ParsedPlantUml {
-  /** alias -> decoded display label, in declaration order. */
+  /** alias -> decoded display label, in declaration order. Any element kind. */
   readonly classes: ReadonlyMap<string, string>;
-  /** alias -> raw class line (stereotypes, styles). */
+  /** alias -> raw declaration line (stereotypes, styles). */
   readonly classLines: ReadonlyMap<string, string>;
+  /** alias -> the PlantUML element declared: `class` or `package`. */
+  readonly elements: ReadonlyMap<string, string>;
   /** [fromAlias, arrow, toAlias, label] in declaration order. */
   readonly edges: readonly (readonly [string, string, string, string | undefined])[];
   readonly hasLegend: boolean;
@@ -37,6 +39,8 @@ function parsePlantUml(source: string): ParsedPlantUml {
 
   const classes = new Map<string, string>();
   const classLines = new Map<string, string>();
+  const elements = new Map<string, string>();
+  let openPackages = 0;
   const edges: (readonly [string, string, string, string | undefined])[] = [];
   let hasLegend = false;
   let inLegend = false;
@@ -78,14 +82,37 @@ function parsePlantUml(source: string): ParsedPlantUml {
     }
     if (line.startsWith("hide ") || line.startsWith("skinparam ")) continue;
 
-    const classMatch = /^class "((?:[^"\n])*)" as ([A-Za-z_][A-Za-z0-9_]*)(?: .*)?$/.exec(line);
-    if (classMatch !== null) {
-      const [, label, alias] = classMatch as unknown as [string, string, string];
+    // A package needs a body, so its declaration ends in `{` and a later line
+    // closes it; the DECLARATION itself is still one physical line, which is
+    // what makes the escaping contract checkable this way.
+    if (line === "}") {
+      if (openPackages === 0) throw new Error("unbalanced }");
+      openPackages -= 1;
+      continue;
+    }
+
+    const declaration =
+      /^(class|package) "((?:[^"\n])*)" as ([A-Za-z_][A-Za-z0-9_]*)(?: (?!\{).*?)?( \{)?$/.exec(line);
+    if (declaration !== null) {
+      const [, element, label, alias, open] = declaration as unknown as [
+        string,
+        string,
+        string,
+        string,
+        string | undefined,
+      ];
+      if (element === "package" && open === undefined) {
+        // Braceless, PlantUML renders the ALIAS as a visible element name.
+        throw new Error(`package declared without a body: ${line}`);
+      }
+      if (element === "class" && open !== undefined) throw new Error(`class with a body: ${line}`);
       if (classes.has(alias)) throw new Error(`alias declared twice: ${alias}`);
+      if (open !== undefined) openPackages += 1;
       // A raw quote inside the label would have truncated the match; a decoded
       // label containing one proves the escaping round-trips instead.
       classes.set(alias, decodeLabel(label));
       classLines.set(alias, line);
+      elements.set(alias, element);
       continue;
     }
 
@@ -107,7 +134,8 @@ function parsePlantUml(source: string): ParsedPlantUml {
   }
 
   if (!started || !ended) throw new Error("missing @startuml/@enduml pair");
-  return { classes, classLines, edges, hasLegend, title };
+  if (openPackages !== 0) throw new Error("unclosed package body");
+  return { classes, classLines, elements, edges, hasLegend, title };
 }
 
 describe("escapePlantUmlLabel", () => {
@@ -162,6 +190,36 @@ describe("toPlantUml on the Java fixture", () => {
       expect(parsed.hasLegend).toBe(true);
     });
   }
+
+  it("draws modules as PlantUML packages, and no class at all", () => {
+    // A module-level node carries TModule, not TType: rendering it as a class
+    // would assert a type the model never declared. The fold has already
+    // selected only the modules, so the diagram's boxes ARE the model's modules.
+    const folded = foldGraph(graph, { level: "module" });
+    const rendered = toPlantUml(folded);
+    const parsed = parsePlantUml(rendered);
+    expect(parsed.classes.size).toBe(folded.nodes.length);
+    expect([...parsed.elements.values()]).toEqual(
+      Array.from({ length: folded.nodes.length }, () => "package"),
+    );
+    for (const line of rendered.split("\n")) expect(line.startsWith('class "')).toBe(false);
+  });
+
+  it("keeps types as classes at type level", () => {
+    const folded = foldGraph(graph, { level: "type" });
+    const parsed = parsePlantUml(toPlantUml(folded));
+    expect(new Set(parsed.elements.values())).toEqual(new Set(["class"]));
+  });
+
+  it("does not repeat the element as a stereotype", () => {
+    // `package "x" <<package>>` states the element twice and the model once.
+    const parsed = parsePlantUml(toPlantUml(foldGraph(graph, { level: "module" })));
+    for (const line of parsed.classLines.values()) expect(line).not.toContain("<<package>>");
+    // The kind still reaches the reader where it adds something: at type level
+    // the fixture's nodes are classes, interfaces and enums.
+    const types = parsePlantUml(toPlantUml(foldGraph(graph, { level: "type" })));
+    expect([...types.classLines.values()].some((line) => line.includes("<<interface>>"))).toBe(true);
+  });
 
   it("declares one class per folded node and draws exactly the folded edges", () => {
     const folded = foldGraph(graph, { level: "module" });
@@ -243,6 +301,13 @@ describe("toPlantUml on the Java fixture", () => {
     expect([...named.classes.values()]).toContain("Basket");
     expect([...byId.classes.values()]).not.toContain("Basket");
     expect([...byId.classes.values()]).toContain("java:com.acme.order/Basket");
+  });
+
+  it("emits the class-diagram cosmetics only where there are classes", () => {
+    // `hide empty members` and `hide circle` speak about class compartments;
+    // a package diagram has none.
+    expect(toPlantUml(foldGraph(graph, { level: "type" }))).toContain("hide empty members");
+    expect(toPlantUml(foldGraph(graph, { level: "module" }))).not.toContain("hide ");
   });
 
   it("omits the legend on request", () => {

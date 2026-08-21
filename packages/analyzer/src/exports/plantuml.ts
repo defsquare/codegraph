@@ -1,11 +1,22 @@
 import type { EntityId } from "@codegraph/core";
-import type { FoldedEdge, FoldedGraph, FoldedNode } from "../fold.js";
+import type { FoldedEdge, FoldedGraph, FoldedNode, FoldLevel } from "../fold.js";
 import { sortIds } from "../order.js";
 
 /**
- * Stage 7: the PlantUML class-diagram rendering of a folded graph — one class
- * per folded node (a module at module level, a type at type level), one
- * dependency arrow per aggregated edge.
+ * Stage 7: the PlantUML rendering of a folded graph — one element per folded
+ * node, one dependency arrow per aggregated edge.
+ *
+ * THE ELEMENT FOLLOWS THE FOLD LEVEL, because the node's nature does:
+ *
+ *   module level   `package`   every node carries TModule; it IS a package, and
+ *                              drawing it as a class would assert a type that
+ *                              the model never declared
+ *   type level     `class`     every node carries TType
+ *
+ * So a module-level diagram contains no `class` statement at all: the boxes are
+ * PlantUML packages, and the only nodes are the model's modules — which is what
+ * the fold already selected (it walks TChildOf to the nearest TModule ancestor
+ * and never parses an id).
  *
  * A rendering is a claim about the model, so CLAUDE.md's honesty rule governs
  * it. Every visual channel maps to one documented fact and nothing else:
@@ -14,7 +25,8 @@ import { sortIds } from "../order.js";
  *   dashed arrow `..>`   at least one aggregated base edge is an inference
  *                        (`derived` / `dynamic-candidate` / `generated`)
  *   arrow label          FoldedEdge.count — the number of base edges aggregated
- *   <<kind>> stereotype  FoldedNode.kind, verbatim from the model
+ *   <<kind>> stereotype  FoldedNode.kind, verbatim from the model — omitted when
+ *                        it would only repeat the element (`package <<package>>`)
  *   <<stub>> stereotype  FoldedNode.isStub — external, not corpus-declared
  *   title                the fold level and the view — a diagram without its
  *                        view is not a fact, and comments do not render
@@ -94,15 +106,40 @@ function assignAliases(ids: readonly EntityId[]): Map<EntityId, string> {
   return aliases;
 }
 
-function classStatement(
+/** A stereotype that only repeats the element it decorates says nothing. */
+function keptStereotypes(
+  element: "class" | "package",
+  stereotypes: readonly string[],
+): readonly string[] {
+  return stereotypes.filter((stereotype) => stereotype !== element);
+}
+
+/** The PlantUML element a node of this fold level is. */
+function elementFor(level: FoldLevel): "class" | "package" {
+  return level === "module" ? "package" : "class";
+}
+
+/**
+ * One declaration, as physical lines. A `package` needs a body — PlantUML
+ * rejects `package "x" as p {}` on one line, and a braceless declaration
+ * renders the ALIAS as visible text — so an empty one costs a second line,
+ * while the declaration itself stays single-line, which is what makes the
+ * escaping contract checkable by a line-based parse.
+ */
+function elementStatement(
+  element: "class" | "package",
   label: string,
   alias: string,
   stereotypes: readonly string[],
   style?: string,
-): string {
-  const marks = stereotypes.map((stereotype) => ` <<${stereotype}>>`).join("");
+): readonly string[] {
+  // `package "x" <<package>>` states the element twice and the model once.
+  const marks = keptStereotypes(element, stereotypes)
+    .map((stereotype) => ` <<${stereotype}>>`)
+    .join("");
   const styled = style === undefined ? "" : ` ${style}`;
-  return `class "${escapePlantUmlLabel(label)}" as ${alias}${marks}${styled}`;
+  const declaration = `${element} "${escapePlantUmlLabel(label)}" as ${alias}${marks}${styled}`;
+  return element === "package" ? [`${declaration} {`, "}"] : [declaration];
 }
 
 export function toPlantUml(folded: FoldedGraph, options?: PlantUmlOptions): string {
@@ -110,6 +147,7 @@ export function toPlantUml(folded: FoldedGraph, options?: PlantUmlOptions): stri
   const withHeader = options?.header ?? true;
   const withLegend = options?.legend ?? true;
 
+  const element = elementFor(folded.level);
   const lines: string[] = [];
   lines.push("@startuml");
 
@@ -128,10 +166,13 @@ export function toPlantUml(folded: FoldedGraph, options?: PlantUmlOptions): stri
   // The level and the view must survive into the RENDERED image, where the
   // comments above do not: an analysis picture without its view is not a fact.
   lines.push(`title codegraph — ${folded.level}-level dependencies, view ${escapePlantUmlLabel(folded.view.name)}`);
-  // Cosmetic-only directives: nodes are modules/types, not OO classes, so the
-  // empty attribute compartments and the circled-C icon carry no meaning.
-  lines.push("hide empty members");
-  lines.push("hide circle");
+  if (element === "class") {
+    // Cosmetic-only directives, and class-only: a folded type is not an OO
+    // class, so the empty attribute compartments and the circled-C icon carry
+    // no meaning. Packages have neither, so they need neither.
+    lines.push("hide empty members");
+    lines.push("hide circle");
+  }
 
   // Aliases for declared nodes first (sorted by the folded graph), then for
   // any edge endpoint the graph never declared — which PlantUML would
@@ -153,7 +194,8 @@ export function toPlantUml(folded: FoldedGraph, options?: PlantUmlOptions): stri
   for (const node of folded.nodes) {
     const stereotypes = node.isStub ? [node.kind, "stub"] : [node.kind];
     lines.push(
-      classStatement(
+      ...elementStatement(
+        element,
         labelFor(node, labels),
         aliasOf(node.id),
         stereotypes,
@@ -162,7 +204,7 @@ export function toPlantUml(folded: FoldedGraph, options?: PlantUmlOptions): stri
     );
   }
   for (const id of sortedOrphans) {
-    lines.push(classStatement(id, aliasOf(id), ["unknown"], "#line.dotted"));
+    lines.push(...elementStatement(element, id, aliasOf(id), ["unknown"], "#line.dotted"));
   }
 
   for (const edge of folded.edges) {
@@ -171,14 +213,22 @@ export function toPlantUml(folded: FoldedGraph, options?: PlantUmlOptions): stri
   }
 
   if (withLegend) {
+    // A legend that explains a marker the diagram never drew is a claim about
+    // nothing — at module level the kind stereotype is usually redundant with
+    // the element and therefore absent.
+    const kindsShown = folded.nodes.some((node) => keptStereotypes(element, [node.kind]).length > 0);
+    const stubsShown = folded.nodes.some((node) => node.isStub);
     lines.push(
       "legend",
       "  how to read this diagram",
       "  ==",
+      element === "package"
+        ? "  a box | one module of the model; nothing below module level is drawn"
+        : "  a box | one type of the model",
       "  A --> B : n | n base edges, all provenance declared",
       "  A ..> B : n | at least one base edge is an inference (derived / dynamic-candidate / generated)",
-      "  <<stub>> | external entity, not corpus-declared",
-      "  <<kind>> | the folded node's entity kind, from the model",
+      ...(stubsShown ? ["  <<stub>> | external entity, not corpus-declared"] : []),
+      ...(kindsShown ? ["  <<kind>> | the folded node's entity kind, from the model"] : []),
       "end legend",
     );
   }

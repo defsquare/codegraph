@@ -353,7 +353,7 @@ describe("export: JSON", () => {
 });
 
 describe("export: PlantUML", () => {
-  it("is a single @startuml/@enduml block with one class per module and one arrow per edge", () => {
+  it("is a single @startuml/@enduml block with one package per module and one arrow per edge", () => {
     const { io, code } = exportTo({ format: "plantuml", level: "module" });
     expect(code).toBe(EXIT.OK);
     const artifact = io.stdout();
@@ -364,7 +364,10 @@ describe("export: PlantUML", () => {
     const lines = artifact.split("\n");
     expect(lines.filter((line) => line === "@startuml")).toHaveLength(1);
     expect(lines.filter((line) => line === "@enduml")).toHaveLength(1);
-    expect(lines.filter((line) => line.startsWith('class "'))).toHaveLength(MODULE_NODES);
+    // A module is not a type: at module level the diagram is packages, and a
+    // `class` statement would assert a type the model never declared.
+    expect(lines.filter((line) => line.startsWith('package "'))).toHaveLength(MODULE_NODES);
+    expect(lines.filter((line) => line.startsWith('class "'))).toHaveLength(0);
     // Anchored at column 0: the legend's example arrows are indented.
     expect(lines.filter((line) => /^\w+ (-->|\.\.>) /.test(line))).toHaveLength(MODULE_EDGES);
   });
@@ -373,11 +376,13 @@ describe("export: PlantUML", () => {
     const artifact = exportTo({ format: "plantuml", level: "type" }).io.stdout();
     const lines = artifact.split("\n");
     expect(lines.filter((line) => line.startsWith('class "'))).toHaveLength(TYPE_NODES);
+    expect(lines.filter((line) => line.startsWith('package "'))).toHaveLength(0);
     // A raw newline in a label would orphan a fragment that matches no grammar.
     for (const line of lines) {
-      expect(/^(@startuml|@enduml|'|title |hide |class "|legend$|end legend$| |[A-Za-z_])/.test(line) || line === "").toBe(
-        true,
-      );
+      expect(
+        /^(@startuml|@enduml|'|title |hide |class "|package "|\}$|legend$|end legend$| |[A-Za-z_])/.test(line) ||
+          line === "",
+      ).toBe(true);
     }
     expect(lines.filter((line) => /^\w+ (-->|\.\.>) /.test(line))).toHaveLength(TYPE_EDGES);
   });
