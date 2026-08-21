@@ -9,7 +9,7 @@ describe("legendModel", () => {
     expect(entries[0]).toEqual({
       swatch: null,
       label: "view full",
-      detail: "2 districts, 3 buildings, 2 arrows",
+      detail: "3 districts, 4 buildings, 2 arrows",
     });
   });
 

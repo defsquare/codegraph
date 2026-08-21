@@ -71,8 +71,11 @@ its own:
 |---|---|---|
 | height, footprint | the artifact's `bindings` (metric, scale, range) | legend, from `bindings` |
 | building color | corpus-declared type vs `isStub` | `theme.ts`, legend |
-| arrow color | `inferred` flag — green declared fact, red inference | `theme.ts`, legend |
+| type-arrow color | `inferred` flag — green declared fact, red inference | `theme.ts`, legend |
 | arrow opacity | aggregated edge `count`, log-scaled (`log1p`) to [0, 1] | `theme.ts` |
+| plate elevation + tint | district nesting depth (`District.parent` chain) — a child plate stacks one thickness higher and reads slightly lighter | `theme.ts` |
+| district-arrow hue | direction relative to the SELECTED district — amber fan-in (who depends on it), blue fan-out (what it depends on) | `theme.ts`, legend |
+| district-arrow saturation | provenance: an inferred module arrow desaturates toward gray but keeps its direction hue | `theme.ts`, legend |
 
 Honesty rules inherited and kept mechanical:
 
@@ -104,6 +107,31 @@ The arc itself: a quadratic Bezier whose apex clears the taller roof by
 `max(2, 0.3 × roof distance)` — short hops stay low, long dependencies fly
 over the skyline. The control height is solved from the apex
 (`apex = (p0 + 2c + p2) / 4`), so the guarantee holds between unequal roofs.
+
+## CR-4b The landscape, and what a click means
+
+The same page is both the city and the module LANDSCAPE — the `buildings` and
+`type dependencies` toggles strip the view down to nested district plates, and
+`?landscape=1` starts there. Nested modules are real geometry: a child
+district's plate stands ON its parent's (the layout packed it inside), so the
+module tree reads in outline and in elevation.
+
+Selection is one thing at a time, on purpose:
+
+- **Hover a building** → its raw metrics, and its type arrows brighten while
+  the rest fade (click locks it).
+- **Click a district plate** → the plate brightens, a card shows its buildings,
+  nested districts and fan-in/fan-out totals, and its module-level arcs draw
+  from the artifact's `districtArrows` — amber into it, blue out of it, each
+  direction toggleable. Clicking the same plate (or empty ground) clears it.
+- district arcs attach at plate-top centers and are lifted over the skyline
+  (tallest building + headroom), so a module dependency never slices through
+  the towers standing between two plates.
+- An orbit drag that happens to end on a plate is NOT a click — selection only
+  changes when the pointer pressed and released in place (≤ 5 px).
+
+Fan-in/fan-out counts in the card are sums over `districtArrows` — city data,
+not re-derived graph facts.
 
 ## CR-5 Loading, in order of ceremony
 

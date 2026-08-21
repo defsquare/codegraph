@@ -2,7 +2,8 @@ import * as THREE from "three";
 import type { CityLayout } from "@codegraph/city";
 import { arrowArcs, type ArrowArc } from "../scene/arrows.js";
 import { buildingBoxes, type BuildingBox } from "../scene/buildings.js";
-import { districtPlates, groundPlate } from "../scene/districts.js";
+import { districtArcs, type DistrictArc } from "../scene/districtArrows.js";
+import { districtPlates, groundPlate, type Plate } from "../scene/districts.js";
 import {
   ARC_SEGMENTS,
   ARROW_ALPHA_DIMMED,
@@ -10,26 +11,39 @@ import {
   ARROW_ALPHA_MAX,
   ARROW_ALPHA_MIN,
   COLORS,
+  INFERRED_DESATURATION,
+  PLATE_LIGHTEN_PER_LEVEL,
+  PLATE_SELECT_LIGHTEN,
 } from "../theme.js";
+
+/** Which of a selected district's dependency directions are drawn. */
+export interface FanToggles {
+  readonly fanIn: boolean;
+  readonly fanOut: boolean;
+}
 
 /**
  * The Three.js upload of the scene model. All geometry is built ONCE here;
  * the render loop touches nothing but the camera. Draw calls stay constant in
- * city size: one instanced mesh for every building, one for every district
- * plate, one mesh for the ground, one LineSegments for every arrow.
+ * city size: one instanced mesh for buildings, one for district plates, one
+ * ground mesh, one LineSegments for type arrows and one for district arrows.
+ * Every interactive state change is an in-place attribute rewrite.
  */
 export interface CityScene {
   readonly root: THREE.Group;
   readonly buildingsMesh: THREE.InstancedMesh;
-  /** Instance index -> building, same order as the artifact. */
+  readonly platesMesh: THREE.InstancedMesh;
+  /** Instance index -> building / plate, same order as the artifact. */
   readonly boxes: readonly BuildingBox[];
+  readonly plates: readonly Plate[];
   readonly arcs: readonly ArrowArc[];
-  /**
-   * Focus a building by instance index (null = none): its arrows brighten,
-   * every other arrow fades. Rewrites the alpha channel in place — the render
-   * loop allocates nothing.
-   */
+  readonly districtArcs: readonly DistrictArc[];
+  /** Focus a building by instance index (null = none): its type arrows brighten. */
   setFocus(index: number | null): void;
+  /** Select a district: its plate brightens and its fan arcs show, per toggles. */
+  setDistrictFocus(districtId: string | null, toggles: FanToggles): void;
+  setBuildingsVisible(visible: boolean): void;
+  setTypeArrowsVisible(visible: boolean): void;
   dispose(): void;
 }
 
@@ -40,10 +54,13 @@ export function createCityScene(city: CityLayout): CityScene {
   const disposables: { dispose(): void }[] = [];
   const boxes = buildingBoxes(city);
   const arcs = arrowArcs(city, boxes);
+  const plates = districtPlates(city);
+  const dArcs = districtArcs(city, plates, boxes);
 
   const matrix = new THREE.Matrix4();
+  const color = new THREE.Color();
 
-  // Ground + district plates.
+  // Ground.
   const ground = groundPlate(city);
   const slabGeometry = new THREE.BoxGeometry(1, 1, 1);
   const groundMaterial = new THREE.MeshLambertMaterial({ color: COLORS.ground });
@@ -53,12 +70,17 @@ export function createCityScene(city: CityLayout): CityScene {
   root.add(groundMesh);
   disposables.push(slabGeometry, groundMaterial);
 
-  const plates = districtPlates(city);
-  const plateMaterial = new THREE.MeshLambertMaterial({ color: COLORS.districtPlate });
+  // District plates: per-instance color encodes nesting depth (lighter = deeper).
+  const plateMaterial = new THREE.MeshLambertMaterial();
   const platesMesh = new THREE.InstancedMesh(slabGeometry, plateMaterial, plates.length);
+  const plateBaseColor = (plate: Plate): THREE.Color =>
+    color
+      .setHex(COLORS.districtPlate)
+      .lerp(new THREE.Color(0xffffff), Math.min(plate.level * PLATE_LIGHTEN_PER_LEVEL, 0.4));
   plates.forEach((plate, i) => {
     matrix.makeScale(...plate.size).setPosition(...plate.center);
     platesMesh.setMatrixAt(i, matrix);
+    platesMesh.setColorAt(i, plateBaseColor(plate));
   });
   root.add(platesMesh);
   disposables.push(plateMaterial, platesMesh);
@@ -67,7 +89,6 @@ export function createCityScene(city: CityLayout): CityScene {
   const buildingGeometry = new THREE.BoxGeometry(1, 1, 1);
   const buildingMaterial = new THREE.MeshLambertMaterial();
   const buildingsMesh = new THREE.InstancedMesh(buildingGeometry, buildingMaterial, boxes.length);
-  const color = new THREE.Color();
   boxes.forEach((box, i) => {
     matrix.makeScale(...box.size).setPosition(...box.center);
     buildingsMesh.setMatrixAt(i, matrix);
@@ -76,15 +97,120 @@ export function createCityScene(city: CityLayout): CityScene {
   root.add(buildingsMesh);
   disposables.push(buildingGeometry, buildingMaterial, buildingsMesh);
 
-  // Arrows: a single LineSegments with RGBA vertex colors. RGB encodes
-  // provenance (declared/inferred), alpha encodes weight and focus state.
-  const positions = new Float32Array(arcs.length * VERTICES_PER_ARC * 3);
-  const colors = new Float32Array(arcs.length * VERTICES_PER_ARC * 4);
-  const declared = new THREE.Color(COLORS.arrowDeclared);
-  const inferred = new THREE.Color(COLORS.arrowInferred);
-  arcs.forEach((arc, arcIndex) => {
-    const tint = arc.inferred ? inferred : declared;
-    const alpha = restingAlpha(arc);
+  // Type arrows: one LineSegments, RGBA vertex colors. RGB = provenance
+  // (declared/inferred), alpha = weight and focus state.
+  const typeArrows = buildArcLines(arcs.map((arc) => ({ arc, tint: typeTint(arc.inferred) })));
+  typeArrows.lines.raycast = () => undefined;
+  root.add(typeArrows.lines);
+  disposables.push(typeArrows.geometry, typeArrows.material);
+  arcs.forEach((arc, i) => typeArrows.setAlpha(i, restingAlpha(arc.weight)));
+  typeArrows.commit();
+
+  // District arrows: same construction, but RGB is rewritten per selection
+  // (fan-in vs fan-out is a property of the SELECTED district, not of the
+  // arrow), and everything rests hidden until a district is selected.
+  const districtArrows = buildArcLines(
+    dArcs.map((arc) => ({ arc, tint: new THREE.Color(COLORS.arrowFanOut) })),
+  );
+  districtArrows.lines.raycast = () => undefined;
+  root.add(districtArrows.lines);
+  disposables.push(districtArrows.geometry, districtArrows.material);
+  districtArrows.commit();
+
+  function setFocus(index: number | null): void {
+    const focusId = index === null ? null : boxes[index]?.id ?? null;
+    arcs.forEach((arc, i) => {
+      typeArrows.setAlpha(
+        i,
+        focusId === null
+          ? restingAlpha(arc.weight)
+          : arc.from === focusId || arc.to === focusId
+            ? ARROW_ALPHA_FOCUS
+            : ARROW_ALPHA_DIMMED,
+      );
+    });
+    typeArrows.commit();
+  }
+
+  let selectedPlate: number | null = null;
+  function setDistrictFocus(districtId: string | null, toggles: FanToggles): void {
+    // Plate highlight, in place.
+    if (selectedPlate !== null) {
+      const plate = plates[selectedPlate];
+      if (plate !== undefined) platesMesh.setColorAt(selectedPlate, plateBaseColor(plate));
+    }
+    selectedPlate = districtId === null ? null : plates.findIndex((p) => p.id === districtId);
+    if (selectedPlate === -1) selectedPlate = null;
+    if (selectedPlate !== null) {
+      const plate = plates[selectedPlate];
+      if (plate !== undefined) {
+        platesMesh.setColorAt(
+          selectedPlate,
+          plateBaseColor(plate).lerp(new THREE.Color(0xffffff), PLATE_SELECT_LIGHTEN),
+        );
+      }
+    }
+    if (platesMesh.instanceColor) platesMesh.instanceColor.needsUpdate = true;
+
+    // Fan arcs: hue = direction relative to the selection, alpha = weight;
+    // inferred arcs desaturate but keep their direction hue.
+    const fanIn = new THREE.Color(COLORS.arrowFanIn);
+    const fanOut = new THREE.Color(COLORS.arrowFanOut);
+    const gray = new THREE.Color(0x9aa1ad);
+    dArcs.forEach((arc, i) => {
+      const isOut = districtId !== null && arc.from === districtId;
+      const isIn = districtId !== null && arc.to === districtId;
+      const shown = (isOut && toggles.fanOut) || (isIn && toggles.fanIn);
+      if (!shown) {
+        districtArrows.setAlpha(i, 0);
+        return;
+      }
+      color.copy(isOut ? fanOut : fanIn);
+      if (arc.inferred) color.lerp(gray, INFERRED_DESATURATION);
+      districtArrows.setTint(i, color);
+      districtArrows.setAlpha(i, ARROW_ALPHA_MIN + arc.weight * (ARROW_ALPHA_FOCUS - ARROW_ALPHA_MIN));
+    });
+    districtArrows.commit();
+  }
+
+  return {
+    root,
+    buildingsMesh,
+    platesMesh,
+    boxes,
+    plates,
+    arcs,
+    districtArcs: dArcs,
+    setFocus,
+    setDistrictFocus,
+    setBuildingsVisible: (visible) => {
+      buildingsMesh.visible = visible;
+    },
+    setTypeArrowsVisible: (visible) => {
+      typeArrows.lines.visible = visible;
+    },
+    dispose: () => disposables.forEach((d) => d.dispose()),
+  };
+}
+
+function typeTint(inferred: boolean): THREE.Color {
+  return new THREE.Color(inferred ? COLORS.arrowInferred : COLORS.arrowDeclared);
+}
+
+function restingAlpha(weight: number): number {
+  return ARROW_ALPHA_MIN + weight * (ARROW_ALPHA_MAX - ARROW_ALPHA_MIN);
+}
+
+interface ArcSource {
+  readonly arc: { readonly points: readonly (readonly [number, number, number])[] };
+  readonly tint: THREE.Color;
+}
+
+/** Shared LineSegments builder: one geometry, RGBA vertex colors, per-arc ranges. */
+function buildArcLines(sources: readonly ArcSource[]) {
+  const positions = new Float32Array(sources.length * VERTICES_PER_ARC * 3);
+  const colors = new Float32Array(sources.length * VERTICES_PER_ARC * 4);
+  sources.forEach(({ arc, tint }, arcIndex) => {
     for (let segment = 0; segment < ARC_SEGMENTS; segment += 1) {
       for (let end = 0; end < 2; end += 1) {
         const vertex = arcIndex * VERTICES_PER_ARC + segment * 2 + end;
@@ -93,51 +219,40 @@ export function createCityScene(city: CityLayout): CityScene {
         colors[vertex * 4] = tint.r;
         colors[vertex * 4 + 1] = tint.g;
         colors[vertex * 4 + 2] = tint.b;
-        colors[vertex * 4 + 3] = alpha;
+        colors[vertex * 4 + 3] = 0;
       }
     }
   });
-  const arrowGeometry = new THREE.BufferGeometry();
-  arrowGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   const colorAttribute = new THREE.BufferAttribute(colors, 4);
-  arrowGeometry.setAttribute("color", colorAttribute);
-  const arrowMaterial = new THREE.LineBasicMaterial({
+  geometry.setAttribute("color", colorAttribute);
+  const material = new THREE.LineBasicMaterial({
     vertexColors: true,
     transparent: true,
     depthWrite: false,
   });
-  const arrowLines = new THREE.LineSegments(arrowGeometry, arrowMaterial);
-  arrowLines.raycast = () => undefined; // arrows are never pick targets
-  root.add(arrowLines);
-  disposables.push(arrowGeometry, arrowMaterial);
-
-  function setFocus(index: number | null): void {
-    const focusId = index === null ? null : boxes[index]?.id ?? null;
-    arcs.forEach((arc, arcIndex) => {
-      const alpha =
-        focusId === null
-          ? restingAlpha(arc)
-          : arc.from === focusId || arc.to === focusId
-            ? ARROW_ALPHA_FOCUS
-            : ARROW_ALPHA_DIMMED;
+  const lines = new THREE.LineSegments(geometry, material);
+  return {
+    lines,
+    geometry,
+    material,
+    setAlpha(arcIndex: number, alpha: number): void {
       const base = arcIndex * VERTICES_PER_ARC;
       for (let vertex = 0; vertex < VERTICES_PER_ARC; vertex += 1) {
         colors[(base + vertex) * 4 + 3] = alpha;
       }
-    });
-    colorAttribute.needsUpdate = true;
-  }
-
-  return {
-    root,
-    buildingsMesh,
-    boxes,
-    arcs,
-    setFocus,
-    dispose: () => disposables.forEach((d) => d.dispose()),
+    },
+    setTint(arcIndex: number, tint: THREE.Color): void {
+      const base = arcIndex * VERTICES_PER_ARC;
+      for (let vertex = 0; vertex < VERTICES_PER_ARC; vertex += 1) {
+        colors[(base + vertex) * 4] = tint.r;
+        colors[(base + vertex) * 4 + 1] = tint.g;
+        colors[(base + vertex) * 4 + 2] = tint.b;
+      }
+    },
+    commit(): void {
+      colorAttribute.needsUpdate = true;
+    },
   };
-}
-
-function restingAlpha(arc: ArrowArc): number {
-  return ARROW_ALPHA_MIN + arc.weight * (ARROW_ALPHA_MAX - ARROW_ALPHA_MIN);
 }

@@ -54,6 +54,11 @@ export function parseCityLayout(text: string): CityLayout {
     }
   }
 
+  // An artifact from before module-level arrows simply has none to draw.
+  if (!Array.isArray(city["districtArrows"])) {
+    city["districtArrows"] = [];
+  }
+
   // Placement is opt-in on the CLI; a city without it has sizes but no
   // coordinates, and inventing them here would be a second, undeclared layout.
   const laidOut =

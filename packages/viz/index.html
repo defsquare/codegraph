@@ -11,6 +11,12 @@
     <canvas id="city"></canvas>
     <aside id="legend" class="panel" hidden></aside>
     <aside id="tooltip" class="panel" hidden></aside>
+    <aside id="controls" class="panel" hidden>
+      <label><input type="checkbox" id="toggle-buildings" checked /> buildings</label>
+      <label><input type="checkbox" id="toggle-type-arrows" checked /> type dependencies</label>
+      <label><input type="checkbox" id="toggle-fan-in" checked /> fan-in</label>
+      <label><input type="checkbox" id="toggle-fan-out" checked /> fan-out</label>
+    </aside>
     <div id="loader">
       <h1>codegraph — code city</h1>
       <p id="loader-message">

@@ -50,19 +50,23 @@ export function arrowArcs(city: CityLayout, boxes: readonly BuildingBox[]): read
 }
 
 /**
- * Quadratic Bezier whose APEX (t = 0.5) clears the taller roof by a lift that
- * grows with roof-to-roof distance: short arrows hop, long arrows fly over the
+ * Quadratic Bezier whose APEX (t = 0.5) clears the taller endpoint by a lift
+ * that grows with distance: short arrows hop, long arrows fly over the
  * skyline. The control height is solved from the apex — apex = (p0 + 2c + p2)/4
- * — so the guarantee holds for unequal roof heights too.
+ * — so the guarantee holds for unequal endpoint heights too. `clearance`
+ * raises the minimum lift; district arcs pass the skyline height so they never
+ * cut through a building standing between two plates.
  */
-function sampleArc(
+export function sampleArc(
   from: readonly [number, number, number],
   to: readonly [number, number, number],
+  clearance = 0,
 ): readonly (readonly [number, number, number])[] {
   const [x0, y0, z0] = from;
   const [x1, y1, z1] = to;
   const horizontal = Math.hypot(x1 - x0, z1 - z0);
-  const apex = Math.max(y0, y1) + Math.max(ARC_MIN_LIFT, ARC_LIFT_RATIO * horizontal);
+  const apex =
+    Math.max(y0, y1) + Math.max(ARC_MIN_LIFT, ARC_LIFT_RATIO * horizontal, clearance);
   const cx = (x0 + x1) / 2;
   const cy = (4 * apex - y0 - y1) / 2;
   const cz = (z0 + z1) / 2;
