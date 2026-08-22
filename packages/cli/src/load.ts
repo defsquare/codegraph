@@ -127,6 +127,6 @@ export function loadExitCode(loaded: LoadedModels): ExitCode {
  * Conflicting duplicates are excluded: those are a real conformance finding and
  * are counted as one there.
  */
-export function benignDuplicateIds(loaded: LoadedModels): number {
+export function benignDuplicateIds(loaded: { diagnostics: LoadDiagnostics }): number {
   return loaded.diagnostics.duplicateIds.filter((duplicate) => !duplicate.conflicting).length;
 }

@@ -174,6 +174,7 @@ describe("analyze", () => {
         level: "type",
         internalOnly: true,
         declaredOnly: true,
+        noCache: false,
         top: 5,
         json: true,
       },
@@ -190,6 +191,7 @@ describe("analyze", () => {
         level: DEFAULT_LEVEL,
         internalOnly: false,
         declaredOnly: false,
+        noCache: false,
         top: undefined,
         json: false,
       },
@@ -244,6 +246,7 @@ describe("export", () => {
         level: DEFAULT_LEVEL,
         internalOnly: true,
         declaredOnly: false,
+        noCache: false,
         out: "graph.dot",
       },
     });

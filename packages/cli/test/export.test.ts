@@ -32,6 +32,7 @@ function options(overrides: Partial<ExportOptions> = {}): ExportOptions {
     internalOnly: false,
     declaredOnly: false,
     out: undefined,
+    noCache: true,
     ...overrides,
   };
 }

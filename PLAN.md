@@ -1056,10 +1056,57 @@ interchange.
       that fails on a busy CI box and passes on a quiet one teaches nobody
       anything, so its budget is now stated.
 
-- [ ] `cli`: `analyze`/`export` given a `.jsonl` auto-build a sibling `.db`
-      cache (`--no-cache` escape hatch); `dbVersion` mismatch in `meta` ⇒
-      re-import from JSONL — migration is regeneration, because the DB is a
-      cache.
+- [x] **Step 10 — the automatic cache.** `analyze` and `export` given a
+      `.jsonl` build the sibling `.db` if they must, reuse it if they can, and
+      answer from it. `--no-cache` reads the model directly.
+
+      Measured on fineract, `analyze --report deps`:
+
+      | | wall | peak RSS |
+      |---|---|---|
+      | first run (builds the store) | 14.9 s | 268 MB |
+      | **second run (reuses it)** | **1.9 s** | **163 MB** |
+      | `--no-cache` | 11.8 s | 1 094 MB |
+
+      **6.3× faster and 6.7× less memory**, and the 19 090-line report is
+      byte-identical to the one the model produces.
+
+      `AnalysisSource` (cli/src/source.ts) is the seam: neither command
+      branches on where the answer came from, so there is no second formatting
+      path to keep in step. The cache is used only when it can be EXACT — one
+      model (a store holds one; a union would mean renumbering), no
+      `--no-cache`, a writable store, and a view SQL can translate. Every
+      other case falls back to what was there before, so the worst case is the
+      old speed, never a different number. `importGraphFromStore` was added so
+      `deps --level module` — the most-used report and the one cross-language
+      layer — is not the single command that has to hydrate.
+
+      Three things this found, two of them real bugs:
+
+      1. **`open: false` does not mean "do not create".** In Node's SQLite it
+         means "construct the handle but defer opening", so every freshness
+         query threw, every store read as unreadable, and **the cache rebuilt
+         itself on every run while looking like it worked.** Only the
+         determinism suite noticed — via the elapsed time it printed.
+      2. **A model the reader refuses was crashing.** `openCache` rethrew
+         `JsonlError`, which reached `main` as "an internal error — a bug in
+         codegraph", blaming the tool for the user's file. A refused model is
+         now simply a reason to have no cache; the reading path reports it as
+         a finding, with the reader's own message and exit 3.
+      3. **stderr is a diffed stream.** `e2e-determinism` says so and explains
+         why — an elapsed-time figure turns every CI log into a false diff —
+         so the cache note is one line, `cache: <path>`, identical whether the
+         run built the store or reused it. Whether *this* invocation paid for
+         the import is a performance detail, and `codegraph import` is the
+         command that reports it.
+
+      Staleness is size and mtime, not a content hash: hashing 133 MB costs
+      more than the parse the cache exists to avoid, which would make the check
+      more expensive than the miss. The trade is stated rather than hidden, and
+      both halves are tested — a changed model AND a model rewritten to the
+      same size with a later timestamp. `*.db` is gitignored: the store is
+      derived and disposable, and a binary beside the `.jsonl` in git would be
+      a second, undiffable answer to the same question.
 - **DoD**: a second `analyze` run on fineract opens the cache without
   re-parsing; every report byte-identical to its M6 (JSONL-only) output;
   ad-hoc SQL cookbook (fan-in, facts-only view, reachability) documented.

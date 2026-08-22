@@ -35,6 +35,7 @@ function analyze(overrides: Partial<AnalyzeOptions> = {}): Invocation {
     declaredOnly: false,
     json: false,
     top: undefined,
+    noCache: true,
     ...overrides,
   };
   const code = analyzeCommand(options, io);

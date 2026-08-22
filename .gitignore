@@ -17,3 +17,9 @@ extractors/java/target/
 
 # Agent worktrees and local session state
 .claude/
+
+# The SQLite analysis store: a DERIVED, DISPOSABLE cache of a model.jsonl,
+# built beside it on demand and regenerable at any time. Never committed —
+# the .jsonl is the contract, and a binary next to it in git would be a
+# second, undiffable answer to the same question.
+*.db

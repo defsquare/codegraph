@@ -126,6 +126,18 @@ const VIEW_OPTIONS: readonly OptionSpec[] = [
   },
 ];
 
+/**
+ * The store is a CACHE: derived, disposable, and rebuilt whenever the model it
+ * describes has changed. `--no-cache` is the escape hatch for anyone who would
+ * rather not rely on size-and-mtime staleness, or who cannot write beside the
+ * model — though the latter degrades on its own.
+ */
+const NO_CACHE_OPTION: OptionSpec = {
+  name: "no-cache",
+  type: "boolean",
+  describe: "Read the model.jsonl directly; never build or reuse a sibling model.db.",
+};
+
 const LEVEL_OPTION: OptionSpec = {
   name: "level",
   type: "string",
@@ -155,6 +167,7 @@ export const ANALYZE_SPEC: CommandSpec = {
     },
     LEVEL_OPTION,
     ...VIEW_OPTIONS,
+    NO_CACHE_OPTION,
     {
       name: "top",
       type: "string",
@@ -180,6 +193,7 @@ export const EXPORT_SPEC: CommandSpec = {
     },
     LEVEL_OPTION,
     ...VIEW_OPTIONS,
+    NO_CACHE_OPTION,
     {
       name: "out",
       type: "string",
@@ -344,11 +358,16 @@ export interface ViewOptions {
   readonly declaredOnly: boolean;
 }
 
+/** Shared by every command that can answer from a store instead of a model. */
+export interface CacheOptions {
+  readonly noCache: boolean;
+}
+
 export interface ValidateOptions extends ModelInputOptions {
   readonly json: boolean;
 }
 
-export interface AnalyzeOptions extends ModelInputOptions, ViewOptions {
+export interface AnalyzeOptions extends ModelInputOptions, ViewOptions, CacheOptions {
   readonly report: ReportName;
   readonly level: FoldLevel;
   readonly json: boolean;
@@ -356,7 +375,7 @@ export interface AnalyzeOptions extends ModelInputOptions, ViewOptions {
   readonly top: number | undefined;
 }
 
-export interface ExportOptions extends ModelInputOptions, ViewOptions {
+export interface ExportOptions extends ModelInputOptions, ViewOptions, CacheOptions {
   readonly format: FormatName;
   readonly level: FoldLevel;
   /** `--out FILE`; undefined means stdout. */
@@ -725,6 +744,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           report: (stringOf(values, "report") ?? DEFAULT_REPORT) as ReportName,
           level: levelOf(values),
           ...viewOf(values),
+          noCache: flagOf(values, "no-cache"),
           json: flagOf(values, "json"),
           top: integerOf(values, "top"),
         },
@@ -751,6 +771,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           format: stringOf(values, "format") as FormatName,
           level: levelOf(values),
           ...viewOf(values),
+          noCache: flagOf(values, "no-cache"),
           out: stringOf(values, "out"),
         },
       };

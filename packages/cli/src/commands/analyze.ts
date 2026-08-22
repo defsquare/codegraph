@@ -1,17 +1,13 @@
 import {
-  buildGraph,
   comparePairs,
   compareIds,
   coupling,
   couplingToJson,
   cycles,
   cyclesToJson,
-  foldGraph,
   foldedGraphToJson,
-  importGraph,
   sortIds,
   toJsonString,
-  typeDependencyGraph,
   type CouplingRow,
   type CouplingTable,
   type CycleEdge,
@@ -29,7 +25,8 @@ import {
 import type { AnalyzeOptions, ReportName } from "../args.js";
 import { EXIT, type ExitCode } from "../exit.js";
 import { errLine, errLines, outLines, type IoSink } from "../io.js";
-import { benignDuplicateIds, loadExitCode, loadModelFiles, type LoadedModels } from "../load.js";
+import { benignDuplicateIds } from "../load.js";
+import { openAnalysis, type AnalysisSource } from "../source.js";
 import { resolveView } from "../view.js";
 
 /**
@@ -53,12 +50,25 @@ import { resolveView } from "../view.js";
  *    import edges are derived, and they must not read as declared imports.
  */
 export function analyzeCommand(options: AnalyzeOptions, io: IoSink): ExitCode {
-  const loaded = loadModelFiles(options.models);
-  reportLoadHealth(loaded, io);
+  const source = openAnalysis(options.models, options, io);
+  try {
+    return analyzeSource(source, options, io);
+  } finally {
+    source.close();
+  }
+}
 
-  const graph = buildGraph(loaded.union);
+/**
+ * Everything below the source. It reads `AnalysisSource` and never asks where
+ * the answer came from: a store and a `.jsonl` produce the same `FoldedGraph`
+ * (`store-fold.test.ts` pins that as an equality), so one formatting path
+ * serves both and byte-identity is arithmetic rather than vigilance.
+ */
+function analyzeSource(source: AnalysisSource, options: AnalyzeOptions, io: IoSink): ExitCode {
+  reportLoadHealth(source, io);
+
   const view = resolveView(options);
-  const folded = foldFor(options.report, options.level, graph, view);
+  const folded = foldFor(options.report, options.level, source, view);
   reportFoldHealth(folded, io);
 
   const context: ReportContext = {
@@ -66,20 +76,21 @@ export function analyzeCommand(options: AnalyzeOptions, io: IoSink): ExitCode {
     level: folded.level,
     view: folded.view,
     layer: layerOf(options.report, options.level),
-    models: loaded.paths,
-    modelClean: loaded.clean,
+    models: source.paths,
+    modelClean: source.clean,
     foldDiagnostics: folded.diagnostics,
     top: options.top,
     json: options.json,
   };
 
+  const exitCode = source.clean ? EXIT.OK : EXIT.FINDINGS;
   switch (options.report) {
     case "deps":
-      return depsReport(folded, context, io, loadExitCode(loaded));
+      return depsReport(folded, context, io, exitCode);
     case "coupling":
-      return couplingReport(coupling(folded), context, io, loadExitCode(loaded));
+      return couplingReport(coupling(folded), context, io, exitCode);
     case "cycles":
-      return cyclesReport(cycles(folded), context, io, loadExitCode(loaded));
+      return cyclesReport(cycles(folded), context, io, exitCode);
   }
 }
 
@@ -115,11 +126,11 @@ interface ReportContext {
 function foldFor(
   report: ReportName,
   level: FoldLevel,
-  graph: ReturnType<typeof buildGraph>,
+  source: AnalysisSource,
   view: View,
 ): FoldedGraph {
-  if (report !== "deps") return foldGraph(graph, { level, view });
-  return level === "module" ? importGraph(graph, view) : typeDependencyGraph(graph, view);
+  if (report !== "deps") return source.fold({ level, view });
+  return level === "module" ? source.imports(view) : source.typeDependencies(view);
 }
 
 function layerOf(report: ReportName, level: FoldLevel): string {
@@ -140,7 +151,7 @@ function isImportGraph(folded: FoldedGraph): folded is ImportGraph {
  * refusing to answer helps nobody — but the numbers may be affected, and saying
  * so belongs on stderr so the artifact on stdout stays the artifact.
  */
-function reportLoadHealth(loaded: LoadedModels, io: IoSink): void {
+function reportLoadHealth(loaded: AnalysisSource, io: IoSink): void {
   // Reported even on a CLEAN load: identical re-declaration across models is
   // legal, but entities dedupe by id while edges do not, so every weight,
   // fan-in and fan-out below is multiplied by the overlap. A silently doubled

@@ -37,7 +37,9 @@ import {
   type FoldedGraph,
   type FoldedNode,
 } from "../fold.js";
-import { identityView, type ViewDescriptor } from "../views.js";
+import { compareIds } from "../order.js";
+import type { ImportGraph, ImportGraphDiagnostics, NonModuleImportEndpoint } from "../queries.js";
+import { identityView, type View, type ViewDescriptor } from "../views.js";
 import { renderStoreIds, storeLang } from "./ids.js";
 import type { SqliteDatabase, SqliteValue } from "./sqlite.js";
 
@@ -168,9 +170,33 @@ export function foldFromStore(db: SqliteDatabase, options: FoldOptions): FoldedG
   const sql = translateView(db, view.descriptor);
   if (sql === undefined) return undefined;
 
-  const lang = storeLang(db);
-
   resolveContainers(db, options.level);
+  try {
+    return foldResolved(db, options, sql, storeLang(db));
+  } finally {
+    dropScratch(db);
+  }
+}
+
+/** Drop the per-fold scratch tables. Named, because two entry points share them. */
+function dropScratch(db: SqliteDatabase): void {
+  db.exec("DROP TABLE IF EXISTS temp.placed");
+  db.exec("DROP TABLE IF EXISTS temp.container");
+}
+
+/**
+ * The fold itself, over containers `resolveContainers` has already put in
+ * `temp.container`. Split out because the import layer needs the SAME
+ * containers for its own diagnostic — resolving them twice would cost 0.38s on
+ * fineract to compute an answer that is already sitting in a temp table.
+ */
+function foldResolved(
+  db: SqliteDatabase,
+  options: FoldOptions,
+  sql: ViewSql,
+  lang: string,
+): FoldedGraph {
+  const view = options.view ?? identityView;
 
   // Entities the view keeps, mapped to containers the view also keeps. An
   // entity whose container is excluded is UNFOLDABLE, not folded onto itself.
@@ -305,9 +331,6 @@ export function foldFromStore(db: SqliteDatabase, options: FoldOptions): FoldedG
     `${sql.entity("e")} AND e.id NOT IN (SELECT id FROM temp.placed)`,
   );
 
-  db.exec("DROP TABLE IF EXISTS temp.placed");
-  db.exec("DROP TABLE IF EXISTS temp.container");
-
   return assembleFoldedGraph(options.level, view.descriptor, nodes, edges, {
     unfoldableEntities: [...unfoldableIds.values()],
     droppedEdges: inViewTotal - placedTotal,
@@ -322,4 +345,114 @@ function dictionary(db: SqliteDatabase, table: string): string[] {
     out[row.id as number] = row.name as string;
   }
   return out;
+}
+
+/**
+ * The module→module import graph, in SQL — `importGraph`'s answer.
+ *
+ * `analyze --report deps --level module` is the most-used report and the one
+ * cross-language layer (invariant 9), so it must not be the single command that
+ * falls back to hydrating. Over `foldFromStore` it adds only the audit of how
+ * endpoints reached module level, and that audit is empty for a conforming
+ * model — so on a corpus that behaves, this costs one count and one query that
+ * returns nothing.
+ *
+ * @returns `undefined` when the view names a filter SQL cannot translate.
+ */
+export function importGraphFromStore(db: SqliteDatabase, view?: View): ImportGraph | undefined {
+  const resolved = view ?? identityView;
+  const sql = translateView(db, resolved.descriptor);
+  if (sql === undefined) return undefined;
+
+  const lang = storeLang(db);
+  const options: FoldOptions = { level: "module", edgeKinds: ["import"], view: resolved };
+
+  resolveContainers(db, "module");
+  try {
+    const folded = foldResolved(db, options, sql, lang);
+    return { ...folded, importDiagnostics: importDiagnosticsResolved(db, sql, lang) };
+  } finally {
+    dropScratch(db);
+  }
+}
+
+/**
+ * How many import edges the view kept, and which endpoints were not modules.
+ *
+ * A non-empty endpoint list means the extractor wrote the import layer below
+ * module granularity — a fact about the extractor, not noise to swallow — so it
+ * is reported rather than folded away silently.
+ */
+function importDiagnosticsResolved(
+  db: SqliteDatabase,
+  sql: ViewSql,
+  lang: string,
+): ImportGraphDiagnostics {
+  const empty = { importEdges: 0, nonModuleEndpoints: Object.freeze([]) };
+  const importKind = db.prepare("SELECT id FROM edge_kind WHERE name = 'import'").get();
+  if (importKind === undefined) return empty;
+  const kindId = importKind.id as number;
+
+  const filtersEntities = sql.entity("ef") !== "1";
+  const joins = filtersEntities
+    ? " JOIN entity ef ON ef.id = x.from_id JOIN entity et ON et.id = x.to_id"
+    : "";
+  const where =
+    `WHERE x.kind_id = ${kindId} AND ${sql.edge("x")}` +
+    (filtersEntities ? ` AND ${sql.entity("ef")} AND ${sql.entity("et")}` : "");
+
+  const importEdges = scalar(db, `SELECT count(*) FROM edge x${joins} ${where}`);
+
+  // Trait sets carrying TModule — the same test `importGraph` makes with
+  // `hasTrait(entity, "TModule")`, never a guess from the kind's name.
+  const moduleSets = db
+    .prepare(
+      "SELECT DISTINCT m.trait_set_id AS s FROM trait_set_member m" +
+        " JOIN trait t ON t.id = m.trait_id WHERE t.name = 'TModule'",
+    )
+    .all()
+    .map((row) => row.s as number);
+  const notModule =
+    moduleSets.length === 0 ? "1" : `e.trait_set_id NOT IN (${moduleSets.join(",")})`;
+
+  // DISTINCT is the JS version's dedupe by (from, to, role): one row per
+  // endpoint of an edge, not one per parallel edge.
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT x.from_id AS f, x.to_id AS o, 'from' AS role, x.from_id AS endpoint
+         FROM edge x${joins} JOIN entity e ON e.id = x.from_id
+        ${where} AND ${notModule}
+       UNION
+       SELECT DISTINCT x.from_id, x.to_id, 'to', x.to_id
+         FROM edge x${joins} JOIN entity e ON e.id = x.to_id
+        ${where} AND ${notModule}`,
+    )
+    .all() as { f: number; o: number; role: string; endpoint: number }[];
+
+  if (rows.length === 0) return { importEdges, nonModuleEndpoints: Object.freeze([]) };
+
+  const ids = renderStoreIds(db, lang, "1");
+  const containers = new Map<number, number>();
+  for (const row of db.prepare("SELECT id, container_id FROM temp.container").iterate()) {
+    containers.set(row.id as number, row.container_id as number);
+  }
+
+  const endpoints: NonModuleImportEndpoint[] = rows.map((row) => {
+    const container = containers.get(row.endpoint);
+    return {
+      edgeFrom: ids.get(row.f)!,
+      edgeTo: ids.get(row.o)!,
+      role: row.role as "from" | "to",
+      endpoint: ids.get(row.endpoint)!,
+      foldedTo: container === undefined ? undefined : ids.get(container),
+    };
+  });
+
+  endpoints.sort(
+    (a, b) =>
+      compareIds(a.edgeFrom, b.edgeFrom) ||
+      compareIds(a.edgeTo, b.edgeTo) ||
+      compareIds(a.role, b.role),
+  );
+  return { importEdges, nonModuleEndpoints: Object.freeze(endpoints) };
 }

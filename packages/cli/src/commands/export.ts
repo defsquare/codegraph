@@ -1,7 +1,5 @@
 import { Buffer } from "node:buffer";
 import {
-  buildGraph,
-  foldGraph,
   foldedGraphToCsv,
   foldedGraphToJson,
   toDot,
@@ -11,9 +9,10 @@ import {
   type LoadDiagnostics,
 } from "@codegraph/analyzer";
 import type { ExportOptions, FormatName } from "../args.js";
-import type { ExitCode } from "../exit.js";
+import { EXIT, type ExitCode } from "../exit.js";
 import { errLine, errLines, type IoSink } from "../io.js";
-import { benignDuplicateIds, loadExitCode, loadModelFiles, type LoadedModels } from "../load.js";
+import { benignDuplicateIds } from "../load.js";
+import { openAnalysis, type AnalysisSource } from "../source.js";
 import { resolveView } from "../view.js";
 
 /**
@@ -92,7 +91,7 @@ function findingCounts(diagnostics: LoadDiagnostics): readonly string[] {
  * A silently smaller graph is how a wrong number gets believed, so a fold that
  * dropped edges or could not place entities always says so.
  */
-function warnings(loaded: LoadedModels, folded: FoldedGraph): readonly string[] {
+function warnings(loaded: AnalysisSource, folded: FoldedGraph): readonly string[] {
   const lines: string[] = [];
 
   if (!loaded.clean) {
@@ -129,9 +128,18 @@ function warnings(loaded: LoadedModels, folded: FoldedGraph): readonly string[] 
 }
 
 export function exportCommand(options: ExportOptions, io: IoSink): ExitCode {
-  const loaded = loadModelFiles(options.models);
-  const graph = buildGraph(loaded.union);
-  const folded = foldGraph(graph, { level: options.level, view: resolveView(options) });
+  const source = openAnalysis(options.models, options, io);
+  try {
+    return exportSource(source, options, io);
+  } finally {
+    source.close();
+  }
+}
+
+/** Below the source: one renderer, whichever way the fold was computed. */
+function exportSource(source: AnalysisSource, options: ExportOptions, io: IoSink): ExitCode {
+  const loaded = source;
+  const folded = source.fold({ level: options.level, view: resolveView(options) });
   const artifact = RENDERERS[options.format](folded);
 
   // Warnings before the artifact: on a terminal they are then visible ahead of
@@ -151,5 +159,5 @@ export function exportCommand(options: ExportOptions, io: IoSink): ExitCode {
     );
   }
 
-  return loadExitCode(loaded);
+  return loaded.clean ? EXIT.OK : EXIT.FINDINGS;
 }
