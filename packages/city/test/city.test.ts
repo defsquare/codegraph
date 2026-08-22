@@ -1,7 +1,8 @@
+import { renderId, type Entity } from "@codegraph/core";
 import { internalOnly } from "@codegraph/analyzer";
 import { describe, expect, it } from "vitest";
 import { buildCity, CITY_ARTEFACT_KIND } from "../src/city.js";
-import { edge, field, graphOf, javaGraph, method, pkg, stubType, type } from "./fixture.js";
+import { edge, field, graphOf, graphOfModels, javaGraph, method, pkg, stubType, type } from "./fixture.js";
 
 /**
  * The city is a SECOND MODEL, so what these tests guard is the mapping, not a
@@ -293,5 +294,99 @@ describe("buildCity: on real extractor output", () => {
       expect(building.footprint.width).toBeGreaterThan(0);
       expect(building.footprint.depth).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("buildCity: corpus name", () => {
+  it("names the corpus after the model root and reports the roots", () => {
+    expect(buildCity(toyGraph()).corpus).toEqual({ name: "test", roots: ["test"] });
+  });
+
+  it("joins deduped, sorted root basenames for a multi-root union", () => {
+    const graph = graphOfModels([
+      { root: "fixtures/java/src", entities: [pkg("java:a"), type("java:a/A", "java:a", 5)] },
+      { root: "other/api/", entities: [pkg("java:b"), type("java:b/B", "java:b", 5)] },
+    ]);
+    expect(buildCity(graph).corpus).toEqual({
+      name: "api + src",
+      roots: ["fixtures/java/src", "other/api/"],
+    });
+  });
+
+  it("lets the caller override the derived name", () => {
+    const city = buildCity(toyGraph(), { name: "acme" });
+    expect(city.corpus.name).toBe("acme");
+    expect(city.corpus.roots).toEqual(["test"]);
+  });
+
+  it("falls back when no root yields a basename", () => {
+    const graph = graphOfModels([
+      { root: "", entities: [pkg("java:a"), type("java:a/A", "java:a", 5)] },
+    ]);
+    expect(buildCity(graph).corpus).toEqual({ name: "codegraph", roots: [] });
+  });
+});
+
+describe("buildCity: members on buildings", () => {
+  it("lists attributes and operations on every building, sorted", () => {
+    const city = buildCity(toyGraph());
+    const big = city.buildings.find((building) => building.id === "java:a/Big");
+    expect(big?.operations).toEqual([
+      { signature: "java:a/Big.run()" },
+      { signature: "java:a/Big.stop()" },
+    ]);
+    expect(big?.attributes).toEqual([{ name: "java:a/Big.state" }]);
+    const small = city.buildings.find((building) => building.id === "java:a/Small");
+    expect(small?.attributes).toEqual([]);
+    expect(small?.operations).toEqual([]);
+  });
+
+  it("resolves an attribute's declaredType to a name, never a raw id", () => {
+    const graph = graphOf([
+      pkg("java:a"),
+      type("java:a/T", "java:a", 5),
+      type("java:a/Other", "java:a", 5, { name: "Other" }),
+      { ...field("java:a/T.x", "java:a/T"), declaredType: "java:a/Other" } as Entity,
+      { ...field("java:a/T.y", "java:a/T"), declaredType: "java:gone/Missing" } as Entity,
+    ]);
+    const t = buildCity(graph).buildings.find((building) => building.id === "java:a/T");
+    // x resolves through the graph; y's type is unknown, so the key is absent —
+    // an unresolvable type never leaks as an id string.
+    expect(t?.attributes).toEqual([{ name: "java:a/T.x", type: "Other" }, { name: "java:a/T.y" }]);
+  });
+
+  it("agrees with the methods and fields metrics on every real building", () => {
+    const city = buildCity(javaGraph(), { carry: ["methods", "fields"] });
+    for (const building of city.buildings) {
+      expect(building.operations.length).toBe(building.metrics["methods"] ?? 0);
+      expect(building.attributes.length).toBe(building.metrics["fields"] ?? 0);
+    }
+  });
+});
+
+describe("buildCity: identity display components", () => {
+  it("emits the components core itself decodes from the rendered id", () => {
+    const city = buildCity(toyGraph());
+    const big = city.buildings.find((building) => building.id === "java:a/Big");
+    expect(big?.identity).toEqual({ lang: "java", module: "a", symbol: "Big" });
+    expect(Object.keys(big?.identity ?? {})).not.toContain("disambiguator");
+    const district = city.districts.find((candidate) => candidate.id === "java:a");
+    expect(district?.identity).toEqual({ lang: "java", module: "a", symbol: "" });
+  });
+
+  it("round-trips every emitted identity back to its id", () => {
+    const city = buildCity(javaGraph());
+    for (const element of [...city.buildings, ...city.districts]) {
+      expect(element.identity).toBeDefined();
+      if (element.identity !== undefined) expect(renderId(element.identity)).toBe(element.id);
+    }
+  });
+
+  it("omits identity for an id that is not a rendered id, and still builds", () => {
+    const graph = graphOf([pkg("weird"), type("weird/T", "weird", 5)]);
+    const city = buildCity(graph);
+    expect(city.buildings).toHaveLength(1);
+    expect(city.buildings[0]?.identity).toBeUndefined();
+    expect(city.districts[0]?.identity).toBeUndefined();
   });
 });

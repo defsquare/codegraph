@@ -217,7 +217,9 @@ export function duplicateNaturalKeys(keys: Iterable<NaturalKey>): DuplicateNatur
  * core: split at the first `:`, then the first `#`, then the first `/`.
  *
  * WHO MAY CALL THIS: an **encoder** turning a rendered-id model into records,
- * and test fixtures. Nothing else. CLAUDE.md invariant 7 forbids consumers
+ * the **city builder** (to emit display-only `identity` components onto the
+ * artefact — never to decide membership, containment or equality), and test
+ * fixtures. Nothing else. CLAUDE.md invariant 7 forbids consumers
  * parsing ids, and the rule it protects is real — deciding module membership by
  * reading an id is how fabricated FQNs get laundered into facts (METAMODEL §6).
  * Decoding a bijection core itself defined is a different act from inferring

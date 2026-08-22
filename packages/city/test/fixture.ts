@@ -28,6 +28,21 @@ export function graphOf(entities: readonly Entity[], edges: readonly Edge[] = []
   return buildGraph(loadModels(model, { sources: ["toy"] }).union);
 }
 
+/** Several models under one union — for corpus-name tests over multiple roots. */
+export function graphOfModels(
+  parts: readonly { root: string; entities: readonly Entity[]; edges?: readonly Edge[] }[],
+): CodeGraph {
+  const models: Model[] = parts.map((part) => ({
+    schemaVersion: "1.0.0",
+    lang: "java",
+    extractor: { name: "test", version: "0.0.0" },
+    root: part.root,
+    entities: [...part.entities],
+    edges: [...(part.edges ?? [])],
+  }));
+  return buildGraph(loadModels(models, { sources: models.map((_, i) => `toy${i}`) }).union);
+}
+
 export function pkg(id: string, isStub = false, parent?: string): Entity {
   return {
     id,

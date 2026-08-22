@@ -79,6 +79,25 @@ function countMembers(context: MetricContext, predicate: (entity: Entity) => boo
   return count;
 }
 
+/**
+ * An invocable member — method, constructor or lambda. ONE definition shared
+ * by the `methods` metric and the artefact's `operations` list, so the detail
+ * panel and the metric can never disagree.
+ */
+export function isOperation(member: Entity): boolean {
+  return hasTraitName(member, "TInvocable");
+}
+
+/**
+ * A structural member whose container is the type itself. The `parent` check
+ * is what excludes parameters and locals that also folded into the building.
+ * Shared by the `fields` metric and the artefact's `attributes` list.
+ */
+export function isAttributeOf(type: EntityId): (member: Entity) => boolean {
+  return (member) =>
+    hasTraitName(member, "TStructural") && (member as { parent?: EntityId }).parent === type;
+}
+
 function hasTraitName(entity: Entity, trait: string): boolean {
   return entity.traits.includes(trait as Entity["traits"][number]);
 }
@@ -100,19 +119,13 @@ const BUILT_IN: readonly MetricSource[] = [
     name: "methods",
     unit: "methods",
     describe: "Members carrying TInvocable — methods, constructors and lambdas.",
-    value: (context) => countMembers(context, (member) => hasTraitName(member, "TInvocable")),
+    value: (context) => countMembers(context, isOperation),
   },
   {
     name: "fields",
     unit: "fields",
     describe: "Members carrying TStructural whose container is the type itself.",
-    value: (context) =>
-      countMembers(
-        context,
-        (member) =>
-          hasTraitName(member, "TStructural") &&
-          (member as { parent?: EntityId }).parent === context.node.id,
-      ),
+    value: (context) => countMembers(context, isAttributeOf(context.node.id)),
   },
   {
     name: "fanIn",

@@ -1,3 +1,4 @@
+import { parseRenderedId } from "@codegraph/core";
 import type { EdgeKind, Entity, EntityId, Provenance } from "@codegraph/core";
 import {
   coupling,
@@ -12,7 +13,13 @@ import {
   type View,
   type ViewDescriptor,
 } from "@codegraph/analyzer";
-import { resolveMetric, type MetricContext, type MetricSource } from "./metrics.js";
+import {
+  isAttributeOf,
+  isOperation,
+  resolveMetric,
+  type MetricContext,
+  type MetricSource,
+} from "./metrics.js";
 import { resolveScale, round, scaleValue, type Domain, type Range, type ScaleName } from "./scale.js";
 
 /**
@@ -101,6 +108,33 @@ export interface ResolvedBinding {
   readonly unmeasured: number;
 }
 
+/**
+ * The natural key's components, emitted for DISPLAY only — decoded by core's
+ * own `parseRenderedId` (the verified inverse of `renderId`), never used to
+ * decide membership, containment or equality. Absent when the id is not a
+ * rendered id (a hand-built model may carry any string).
+ */
+export interface IdentityComponents {
+  readonly lang: string;
+  readonly module: string;
+  /** Empty exactly when the element IS the module (a district). */
+  readonly symbol: string;
+  readonly disambiguator?: string;
+}
+
+/** One field of a type, for the detail panel: its name and, when the model
+ * resolves it, the NAME of its declared type — never a raw id. */
+export interface BuildingAttribute {
+  readonly name: string;
+  readonly type?: string;
+}
+
+/** One invocable of a type — methods, constructors and lambdas alike carry a
+ * signature; a name alone stands in when the model gives none. */
+export interface BuildingOperation {
+  readonly signature: string;
+}
+
 export interface Building {
   readonly id: EntityId;
   readonly name: string | undefined;
@@ -108,6 +142,7 @@ export interface Building {
   readonly kind: string;
   readonly isStub: boolean;
   readonly district: EntityId;
+  readonly identity?: IdentityComponents;
   /** Along the height axis. */
   readonly height: number;
   /** Base rectangle; square today, a layout concern the day it is not. */
@@ -117,6 +152,10 @@ export interface Building {
    * caller asked to carry. `null` means the model does not say.
    */
   readonly metrics: Readonly<Record<string, number | null>>;
+  /** Sorted by name; empty for stubs and memberless types, never absent. */
+  readonly attributes: readonly BuildingAttribute[];
+  /** Sorted by signature; empty for stubs and memberless types, never absent. */
+  readonly operations: readonly BuildingOperation[];
 }
 
 export interface District {
@@ -124,6 +163,7 @@ export interface District {
   readonly name: string | undefined;
   readonly kind: string;
   readonly isStub: boolean;
+  readonly identity?: IdentityComponents;
   /**
    * The nearest ancestor module that is itself a district of this city, when
    * the MODEL declares module containment (`TChildOf` on the module — e.g. the
@@ -183,6 +223,12 @@ export interface CityModel {
   readonly generatedBy: string;
   /** The view the city was built under; a city without its view is not a fact. */
   readonly view: ViewDescriptor;
+  /**
+   * What corpus this city renders: a display name (the deduped, sorted root
+   * basenames joined with " + ", or the caller's `name`) and the model roots
+   * verbatim. The renderer's header shows `name`; it decides nothing.
+   */
+  readonly corpus: { readonly name: string; readonly roots: readonly string[] };
   readonly conventions: CityConventions;
   readonly bindings: readonly ResolvedBinding[];
   /** Sorted by id. */
@@ -204,6 +250,8 @@ export interface CityModel {
 
 export interface CityOptions {
   readonly view?: View;
+  /** Display name for the corpus; defaults to the model roots' basenames. */
+  readonly name?: string;
   /** Defaults to `loc` on a linear scale. */
   readonly height?: ChannelBinding;
   /** Defaults to `members` on a sqrt scale, so base AREA grows with the metric. */
@@ -319,15 +367,20 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
     for (const name of [...building.values.keys()].sort()) {
       metrics[name] = building.values.get(name) ?? null;
     }
+    const members = membersByType.get(building.node.id) ?? [];
+    const identity = identityOf(building.node.id);
     return {
       id: building.node.id,
       name: building.node.name,
       kind: building.node.kind,
       isStub: building.node.isStub,
       district: building.district,
+      ...(identity === undefined ? {} : { identity }),
       height: dimension("height"),
       footprint: { width: side, depth: side },
       metrics,
+      attributes: attributesOf(graph, building.node.id, members),
+      operations: operationsOf(members),
     };
   });
 
@@ -390,6 +443,7 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
     kind: CITY_ARTEFACT_KIND,
     generatedBy: CITY_GENERATOR,
     view: folded.view,
+    corpus: corpusOf(graph, options.name),
     conventions: CONVENTIONS,
     bindings: bindings.map((binding) => ({
       channel: binding.channel,
@@ -458,6 +512,87 @@ function domainOf(measured: readonly Measured[], metric: string): Domain | undef
 }
 
 /**
+ * The corpus line of the artefact. The display name is the deduped, sorted
+ * basenames of the model roots (or the caller's override) — a label for a
+ * header, deciding nothing. Roots are reported verbatim, blanks excluded.
+ */
+function corpusOf(
+  graph: CodeGraph,
+  name: string | undefined,
+): { name: string; roots: readonly string[] } {
+  const roots = [...new Set(graph.union.models.map((model) => model.root))]
+    .filter((root) => root.length > 0)
+    .sort();
+  const basenames = [
+    ...new Set(
+      roots
+        .map((root) => root.replace(/\/+$/, ""))
+        .map((root) => root.slice(root.lastIndexOf("/") + 1))
+        .filter((base) => base.length > 0),
+    ),
+  ].sort();
+  return { name: name ?? (basenames.length > 0 ? basenames.join(" + ") : "codegraph"), roots };
+}
+
+/**
+ * Display components of a rendered id — core's own decoding, tolerant: an id
+ * core did not render (hand-built models may carry any string) yields nothing,
+ * and the element simply ships without `identity`.
+ */
+function identityOf(id: EntityId): Building["identity"] {
+  try {
+    const key = parseRenderedId(id);
+    return {
+      lang: key.lang,
+      module: key.module,
+      symbol: key.symbol,
+      ...(key.disambiguator === undefined ? {} : { disambiguator: key.disambiguator }),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Code-unit compare, the workspace's one string order (same as `sortIds`). */
+function compareStrings(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function attributesOf(
+  graph: CodeGraph,
+  type: EntityId,
+  members: readonly Entity[],
+): readonly BuildingAttribute[] {
+  const isAttribute = isAttributeOf(type);
+  return members
+    .filter(isAttribute)
+    .map((member) => {
+      const name = (member as { name?: string }).name ?? member.id;
+      const declared = (member as { declaredType?: EntityId }).declaredType;
+      // The type is the NAME of the resolved entity — an unresolvable
+      // declaredType stays absent rather than leaking as an id string.
+      const typeName =
+        declared === undefined
+          ? undefined
+          : (graph.entity(declared) as { name?: string } | undefined)?.name;
+      return { name, ...(typeName === undefined ? {} : { type: typeName }) };
+    })
+    .sort((a, b) => compareStrings(a.name, b.name));
+}
+
+function operationsOf(members: readonly Entity[]): readonly BuildingOperation[] {
+  return members
+    .filter(isOperation)
+    .map((member) => ({
+      signature:
+        (member as { signature?: string }).signature ??
+        (member as { name?: string }).name ??
+        member.id,
+    }))
+    .sort((a, b) => compareStrings(a.signature, b.signature));
+}
+
+/**
  * Every entity grouped under the type it folds into — one pass over the graph
  * rather than a walk per building, which would be quadratic on a real corpus.
  */
@@ -504,11 +639,13 @@ function collectDistricts(
       0,
     );
     const parent = parentDistrictOf(graph, folder, id, districtIds);
+    const identity = identityOf(id);
     return {
       id,
       name: (entity as { name?: string } | undefined)?.name,
       kind: entity?.kind ?? "module",
       isStub: graph.isStub(id),
+      ...(identity === undefined ? {} : { identity }),
       ...(parent === undefined ? {} : { parent }),
       buildings: sortIds(members.map((building) => building.id)),
       footprintDemand: round(demand),

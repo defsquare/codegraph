@@ -36,6 +36,8 @@ function cityOf(
       height: spec.height ?? 10,
       footprint: { width: spec.width, depth: spec.depth },
       metrics: {},
+      attributes: [],
+      operations: [],
     }));
   const grouped = new Map<string, Building[]>();
   for (const building of buildings) {
@@ -56,6 +58,7 @@ function cityOf(
     kind: "codegraph.city/1",
     generatedBy: "@codegraph/city",
     view: { name: "all", filters: [] },
+    corpus: { name: "toy", roots: [] },
     conventions: { arrowAttachment: "roof", heightAxis: "y", groundPlane: "xz", units: "city" },
     bindings: [],
     districts,
