@@ -25,6 +25,7 @@ function options(overrides: Partial<CityOptions> = {}): CityOptions {
     footprint: "members",
     footprintScale: "sqrt",
     carry: [],
+    name: undefined,
     internalOnly: false,
     declaredOnly: false,
     layout: false,
@@ -150,6 +151,30 @@ describe("city: the flags reach the transform", () => {
     expect(height?.unmeasured).toBe(city.buildings.length);
     expect(io.stderr()).toContain("unmeasured");
     for (const building of city.buildings) expect(building.metrics["sum:cyclomatic"]).toBeNull();
+  });
+});
+
+describe("city: --name", () => {
+  it("defaults the corpus name to the model root's basename", () => {
+    const { io } = cityTo();
+    const city = JSON.parse(io.stdout()) as { corpus: { name: string; roots: string[] } };
+    // The fixture's header says root: "fixtures/java/src".
+    expect(city.corpus.name).toBe("src");
+    expect(city.corpus.roots).toEqual(["fixtures/java/src"]);
+  });
+
+  it("puts --name in the artifact verbatim", () => {
+    const { io } = cityTo({ name: "acme" });
+    const city = JSON.parse(io.stdout()) as { corpus: { name: string } };
+    expect(city.corpus.name).toBe("acme");
+  });
+
+  it("parses from argv through the real dispatcher", () => {
+    const io = captureIo();
+    const code = run(["city", FIXTURE, "--name", "acme"], io);
+    expect(code).toBe(EXIT.OK);
+    const city = JSON.parse(io.stdout()) as { corpus: { name: string } };
+    expect(city.corpus.name).toBe("acme");
   });
 });
 

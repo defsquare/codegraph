@@ -242,6 +242,14 @@ export const CITY_SPEC: CommandSpec = {
       placeholder: "M1,M2",
     },
     {
+      name: "name",
+      type: "string",
+      describe:
+        "Display name for the corpus in the visualizer header; " +
+        "defaults to the basename of each model's root.",
+      placeholder: "STR",
+    },
+    {
       name: "layout",
       type: "boolean",
       describe:
@@ -336,6 +344,8 @@ export interface CityOptions extends ModelInputOptions, ViewOptions {
   readonly footprintScale: string;
   /** Extra metrics carried on every building; empty when `--carry` was absent. */
   readonly carry: readonly string[];
+  /** `--name STR`: corpus display name; undefined derives it from the roots. */
+  readonly name: string | undefined;
   /** `--layout`: add placement (positions, bounds) to the artifact. */
   readonly layout: boolean;
   /** `--serve`: host the visualizer on localhost with this city loaded. */
@@ -708,6 +718,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           footprint: stringOf(values, "footprint") ?? "members",
           footprintScale: stringOf(values, "footprint-scale") ?? "sqrt",
           carry: metricList(stringOf(values, "carry")),
+          name: stringOf(values, "name"),
           layout: flagOf(values, "layout"),
           serve: flagOf(values, "serve"),
           port: portOf(values),

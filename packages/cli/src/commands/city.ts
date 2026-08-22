@@ -91,6 +91,7 @@ function build(graph: ReturnType<typeof buildGraph>, options: CityOptions): City
   try {
     return buildCity(graph, {
       view: resolveView(options),
+      ...(options.name === undefined ? {} : { name: options.name }),
       height: { metric: options.height, scale: options.heightScale },
       footprint: { metric: options.footprint, scale: options.footprintScale },
       carry: options.carry,
