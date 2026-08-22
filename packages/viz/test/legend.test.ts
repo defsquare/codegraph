@@ -22,12 +22,14 @@ describe("legendModel", () => {
     expect(footprint?.detail).not.toContain("unmeasured");
   });
 
-  it("explains all four semantic swatches", () => {
+  it("explains all six semantic swatches, the fan directions included", () => {
     expect(entries.map((entry) => entry.swatch).filter((s) => s !== null)).toEqual([
       "building",
       "stub",
       "declared",
       "inferred",
+      "fanIn",
+      "fanOut",
     ]);
   });
 

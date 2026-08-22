@@ -1,7 +1,7 @@
 import { CITY_ARTEFACT_KIND as CANONICAL_KIND } from "@codegraph/city";
 import { describe, expect, it } from "vitest";
 import { CITY_ARTEFACT_KIND, CityLoadError, parseCityLayout } from "../src/guard.js";
-import { makeCity } from "./fixture.js";
+import { makeCity, makeOldCity } from "./fixture.js";
 
 describe("parseCityLayout", () => {
   it("pins the artifact kind the city package actually writes", () => {
@@ -14,6 +14,14 @@ describe("parseCityLayout", () => {
     const city = makeCity();
     const parsed = parseCityLayout(JSON.stringify(city));
     expect(parsed).toEqual(city);
+  });
+
+  it("accepts an artifact from before corpus, identity and members existed", () => {
+    // Back-compat, like the districtArrows default below it: none of the new
+    // keys is a hard requirement; the scene models default what is absent.
+    const parsed = parseCityLayout(JSON.stringify(makeOldCity()));
+    expect((parsed as unknown as Record<string, unknown>)["corpus"]).toBeUndefined();
+    expect(parsed.buildings).toHaveLength(4);
   });
 
   it("rejects non-JSON (a model.jsonl line stream) with the producing command", () => {

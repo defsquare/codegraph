@@ -1,4 +1,4 @@
-import type { CityLayout } from "@codegraph/city";
+import type { CityLayout, IdentityComponents } from "@codegraph/city";
 import { GROUND_MARGIN, GROUND_THICKNESS, PLATE_THICKNESS } from "../theme.js";
 
 /** An axis-aligned slab on the ground: a district plate or the ground itself. */
@@ -6,6 +6,8 @@ export interface Plate {
   readonly id: string;
   readonly name: string | undefined;
   readonly isStub: boolean;
+  /** Display components from the artifact; absent on pre-identity artifacts. */
+  readonly identity: IdentityComponents | undefined;
   /** Nesting depth: 0 for a root district, parent's level + 1 below it. */
   readonly level: number;
   readonly parent: string | undefined;
@@ -49,6 +51,7 @@ export function districtPlates(city: CityLayout): readonly Plate[] {
       id: district.id,
       name: district.name,
       isStub: district.isStub,
+      identity: district.identity,
       level,
       parent: district.parent,
       center: [
@@ -73,6 +76,7 @@ export function groundPlate(city: CityLayout): Plate {
     id: "ground",
     name: undefined,
     isStub: false,
+    identity: undefined,
     level: 0,
     parent: undefined,
     center: [

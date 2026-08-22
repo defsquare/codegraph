@@ -15,6 +15,7 @@ export function makeCity(overrides: Partial<CityLayout> = {}): CityLayout {
       declaredOnly: false,
       description: "every entity and every edge",
     },
+    corpus: { name: "acme", roots: ["fixtures/acme/src"] },
     conventions: {
       arrowAttachment: "roof",
       heightAxis: "y",
@@ -49,6 +50,7 @@ export function makeCity(overrides: Partial<CityLayout> = {}): CityLayout {
         name: "com.acme.order",
         kind: "module",
         isStub: false,
+        identity: { lang: "java", module: "com.acme.order", symbol: "" },
         buildings: ["java:com.acme.order/OrderService", "java:com.acme.order/Order"],
         footprintDemand: 52,
         bounds: { x: 0, y: 0, width: 18, depth: 14 },
@@ -58,6 +60,7 @@ export function makeCity(overrides: Partial<CityLayout> = {}): CityLayout {
         name: "com.acme.order.deep",
         kind: "module",
         isStub: false,
+        identity: { lang: "java", module: "com.acme.order.deep", symbol: "" },
         parent: "java:com.acme.order",
         buildings: ["java:com.acme.order.deep/Util"],
         footprintDemand: 4,
@@ -68,6 +71,7 @@ export function makeCity(overrides: Partial<CityLayout> = {}): CityLayout {
         name: "com.acme.web",
         kind: "module",
         isStub: false,
+        identity: { lang: "java", module: "com.acme.web", symbol: "" },
         buildings: ["java:com.acme.web/OrderController"],
         footprintDemand: 16,
         bounds: { x: 20, y: 0, width: 10, depth: 10 },
@@ -80,10 +84,13 @@ export function makeCity(overrides: Partial<CityLayout> = {}): CityLayout {
         kind: "class",
         isStub: false,
         district: "java:com.acme.order.deep",
+        identity: { lang: "java", module: "com.acme.order.deep", symbol: "Util" },
         height: 5,
         footprint: { width: 2, depth: 2 },
         position: { x: 2, y: 9 },
         metrics: { loc: 12, members: 2 },
+        attributes: [],
+        operations: [{ signature: "format(Order)" }],
       },
       {
         id: "java:com.acme.order/Order",
@@ -91,10 +98,13 @@ export function makeCity(overrides: Partial<CityLayout> = {}): CityLayout {
         kind: "class",
         isStub: false,
         district: "java:com.acme.order",
+        identity: { lang: "java", module: "com.acme.order", symbol: "Order" },
         height: 10,
         footprint: { width: 4, depth: 4 },
         position: { x: 10, y: 3 },
         metrics: { loc: 30, members: 4 },
+        attributes: [{ name: "reference", type: "String" }, { name: "total" }],
+        operations: [{ signature: "price()" }],
       },
       {
         id: "java:com.acme.order/OrderService",
@@ -102,10 +112,13 @@ export function makeCity(overrides: Partial<CityLayout> = {}): CityLayout {
         kind: "class",
         isStub: false,
         district: "java:com.acme.order",
+        identity: { lang: "java", module: "com.acme.order", symbol: "OrderService" },
         height: 40,
         footprint: { width: 6, depth: 6 },
         position: { x: 3, y: 3 },
         metrics: { loc: 120, members: 9 },
+        attributes: [{ name: "orders", type: "OrderRepository" }],
+        operations: [{ signature: "bill(Order)" }, { signature: "place(Order)" }],
       },
       {
         id: "java:com.acme.web/OrderController",
@@ -113,10 +126,13 @@ export function makeCity(overrides: Partial<CityLayout> = {}): CityLayout {
         kind: "class",
         isStub: true,
         district: "java:com.acme.web",
+        identity: { lang: "java", module: "com.acme.web", symbol: "OrderController" },
         height: 1,
         footprint: { width: 4, depth: 4 },
         position: { x: 23, y: 3 },
         metrics: { loc: null, members: 1 },
+        attributes: [],
+        operations: [],
       },
     ],
     arrows: [
@@ -179,4 +195,22 @@ export function makeCity(overrides: Partial<CityLayout> = {}): CityLayout {
     ...overrides,
   };
   return city as unknown as CityLayout;
+}
+
+/**
+ * The same city as an artifact from BEFORE corpus/identity/members existed —
+ * every new key stripped. The renderer must keep accepting these files.
+ */
+export function makeOldCity(): CityLayout {
+  const city = makeCity() as unknown as Record<string, unknown>;
+  const { corpus: _corpus, ...rest } = city;
+  return {
+    ...rest,
+    districts: (rest["districts"] as Record<string, unknown>[]).map(
+      ({ identity: _i, ...district }) => district,
+    ),
+    buildings: (rest["buildings"] as Record<string, unknown>[]).map(
+      ({ identity: _i, attributes: _a, operations: _o, ...building }) => building,
+    ),
+  } as unknown as CityLayout;
 }

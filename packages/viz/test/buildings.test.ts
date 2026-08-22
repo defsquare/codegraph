@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildingBoxes, roofOf } from "../src/scene/buildings.js";
 import { PLATE_THICKNESS } from "../src/theme.js";
-import { makeCity } from "./fixture.js";
+import { makeCity, makeOldCity } from "./fixture.js";
 
 describe("buildingBoxes", () => {
   const boxes = buildingBoxes(makeCity());
@@ -32,6 +32,27 @@ describe("buildingBoxes", () => {
     const controller = boxes[3]!;
     expect(controller.isStub).toBe(true);
     expect(controller.metrics).toEqual({ loc: null, members: 1 });
+  });
+
+  it("passes identity, attributes and operations through untouched", () => {
+    const service = boxes[2]!;
+    expect(service.identity).toEqual({
+      lang: "java",
+      module: "com.acme.order",
+      symbol: "OrderService",
+    });
+    expect(service.attributes).toEqual([{ name: "orders", type: "OrderRepository" }]);
+    expect(service.operations).toEqual([
+      { signature: "bill(Order)" },
+      { signature: "place(Order)" },
+    ]);
+  });
+
+  it("defaults the member lists on an artifact from before they existed", () => {
+    const old = buildingBoxes(makeOldCity())[2]!;
+    expect(old.identity).toBeUndefined();
+    expect(old.attributes).toEqual([]);
+    expect(old.operations).toEqual([]);
   });
 
   it("puts the roof at the top face center", () => {

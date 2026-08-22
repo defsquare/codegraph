@@ -1,4 +1,9 @@
-import type { CityLayout } from "@codegraph/city";
+import type {
+  BuildingAttribute,
+  BuildingOperation,
+  CityLayout,
+  IdentityComponents,
+} from "@codegraph/city";
 import { districtLevels, plateTop } from "./districts.js";
 
 /**
@@ -15,12 +20,17 @@ export interface BuildingBox {
   readonly kind: string;
   readonly isStub: boolean;
   readonly district: string;
+  /** Display components from the artifact; absent on pre-identity artifacts. */
+  readonly identity: IdentityComponents | undefined;
   /** Center of the box, world space. */
   readonly center: readonly [number, number, number];
   /** Extent along world x (width), y (height), z (depth). */
   readonly size: readonly [number, number, number];
   /** Raw measurements, verbatim from the artifact; `null` = unmeasured. */
   readonly metrics: Readonly<Record<string, number | null>>;
+  /** Verbatim from the artifact; empty (never absent) on older artifacts. */
+  readonly attributes: readonly BuildingAttribute[];
+  readonly operations: readonly BuildingOperation[];
 }
 
 /**
@@ -46,6 +56,9 @@ export function buildingBoxes(city: CityLayout): readonly BuildingBox[] {
       ],
       size: [building.footprint.width, building.height, building.footprint.depth],
       metrics: building.metrics,
+      identity: building.identity,
+      attributes: building.attributes ?? [],
+      operations: building.operations ?? [],
     };
   });
 }
