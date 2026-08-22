@@ -12,8 +12,10 @@ import {
   ARROW_ALPHA_MIN,
   COLORS,
   INFERRED_DESATURATION,
-  PLATE_LIGHTEN_PER_LEVEL,
-  PLATE_SELECT_LIGHTEN,
+  INFERRED_GRAY,
+  PLATE_LEVEL_TARGET,
+  PLATE_SELECT_TINT,
+  PLATE_TINT_PER_LEVEL,
 } from "../theme.js";
 
 /** Which of a selected district's dependency directions are drawn. */
@@ -70,13 +72,15 @@ export function createCityScene(city: CityLayout): CityScene {
   root.add(groundMesh);
   disposables.push(slabGeometry, groundMaterial);
 
-  // District plates: per-instance color encodes nesting depth (lighter = deeper).
+  // District plates: per-instance color encodes nesting depth (further toward
+  // the tint target = deeper).
   const plateMaterial = new THREE.MeshLambertMaterial();
   const platesMesh = new THREE.InstancedMesh(slabGeometry, plateMaterial, plates.length);
+  const plateTintTarget = new THREE.Color(PLATE_LEVEL_TARGET);
   const plateBaseColor = (plate: Plate): THREE.Color =>
     color
       .setHex(COLORS.districtPlate)
-      .lerp(new THREE.Color(0xffffff), Math.min(plate.level * PLATE_LIGHTEN_PER_LEVEL, 0.4));
+      .lerp(plateTintTarget, Math.min(plate.level * PLATE_TINT_PER_LEVEL, 0.4));
   plates.forEach((plate, i) => {
     matrix.makeScale(...plate.size).setPosition(...plate.center);
     platesMesh.setMatrixAt(i, matrix);
@@ -146,7 +150,7 @@ export function createCityScene(city: CityLayout): CityScene {
       if (plate !== undefined) {
         platesMesh.setColorAt(
           selectedPlate,
-          plateBaseColor(plate).lerp(new THREE.Color(0xffffff), PLATE_SELECT_LIGHTEN),
+          plateBaseColor(plate).lerp(plateTintTarget, PLATE_SELECT_TINT),
         );
       }
     }
@@ -156,7 +160,7 @@ export function createCityScene(city: CityLayout): CityScene {
     // inferred arcs desaturate but keep their direction hue.
     const fanIn = new THREE.Color(COLORS.arrowFanIn);
     const fanOut = new THREE.Color(COLORS.arrowFanOut);
-    const gray = new THREE.Color(0x9aa1ad);
+    const gray = new THREE.Color(INFERRED_GRAY);
     dArcs.forEach((arc, i) => {
       const isOut = districtId !== null && arc.from === districtId;
       const isIn = districtId !== null && arc.to === districtId;

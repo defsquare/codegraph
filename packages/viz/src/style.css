@@ -1,9 +1,9 @@
 :root {
-  color-scheme: dark;
-  --panel-bg: rgba(16, 19, 26, 0.92);
-  --panel-border: #2c3342;
-  --text: #d6dae3;
-  --text-dim: #8b93a3;
+  color-scheme: light;
+  --panel-bg: rgba(255, 255, 255, 0.92);
+  --panel-border: #c9d0da;
+  --text: #1c222b;
+  --text-dim: #5b6472;
 }
 
 * {
@@ -13,7 +13,7 @@
 
 body {
   font-family: system-ui, sans-serif;
-  background: #10131a;
+  background: #eef1f5;
   color: var(--text);
   overflow: hidden;
 }
@@ -82,7 +82,7 @@ body {
 }
 
 #controls input {
-  accent-color: #6b7f9e;
+  accent-color: #4a5c75;
   margin: 0;
 }
 
@@ -131,11 +131,11 @@ body {
   justify-content: center;
   gap: 14px;
   text-align: center;
-  background: #10131a;
+  background: #eef1f5;
 }
 
 #loader.error #loader-message {
-  color: #e0837c;
+  color: #b3261e;
 }
 
 #loader h1 {
@@ -149,7 +149,7 @@ body {
 
 #loader code {
   color: var(--text);
-  background: #1b2029;
+  background: #dfe4eb;
   padding: 1px 5px;
   border-radius: 4px;
 }
@@ -159,6 +159,6 @@ body {
 }
 
 body.dragging #loader {
-  outline: 2px dashed #4a5468;
+  outline: 2px dashed #8a93a0;
   outline-offset: -16px;
 }

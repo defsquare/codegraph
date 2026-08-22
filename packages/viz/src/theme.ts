@@ -4,8 +4,9 @@
  *
  * Colors are semantic, never aesthetic:
  *  - building        a corpus-declared type; the concrete of the city
- *  - buildingStub    an external type the model degraded to a stub — darker,
- *                    because the model knows less about it
+ *  - buildingStub    an external type the model degraded to a stub — paler,
+ *                    fading toward the background, because the model knows
+ *                    less about it
  *  - arrowDeclared   a dependency every base edge of which is a `declared` fact
  *  - arrowInferred   an arrow with at least one non-declared base edge — the
  *                    artifact's `inferred` flag, never recomputed here
@@ -14,28 +15,36 @@
  * metric and therefore live here, not in the city model.
  */
 export const COLORS = {
-  background: 0x10131a,
-  ground: 0x08090c,
-  districtPlate: 0x232833,
-  building: 0x9aa48f,
-  buildingStub: 0x565c51,
-  arrowDeclared: 0x3ecf6f,
-  arrowInferred: 0xe0483e,
+  background: 0xeef1f5,
+  ground: 0xdde2e9,
+  districtPlate: 0xc6cdd8,
+  building: 0x8a957e,
+  buildingStub: 0xb9beb3,
+  arrowDeclared: 0x1e9e54,
+  arrowInferred: 0xc23a30,
   /** Fan-in: arrows INTO the selected district — who depends on it. */
-  arrowFanIn: 0xffa245,
+  arrowFanIn: 0xd97a12,
   /** Fan-out: arrows OUT of the selected district — what it depends on. */
-  arrowFanOut: 0x3fb6ff,
+  arrowFanOut: 0x1273c2,
 } as const;
 
 /**
- * Nesting depth is encoded twice, redundantly on purpose: a child plate sits
- * ON its parent (one PLATE_THICKNESS higher) and is tinted this much lighter
- * per level, so the module tree reads from straight above too.
+ * Where plate tinting heads: deeper and selected plates lerp toward this dark
+ * slate, so nesting and selection DARKEN against the light ground — contrast
+ * would die lerping toward white here. One target, both uses.
  */
-export const PLATE_LIGHTEN_PER_LEVEL = 0.07;
+export const PLATE_LEVEL_TARGET = 0x39404d;
 
-/** A selected district's plate brightens by this factor. */
-export const PLATE_SELECT_LIGHTEN = 0.25;
+/**
+ * Nesting depth is encoded twice, redundantly on purpose: a child plate sits
+ * ON its parent (one PLATE_THICKNESS higher) and is tinted this much further
+ * toward PLATE_LEVEL_TARGET per level, so the module tree reads from straight
+ * above too.
+ */
+export const PLATE_TINT_PER_LEVEL = 0.07;
+
+/** A selected district's plate moves this much further toward the target. */
+export const PLATE_SELECT_TINT = 0.25;
 
 /**
  * An INFERRED district arrow keeps its direction hue but collapses most of the
@@ -43,6 +52,9 @@ export const PLATE_SELECT_LIGHTEN = 0.25;
  * direction, and the legend states both.
  */
 export const INFERRED_DESATURATION = 0.65;
+
+/** The gray provenance desaturation collapses toward — themed once, here. */
+export const INFERRED_GRAY = 0x8a93a0;
 
 /** District plates rest on the ground plane; buildings stand on the plates. */
 export const PLATE_THICKNESS = 0.35;
@@ -61,7 +73,7 @@ export const ARC_MIN_LIFT = 2;
  * an unfocused arrow occupies, the near-invisible level a non-incident arrow
  * drops to while a building has focus, and the level an incident arrow rises to.
  */
-export const ARROW_ALPHA_MIN = 0.18;
-export const ARROW_ALPHA_MAX = 0.8;
-export const ARROW_ALPHA_DIMMED = 0.05;
-export const ARROW_ALPHA_FOCUS = 0.95;
+export const ARROW_ALPHA_MIN = 0.3;
+export const ARROW_ALPHA_MAX = 0.85;
+export const ARROW_ALPHA_DIMMED = 0.08;
+export const ARROW_ALPHA_FOCUS = 1.0;

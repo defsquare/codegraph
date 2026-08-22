@@ -45,8 +45,8 @@ const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI / 2 - 0.02; // never dive below the ground
 
-scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x14161c, 1.1));
-const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xcfd6df, 1.0));
+const sun = new THREE.DirectionalLight(0xffffff, 1.2);
 scene.add(sun);
 
 let cityScene: CityScene | null = null;
