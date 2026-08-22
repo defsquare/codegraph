@@ -18,7 +18,7 @@ export { UsageError } from "./exit.js";
  * an option means adding one entry to one array.
  */
 
-export const COMMAND_NAMES = ["validate", "analyze", "export", "city", "profiles"] as const;
+export const COMMAND_NAMES = ["validate", "analyze", "import", "export", "city", "profiles"] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 /** `analyze --report` values. */
@@ -279,6 +279,32 @@ export const CITY_SPEC: CommandSpec = {
   ],
 };
 
+/**
+ * A store holds ONE model. Surrogates are file-scoped and are not identity
+ * (MM-1), so unioning several models into one database would mean renumbering
+ * them — and a renumbered corpus is a repointed one. Several paths are still
+ * accepted: each becomes its own sibling `.db`, which is a loop, not a union.
+ */
+export const IMPORT_SPEC: CommandSpec = {
+  name: "import",
+  summary: "Build the SQLite analysis store (model.db) beside a model.jsonl.",
+  positional: {
+    name: "model.jsonl",
+    describe: "One or more model.jsonl paths. Each becomes its OWN store — never a union.",
+    variadic: true,
+    required: true,
+  },
+  options: [
+    {
+      name: "out",
+      type: "string",
+      describe: "Write the store here instead of beside the model. One model only.",
+      placeholder: "FILE",
+    },
+    JSON_OPTION,
+  ],
+};
+
 export const PROFILES_SPEC: CommandSpec = {
   name: "profiles",
   summary: "Print the language profiles core ships.",
@@ -296,6 +322,7 @@ export const PROFILES_SPEC: CommandSpec = {
 export const COMMAND_SPECS: readonly CommandSpec[] = [
   VALIDATE_SPEC,
   ANALYZE_SPEC,
+  IMPORT_SPEC,
   EXPORT_SPEC,
   CITY_SPEC,
   PROFILES_SPEC,
@@ -356,6 +383,12 @@ export interface CityOptions extends ModelInputOptions, ViewOptions {
   readonly out: string | undefined;
 }
 
+export interface ImportOptions extends ModelInputOptions {
+  /** `--out FILE`; undefined means `storePathFor` each model. */
+  readonly out: string | undefined;
+  readonly json: boolean;
+}
+
 export interface ProfilesOptions {
   readonly lang: string | undefined;
   readonly json: boolean;
@@ -371,6 +404,7 @@ export type Invocation =
   | { readonly kind: "version" }
   | { readonly kind: "run"; readonly command: "validate"; readonly options: ValidateOptions }
   | { readonly kind: "run"; readonly command: "analyze"; readonly options: AnalyzeOptions }
+  | { readonly kind: "run"; readonly command: "import"; readonly options: ImportOptions }
   | { readonly kind: "run"; readonly command: "export"; readonly options: ExportOptions }
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
   | { readonly kind: "run"; readonly command: "profiles"; readonly options: ProfilesOptions };
@@ -695,6 +729,19 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           top: integerOf(values, "top"),
         },
       };
+    case "import": {
+      const out = stringOf(values, "out");
+      // `--out` names ONE file, so it cannot mean anything for several models.
+      // Silently importing only the first, or writing them all to one path,
+      // are both worse than saying so.
+      if (out !== undefined && models.length > 1) {
+        throw new UsageError(
+          `--out takes one model, but ${models.length} were given`,
+          "Import them one at a time, or drop --out to write each store beside its model.",
+        );
+      }
+      return { kind: "run", command: "import", options: { models, out, json: flagOf(values, "json") } };
+    }
     case "export":
       return {
         kind: "run",

@@ -2,6 +2,7 @@ import { commandSpec, parseInvocation, renderHelp, type Invocation } from "./arg
 import { analyzeCommand } from "./commands/analyze.js";
 import { cityCommand } from "./commands/city.js";
 import { exportCommand } from "./commands/export.js";
+import { importCommand } from "./commands/import.js";
 import { profilesCommand } from "./commands/profiles.js";
 import { validateCommand } from "./commands/validate.js";
 import { EXIT, isUsageError, type ExitCode } from "./exit.js";
@@ -59,6 +60,8 @@ function dispatch(invocation: Invocation, io: IoSink): ExitCode {
           return validateCommand(invocation.options, io);
         case "analyze":
           return analyzeCommand(invocation.options, io);
+        case "import":
+          return importCommand(invocation.options, io);
         case "export":
           return exportCommand(invocation.options, io);
         case "city":

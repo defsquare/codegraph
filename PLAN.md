@@ -1019,10 +1019,47 @@ interchange.
       in-memory path computes them regardless of profile; the test passed only
       because no fixture had a duplicate.
 
-- [ ] `cli`: `codegraph import`; `analyze`/`export` given a `.jsonl`
-      auto-build a sibling `.db` cache (`--no-cache` escape hatch);
-      `dbVersion` mismatch in `meta` ⇒ re-import from JSONL — migration is
-      regeneration, because the DB is a cache.
+- [x] **Step 9 — `codegraph import`.** The explicit command:
+      `codegraph import <model.jsonl...> [--out FILE] [--json]`. It is
+      unconditional — the user asked for a store, so they get a fresh one, and
+      nothing here guesses whether the old one was still good. That question
+      belongs to the automatic cache, which has to answer it unasked.
+
+      **One model per store.** Every other command unions its positionals; this
+      one deliberately does not, because surrogates are file-scoped and are not
+      identity (MM-1), so a union would mean renumbering — and a renumbered
+      corpus is a repointed one. Several paths mean several imports, and `--out`
+      with more than one is a usage error rather than a silent choice.
+
+      Two decisions the CLI's own contracts forced:
+
+      - **stdout says what is true of the STORE; stderr says what was true of
+        the RUN.** SQLite promises no byte-determinism (page allocation varies)
+        and a duration never could, so the size and the timing must not reach
+        the stream `e2e-determinism` compares.
+      - **A file that is not a model is a FINDING, not a crash.** Left
+        unhandled, the record reader's `JsonlError` escaped to `main` and was
+        reported as "an internal error — a bug in codegraph", blaming the tool
+        for the user's file. It now exits 3 with the reader's own message, and
+        one run reports every bad path while still importing the good ones —
+        the same choice `loadModelFiles` makes for the reading commands.
+
+      Exit 3 also covers a model that reads fine but breaks its profile: the
+      store IS written and usable (refusing to cache what `validate` exists to
+      describe would be the second gate this project keeps declining to add),
+      and the exit code still says something is wrong. Step 8 makes that check
+      affordable — `diagnoseStore` on fineract costs ~0.5s, not 8s.
+
+      Also fixed: the 20 000-entity round-trip from step 6 was FLAKY. It takes
+      ~0.4s alone but exceeded vitest's 5s default under the contention of
+      `pnpm -r test`, where several packages' workers share one machine. A test
+      that fails on a busy CI box and passes on a quiet one teaches nobody
+      anything, so its budget is now stated.
+
+- [ ] `cli`: `analyze`/`export` given a `.jsonl` auto-build a sibling `.db`
+      cache (`--no-cache` escape hatch); `dbVersion` mismatch in `meta` ⇒
+      re-import from JSONL — migration is regeneration, because the DB is a
+      cache.
 - **DoD**: a second `analyze` run on fineract opens the cache without
   re-parsing; every report byte-identical to its M6 (JSONL-only) output;
   ad-hoc SQL cookbook (fan-in, facts-only view, reachability) documented.

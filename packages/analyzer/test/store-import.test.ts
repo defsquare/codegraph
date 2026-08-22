@@ -337,7 +337,11 @@ describe("at a size the fixture cannot reach", () => {
     } finally {
       db.close();
     }
-  });
+    // Deliberately heavy: ~0.4s alone, but `pnpm -r test` runs several
+    // packages' workers on one machine and it has exceeded the 5s default
+    // under that contention. A test that fails on a busy CI box and passes on
+    // a quiet one teaches nobody anything, so the budget is stated.
+  }, 30_000);
 
   /** Two interning maps, however many entities: MM-4, at scale. */
   it("still interns two trait sets across 20 000 entities", () => {
