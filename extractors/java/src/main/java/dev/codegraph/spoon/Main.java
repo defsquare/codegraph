@@ -241,12 +241,14 @@ public final class Main {
    * needs an absolute path.
    */
   static Path commonRoot(List<Path> sources) {
-    Path common = sources.get(0).toAbsolutePath().normalize();
+    // Canonical throughout: startsWith over mixed symlink forms would walk the
+    // common ancestor all the way up to "/" and make every anchor absolute.
+    Path common = Anchors.canonical(sources.get(0));
     if (!Files.isDirectory(common)) {
       common = common.getParent();
     }
     for (int i = 1; i < sources.size(); i++) {
-      Path candidate = sources.get(i).toAbsolutePath().normalize();
+      Path candidate = Anchors.canonical(sources.get(i));
       while (common != null && !candidate.startsWith(common)) {
         common = common.getParent();
       }

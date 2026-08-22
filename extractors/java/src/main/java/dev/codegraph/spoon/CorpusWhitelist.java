@@ -310,7 +310,7 @@ public final class CorpusWhitelist {
       if (position == null || !position.isValidPosition() || position.getFile() == null) {
         continue;
       }
-      Path directory = position.getFile().toPath().toAbsolutePath().normalize().getParent();
+      Path directory = Anchors.canonical(position.getFile().toPath()).getParent();
       String packageName =
           type.getPackage() == null || type.getPackage().isUnnamedPackage()
               ? ""
@@ -325,7 +325,7 @@ public final class CorpusWhitelist {
       }
       common = (common == null) ? directory : deepestCommonAncestor(common, directory);
     }
-    return common == null ? Path.of("").toAbsolutePath() : common;
+    return common == null ? Anchors.canonical(Path.of("")) : common;
   }
 
   private static Path deepestCommonAncestor(Path left, Path right) {
