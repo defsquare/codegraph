@@ -36,19 +36,71 @@ body {
   pointer-events: none;
 }
 
-#legend {
-  left: 12px;
-  top: 12px;
+/* An author `display` beats the UA's `[hidden] { display: none }`; restate it
+   for EVERY container given a display of its own. */
+#app-header[hidden],
+#details[hidden] {
+  display: none;
 }
 
-#legend .entry {
+#app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
-  gap: 6px;
-  align-items: baseline;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 14px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--panel-border);
+  font-size: 12px;
+  pointer-events: auto;
+  user-select: none;
 }
 
-#legend .detail {
-  color: var(--text-dim);
+#app-header h1 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#header-toggles {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+#header-toggles label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#header-toggles input {
+  accent-color: #4a5c75;
+  margin: 0;
+}
+
+#help-link {
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+#help-link:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .swatch {
@@ -61,60 +113,144 @@ body {
 }
 
 #tooltip {
-  min-width: 180px;
-}
-
-#controls {
-  left: 12px;
-  bottom: 12px;
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  user-select: none;
-}
-
-#controls label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-
-#controls input {
-  accent-color: #4a5c75;
-  margin: 0;
-}
-
-#tooltip h2 {
-  font-size: 13px;
-  margin-bottom: 2px;
+  max-width: 420px;
   word-break: break-all;
 }
 
-#tooltip .meta {
+#details {
+  top: 46px;
+  right: 12px;
+  width: 320px;
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+#details-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+#details h2 {
+  font-size: 13px;
+  margin-bottom: 2px;
+  padding-right: 16px;
+  word-break: break-all;
+}
+
+#details .meta {
   color: var(--text-dim);
   margin-bottom: 6px;
   word-break: break-all;
 }
 
-#tooltip table {
+#details table {
   border-collapse: collapse;
   width: 100%;
 }
 
-#tooltip td {
+#details td {
   padding: 1px 0;
 }
 
-#tooltip td:last-child {
+#details td:last-child {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-#tooltip .unmeasured {
+#details .unmeasured {
   color: var(--text-dim);
   font-style: italic;
+}
+
+#details details {
+  margin-top: 8px;
+}
+
+#details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+#details details ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+#details details li {
+  padding: 1px 0;
+  word-break: break-all;
+}
+
+#details details li .type {
+  color: var(--text-dim);
+}
+
+dialog#help {
+  max-width: 560px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  background: #ffffff;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+dialog#help::backdrop {
+  background: rgba(28, 34, 43, 0.35);
+}
+
+#help h2 {
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+
+#help h3 {
+  font-size: 13px;
+  margin: 12px 0 4px;
+}
+
+#help p {
+  margin: 4px 0;
+  color: var(--text-dim);
+}
+
+#help .entry {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+#help .detail {
+  color: var(--text-dim);
+}
+
+#help form {
+  margin-top: 14px;
+  text-align: right;
+}
+
+#help form button {
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 3px 12px;
+  cursor: pointer;
 }
 
 /* An author `display` beats the UA's `[hidden] { display: none }`; restate it. */

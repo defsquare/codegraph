@@ -9,14 +9,25 @@
   </head>
   <body>
     <canvas id="city"></canvas>
-    <aside id="legend" class="panel" hidden></aside>
+    <header id="app-header" hidden>
+      <h1 id="corpus-name"></h1>
+      <nav id="header-toggles">
+        <label><input type="checkbox" id="toggle-buildings" checked /> Show buildings</label>
+        <label><input type="checkbox" id="toggle-fan-in" checked /> Show fan-in</label>
+        <label><input type="checkbox" id="toggle-fan-out" checked /> Show fan-out</label>
+        <label><input type="checkbox" id="toggle-all-deps" /> Show all dependencies</label>
+      </nav>
+      <button id="help-link" type="button">Help</button>
+    </header>
     <aside id="tooltip" class="panel" hidden></aside>
-    <aside id="controls" class="panel" hidden>
-      <label><input type="checkbox" id="toggle-buildings" checked /> buildings</label>
-      <label><input type="checkbox" id="toggle-type-arrows" checked /> type dependencies</label>
-      <label><input type="checkbox" id="toggle-fan-in" checked /> fan-in</label>
-      <label><input type="checkbox" id="toggle-fan-out" checked /> fan-out</label>
+    <aside id="details" class="panel" hidden>
+      <button id="details-close" type="button" aria-label="Close">&times;</button>
+      <div id="details-body"></div>
     </aside>
+    <dialog id="help">
+      <div id="help-body"></div>
+      <form method="dialog"><button>Close</button></form>
+    </dialog>
     <div id="loader">
       <h1>codegraph — code city</h1>
       <p id="loader-message">

@@ -2,9 +2,10 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { CityLayout } from "@codegraph/city";
 import { CityLoadError, parseCityLayout } from "./guard.js";
-import { legendModel } from "./scene/legend.js";
-import type { BuildingBox } from "./scene/buildings.js";
-import type { Plate } from "./scene/districts.js";
+import { buildingDetails, districtDetails, type BuildingDetails, type DetailRow } from "./scene/details.js";
+import type { ArrowToggles } from "./scene/focus.js";
+import { HELP_SEEN_KEY, helpModel } from "./scene/help.js";
+import { buildingLabel, districtLabel } from "./scene/labels.js";
 import { createCityScene, type CityScene } from "./three/cityScene.js";
 import { BuildingPicker } from "./three/picking.js";
 import { COLORS } from "./theme.js";
@@ -13,10 +14,12 @@ import { COLORS } from "./theme.js";
  * The viewer shell: load a city artifact (dev-server `/city.json`, `?src=URL`,
  * drag & drop, or file picker), upload it once via `createCityScene`, then
  * orbit it (rotate / zoom / pan are all live). Interaction is honest and
- * minimal: hovering a building shows its RAW metrics and focuses its type
- * arrows; CLICKING A DISTRICT shows its module-level fan-in/fan-out arcs, each
- * direction toggleable; the Buildings toggle turns the city into the pure
- * module landscape. `?landscape=1` starts in that state.
+ * minimal: HOVER names an element (one line, identity components from the
+ * artifact); CLICK selects it — a right-side panel shows its details and
+ * exactly its fan-in/fan-out arcs appear, per the header toggles. Dependency
+ * arrows rest hidden ("Show all dependencies" restores the overview). The
+ * header carries the corpus name and a Help dialog (auto-shown once, the
+ * legend inside). `?landscape=1` starts with buildings hidden.
  */
 
 function must<T extends Element>(selector: string): T {
@@ -25,16 +28,22 @@ function must<T extends Element>(selector: string): T {
   return element;
 }
 const canvas = must<HTMLCanvasElement>("#city");
-const legendPanel = must<HTMLElement>("#legend");
 const tooltip = must<HTMLElement>("#tooltip");
 const loader = must<HTMLElement>("#loader");
 const loaderMessage = must<HTMLElement>("#loader-message");
 const loaderFile = must<HTMLInputElement>("#loader-file");
-const controlsPanel = must<HTMLElement>("#controls");
+const header = must<HTMLElement>("#app-header");
+const corpusName = must<HTMLElement>("#corpus-name");
+const helpDialog = must<HTMLDialogElement>("#help");
+const helpBody = must<HTMLElement>("#help-body");
+const helpLink = must<HTMLButtonElement>("#help-link");
+const detailsPanel = must<HTMLElement>("#details");
+const detailsBody = must<HTMLElement>("#details-body");
+const detailsClose = must<HTMLButtonElement>("#details-close");
 const toggleBuildings = must<HTMLInputElement>("#toggle-buildings");
-const toggleTypeArrows = must<HTMLInputElement>("#toggle-type-arrows");
 const toggleFanIn = must<HTMLInputElement>("#toggle-fan-in");
 const toggleFanOut = must<HTMLInputElement>("#toggle-fan-out");
+const toggleAllDeps = must<HTMLInputElement>("#toggle-all-deps");
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -72,19 +81,22 @@ renderer.setAnimationLoop(() => {
 
 if (new URLSearchParams(window.location.search).get("landscape") === "1") {
   toggleBuildings.checked = false;
-  toggleTypeArrows.checked = false;
+}
+
+function fanToggles(showAll: boolean): ArrowToggles {
+  return { fanIn: toggleFanIn.checked, fanOut: toggleFanOut.checked, showAll };
 }
 
 function applyToggles(): void {
   if (!cityScene) return;
-  cityScene.setBuildingsVisible(toggleBuildings.checked);
-  cityScene.setTypeArrowsVisible(toggleTypeArrows.checked && toggleBuildings.checked);
-  cityScene.setDistrictFocus(selectedDistrict, {
-    fanIn: toggleFanIn.checked,
-    fanOut: toggleFanOut.checked,
-  });
+  const buildings = toggleBuildings.checked;
+  cityScene.setBuildingsVisible(buildings);
+  // "Show all dependencies" means the layer that is on screen: type arrows
+  // with buildings up, module arrows in the landscape view.
+  cityScene.setFocus(buildings ? locked : null, fanToggles(toggleAllDeps.checked && buildings));
+  cityScene.setDistrictFocus(selectedDistrict, fanToggles(toggleAllDeps.checked && !buildings));
 }
-for (const toggle of [toggleBuildings, toggleTypeArrows, toggleFanIn, toggleFanOut]) {
+for (const toggle of [toggleBuildings, toggleFanIn, toggleFanOut, toggleAllDeps]) {
   toggle.addEventListener("change", applyToggles);
 }
 
@@ -95,14 +107,19 @@ function showCity(city: CityLayout): void {
     hovered = locked = null;
     selectedDistrict = null;
     tooltip.hidden = true;
+    detailsPanel.hidden = true;
   }
   cityScene = createCityScene(city);
   scene.add(cityScene.root);
   frameCity(city);
-  renderLegend(city);
+  // `corpus` arrived with this feature; older artifacts fall back to the view.
+  const corpus = (city as { corpus?: { name?: string } }).corpus;
+  corpusName.textContent = corpus?.name ?? city.view.name ?? "city.json";
+  renderHelp(city);
   applyToggles();
   loader.hidden = true;
-  controlsPanel.hidden = false;
+  header.hidden = false;
+  showHelpOnce();
 }
 
 /** Aim the camera like the reference shot: elevated three-quarter view. */
@@ -119,7 +136,7 @@ function frameCity(city: CityLayout): void {
   sun.position.set(cx - span, span * 1.5, cz + span * 0.6);
 }
 
-// --- legend and tooltips ----------------------------------------------------
+// --- header, help dialog, tooltip and details panel -------------------------
 
 const SWATCH_COLORS: Record<string, number> = {
   building: COLORS.building,
@@ -137,41 +154,75 @@ function swatchOf(kind: string): HTMLElement {
   return swatch;
 }
 
-function renderLegend(city: CityLayout): void {
-  const entries = [
-    ...legendModel(city).map((entry) => ({ ...entry, swatch: entry.swatch as string | null })),
-    {
-      swatch: "fanIn",
-      label: "fan-in",
-      detail: "modules that depend on the selected district",
-    },
-    {
-      swatch: "fanOut",
-      label: "fan-out",
-      detail: "modules the selected district depends on (inferred = desaturated)",
-    },
-  ];
-  legendPanel.replaceChildren(
-    ...entries.map((entry) => {
-      const line = document.createElement("div");
-      line.className = "entry";
-      if (entry.swatch !== null) line.append(swatchOf(entry.swatch));
-      const text = document.createElement("span");
-      const label = document.createElement("strong");
-      label.textContent = entry.label;
-      text.append(label);
-      if (entry.detail !== undefined) {
-        const detail = document.createElement("span");
-        detail.className = "detail";
-        detail.textContent = ` — ${entry.detail}`;
-        text.append(detail);
-      }
-      line.append(text);
-      return line;
-    }),
-  );
-  legendPanel.hidden = false;
+function legendLine(entry: {
+  swatch: string | null;
+  label: string;
+  detail: string | undefined;
+}): HTMLElement {
+  const line = document.createElement("div");
+  line.className = "entry";
+  if (entry.swatch !== null) line.append(swatchOf(entry.swatch));
+  const text = document.createElement("span");
+  const label = document.createElement("strong");
+  label.textContent = entry.label;
+  text.append(label);
+  if (entry.detail !== undefined) {
+    const detail = document.createElement("span");
+    detail.className = "detail";
+    detail.textContent = ` — ${entry.detail}`;
+    text.append(detail);
+  }
+  line.append(text);
+  return line;
 }
+
+/** The dialog renders `helpModel` verbatim — concept text AND the legend are
+ * the unit-tested model; nothing here is free-hand prose. */
+function renderHelp(city: CityLayout | null): void {
+  const model = helpModel(city);
+  const nodes: HTMLElement[] = [];
+  const title = document.createElement("h2");
+  title.textContent = "codegraph — code city";
+  nodes.push(title);
+  for (const section of model.sections) {
+    const heading = document.createElement("h3");
+    heading.textContent = section.heading;
+    nodes.push(heading);
+    for (const paragraph of section.paragraphs) {
+      const p = document.createElement("p");
+      p.textContent = paragraph;
+      nodes.push(p);
+    }
+  }
+  if (model.legend.length > 0) {
+    const heading = document.createElement("h3");
+    heading.textContent = "Legend";
+    nodes.push(heading);
+    nodes.push(...model.legend.map(legendLine));
+  }
+  helpBody.replaceChildren(...nodes);
+}
+
+/** Auto-open once per browser; the Help button always reopens. localStorage
+ * may throw (file://, blocked storage) — then never auto-open, only on ask. */
+function showHelpOnce(): void {
+  let seen = true;
+  try {
+    seen = localStorage.getItem(HELP_SEEN_KEY) !== null;
+  } catch {
+    /* storage unavailable: treat as seen */
+  }
+  if (seen || helpDialog.open) return;
+  helpDialog.showModal();
+  try {
+    localStorage.setItem(HELP_SEEN_KEY, "1");
+  } catch {
+    /* storage unavailable */
+  }
+}
+helpLink.addEventListener("click", () => {
+  if (!helpDialog.open) helpDialog.showModal();
+});
 
 function placeTooltip(clientX: number, clientY: number): void {
   tooltip.hidden = false;
@@ -180,9 +231,15 @@ function placeTooltip(clientX: number, clientY: number): void {
   tooltip.style.top = `${Math.min(clientY + pad, window.innerHeight - tooltip.offsetHeight - pad)}px`;
 }
 
-function metricsTable(rows: readonly (readonly [string, string, string?])[]): HTMLTableElement {
+/** Hover shows ONE line — the element's identity; details live in the panel. */
+function renderTooltip(label: string, clientX: number, clientY: number): void {
+  tooltip.textContent = label;
+  placeTooltip(clientX, clientY);
+}
+
+function rowsTable(rows: readonly DetailRow[]): HTMLTableElement {
   const table = document.createElement("table");
-  for (const [label, value, className] of rows) {
+  for (const { label, value, className } of rows) {
     const row = table.insertRow();
     row.insertCell().textContent = label;
     const cell = row.insertCell();
@@ -192,55 +249,97 @@ function metricsTable(rows: readonly (readonly [string, string, string?])[]): HT
   return table;
 }
 
-function renderBuildingTooltip(box: BuildingBox, clientX: number, clientY: number): void {
-  tooltip.replaceChildren();
-  const title = document.createElement("h2");
-  title.textContent = box.name ?? box.id;
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  meta.textContent = `${box.kind}${box.isStub ? " (stub)" : ""} — ${box.district}`;
-  tooltip.append(
-    title,
-    meta,
-    metricsTable(
-      Object.entries(box.metrics).map(([metric, value]) =>
-        value === null ? [metric, "unmeasured", "unmeasured"] : [metric, String(value)],
-      ),
+function memberList(
+  summaryText: string,
+  items: readonly { text: string; type?: string }[],
+  open: boolean,
+): HTMLDetailsElement {
+  const fold = document.createElement("details");
+  fold.open = open;
+  const summary = document.createElement("summary");
+  summary.textContent = `${summaryText} (${items.length})`;
+  fold.append(summary);
+  const list = document.createElement("ul");
+  for (const item of items) {
+    const line = document.createElement("li");
+    line.textContent = item.text;
+    if (item.type !== undefined) {
+      const type = document.createElement("span");
+      type.className = "type";
+      type.textContent = `: ${item.type}`;
+      line.append(type);
+    }
+    list.append(line);
+  }
+  fold.append(list);
+  return fold;
+}
+
+function detailsHeader(title: string, meta: string): readonly HTMLElement[] {
+  const heading = document.createElement("h2");
+  heading.textContent = title;
+  const metaLine = document.createElement("div");
+  metaLine.className = "meta";
+  metaLine.textContent = meta;
+  return [heading, metaLine];
+}
+
+function renderBuildingPanel(details: BuildingDetails): void {
+  detailsBody.replaceChildren(
+    ...detailsHeader(details.title, details.meta),
+    rowsTable(details.rows),
+    memberList(
+      "Attributes",
+      details.attributes.map((attribute) => ({
+        text: attribute.name,
+        ...(attribute.type === undefined ? {} : { type: attribute.type }),
+      })),
+      true,
+    ),
+    memberList(
+      "Operations",
+      details.operations.map((operation) => ({ text: operation.signature })),
+      false,
     ),
   );
-  placeTooltip(clientX, clientY);
+  detailsPanel.hidden = false;
 }
 
-function renderDistrictTooltip(plate: Plate, clientX: number, clientY: number): void {
+/** The right-side panel mirrors the selection; deselecting closes it. */
+function renderDetails(): void {
   if (!cityScene) return;
-  const city = cityScene;
-  const buildings = city.boxes.filter((box) => box.district === plate.id).length;
-  const nested = city.plates.filter((p) => p.parent === plate.id).length;
-  const fanIn = city.districtArcs.filter((arc) => arc.to === plate.id);
-  const fanOut = city.districtArcs.filter((arc) => arc.from === plate.id);
-  const sum = (arcs: readonly { count: number }[]) =>
-    arcs.reduce((total, arc) => total + arc.count, 0);
-
-  tooltip.replaceChildren();
-  const title = document.createElement("h2");
-  title.textContent = plate.name ?? plate.id;
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  meta.textContent = `module${plate.isStub ? " (stub)" : ""}${
-    plate.parent === undefined ? "" : ` — in ${plate.parent}`
-  }`;
-  tooltip.append(
-    title,
-    meta,
-    metricsTable([
-      ["buildings", String(buildings)],
-      ["nested districts", String(nested)],
-      ["fan-in", `${fanIn.length} modules / ${sum(fanIn)} deps`],
-      ["fan-out", `${fanOut.length} modules / ${sum(fanOut)} deps`],
-    ]),
-  );
-  placeTooltip(clientX, clientY);
+  const box = locked === null ? undefined : cityScene.boxes[locked];
+  if (box !== undefined) {
+    renderBuildingPanel(buildingDetails(box));
+    return;
+  }
+  const plate =
+    selectedDistrict === null
+      ? undefined
+      : cityScene.plates.find((candidate) => candidate.id === selectedDistrict);
+  if (plate !== undefined) {
+    const details = districtDetails(
+      cityScene.plates,
+      cityScene.boxes,
+      cityScene.districtArcs,
+      plate,
+    );
+    detailsBody.replaceChildren(
+      ...detailsHeader(details.title, details.meta),
+      rowsTable(details.rows),
+    );
+    detailsPanel.hidden = false;
+    return;
+  }
+  detailsPanel.hidden = true;
 }
+
+detailsClose.addEventListener("click", () => {
+  locked = null;
+  selectedDistrict = null;
+  applyToggles();
+  renderDetails();
+});
 
 // --- picking ----------------------------------------------------------------
 
@@ -250,27 +349,21 @@ function pickPlate(event: { clientX: number; clientY: number }): number | null {
   return picker.pick(event, canvas, camera, cityScene.platesMesh);
 }
 
+// Hover only NAMES things; it never changes what arrows show — selection does.
 canvas.addEventListener("pointermove", (event) => {
   if (!cityScene) return;
-  const hit = toggleBuildings.checked
+  hovered = toggleBuildings.checked
     ? picker.pick(event, canvas, camera, cityScene.buildingsMesh)
     : null;
-  if (hit !== hovered) {
-    hovered = hit;
-    if (locked === null) cityScene.setFocus(hovered);
-  }
-  const shownBuilding = locked ?? hovered;
-  const box = shownBuilding === null ? undefined : cityScene.boxes[shownBuilding];
+  const box = hovered === null ? undefined : cityScene.boxes[hovered];
   if (box !== undefined) {
-    renderBuildingTooltip(box, event.clientX, event.clientY);
+    renderTooltip(buildingLabel(box), event.clientX, event.clientY);
     return;
   }
   const plateIndex = pickPlate(event);
   const plate = plateIndex === null ? undefined : cityScene.plates[plateIndex];
   if (plate !== undefined) {
-    renderDistrictTooltip(plate, event.clientX, event.clientY);
-  } else if (selectedDistrict === null) {
-    tooltip.hidden = true;
+    renderTooltip(districtLabel(plate), event.clientX, event.clientY);
   } else {
     tooltip.hidden = true;
   }
@@ -292,20 +385,20 @@ canvas.addEventListener("click", (event) => {
     ? picker.pick(event, canvas, camera, cityScene.buildingsMesh)
     : null;
   if (buildingHit !== null) {
-    // A building click locks/unlocks type-arrow focus, and clears any
-    // district selection — one selection at a time keeps the picture readable.
+    // A building click selects/deselects it, and clears any district
+    // selection — one selection at a time keeps the picture readable.
     locked = buildingHit === locked ? null : buildingHit;
-    cityScene.setFocus(locked ?? hovered);
     selectedDistrict = null;
     applyToggles();
+    renderDetails();
     return;
   }
   const plateIndex = pickPlate(event);
   const plate = plateIndex === null ? undefined : cityScene.plates[plateIndex];
   selectedDistrict = plate === undefined || plate.id === selectedDistrict ? null : plate.id;
   locked = null;
-  cityScene.setFocus(hovered);
   applyToggles();
+  renderDetails();
 });
 
 // --- artifact loading -------------------------------------------------------

@@ -4,12 +4,9 @@ import { arrowArcs, type ArrowArc } from "../scene/arrows.js";
 import { buildingBoxes, type BuildingBox } from "../scene/buildings.js";
 import { districtArcs, type DistrictArc } from "../scene/districtArrows.js";
 import { districtPlates, groundPlate, type Plate } from "../scene/districts.js";
+import { arcState, type ArrowToggles } from "../scene/focus.js";
 import {
   ARC_SEGMENTS,
-  ARROW_ALPHA_DIMMED,
-  ARROW_ALPHA_FOCUS,
-  ARROW_ALPHA_MAX,
-  ARROW_ALPHA_MIN,
   COLORS,
   INFERRED_DESATURATION,
   INFERRED_GRAY,
@@ -17,12 +14,6 @@ import {
   PLATE_SELECT_TINT,
   PLATE_TINT_PER_LEVEL,
 } from "../theme.js";
-
-/** Which of a selected district's dependency directions are drawn. */
-export interface FanToggles {
-  readonly fanIn: boolean;
-  readonly fanOut: boolean;
-}
 
 /**
  * The Three.js upload of the scene model. All geometry is built ONCE here;
@@ -40,12 +31,14 @@ export interface CityScene {
   readonly plates: readonly Plate[];
   readonly arcs: readonly ArrowArc[];
   readonly districtArcs: readonly DistrictArc[];
-  /** Focus a building by instance index (null = none): its type arrows brighten. */
-  setFocus(index: number | null): void;
-  /** Select a district: its plate brightens and its fan arcs show, per toggles. */
-  setDistrictFocus(districtId: string | null, toggles: FanToggles): void;
+  /**
+   * Select a building by instance index (null = none): exactly its fan-in/out
+   * type arrows show, per the toggles' decision table (scene/focus.ts).
+   */
+  setFocus(index: number | null, toggles: ArrowToggles): void;
+  /** Select a district: its plate darkens and its fan arcs show, per toggles. */
+  setDistrictFocus(districtId: string | null, toggles: ArrowToggles): void;
   setBuildingsVisible(visible: boolean): void;
-  setTypeArrowsVisible(visible: boolean): void;
   dispose(): void;
 }
 
@@ -107,7 +100,8 @@ export function createCityScene(city: CityLayout): CityScene {
   typeArrows.lines.raycast = () => undefined;
   root.add(typeArrows.lines);
   disposables.push(typeArrows.geometry, typeArrows.material);
-  arcs.forEach((arc, i) => typeArrows.setAlpha(i, restingAlpha(arc.weight)));
+  // Arcs rest at alpha 0 — the decision table (applyToggles -> setFocus)
+  // decides everything that shows; nothing is drawn unasked.
   typeArrows.commit();
 
   // District arrows: same construction, but RGB is rewritten per selection
@@ -121,23 +115,39 @@ export function createCityScene(city: CityLayout): CityScene {
   disposables.push(districtArrows.geometry, districtArrows.material);
   districtArrows.commit();
 
-  function setFocus(index: number | null): void {
-    const focusId = index === null ? null : boxes[index]?.id ?? null;
-    arcs.forEach((arc, i) => {
-      typeArrows.setAlpha(
-        i,
-        focusId === null
-          ? restingAlpha(arc.weight)
-          : arc.from === focusId || arc.to === focusId
-            ? ARROW_ALPHA_FOCUS
-            : ARROW_ALPHA_DIMMED,
-      );
+  // One painter for both arc families: role from the decision table, hue by
+  // direction under a selection (provenance moves to the saturation channel),
+  // provenance hue when resting in the showAll overview.
+  const fanInColor = new THREE.Color(COLORS.arrowFanIn);
+  const fanOutColor = new THREE.Color(COLORS.arrowFanOut);
+  const inferredGray = new THREE.Color(INFERRED_GRAY);
+  function paintArcs(
+    layer: ReturnType<typeof buildArcLines>,
+    arcList: readonly { from: string; to: string; weight: number; inferred: boolean }[],
+    selected: string | null,
+    toggles: ArrowToggles,
+  ): void {
+    arcList.forEach((arc, i) => {
+      const state = arcState(arc, selected, toggles);
+      if (state.role === "fanIn" || state.role === "fanOut") {
+        color.copy(state.role === "fanOut" ? fanOutColor : fanInColor);
+        if (arc.inferred) color.lerp(inferredGray, INFERRED_DESATURATION);
+      } else {
+        color.copy(typeTint(arc.inferred));
+      }
+      layer.setTint(i, color);
+      layer.setAlpha(i, state.alpha);
     });
-    typeArrows.commit();
+    layer.commit();
+  }
+
+  function setFocus(index: number | null, toggles: ArrowToggles): void {
+    const focusId = index === null ? null : boxes[index]?.id ?? null;
+    paintArcs(typeArrows, arcs, focusId, toggles);
   }
 
   let selectedPlate: number | null = null;
-  function setDistrictFocus(districtId: string | null, toggles: FanToggles): void {
+  function setDistrictFocus(districtId: string | null, toggles: ArrowToggles): void {
     // Plate highlight, in place.
     if (selectedPlate !== null) {
       const plate = plates[selectedPlate];
@@ -156,25 +166,7 @@ export function createCityScene(city: CityLayout): CityScene {
     }
     if (platesMesh.instanceColor) platesMesh.instanceColor.needsUpdate = true;
 
-    // Fan arcs: hue = direction relative to the selection, alpha = weight;
-    // inferred arcs desaturate but keep their direction hue.
-    const fanIn = new THREE.Color(COLORS.arrowFanIn);
-    const fanOut = new THREE.Color(COLORS.arrowFanOut);
-    const gray = new THREE.Color(INFERRED_GRAY);
-    dArcs.forEach((arc, i) => {
-      const isOut = districtId !== null && arc.from === districtId;
-      const isIn = districtId !== null && arc.to === districtId;
-      const shown = (isOut && toggles.fanOut) || (isIn && toggles.fanIn);
-      if (!shown) {
-        districtArrows.setAlpha(i, 0);
-        return;
-      }
-      color.copy(isOut ? fanOut : fanIn);
-      if (arc.inferred) color.lerp(gray, INFERRED_DESATURATION);
-      districtArrows.setTint(i, color);
-      districtArrows.setAlpha(i, ARROW_ALPHA_MIN + arc.weight * (ARROW_ALPHA_FOCUS - ARROW_ALPHA_MIN));
-    });
-    districtArrows.commit();
+    paintArcs(districtArrows, dArcs, districtId, toggles);
   }
 
   return {
@@ -190,19 +182,12 @@ export function createCityScene(city: CityLayout): CityScene {
     setBuildingsVisible: (visible) => {
       buildingsMesh.visible = visible;
     },
-    setTypeArrowsVisible: (visible) => {
-      typeArrows.lines.visible = visible;
-    },
     dispose: () => disposables.forEach((d) => d.dispose()),
   };
 }
 
 function typeTint(inferred: boolean): THREE.Color {
   return new THREE.Color(inferred ? COLORS.arrowInferred : COLORS.arrowDeclared);
-}
-
-function restingAlpha(weight: number): number {
-  return ARROW_ALPHA_MIN + weight * (ARROW_ALPHA_MAX - ARROW_ALPHA_MIN);
 }
 
 interface ArcSource {
