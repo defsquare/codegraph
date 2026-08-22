@@ -333,28 +333,41 @@ old-format reader. Fixture snapshots regenerate to `.jsonl`; `model.db` is
 never committed. (First external consumer, whenever one exists, is the
 moment versioning starts meaning something.)
 
-- [ ] `core`: record-type Zod schemas (`Header`, `FileRec`, `EntityRec`,
-      `EdgeRec`, `Eof`); streaming `readModel`/`writeModel`;
+- [x] `core`: record-type Zod schemas (`Header`, `FileRec`, `EntityRec`,
+      `EdgeRec`, `Eof`); streaming `readModelRecordsSync`/`writeModelFile`;
       `gen:schemas` emits per-record JSON Schemas + container contract README.
-- [ ] `extractors/java`: Jackson streaming JSONL writer (removes its current
+- [x] `extractors/java`: Jackson streaming JSONL writer (removes its former
       whole-document buffering); canonical sort before surrogate assignment.
-- [ ] Property suite: reformulated over surrogates + natural keys; add
-      truncation detection (eof counts) and line-level schema conformance.
-- [ ] `analyzer`: `importModel(jsonlPath) → model.db` (single transaction,
-      prepared statements); DB-backed graph facade behind the existing API.
-- [ ] `cli`: `codegraph import`; `analyze`/`export`/PlantUML read `model.db`,
-      auto-importing when given a `.jsonl`.
-- [ ] Regenerate fixtures; delete v1 path.
+- [x] Property suite: reformulated over surrogates + natural keys; truncation
+      detection (eof counts) and line-level schema conformance.
+- [x] `analyzer`: `importModel(jsonlPath) → model.db` (single transaction,
+      prepared statements) and its exact inverse `readStoreRecords`; the fold,
+      the import layer and every diagnostic answered in SQL behind the existing
+      API, with `foldFromStore` REFUSING any view it cannot translate rather
+      than approximating it.
+- [x] `cli`: `codegraph import`; `analyze`/`export` auto-build and reuse a
+      sibling `model.db`, with `--no-cache`.
+- [x] Regenerate fixtures; delete v1 path.
+
+Everything above is measured in PLAN.md §9.3, which carries the definition of
+done and the numbers behind it. `docs/sql-cookbook.md` is the user-facing half:
+how to query the store yourself, and the four rules a query must respect.
 
 ## 5. Open questions
 
-1. Confirm the two-artifact split (JSONL contract + SQLite cache) vs.
-   SQLite-only. SQLite-only is defensible but sacrifices diffable fixtures,
-   byte-determinism as a tested property, and the any-language extractor bar.
+1. ~~Confirm the two-artifact split (JSONL contract + SQLite cache) vs.
+   SQLite-only.~~ — **settled by building it**: the split held up. The
+   `.jsonl` stayed the thing fixtures diff, property tests run against and
+   extractors must conform to; the `.db` is regenerated on demand and
+   gitignored. Nothing in M7 needed the store to be authoritative, and the
+   round trip through it is a test precisely because it is not.
 2. ~~`node:sqlite` vs `better-sqlite3`~~ — **settled**: the builtin, loaded at
    one site (`analyzer/src/store/sqlite.ts`) behind an interface written from
    the store's needs, so a fallback is a matter of satisfying one type at one
    place. Node 22.5+ has everything the store uses, `iterate()` included.
-3. Does `codegraph analyze foo.jsonl` auto-build `foo.db` next to it
-   (recommended: yes, with a `--no-cache` escape hatch)?
+3. ~~Does `codegraph analyze foo.jsonl` auto-build `foo.db` next to it?~~ —
+   **settled**: yes, with `--no-cache`. Staleness is size and mtime rather
+   than a content hash, because hashing 133 MB costs more than the parse the
+   cache exists to avoid; a `dbVersion` mismatch, a corrupt file or an
+   unwritable directory all mean "read the `.jsonl`", never "fail".
 4. `.jsonl.gz` support in `readModel` — cheap follow-up, not part of M6.

@@ -533,7 +533,12 @@ describe("natural keys (MM-1)", () => {
     fc.assert(
       fc.property(naturalKeyArb, naturalKeyArb, (a, b) => {
         const forward = compareNaturalKeys(a, b);
-        expect(Math.sign(compareNaturalKeys(b, a))).toBe(-Math.sign(forward));
+        // As a SUM, not as `-Math.sign(forward)`: `Object.is(0, -0)` is false,
+        // so negating the sign of an equal pair produces `-0` and the assertion
+        // fails on the sign of zero rather than on the order. This generator
+        // draws components from a small alphabet, so it does produce equal
+        // pairs — rarely enough that the seed decided whether the suite passed.
+        expect(Math.sign(forward) + Math.sign(compareNaturalKeys(b, a))).toBe(0);
         expect(forward === 0).toBe(naturalKeysEqual(a, b));
       }),
       { numRuns: 400 },

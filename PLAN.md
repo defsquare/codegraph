@@ -1107,9 +1107,76 @@ interchange.
       same size with a later timestamp. `*.db` is gitignored: the store is
       derived and disposable, and a binary beside the `.jsonl` in git would be
       a second, undiffable answer to the same question.
-- **DoD**: a second `analyze` run on fineract opens the cache without
-  re-parsing; every report byte-identical to its M6 (JSONL-only) output;
-  ad-hoc SQL cookbook (fan-in, facts-only view, reachability) documented.
+- [x] **Step 11 — the SQL cookbook.** `docs/sql-cookbook.md`: orientation,
+      two setup views that turn surrogates into rendered ids, and recipes for
+      fan-in, fan-out, facts-only, traits, modules, the import graph,
+      reachability, module cycles, evidence and uncertain dispatch — plus the
+      four rules a query must respect and the list of questions to ask
+      `codegraph` instead.
+
+      **The cookbook is executable.** `sql-cookbook.test.ts` extracts every
+      ```sql block and runs it in document order against a store built from the
+      committed fixture, because a recipe that has rotted still LOOKS like SQL
+      and the reader finds out at a prompt rather than in review. Three claims
+      the document makes about agreeing with `codegraph` are checked as
+      equalities, not for syntax: the `node` view reproduces `renderId` for all
+      167 ids in order, the fan-in recipe counts what the model's edges count,
+      and the cycle recipe agrees about cycles.
+
+      Two mutations. Breaking a recipe fails three tests. **Rendering the
+      self-module test by SYMBOL instead of surrogate did not** — the same
+      hazard that survived step 7's parity suite, now living in the
+      documentation, where it would have taught the wrong idiom. The namesake
+      corpus is now built here too.
+
+      Written while checking rather than asserting: `module_id` and the fold's
+      container walk agree for every entity that resolves on both corpora (0
+      disagreements), but they differ where the walk ends with NO container and
+      `module_id` always points somewhere — the fixture has 2 such entities. The
+      document says so rather than implying they are the same question.
+
+---
+
+### M7 — definition of done
+
+**Every clause verified on apache/fineract (241 101 entities / 782 046 edges),
+not asserted.**
+
+| DoD clause | evidence |
+|---|---|
+| a second `analyze` opens the cache without re-parsing | cold 10.9 s / 241 MB → **warm 1.96 s / 114 MB**; `--no-cache` 9.8 s / 1 053 MB |
+| every report byte-identical to its JSONL-only output | **12 of 12**, `cmp`-verified: 8 `analyze` variants and 4 `export` formats, 486 000+ lines including `deps --level type` at 124 266 lines and `export --format json` at 134 077 |
+| ad-hoc SQL cookbook documented | `docs/sql-cookbook.md`, every query executed by a test |
+
+The cache is **5× faster and 9× lighter** on the report that motivated M7, and
+the whole M6 → M7 arc takes `analyze` on fineract from 11.5 s / 1 438 MB to
+1.96 s / 114 MB — **5.9× faster on 12.6× less memory**, with the answer
+unchanged to the byte.
+
+What the eleven steps actually bought, in order of how much it mattered:
+
+1. **The wire became streamable** (steps 1–3, 6). A 559.5 MB v1 model was
+   unreadable at all — past Node's single-string ceiling. It is 133.7 MB of
+   JSONL now, and validating it costs 140 MB of memory where materializing it
+   costs 555 MB.
+2. **The fold moved into SQL** (step 7). Fold is the funnel every report and
+   export goes through, so moving that one thing moved all of them, and the
+   782 046 base edges never enter JavaScript.
+3. **MM-4 made validation nearly free** (step 8). Profile validity is a
+   function of `(kind, trait set, isStub)` and the store interns trait sets, so
+   23 rows decide a 241 101-entity corpus: 2.1 s → 0.46 s.
+4. **The store answers, it does not remember** (steps 5, 8). No cached verdicts,
+   no second representation to invalidate — every diagnostic is a query.
+
+And what the process bought, which is most of why the numbers are trustworthy:
+**of roughly two dozen mutations, five exposed gaps rather than confirming
+coverage**, and three of those found real bugs that no test had asked about —
+`open: false` silently rebuilding the cache on every run, an empty array
+indistinguishable from an absent key, and `is_stub` read without the trait that
+gives it meaning. The two that recur are worth naming: a test that passes
+because the fixture has no instance of the case (the namesake type, the
+duplicate under an unknown profile), and a mutation written so symmetrically
+that it cannot be detected by construction.
 
 ## 10. Phase 7+ — Next languages (deferred, contract-ready from day 1)
 

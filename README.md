@@ -263,6 +263,12 @@ fact and a dashed one contains an inference, and stub nodes are dashed and grey.
 - [`CLAUDE.md`](CLAUDE.md) — architecture boundaries and metamodel invariants
 - [`docs/analyzer.md`](docs/analyzer.md) — the analyzer's design: the pipeline,
   its data structures, algorithms and costs, entry points, and the rules behind them
+- [`docs/model-encoding.md`](docs/model-encoding.md) — the two physical
+  encodings: the JSONL interchange (the contract) and the SQLite analysis store
+  (the workbench), and why the split
+- [`docs/sql-cookbook.md`](docs/sql-cookbook.md) — querying `model.db`
+  yourself: fan-in, facts-only views, reachability, cycles, and the four rules
+  a query must respect
 - [`docs/city-model.md`](docs/city-model.md) — the city model's design: data
   structures, metric sources, algorithms, entry points, and what layout will consume
 - [`docs/city-render.md`](docs/city-render.md) — the renderer's design: the
