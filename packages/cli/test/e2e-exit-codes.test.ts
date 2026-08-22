@@ -43,6 +43,8 @@ const SUCCESS_CASES: readonly Case[] = [
   { why: "validate the clean fixture", argv: ["validate", FIXTURE], expected: EXIT.OK },
   { why: "validate as json", argv: ["validate", FIXTURE, "--json"], expected: EXIT.OK },
   { why: "deps report", argv: ["analyze", FIXTURE, "--report", "deps"], expected: EXIT.OK },
+  // No --report at all: the default report is a RUN, not a usage error.
+  { why: "the default report", argv: ["analyze", FIXTURE], expected: EXIT.OK },
   {
     why: "coupling report",
     argv: ["analyze", FIXTURE, "--report", "coupling"],
@@ -75,7 +77,11 @@ const USAGE_CASES: readonly Case[] = [
   { why: "unknown global flag", argv: ["--frobnicate"], expected: EXIT.USAGE },
   { why: "missing the model path", argv: ["validate"], expected: EXIT.USAGE },
   { why: "unknown flag on validate", argv: ["validate", FIXTURE, "--nope"], expected: EXIT.USAGE },
-  { why: "analyze without --report", argv: ["analyze", FIXTURE], expected: EXIT.USAGE },
+  {
+    why: "analyze with an unknown --level",
+    argv: ["analyze", FIXTURE, "--level", "galaxy"],
+    expected: EXIT.USAGE,
+  },
   {
     why: "unknown --report value",
     argv: ["analyze", FIXTURE, "--report", "entropy"],
@@ -199,7 +205,9 @@ describe("exit 2 — the invocation was wrong", () => {
       expect(result.stdout, `${describeArgv(argv)} wrote to stdout`).toBe("");
       expect(result.stderr.trim(), `${describeArgv(argv)} said nothing`).not.toBe("");
     }
-  });
+    // One spawn per case, serially: the 5 s default is a coin flip on a loaded
+    // machine, and a timeout here would read as "the CLI printed to stdout".
+  }, 120_000);
 });
 
 describe("exit 3 — the tool worked, the model did not", () => {

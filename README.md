@@ -84,7 +84,7 @@ directory the extractor has run on, they read its `<current-dir>-codegraph.jsonl
 ```bash
 codegraph validate model.jsonl [--json]
 
-codegraph analyze  [model.jsonl] --report deps|cycles|coupling
+codegraph analyze  [model.jsonl] [--report deps|cycles|coupling]   # default: deps
                    [--level module|type] [--internal-only] [--declared-only]
                    [--json] [--top N]
 

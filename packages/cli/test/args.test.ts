@@ -6,6 +6,7 @@ import {
   COMMAND_NAMES,
   COMMAND_SPECS,
   DEFAULT_LEVEL,
+  DEFAULT_REPORT,
   defaultModelPath,
   EXPORT_SPEC,
   flagSyntax,
@@ -195,10 +196,17 @@ describe("analyze", () => {
     });
   });
 
-  it("requires --report", () => {
-    const error = usageErrorFor(["analyze", "a.json"]);
-    expect(error.message).toContain("--report");
-    expect(error.message).toContain("deps|cycles|coupling");
+  it("defaults --report to the dependency report", () => {
+    expect(parse(["analyze", "a.json"])).toMatchObject({
+      command: "analyze",
+      options: { report: DEFAULT_REPORT },
+    });
+    expect(DEFAULT_REPORT).toBe("deps");
+  });
+
+  it("offers the default as an optional flag, and says so in the help", () => {
+    expect(usageLine(ANALYZE_SPEC)).toContain("[--report <deps|cycles|coupling>]");
+    expect(renderHelp(ANALYZE_SPEC)).toContain(`default: ${DEFAULT_REPORT}`);
   });
 
   it("rejects a value outside the closed set, naming the set", () => {

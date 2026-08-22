@@ -31,8 +31,8 @@ describe("analyze and city default to the model the extractor writes here", () =
     if (root !== undefined) rmSync(root, { recursive: true, force: true });
   });
 
-  it("analyzes the local model with no path given", () => {
-    const bare = runCli(["analyze", "--report", "deps"], { cwd: corpus });
+  it("analyzes the local model with nothing typed at all", () => {
+    const bare = runCli(["analyze"], { cwd: corpus });
     const explicit = runCli(["analyze", "--report", "deps", `${basename(corpus)}-codegraph.jsonl`], {
       cwd: corpus,
     });

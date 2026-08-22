@@ -62,8 +62,8 @@ describe("usage errors exit 2 and stay off stdout (decisions 2 and 3)", () => {
     ["--frobnicate"],
     ["validate"],
     ["validate", FIXTURE, "--nope"],
-    ["analyze", FIXTURE],
     ["analyze", FIXTURE, "--report", "nonsense"],
+    ["analyze", FIXTURE, "--top", "0"],
     ["export", FIXTURE],
     ["profiles", FIXTURE],
   ];
@@ -165,7 +165,7 @@ describe("error messages read as one sentence", () => {
   /** `main` owns the `codegraph: ` prefix, so no message may add its own. */
   const cases: readonly (readonly string[])[] = [
     ["validate"],
-    ["analyze", FIXTURE],
+    ["analyze", FIXTURE, "--top", "zero"],
     ["analyze", FIXTURE, "--repot", "deps"],
     ["profiles", FIXTURE],
     ["export", FIXTURE, "--format", "graphml"],

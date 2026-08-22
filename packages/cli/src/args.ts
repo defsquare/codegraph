@@ -37,6 +37,9 @@ export type FormatName = (typeof FORMATS)[number];
 export const LEVELS: readonly FoldLevel[] = FOLD_LEVELS;
 export const DEFAULT_LEVEL: FoldLevel = "module";
 
+/** `analyze` with no `--report`: the dependency graph, the report the rest build on. */
+export const DEFAULT_REPORT: ReportName = "deps";
+
 export interface OptionSpec {
   /** The long flag exactly as typed, without `--` (`internal-only`). */
   readonly name: string;
@@ -148,7 +151,7 @@ export const ANALYZE_SPEC: CommandSpec = {
       type: "string",
       describe: "Which analysis to run.",
       choices: REPORTS,
-      required: true,
+      defaultValue: DEFAULT_REPORT,
     },
     LEVEL_OPTION,
     ...VIEW_OPTIONS,
@@ -675,7 +678,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         command: "analyze",
         options: {
           models,
-          report: stringOf(values, "report") as ReportName,
+          report: (stringOf(values, "report") ?? DEFAULT_REPORT) as ReportName,
           level: levelOf(values),
           ...viewOf(values),
           json: flagOf(values, "json"),
