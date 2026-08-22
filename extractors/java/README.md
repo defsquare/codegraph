@@ -33,12 +33,15 @@ Go or .NET extractor would use.
 
 ```bash
 java -jar target/codegraph-java.jar --src src/main/java --out model.jsonl
+
+# both options default: extract the current directory into <current-dir>-codegraph.jsonl
+java -jar target/codegraph-java.jar
 ```
 
 | Option | Meaning |
 |---|---|
-| `--src <dir>` | source root to analyze. Repeatable; at least one required. With several roots, anchors are relativized against their deepest common ancestor, which becomes the model's `root`. |
-| `--out <file>` | where to write `model.jsonl` (required) |
+| `--src <dir>` | source root to analyze. Repeatable; defaults to the current directory. With several roots, anchors are relativized against their deepest common ancestor, which becomes the model's `root`. |
+| `--out <file>` | where to write the model. Defaults to `<current-dir>-codegraph.jsonl`, i.e. next to the corpus and named after it. |
 | `--progress <mode>` | `auto` (default), `plain` or `none` — see below |
 | `--no-progress` | same as `--progress none` |
 | `--help` | usage |

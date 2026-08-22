@@ -16,7 +16,8 @@ import spoon.Launcher;
 import spoon.reflect.CtModel;
 
 /**
- * CLI: {@code java -jar codegraph-java.jar --src <dir> [--src <dir>…] --out model.jsonl}.
+ * CLI: {@code java -jar codegraph-java.jar [--src <dir>…] [--out <file>]} — bare, it
+ * extracts the current directory into {@code <current-dir>-codegraph.jsonl}.
  *
  * <p>THE PASS ORDER, and why it is not negotiable:
  *
@@ -266,11 +267,13 @@ public final class Main {
         codegraph-java %s — Spoon-based Java extractor
 
         USAGE
-          java -jar codegraph-java.jar --src <dir> [--src <dir>…] --out <file>
+          java -jar codegraph-java.jar [--src <dir>…] [--out <file>]
 
         OPTIONS
-          --src <dir>    source root to analyze; repeatable, at least one required
-          --out <file>   where to write model.jsonl (required)
+          --src <dir>    source root to analyze; repeatable (default: the current
+                         directory)
+          --out <file>   where to write the model (default:
+                         <current-dir>-codegraph.jsonl)
           --progress <m> auto (default: a bar on a terminal, silence when piped),
                          plain (one line per phase, no control characters), or none
           --no-progress  same as --progress none
@@ -287,6 +290,19 @@ public final class Main {
 
   /** Hand-rolled parsing: an argument parser is not worth a dependency here. */
   record Options(List<Path> sources, Path out, boolean help, Progress.Mode progress) {
+
+    private static final Path CURRENT_DIRECTORY = Path.of(".");
+
+    /**
+     * {@code <current-dir>-codegraph.jsonl}, beside the corpus it describes. Kept
+     * relative so the name follows the process's working directory rather than
+     * where the jar happens to live; the filesystem root has no name, hence the
+     * fallback.
+     */
+    private static Path defaultOut() {
+      Path name = Path.of("").toAbsolutePath().normalize().getFileName();
+      return Path.of((name == null ? "" : name + "-") + "codegraph.jsonl");
+    }
 
     static Options parse(String[] args) {
       Set<Path> sources = new LinkedHashSet<>();
@@ -308,10 +324,10 @@ public final class Main {
       }
 
       if (sources.isEmpty()) {
-        throw new IllegalArgumentException("--src is required (repeat it for several roots)");
+        sources.add(CURRENT_DIRECTORY);
       }
       if (out == null) {
-        throw new IllegalArgumentException("--out is required");
+        out = defaultOut();
       }
       for (Path source : sources) {
         if (!Files.exists(source)) {
