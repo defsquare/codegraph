@@ -2,7 +2,10 @@ package dev.codegraph.spoon;
 
 import dev.codegraph.spoon.model.SourceAnchor;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import spoon.reflect.cu.SourcePosition;
 import spoon.reflect.declaration.CtElement;
@@ -24,8 +27,27 @@ public final class Anchors {
 
   private final Path root;
 
+  /** Relativization hits the filesystem (see {@link #canonical}); a corpus has far more elements than files. */
+  private final Map<Path, String> relativeByFile = new HashMap<>();
+
   public Anchors(Path root) {
-    this.root = root.toAbsolutePath().normalize();
+    this.root = canonical(root);
+  }
+
+  /**
+   * Symlinks resolved, so a path from Spoon and a path from the command line are
+   * comparable. Spoon reports real paths; a {@code --src} argument usually is not
+   * one (on macOS {@code /tmp} and {@code /var} are symlinks), and comparing the
+   * two forms directly fails, leaking absolute machine-specific paths into anchors
+   * and into the lambda/anonymous ids that embed a file path.
+   */
+  static Path canonical(Path path) {
+    Path absolute = path.toAbsolutePath().normalize();
+    try {
+      return absolute.toRealPath();
+    } catch (IOException notOnDisk) {
+      return absolute;
+    }
   }
 
   public Path root() {
@@ -84,7 +106,11 @@ public final class Anchors {
     if (file == null) {
       return null;
     }
-    Path absolute = file.toPath().toAbsolutePath().normalize();
+    return relativeByFile.computeIfAbsent(file.toPath(), this::relativize);
+  }
+
+  private String relativize(Path file) {
+    Path absolute = canonical(file);
     Path relative = absolute.startsWith(root) ? root.relativize(absolute) : absolute;
     // Forward slashes always: the model must not differ between platforms.
     return relative.toString().replace(File.separatorChar, '/');

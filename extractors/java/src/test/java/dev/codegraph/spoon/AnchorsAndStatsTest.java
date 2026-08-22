@@ -79,6 +79,32 @@ class AnchorsAndStatsTest {
     assertFalse(summary.contains("%d"));
   }
 
+  /**
+   * The root a user types is not the root Spoon reports: Spoon resolves symlinks,
+   * shells and build tools generally do not (on macOS {@code /tmp} and {@code /var}
+   * are symlinks, so this is the common case, not the exotic one). Mixing the two
+   * forms leaks absolute machine-specific paths into anchors AND into the lambda
+   * and anonymous-class ids that embed a file path.
+   */
+  @Test
+  void aRootReachedThroughASymlinkStillRelativizes(@TempDir Path parent) throws IOException {
+    Path real = Files.createDirectories(parent.resolve("real"));
+    CtModel model = build(real);
+    Path link = parent.resolve("link");
+    try {
+      Files.createSymbolicLink(link, real);
+    } catch (UnsupportedOperationException | IOException noSymlinks) {
+      return; // Windows without developer mode: the property is untestable, not violated.
+    }
+
+    CtType<?> type = build(link).getAllTypes().iterator().next();
+    assertEquals(
+        "com/acme/order/OrderService.java", new Anchors(link).of(type).orElseThrow().file());
+    assertEquals(
+        "com/acme/order/OrderService.java",
+        new Anchors(link).of(model.getAllTypes().iterator().next()).orElseThrow().file());
+  }
+
   private static CtModel build(Path root) throws IOException {
     Path file = root.resolve("com/acme/order/OrderService.java");
     Files.createDirectories(file.getParent());
