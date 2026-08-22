@@ -27,13 +27,7 @@
  * cases the caller must not use it for.
  */
 
-import {
-  renderId,
-  type EdgeKind,
-  type EntityId,
-  type NaturalKey,
-  type Provenance,
-} from "@codegraph/core";
+import type { EdgeKind, Provenance } from "@codegraph/core";
 
 import {
   assembleFoldedGraph,
@@ -44,6 +38,7 @@ import {
   type FoldedNode,
 } from "../fold.js";
 import { identityView, type ViewDescriptor } from "../views.js";
+import { renderStoreIds, storeLang } from "./ids.js";
 import type { SqliteDatabase, SqliteValue } from "./sqlite.js";
 
 /** The trait that makes an entity a container at each level — mirrors `fold.ts`. */
@@ -162,34 +157,6 @@ function resolveContainers(db: SqliteDatabase, level: FoldLevel): void {
   }
 }
 
-/** Rendered ids for a set of surrogates, via the natural key (MM-1). */
-function renderIds(db: SqliteDatabase, lang: string, sql: string): Map<number, EntityId> {
-  const statement = db.prepare(sql);
-  statement.setReturnArrays(true);
-  const out = new Map<number, EntityId>();
-  for (const row of statement.iterate() as unknown as Iterable<SqliteValue[]>) {
-    const [id, moduleSymbol, symbol, disambiguator, moduleId] = row as [
-      number,
-      string,
-      string,
-      string | null,
-      number,
-    ];
-    const key: NaturalKey = {
-      lang,
-      module: moduleSymbol,
-      // A module names ITSELF (`m === i` on the wire): its symbol slot holds
-      // the module path and its key's symbol is empty. Deciding that by
-      // comparing the two SYMBOLS would misrender any entity that happens to
-      // share its module's name — the surrogate is the only honest test.
-      symbol: id === moduleId ? "" : symbol,
-      ...(disambiguator === null ? {} : { disambiguator }),
-    };
-    out.set(id, renderId(key));
-  }
-  return out;
-}
-
 /**
  * Fold the store's model to `level` under `options.view`, entirely in SQL.
  *
@@ -201,8 +168,7 @@ export function foldFromStore(db: SqliteDatabase, options: FoldOptions): FoldedG
   const sql = translateView(db, view.descriptor);
   if (sql === undefined) return undefined;
 
-  const langRow = db.prepare("SELECT value FROM meta WHERE key = 'lang'").get();
-  const lang = (langRow?.value as string | undefined) ?? "";
+  const lang = storeLang(db);
 
   resolveContainers(db, options.level);
 
@@ -285,12 +251,10 @@ export function foldFromStore(db: SqliteDatabase, options: FoldOptions): FoldedG
   const edgeKindNames = dictionary(db, "edge_kind");
   const provenanceNames = dictionary(db, "provenance");
 
-  const nodeIds = renderIds(
+  const nodeIds = renderStoreIds(
     db,
     lang,
-    `SELECT e.id, m.symbol, e.symbol, e.disambiguator, e.module_id
-       FROM entity e JOIN entity m ON m.id = e.module_id
-      WHERE e.id IN (SELECT DISTINCT container_id FROM temp.placed)`,
+    "e.id IN (SELECT DISTINCT container_id FROM temp.placed)",
   );
 
   const rawEdges: [number, number, number, string, string][] = [];
@@ -335,12 +299,10 @@ export function foldFromStore(db: SqliteDatabase, options: FoldOptions): FoldedG
   }
 
   // Entities the view keeps that no view-kept container claims.
-  const unfoldableIds = renderIds(
+  const unfoldableIds = renderStoreIds(
     db,
     lang,
-    `SELECT e.id, m.symbol, e.symbol, e.disambiguator, e.module_id
-       FROM entity e JOIN entity m ON m.id = e.module_id
-      WHERE ${sql.entity("e")} AND e.id NOT IN (SELECT id FROM temp.placed)`,
+    `${sql.entity("e")} AND e.id NOT IN (SELECT id FROM temp.placed)`,
   );
 
   db.exec("DROP TABLE IF EXISTS temp.placed");

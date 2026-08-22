@@ -70,3 +70,5 @@ export * from "./store/sqlite.js";
 export * from "./store/schema.js";
 export * from "./store/import.js";
 export * from "./store/fold-sql.js";
+export * from "./store/ids.js";
+export * from "./store/diagnose.js";

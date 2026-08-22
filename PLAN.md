@@ -970,6 +970,55 @@ interchange.
       whose symbol equals its module's path. That case now exists, because
       getting it wrong renders a class as its own package — two entities, one
       id.
+- [x] **Step 8 — diagnose from the store.** `diagnoseStore(db)` returns the
+      `LoadDiagnostics` `loadDecodedModels` returns, computed by query rather
+      than by walking entities. The store is not asked to REMEMBER a diagnosis
+      — a cached verdict inside a cache is a second thing to invalidate — it is
+      asked to answer one.
+
+      **MM-4 is what makes it cheap.** Profile validity is a function of
+      `(kind, trait set, isStub)`, and the store interns trait sets, so
+      `SELECT DISTINCT kind_id, trait_set_id, is_stub` is 23 rows over
+      fineract's 241 101 entities. Each verdict comes from
+      `entityCompositionVerdict` — now exported from core, the same memoized
+      function `validateEntity` calls — and a verdict with no issues needs no
+      entities at all, so a clean corpus enumerates nothing. `edge-kind-not-
+      allowed` is likewise a function of six values, not 782 046 edges.
+
+      Measured on fineract: **0.46 s from the store against 2.10 s in memory,
+      and that 2.10 s needs a 6.21 s read first** — 8.3 s → 0.46 s.
+
+      One check is skipped and says so: the per-entity Zod parse of each
+      declared trait's keys, which is the bulk of the in-memory cost. It cannot
+      fail on a model that reached a store, because the record reader enforced
+      `WIRE_TRAITS` at import. That is an argument, so it is a test — every
+      trait's key set is pinned to match between `TRAITS` and `WIRE_TRAITS`, and
+      a value the model schema rejects is shown to be refused on the wire.
+
+      Self-edges are the one diagnostic needing whole `Edge` objects, so when
+      one exists the model is hydrated and core's `selfReferences` answers.
+      A self-edge means the corpus is already broken; paying a hydrate there
+      costs nothing on every correct run, and beats a second edge constructor
+      drifting from `ModelBuilder`'s.
+
+      **Both real corpora are clean, so parity on them proves almost nothing** —
+      returning "no issues" unconditionally would pass. Every category is
+      therefore exercised on a model broken on purpose, each asserting the issue
+      exists before asserting the two paths agree about it.
+
+      Four mutations; two exposed gaps, and building the case for a third found
+      a real bug. Comparing interned `trait_set_id`s instead of the canonical
+      trait SET was caught (two declarations differing only in trait ORDER are
+      the same declaration). Dropping the emission order was NOT — until a model
+      existed with issues from two categories landing in the opposite order.
+      Constructing it surfaced the bug: `isStubEntity` is "declares TType or
+      TModule AND isStub is true", and reading the `is_stub` column alone calls
+      an entity a stub that the in-memory path does not — which flips the
+      composition verdict, since the trait lower bound is waived for stubs. And
+      the unknown-profile branch was returning no `duplicateIds`, where the
+      in-memory path computes them regardless of profile; the test passed only
+      because no fixture had a duplicate.
+
 - [ ] `cli`: `codegraph import`; `analyze`/`export` given a `.jsonl`
       auto-build a sibling `.db` cache (`--no-cache` escape hatch);
       `dbVersion` mismatch in `meta` ⇒ re-import from JSONL — migration is

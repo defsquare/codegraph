@@ -84,9 +84,9 @@ function formatIssues(issues: readonly ZodIssueLike[]): string {
 }
 
 /** A verdict without its subject: the same issues, whatever entity carries them. */
-type IssueTemplate = { readonly code: ValidationCode; readonly message: string };
+export type IssueTemplate = { readonly code: ValidationCode; readonly message: string };
 
-interface CompositionVerdict {
+export interface CompositionVerdict {
   /** An unknown kind makes the trait rules unenforceable — stop after it. */
   readonly terminal: boolean;
   readonly issues: readonly IssueTemplate[];
@@ -115,7 +115,17 @@ function compositionCacheKey(kind: string, sortedTraits: readonly string[], isSt
   return `${isStub ? "1" : "0"}${sep}${sortedTraits.length}${sep}${sortedTraits.join(sep)}${sep}${kind}`;
 }
 
-function compositionVerdict(
+/**
+ * The verdict for one `(kind, trait set, isStub)`, memoized per profile.
+ *
+ * Exported because the SQLite analysis store validates BY COMPOSITION rather
+ * than by entity: it interns trait sets, so `SELECT DISTINCT kind_id,
+ * trait_set_id, is_stub` is a few dozen rows over any corpus, and each verdict
+ * is decided once here — by the same function `validateEntity` calls, so a
+ * store-derived diagnosis cannot judge a composition differently than an
+ * in-memory one.
+ */
+export function entityCompositionVerdict(
   profile: Profile,
   kind: string,
   traits: readonly string[],
@@ -208,7 +218,7 @@ function judgeComposition(
  */
 export function validateEntity(profile: Profile, entity: Entity): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  const verdict = compositionVerdict(profile, entity.kind, entity.traits, isStubEntity(entity));
+  const verdict = entityCompositionVerdict(profile, entity.kind, entity.traits, isStubEntity(entity));
   for (const issue of verdict.issues) {
     issues.push({ code: issue.code, path: entity.id, message: issue.message });
   }

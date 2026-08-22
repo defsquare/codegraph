@@ -65,6 +65,9 @@ const PUBLIC_API = {
     "hydrateModel",
     "foldFromStore",
     "translateView",
+    "diagnoseStore",
+    "renderStoreIds",
+    "storeLang",
   ],
 } as const;
 
