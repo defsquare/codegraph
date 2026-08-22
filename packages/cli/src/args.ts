@@ -1,3 +1,5 @@
+import { accessSync, constants } from "node:fs";
+import { basename, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { FOLD_LEVELS, type FoldLevel } from "@codegraph/analyzer";
 import { METRIC_PREFIXES, SCALES, metricNames } from "@codegraph/city";
@@ -62,6 +64,11 @@ export interface PositionalSpec {
   readonly variadic: boolean;
   /** At least one must be given. */
   readonly required: boolean;
+  /**
+   * Used when nothing is typed. A thunk, not a string: the value depends on the
+   * process's working directory, which is not known when the specs are built.
+   */
+  readonly defaultPath?: (() => string) | undefined;
 }
 
 export interface CommandSpec {
@@ -77,6 +84,24 @@ const MODELS_POSITIONAL: PositionalSpec = {
   describe: "One or more model.jsonl paths, loaded together as ONE union (decision 5).",
   variadic: true,
   required: true,
+};
+
+/**
+ * `<current-dir>-codegraph.jsonl` — exactly what `codegraph-java` writes when it
+ * is run bare. The two halves of the pipeline agree on one file name so that
+ * standing in a corpus and typing the command is the whole workflow; the name
+ * carries the directory so several models can share a downloads folder.
+ */
+export function defaultModelPath(): string {
+  const directory = basename(resolve("."));
+  return directory.length === 0 ? "codegraph.jsonl" : `${directory}-codegraph.jsonl`;
+}
+
+/** The same models, defaulted: for the commands run against the corpus at hand. */
+const MODELS_POSITIONAL_DEFAULTED: PositionalSpec = {
+  ...MODELS_POSITIONAL,
+  required: false,
+  defaultPath: defaultModelPath,
 };
 
 const JSON_OPTION: OptionSpec = {
@@ -116,7 +141,7 @@ export const VALIDATE_SPEC: CommandSpec = {
 export const ANALYZE_SPEC: CommandSpec = {
   name: "analyze",
   summary: "Report dependencies, cycles or coupling over the loaded models.",
-  positional: MODELS_POSITIONAL,
+  positional: MODELS_POSITIONAL_DEFAULTED,
   options: [
     {
       name: "report",
@@ -177,7 +202,7 @@ function metricHelp(channel: string): string {
 export const CITY_SPEC: CommandSpec = {
   name: "city",
   summary: "Write the code city: modules as districts, types as buildings.",
-  positional: MODELS_POSITIONAL,
+  positional: MODELS_POSITIONAL_DEFAULTED,
   options: [
     {
       name: "height",
@@ -417,7 +442,12 @@ export function renderHelp(spec: CommandSpec | undefined): string {
       lines.push("");
       lines.push("arguments:");
       const name = spec.positional.variadic ? `<${spec.positional.name}...>` : `<${spec.positional.name}>`;
-      lines.push(`  ${name}   ${spec.positional.describe}`);
+      const fallback = spec.positional.defaultPath;
+      const describe =
+        fallback === undefined
+          ? spec.positional.describe
+          : `${spec.positional.describe} (default: ${fallback()}, what the extractor writes here)`;
+      lines.push(`  ${name}   ${describe}`);
     }
     lines.push("");
     lines.push("options:");
@@ -528,6 +558,26 @@ function viewOf(values: ParsedValues): ViewOptions {
   };
 }
 
+/**
+ * A path nobody typed must explain itself: parsing checks the default is there,
+ * so its absence names the file AND how to produce it, instead of surfacing as
+ * an ENOENT on a file name the user never wrote. Typed paths are NOT checked
+ * here — loading owns those, and reports them per file.
+ */
+function readableDefault(spec: CommandSpec, path: string): string {
+  try {
+    accessSync(path, constants.R_OK);
+  } catch (error) {
+    throw new UsageError(
+      `no model given, and the default '${path}' is not here`,
+      `Extract this directory first: java -jar codegraph-java.jar\n` +
+        `or pass a path: ${usageLine(spec)}`,
+      { cause: error },
+    );
+  }
+  return path;
+}
+
 function positionalsOf(spec: CommandSpec, positionals: readonly string[]): readonly string[] {
   if (spec.positional === undefined) {
     if (positionals.length > 0) {
@@ -538,11 +588,15 @@ function positionalsOf(spec: CommandSpec, positionals: readonly string[]): reado
     }
     return [];
   }
-  if (spec.positional.required && positionals.length === 0) {
-    throw new UsageError(
-      `${spec.name} needs at least one ${spec.positional.name} path`,
-      `${usageLine(spec)}\n${spec.positional.describe}`,
-    );
+  if (positionals.length === 0) {
+    const fallback = spec.positional.defaultPath;
+    if (fallback !== undefined) return [readableDefault(spec, fallback())];
+    if (spec.positional.required) {
+      throw new UsageError(
+        `${spec.name} needs at least one ${spec.positional.name} path`,
+        `${usageLine(spec)}\n${spec.positional.describe}`,
+      );
+    }
   }
   if (!spec.positional.variadic && positionals.length > 1) {
     throw new UsageError(

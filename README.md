@@ -71,16 +71,20 @@ Java extractor:
 ```bash
 cd extractors/java && ./mvnw -B package   # the wrapper; no local Maven needed
 java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
+java -jar target/codegraph-java.jar          # both default: the current
+                                             # directory, into
+                                             # <current-dir>-codegraph.jsonl
 ```
 
 Analysis — the `codegraph` CLI. Every command takes one or more `model.jsonl`
 paths and loads them as a single union, so multi-language analysis is just a
-longer argument list:
+longer argument list. `analyze` and `city` may take none at all: standing in a
+directory the extractor has run on, they read its `<current-dir>-codegraph.jsonl`.
 
 ```bash
 codegraph validate model.jsonl [--json]
 
-codegraph analyze  model.jsonl --report deps|cycles|coupling
+codegraph analyze  [model.jsonl] --report deps|cycles|coupling
                    [--level module|type] [--internal-only] [--declared-only]
                    [--json] [--top N]
 
@@ -88,7 +92,7 @@ codegraph export   model.jsonl --format dot|json|csv|plantuml
                    [--level module|type] [--internal-only] [--declared-only]
                    [--out FILE]
 
-codegraph city     model.jsonl [--serve [--port N]] [--layout] [--out FILE]
+codegraph city     [model.jsonl] [--serve [--port N]] [--layout] [--out FILE]
                    [--height METRIC] [--footprint METRIC] [--carry M1,M2]
                    [--internal-only] [--declared-only]
 

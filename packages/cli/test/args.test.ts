@@ -1,9 +1,12 @@
+import { basename } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   ANALYZE_SPEC,
+  CITY_SPEC,
   COMMAND_NAMES,
   COMMAND_SPECS,
   DEFAULT_LEVEL,
+  defaultModelPath,
   EXPORT_SPEC,
   flagSyntax,
   optionSummary,
@@ -285,5 +288,47 @@ describe("parseArgs errors are re-said in codegraph's terms", () => {
   it("says which option is missing its value", () => {
     const error = usageErrorFor(["export", "a.json", "--out"]);
     expect(error.message).toContain("--out");
+  });
+});
+
+/**
+ * The extractor writes `<current-dir>-codegraph.jsonl` when run bare; the two
+ * commands that consume a model day to day pick that same file up when no path
+ * is typed. The default is only worth having if its absence explains itself,
+ * which is why parsing — not loading — reports a missing default.
+ */
+describe("the model path defaults to what the extractor writes here", () => {
+  it("makes the positional optional for analyze and city only", () => {
+    expect(ANALYZE_SPEC.positional?.required).toBe(false);
+    expect(CITY_SPEC.positional?.required).toBe(false);
+    expect(VALIDATE_SPEC.positional?.required).toBe(true);
+    expect(EXPORT_SPEC.positional?.required).toBe(true);
+  });
+
+  it("shows the default it would use, in the help and in the usage line", () => {
+    for (const spec of [ANALYZE_SPEC, CITY_SPEC]) {
+      expect(usageLine(spec), spec.name).toContain("[model.jsonl...]");
+      expect(renderHelp(spec), spec.name).toContain(defaultModelPath());
+    }
+    expect(usageLine(VALIDATE_SPEC)).toContain("<model.jsonl...>");
+  });
+
+  it("names the current directory in the default, never a fixed path", () => {
+    expect(defaultModelPath()).toBe(`${basename(process.cwd())}-codegraph.jsonl`);
+  });
+
+  it("explains the default when it is not there, and says how to make it", () => {
+    // These tests run from packages/cli, where no such model exists.
+    for (const command of ["analyze", "city"]) {
+      const error = usageErrorFor(command === "analyze" ? [command, "--report", "deps"] : [command]);
+      expect(error.exitCode, command).toBe(EXIT.USAGE);
+      expect(error.message, command).toContain(defaultModelPath());
+      expect(`${error.message} ${error.hint ?? ""}`, command).toContain("codegraph-java");
+    }
+  });
+
+  it("leaves an explicitly typed path alone, existing or not", () => {
+    const invocation = parse(["analyze", "nowhere.jsonl", "--report", "deps"]);
+    expect(invocation).toMatchObject({ options: { models: ["nowhere.jsonl"] } });
   });
 });
