@@ -37,6 +37,12 @@ describe("arrowArcs", () => {
     expect(arcs.map((arc) => arc.crossDistrict)).toEqual([false, true]);
   });
 
+  it("flags an arc external when either endpoint is a stub building", () => {
+    // OrderController is the fixture's stub; the OrderService -> Order arc
+    // stays internal.
+    expect(arcs.map((arc) => arc.external)).toEqual([false, true]);
+  });
+
   it("weights arrows by count, log-scaled to [0, 1] with the max at 1", () => {
     const weights = new Map(arcs.map((arc) => [arc.count, arc.weight] as const));
     expect(weights.get(6)).toBe(1);

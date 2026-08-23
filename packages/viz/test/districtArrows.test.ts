@@ -36,6 +36,23 @@ describe("districtArcs", () => {
     expect(weights.get(2)).toBeCloseTo(Math.log1p(2) / Math.log1p(3));
   });
 
+  it("flags an arc external when either endpoint is a stub district", () => {
+    // The fixture's districts are all corpus-declared: nothing is external.
+    expect(arcs.map((arc) => arc.external)).toEqual([false, false]);
+    // Re-plate with com.acme.web degraded to a stub module: its arc turns external.
+    const stubbed = makeCity({
+      districts: city.districts.map((district) =>
+        district.id === "java:com.acme.web" ? { ...district, isStub: true } : district,
+      ),
+    } as never);
+    const stubbedPlates = districtPlates(stubbed);
+    const stubbedArcs = districtArcs(stubbed, stubbedPlates, buildingBoxes(stubbed));
+    expect(stubbedArcs.map((arc) => [arc.from, arc.external])).toEqual([
+      ["java:com.acme.order", false],
+      ["java:com.acme.web", true],
+    ]);
+  });
+
   it("tolerates an artifact without districtArrows (older cities draw none)", () => {
     const bare = { ...city, districtArrows: undefined };
     expect(districtArcs(bare as never, plates, boxes)).toEqual([]);

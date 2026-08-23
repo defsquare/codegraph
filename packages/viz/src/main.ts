@@ -43,7 +43,8 @@ const detailsClose = must<HTMLButtonElement>("#details-close");
 const toggleBuildings = must<HTMLInputElement>("#toggle-buildings");
 const toggleFanIn = must<HTMLInputElement>("#toggle-fan-in");
 const toggleFanOut = must<HTMLInputElement>("#toggle-fan-out");
-const toggleAllDeps = must<HTMLInputElement>("#toggle-all-deps");
+const toggleExternals = must<HTMLInputElement>("#toggle-externals");
+const resetView = must<HTMLButtonElement>("#reset-view");
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -51,7 +52,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(COLORS.background);
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
 const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
+// No easing: orbit, pan and zoom stop exactly where the hand stops.
+controls.enableDamping = false;
 controls.maxPolarAngle = Math.PI / 2 - 0.02; // never dive below the ground
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0xcfd6df, 1.0));
@@ -59,6 +61,7 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.2);
 scene.add(sun);
 
 let cityScene: CityScene | null = null;
+let currentCity: CityLayout | null = null;
 const picker = new BuildingPicker();
 let hovered: number | null = null;
 let locked: number | null = null;
@@ -83,22 +86,38 @@ if (new URLSearchParams(window.location.search).get("landscape") === "1") {
   toggleBuildings.checked = false;
 }
 
-function fanToggles(showAll: boolean): ArrowToggles {
-  return { fanIn: toggleFanIn.checked, fanOut: toggleFanOut.checked, showAll };
+function fanToggles(): ArrowToggles {
+  return {
+    fanIn: toggleFanIn.checked,
+    fanOut: toggleFanOut.checked,
+    externals: toggleExternals.checked,
+  };
 }
 
 function applyToggles(): void {
   if (!cityScene) return;
   const buildings = toggleBuildings.checked;
+  // Hiding externals with a stub selected would leave a panel describing an
+  // invisible element — drop such a selection first.
+  if (!toggleExternals.checked) {
+    const box = locked === null ? undefined : cityScene.boxes[locked];
+    if (box?.isStub) locked = null;
+    const plate = cityScene.plates.find((candidate) => candidate.id === selectedDistrict);
+    if (plate?.isStub) selectedDistrict = null;
+    renderDetails();
+  }
   cityScene.setBuildingsVisible(buildings);
-  // "Show all dependencies" means the layer that is on screen: type arrows
-  // with buildings up, module arrows in the landscape view.
-  cityScene.setFocus(buildings ? locked : null, fanToggles(toggleAllDeps.checked && buildings));
-  cityScene.setDistrictFocus(selectedDistrict, fanToggles(toggleAllDeps.checked && !buildings));
+  cityScene.setExternalsVisible(toggleExternals.checked);
+  cityScene.setFocus(buildings ? locked : null, fanToggles());
+  cityScene.setDistrictFocus(selectedDistrict, fanToggles());
 }
-for (const toggle of [toggleBuildings, toggleFanIn, toggleFanOut, toggleAllDeps]) {
+for (const toggle of [toggleBuildings, toggleFanIn, toggleFanOut, toggleExternals]) {
   toggle.addEventListener("change", applyToggles);
 }
+
+resetView.addEventListener("click", () => {
+  if (currentCity) frameCity(currentCity);
+});
 
 function showCity(city: CityLayout): void {
   if (cityScene) {
@@ -110,6 +129,7 @@ function showCity(city: CityLayout): void {
     detailsPanel.hidden = true;
   }
   cityScene = createCityScene(city);
+  currentCity = city;
   scene.add(cityScene.root);
   frameCity(city);
   // `corpus` arrived with this feature; older artifacts fall back to the view.
@@ -122,18 +142,19 @@ function showCity(city: CityLayout): void {
   showHelpOnce();
 }
 
-/** Aim the camera like the reference shot: elevated three-quarter view. */
+/**
+ * Aim the camera like the reference shot: elevated three-quarter view. The
+ * scene group is centered on the world origin (cityScene root offset), so the
+ * orbit target — and what "Reset view" returns to — is (0, 0, 0).
+ */
 function frameCity(city: CityLayout): void {
-  const { x, y, width, depth } = city.bounds;
-  const span = Math.max(width, depth, 1);
-  const cx = x + width / 2;
-  const cz = y + depth / 2;
-  controls.target.set(cx, 0, cz);
-  camera.position.set(cx - span * 0.35, span * 0.65, cz + span * 0.95);
+  const span = Math.max(city.bounds.width, city.bounds.depth, 1);
+  controls.target.set(0, 0, 0);
+  camera.position.set(-span * 0.35, span * 0.65, span * 0.95);
   camera.near = span / 1000;
   camera.far = span * 20;
   camera.updateProjectionMatrix();
-  sun.position.set(cx - span, span * 1.5, cz + span * 0.6);
+  sun.position.set(-span, span * 1.5, span * 0.6);
 }
 
 // --- header, help dialog, tooltip and details panel -------------------------
@@ -141,8 +162,6 @@ function frameCity(city: CityLayout): void {
 const SWATCH_COLORS: Record<string, number> = {
   building: COLORS.building,
   stub: COLORS.buildingStub,
-  declared: COLORS.arrowDeclared,
-  inferred: COLORS.arrowInferred,
   fanIn: COLORS.arrowFanIn,
   fanOut: COLORS.arrowFanOut,
 };

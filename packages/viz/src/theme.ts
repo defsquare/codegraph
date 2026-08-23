@@ -7,9 +7,10 @@
  *  - buildingStub    an external type the model degraded to a stub — paler,
  *                    fading toward the background, because the model knows
  *                    less about it
- *  - arrowDeclared   a dependency every base edge of which is a `declared` fact
- *  - arrowInferred   an arrow with at least one non-declared base edge — the
- *                    artifact's `inferred` flag, never recomputed here
+ *  - arrowFanIn / arrowFanOut   dependency direction relative to the selected
+ *                    element; provenance rides the saturation channel — an
+ *                    `inferred` arc (the artifact's flag, never recomputed
+ *                    here) desaturates toward INFERRED_GRAY
  *
  * Dimensions of plates and arcs are presentation geometry only; they encode no
  * metric and therefore live here, not in the city model.
@@ -20,8 +21,6 @@ export const COLORS = {
   districtPlate: 0xc6cdd8,
   building: 0x8a957e,
   buildingStub: 0xb9beb3,
-  arrowDeclared: 0x1e9e54,
-  arrowInferred: 0xc23a30,
   /** Fan-in: arrows INTO the selected district — who depends on it. */
   arrowFanIn: 0xd97a12,
   /** Fan-out: arrows OUT of the selected district — what it depends on. */

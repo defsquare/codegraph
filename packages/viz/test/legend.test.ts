@@ -22,12 +22,13 @@ describe("legendModel", () => {
     expect(footprint?.detail).not.toContain("unmeasured");
   });
 
-  it("explains all six semantic swatches, the fan directions included", () => {
+  it("explains exactly the swatches the renderer draws — no retired hues", () => {
+    // Arrows only ever render in the fan direction hues now (provenance is the
+    // saturation channel); a declared/inferred swatch would describe colors
+    // that never appear.
     expect(entries.map((entry) => entry.swatch).filter((s) => s !== null)).toEqual([
       "building",
       "stub",
-      "declared",
-      "inferred",
       "fanIn",
       "fanOut",
     ]);

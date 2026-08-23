@@ -39,6 +39,8 @@ export interface CityScene {
   /** Select a district: its plate darkens and its fan arcs show, per toggles. */
   setDistrictFocus(districtId: string | null, toggles: ArrowToggles): void;
   setBuildingsVisible(visible: boolean): void;
+  /** Show or hide stubs — buildings and plates the corpus does not declare. */
+  setExternalsVisible(visible: boolean): void;
   dispose(): void;
 }
 
@@ -46,6 +48,13 @@ const VERTICES_PER_ARC = ARC_SEGMENTS * 2; // line-segment pairs between samples
 
 export function createCityScene(city: CityLayout): CityScene {
   const root = new THREE.Group();
+  // The layout's origin is a corner; the world's is the city center, so the
+  // camera orbits (and "Reset view" targets) the middle of the landscape.
+  root.position.set(
+    -(city.bounds.x + city.bounds.width / 2),
+    0,
+    -(city.bounds.y + city.bounds.depth / 2),
+  );
   const disposables: { dispose(): void }[] = [];
   const boxes = buildingBoxes(city);
   const arcs = arrowArcs(city, boxes);
@@ -94,9 +103,11 @@ export function createCityScene(city: CityLayout): CityScene {
   root.add(buildingsMesh);
   disposables.push(buildingGeometry, buildingMaterial, buildingsMesh);
 
-  // Type arrows: one LineSegments, RGBA vertex colors. RGB = provenance
-  // (declared/inferred), alpha = weight and focus state.
-  const typeArrows = buildArcLines(arcs.map((arc) => ({ arc, tint: typeTint(arc.inferred) })));
+  // Type arrows: one LineSegments, RGBA vertex colors. RGB is rewritten per
+  // selection (direction hue, provenance as saturation), alpha by the table.
+  const typeArrows = buildArcLines(
+    arcs.map((arc) => ({ arc, tint: new THREE.Color(COLORS.arrowFanOut) })),
+  );
   typeArrows.lines.raycast = () => undefined;
   root.add(typeArrows.lines);
   disposables.push(typeArrows.geometry, typeArrows.material);
@@ -123,19 +134,23 @@ export function createCityScene(city: CityLayout): CityScene {
   const inferredGray = new THREE.Color(INFERRED_GRAY);
   function paintArcs(
     layer: ReturnType<typeof buildArcLines>,
-    arcList: readonly { from: string; to: string; weight: number; inferred: boolean }[],
+    arcList: readonly {
+      from: string;
+      to: string;
+      weight: number;
+      inferred: boolean;
+      external: boolean;
+    }[],
     selected: string | null,
     toggles: ArrowToggles,
   ): void {
     arcList.forEach((arc, i) => {
       const state = arcState(arc, selected, toggles);
-      if (state.role === "fanIn" || state.role === "fanOut") {
+      if (state.role !== "hidden") {
         color.copy(state.role === "fanOut" ? fanOutColor : fanInColor);
         if (arc.inferred) color.lerp(inferredGray, INFERRED_DESATURATION);
-      } else {
-        color.copy(typeTint(arc.inferred));
+        layer.setTint(i, color);
       }
-      layer.setTint(i, color);
       layer.setAlpha(i, state.alpha);
     });
     layer.commit();
@@ -169,6 +184,25 @@ export function createCityScene(city: CityLayout): CityScene {
     paintArcs(districtArrows, dArcs, districtId, toggles);
   }
 
+  // Stubs hide by collapsing their instance to zero scale — the one instanced
+  // mesh stays one draw call, and a zero-scaled instance cannot be picked.
+  function setExternalsVisible(visible: boolean): void {
+    boxes.forEach((box, i) => {
+      if (!box.isStub) return;
+      if (visible) matrix.makeScale(...box.size).setPosition(...box.center);
+      else matrix.makeScale(0, 0, 0).setPosition(...box.center);
+      buildingsMesh.setMatrixAt(i, matrix);
+    });
+    buildingsMesh.instanceMatrix.needsUpdate = true;
+    plates.forEach((plate, i) => {
+      if (!plate.isStub) return;
+      if (visible) matrix.makeScale(...plate.size).setPosition(...plate.center);
+      else matrix.makeScale(0, 0, 0).setPosition(...plate.center);
+      platesMesh.setMatrixAt(i, matrix);
+    });
+    platesMesh.instanceMatrix.needsUpdate = true;
+  }
+
   return {
     root,
     buildingsMesh,
@@ -182,12 +216,9 @@ export function createCityScene(city: CityLayout): CityScene {
     setBuildingsVisible: (visible) => {
       buildingsMesh.visible = visible;
     },
+    setExternalsVisible,
     dispose: () => disposables.forEach((d) => d.dispose()),
   };
-}
-
-function typeTint(inferred: boolean): THREE.Color {
-  return new THREE.Color(inferred ? COLORS.arrowInferred : COLORS.arrowDeclared);
 }
 
 interface ArcSource {

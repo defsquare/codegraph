@@ -1,32 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { arcState, type ArrowToggles } from "../src/scene/focus.js";
-import { ARROW_ALPHA_FOCUS, ARROW_ALPHA_MAX, ARROW_ALPHA_MIN } from "../src/theme.js";
+import { ARROW_ALPHA_FOCUS, ARROW_ALPHA_MIN } from "../src/theme.js";
 
 /**
  * The decision table behind "edges appear when you click": one pure function
  * serves BOTH arc families (type arrows under a selected building, district
  * arrows under a selected district), so the two layers cannot drift apart.
- * Resting state is HIDDEN — the city shows no dependency it was not asked for.
+ * Arcs are HIDDEN unless something is selected — and an external arc (an
+ * endpoint the model only stubbed) shows only while externals are shown.
  */
-const arc = { from: "a", to: "b", weight: 0.5 };
+const arc = { from: "a", to: "b", weight: 0.5, external: false };
 const toggles = (overrides: Partial<ArrowToggles> = {}): ArrowToggles => ({
   fanIn: true,
   fanOut: true,
-  showAll: false,
+  externals: true,
   ...overrides,
 });
 
 describe("arcState", () => {
-  it("hides every arc when nothing is selected and the overview is off", () => {
+  it("hides every arc when nothing is selected", () => {
     expect(arcState(arc, null, toggles())).toEqual({ role: "hidden", alpha: 0 });
-  });
-
-  it("rests at weight-scaled alpha when the overview toggle is on", () => {
-    const state = arcState(arc, null, toggles({ showAll: true }));
-    expect(state.role).toBe("resting");
-    expect(state.alpha).toBeCloseTo(
-      ARROW_ALPHA_MIN + arc.weight * (ARROW_ALPHA_MAX - ARROW_ALPHA_MIN),
-    );
   });
 
   it("shows a selection's outgoing arcs as fan-out and incoming as fan-in", () => {
@@ -38,15 +31,23 @@ describe("arcState", () => {
     expect(arcState(arc, "b", toggles()).role).toBe("fanIn");
   });
 
-  it("hides non-incident arcs entirely while something is selected — even with the overview on", () => {
-    expect(arcState(arc, "elsewhere", toggles({ showAll: true }))).toEqual({
-      role: "hidden",
-      alpha: 0,
-    });
+  it("hides non-incident arcs entirely while something is selected", () => {
+    expect(arcState(arc, "elsewhere", toggles())).toEqual({ role: "hidden", alpha: 0 });
   });
 
   it("honours the per-direction toggles", () => {
     expect(arcState(arc, "a", toggles({ fanOut: false })).role).toBe("hidden");
     expect(arcState(arc, "b", toggles({ fanIn: false })).role).toBe("hidden");
+  });
+
+  it("hides an external arc when externals are hidden, even under selection", () => {
+    const external = { ...arc, external: true };
+    expect(arcState(external, "a", toggles({ externals: false }))).toEqual({
+      role: "hidden",
+      alpha: 0,
+    });
+    expect(arcState(external, "a", toggles()).role).toBe("fanOut");
+    // An internal arc is untouched by the externals toggle.
+    expect(arcState(arc, "a", toggles({ externals: false })).role).toBe("fanOut");
   });
 });

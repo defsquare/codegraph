@@ -41,10 +41,11 @@ export function helpModel(city: CityLayout | null): HelpModel {
         "Dependency arrows rest hidden until you ask for them: click a " +
           "building or a district to see exactly its fan-in (who depends on " +
           "it) and fan-out (what it depends on), direction by hue.",
-        "'Show all dependencies' draws the whole overview instead. Everywhere, " +
-          "saturation carries provenance: a declared fact keeps its full hue, " +
+        "Saturation carries provenance: a declared fact keeps its full hue, " +
           "an inferred dependency (any non-declared base edge) is desaturated " +
-          "— the picture never presents an inference as a fact.",
+          "— the picture never presents an inference as a fact. 'Show " +
+          "externals' includes stubs and the dependencies touching them; " +
+          "uncheck it for the corpus-only city.",
       ],
     },
     {
@@ -53,8 +54,9 @@ export function helpModel(city: CityLayout | null): HelpModel {
         "Hover names an element; click it for details — a district's contents " +
           "and coupling, a building's metrics, attributes and operations. " +
           "Click again (or click the ground) to deselect.",
-        "Drop another city.json anywhere to load it. '?landscape=1' starts " +
-          "with buildings hidden — the pure module landscape.",
+        "Drop another city.json anywhere to load it. 'Reset view' returns " +
+          "the camera to the initial framing. '?landscape=1' starts with " +
+          "buildings hidden — the pure module landscape.",
       ],
     },
   ];

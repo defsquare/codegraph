@@ -15,6 +15,9 @@ export interface ArrowArc {
   readonly count: number;
   readonly inferred: boolean;
   readonly crossDistrict: boolean;
+  /** True when either endpoint is a stub — a dependency on code the corpus
+   * does not declare; the externals toggle gates these. */
+  readonly external: boolean;
   /** Aggregated edge count mapped to [0, 1] on a log scale over this city. */
   readonly weight: number;
   /** ARC_SEGMENTS + 1 world-space samples of a quadratic Bezier, from -> to. */
@@ -42,6 +45,7 @@ export function arrowArcs(city: CityLayout, boxes: readonly BuildingBox[]): read
         count: arrow.count,
         inferred: arrow.inferred,
         crossDistrict: arrow.crossDistrict,
+        external: from.isStub || to.isStub,
         weight: maxCount <= 1 ? 1 : Math.log1p(arrow.count) / Math.log1p(maxCount),
         points: sampleArc(roofOf(from), roofOf(to)),
       },

@@ -1,8 +1,4 @@
-import {
-  ARROW_ALPHA_FOCUS,
-  ARROW_ALPHA_MAX,
-  ARROW_ALPHA_MIN,
-} from "../theme.js";
+import { ARROW_ALPHA_FOCUS, ARROW_ALPHA_MIN } from "../theme.js";
 
 /** The header's arrow controls, as the decision table reads them. */
 export interface ArrowToggles {
@@ -10,11 +6,11 @@ export interface ArrowToggles {
   readonly fanIn: boolean;
   /** Show arcs OUT of the selection — what it depends on. */
   readonly fanOut: boolean;
-  /** With nothing selected, show every arc as a resting overview. */
-  readonly showAll: boolean;
+  /** Show dependencies on stubs — code the corpus does not declare. */
+  readonly externals: boolean;
 }
 
-export type ArcRole = "fanIn" | "fanOut" | "resting" | "hidden";
+export type ArcRole = "fanIn" | "fanOut" | "hidden";
 
 export interface ArcState {
   readonly role: ArcRole;
@@ -25,23 +21,22 @@ export interface ArcState {
 /**
  * ONE decision table for both arc families — type arrows under a selected
  * building and district arrows under a selected district — so the two layers
- * cannot drift apart. The resting state is hidden: the city draws no
- * dependency it was not asked for, and a selection shows exactly its own
- * fan-in/fan-out, direction by hue, weight by alpha.
+ * cannot drift apart. Nothing is selected: nothing is drawn. A selection
+ * shows exactly its own fan-in/fan-out, direction by hue, weight by alpha;
+ * an external arc additionally needs the externals toggle.
  */
 export function arcState(
-  arc: { readonly from: string; readonly to: string; readonly weight: number },
+  arc: {
+    readonly from: string;
+    readonly to: string;
+    readonly weight: number;
+    readonly external: boolean;
+  },
   selected: string | null,
   toggles: ArrowToggles,
 ): ArcState {
-  if (selected === null) {
-    return toggles.showAll
-      ? {
-          role: "resting",
-          alpha: ARROW_ALPHA_MIN + arc.weight * (ARROW_ALPHA_MAX - ARROW_ALPHA_MIN),
-        }
-      : { role: "hidden", alpha: 0 };
-  }
+  if (selected === null) return { role: "hidden", alpha: 0 };
+  if (arc.external && !toggles.externals) return { role: "hidden", alpha: 0 };
   const isOut = arc.from === selected && toggles.fanOut;
   const isIn = arc.to === selected && toggles.fanIn;
   if (!isOut && !isIn) return { role: "hidden", alpha: 0 };

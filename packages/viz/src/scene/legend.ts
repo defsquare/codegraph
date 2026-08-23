@@ -8,7 +8,7 @@ import type { CityLayout } from "@codegraph/city";
  */
 export interface LegendEntry {
   /** Which swatch to draw beside the label; null = text-only line. */
-  readonly swatch: "building" | "stub" | "declared" | "inferred" | "fanIn" | "fanOut" | null;
+  readonly swatch: "building" | "stub" | "fanIn" | "fanOut" | null;
   readonly label: string;
   readonly detail: string | undefined;
 }
@@ -39,12 +39,6 @@ export function legendModel(city: CityLayout): readonly LegendEntry[] {
   entries.push(
     { swatch: "building", label: "building", detail: "a type declared in the corpus" },
     { swatch: "stub", label: "stub", detail: "an external type the model only glimpsed" },
-    { swatch: "declared", label: "declared", detail: "every base edge is a declared fact" },
-    {
-      swatch: "inferred",
-      label: "inferred",
-      detail: "at least one base edge is derived, dynamic-candidate or generated",
-    },
     {
       swatch: "fanIn",
       label: "fan-in",

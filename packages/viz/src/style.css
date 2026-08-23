@@ -89,7 +89,8 @@ body {
   margin: 0;
 }
 
-#help-link {
+#help-link,
+#reset-view {
   font: inherit;
   color: var(--text);
   background: none;
@@ -99,7 +100,8 @@ body {
   cursor: pointer;
 }
 
-#help-link:hover {
+#help-link:hover,
+#reset-view:hover {
   background: rgba(0, 0, 0, 0.05);
 }
 

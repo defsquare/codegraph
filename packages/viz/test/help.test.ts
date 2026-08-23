@@ -25,6 +25,10 @@ describe("helpModel", () => {
       .sections.flatMap((section) => section.paragraphs)
       .join(" ");
     expect(text.toLowerCase()).toContain("hidden until");
+    // The overview toggle is gone; the text must not promise it.
+    expect(text).not.toContain("Show all dependencies");
+    expect(text).toContain("Show externals");
+    expect(text).toContain("Reset view");
   });
 
   it("embeds the artifact-derived legend when a city is loaded", () => {
