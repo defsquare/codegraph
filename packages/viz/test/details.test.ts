@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { buildingBoxes } from "../src/scene/buildings.js";
-import { buildingDetails, districtDetails } from "../src/scene/details.js";
+import {
+  buildingDetails,
+  districtDetails,
+  operationDisplay,
+  operationList,
+} from "../src/scene/details.js";
 import { districtArcs } from "../src/scene/districtArrows.js";
 import { districtPlates } from "../src/scene/districts.js";
 import { makeCity, makeOldCity } from "./fixture.js";
@@ -37,6 +42,59 @@ describe("districtDetails", () => {
     if (deep === undefined) return;
     const details = districtDetails(plates, boxes, arcs, { ...deep, isStub: true });
     expect(details.meta).toBe("module (stub) — in java:com.acme.order");
+  });
+});
+
+describe("operationDisplay", () => {
+  it("splits the operation name from its parameter list", () => {
+    expect(operationDisplay("bill(Order)")).toEqual({ name: "bill", params: "(Order)" });
+    expect(operationDisplay("run()")).toEqual({ name: "run", params: "()" });
+  });
+
+  it("shortens java.lang and java.util parameter types to their symbol name", () => {
+    expect(operationDisplay("format(java.lang.String, java.util.List)")).toEqual({
+      name: "format",
+      params: "(String, List)",
+    });
+  });
+
+  it("shortens their subpackages too, but leaves other packages whole", () => {
+    expect(
+      operationDisplay("apply(java.util.function.Function, com.acme.order.Order)"),
+    ).toEqual({ name: "apply", params: "(Function, com.acme.order.Order)" });
+  });
+
+  it("shortens types nested inside generics", () => {
+    expect(operationDisplay("index(java.util.Map<java.lang.String, com.acme.Order>)")).toEqual({
+      name: "index",
+      params: "(Map<String, com.acme.Order>)",
+    });
+  });
+
+  it("treats a signature without a parameter list as all name", () => {
+    expect(operationDisplay("toString")).toEqual({ name: "toString", params: "" });
+  });
+});
+
+describe("operationList", () => {
+  it("lists named operations and counts nameless ones (lambdas) apart", () => {
+    const { items, anonymous } = operationList([
+      { signature: "bill(java.lang.String)" },
+      { signature: "()" },
+      { signature: "(<unknown>)" },
+      { signature: "place(Order)" },
+    ]);
+    expect(items).toEqual([
+      { name: "bill", params: "(String)" },
+      { name: "place", params: "(Order)" },
+    ]);
+    expect(anonymous).toBe(2);
+  });
+
+  it("keeps constructors — <init> is a name", () => {
+    const { items, anonymous } = operationList([{ signature: "<init>(java.util.List)" }]);
+    expect(items).toEqual([{ name: "<init>", params: "(List)" }]);
+    expect(anonymous).toBe(0);
   });
 });
 

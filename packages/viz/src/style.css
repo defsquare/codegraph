@@ -122,7 +122,8 @@ body {
 #details {
   top: 46px;
   right: 12px;
-  width: 320px;
+  width: 400px;
+  max-width: calc(100vw - 24px);
   max-height: calc(100vh - 60px);
   overflow-y: auto;
   pointer-events: auto;
@@ -183,9 +184,9 @@ body {
 }
 
 #details details ul {
-  list-style: none;
+  list-style: disc;
   margin: 4px 0 0;
-  padding: 0;
+  padding: 0 0 0 18px;
   font-family: ui-monospace, monospace;
   font-size: 11px;
 }
@@ -197,6 +198,12 @@ body {
 
 #details details li .type {
   color: var(--text-dim);
+}
+
+#details details .footnote {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-style: italic;
 }
 
 dialog#help {

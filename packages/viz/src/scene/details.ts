@@ -56,6 +56,39 @@ export function districtDetails(
   };
 }
 
+/**
+ * How the panel prints one operation: the name apart (the shell bolds it) and
+ * the parameter list with `java.lang.*` / `java.util.*` types — subpackages
+ * included — shortened to their symbol name. Those packages are ubiquitous
+ * noise (`String`, `List`, `Function`); every other package stays whole
+ * because it is what distinguishes two same-named types.
+ */
+export function operationDisplay(signature: string): { name: string; params: string } {
+  const paren = signature.indexOf("(");
+  if (paren < 0) return { name: signature, params: "" };
+  const params = signature
+    .slice(paren)
+    .replace(/\bjava\.(?:lang|util)(?:\.[a-z][\w$]*)*\.(?=[A-Z])/g, "");
+  return { name: signature.slice(0, paren), params };
+}
+
+/**
+ * The operations the panel lists: named ones through `operationDisplay`, in
+ * order; the nameless — lambdas and other anonymous invocables, whose
+ * signature starts at the parameter list — only as a count. 387 identical
+ * `()` bullets name nothing; one honest count line does.
+ */
+export function operationList(operations: BuildingBox["operations"]): {
+  items: readonly { name: string; params: string }[];
+  anonymous: number;
+} {
+  const named = operations.filter((operation) => !operation.signature.startsWith("("));
+  return {
+    items: named.map((operation) => operationDisplay(operation.signature)),
+    anonymous: operations.length - named.length,
+  };
+}
+
 export function buildingDetails(box: BuildingBox): BuildingDetails {
   return {
     title: box.name ?? box.id,

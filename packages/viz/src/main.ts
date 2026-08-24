@@ -2,7 +2,13 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { CityLayout } from "@codegraph/city";
 import { CityLoadError, parseCityLayout } from "./guard.js";
-import { buildingDetails, districtDetails, type BuildingDetails, type DetailRow } from "./scene/details.js";
+import {
+  buildingDetails,
+  districtDetails,
+  operationList,
+  type BuildingDetails,
+  type DetailRow,
+} from "./scene/details.js";
 import type { ArrowToggles } from "./scene/focus.js";
 import { HELP_SEEN_KEY, helpModel } from "./scene/help.js";
 import { buildingLabel, districtLabel } from "./scene/labels.js";
@@ -302,7 +308,7 @@ function rowsTable(rows: readonly DetailRow[]): HTMLTableElement {
 
 function memberList(
   summaryText: string,
-  items: readonly { text: string; type?: string }[],
+  items: readonly { lead?: string; text: string; type?: string }[],
   open: boolean,
 ): HTMLDetailsElement {
   const fold = document.createElement("details");
@@ -313,7 +319,12 @@ function memberList(
   const list = document.createElement("ul");
   for (const item of items) {
     const line = document.createElement("li");
-    line.textContent = item.text;
+    if (item.lead !== undefined) {
+      const lead = document.createElement("strong");
+      lead.textContent = item.lead;
+      line.append(lead);
+    }
+    line.append(item.text);
     if (item.type !== undefined) {
       const type = document.createElement("span");
       type.className = "type";
@@ -336,6 +347,18 @@ function detailsHeader(title: string, meta: string): readonly HTMLElement[] {
 }
 
 function renderBuildingPanel(details: BuildingDetails): void {
+  const operations = operationList(details.operations);
+  const operationsFold = memberList(
+    "Operations",
+    operations.items.map((operation) => ({ lead: operation.name, text: operation.params })),
+    false,
+  );
+  if (operations.anonymous > 0) {
+    const note = document.createElement("div");
+    note.className = "footnote";
+    note.textContent = `+ ${operations.anonymous} anonymous (lambdas), not listed`;
+    operationsFold.append(note);
+  }
   detailsBody.replaceChildren(
     ...detailsHeader(details.title, details.meta),
     rowsTable(details.rows),
@@ -347,11 +370,7 @@ function renderBuildingPanel(details: BuildingDetails): void {
       })),
       true,
     ),
-    memberList(
-      "Operations",
-      details.operations.map((operation) => ({ text: operation.signature })),
-      false,
-    ),
+    operationsFold,
   );
   detailsPanel.hidden = false;
 }
