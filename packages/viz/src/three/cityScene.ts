@@ -6,6 +6,7 @@ import { landscapeCenter } from "../scene/center.js";
 import { districtArcs, type DistrictArc } from "../scene/districtArrows.js";
 import { districtPlates, groundPlate, type Plate } from "../scene/districts.js";
 import { arcState, type ArrowToggles } from "../scene/focus.js";
+import type { CityPalette } from "../scene/palette.js";
 import {
   ARC_SEGMENTS,
   COLORS,
@@ -42,12 +43,15 @@ export interface CityScene {
   setBuildingsVisible(visible: boolean): void;
   /** Show or hide stubs — buildings and plates the corpus does not declare. */
   setExternalsVisible(visible: boolean): void;
+  /** Repaint buildings, stubs and plates from a new palette, in place. */
+  setPalette(palette: CityPalette): void;
   dispose(): void;
 }
 
 const VERTICES_PER_ARC = ARC_SEGMENTS * 2; // line-segment pairs between samples
 
-export function createCityScene(city: CityLayout): CityScene {
+export function createCityScene(city: CityLayout, initialPalette: CityPalette): CityScene {
+  let palette = initialPalette;
   const root = new THREE.Group();
   // The layout's origin is a corner; the world's is the landscape's visual
   // center — the built mass's centroid, not the bounds rectangle's middle — so
@@ -80,7 +84,7 @@ export function createCityScene(city: CityLayout): CityScene {
   const plateTintTarget = new THREE.Color(PLATE_LEVEL_TARGET);
   const plateBaseColor = (plate: Plate): THREE.Color =>
     color
-      .setHex(COLORS.districtPlate)
+      .setHex(palette.districtPlate)
       .lerp(plateTintTarget, Math.min(plate.level * PLATE_TINT_PER_LEVEL, 0.4));
   plates.forEach((plate, i) => {
     matrix.makeScale(...plate.size).setPosition(...plate.center);
@@ -97,7 +101,7 @@ export function createCityScene(city: CityLayout): CityScene {
   boxes.forEach((box, i) => {
     matrix.makeScale(...box.size).setPosition(...box.center);
     buildingsMesh.setMatrixAt(i, matrix);
-    buildingsMesh.setColorAt(i, color.setHex(box.isStub ? COLORS.buildingStub : COLORS.building));
+    buildingsMesh.setColorAt(i, color.setHex(box.isStub ? palette.buildingStub : palette.building));
   });
   root.add(buildingsMesh);
   disposables.push(buildingGeometry, buildingMaterial, buildingsMesh);
@@ -202,6 +206,23 @@ export function createCityScene(city: CityLayout): CityScene {
     platesMesh.instanceMatrix.needsUpdate = true;
   }
 
+  // Event-driven repaint (never per-frame): rewrite the instance colors the
+  // palette feeds, keeping the selected plate's extra tint.
+  function setPalette(next: CityPalette): void {
+    palette = next;
+    boxes.forEach((box, i) => {
+      buildingsMesh.setColorAt(i, color.setHex(box.isStub ? palette.buildingStub : palette.building));
+    });
+    if (buildingsMesh.instanceColor) buildingsMesh.instanceColor.needsUpdate = true;
+    plates.forEach((plate, i) => {
+      platesMesh.setColorAt(i, plateBaseColor(plate));
+      if (i === selectedPlate) {
+        platesMesh.setColorAt(i, plateBaseColor(plate).lerp(plateTintTarget, PLATE_SELECT_TINT));
+      }
+    });
+    if (platesMesh.instanceColor) platesMesh.instanceColor.needsUpdate = true;
+  }
+
   return {
     root,
     buildingsMesh,
@@ -212,6 +233,7 @@ export function createCityScene(city: CityLayout): CityScene {
     districtArcs: dArcs,
     setFocus,
     setDistrictFocus,
+    setPalette,
     setBuildingsVisible: (visible) => {
       buildingsMesh.visible = visible;
     },

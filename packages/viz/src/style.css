@@ -89,8 +89,35 @@ body {
   margin: 0;
 }
 
+#header-colors {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#header-colors label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Small flat swatch wells, header-sized instead of the chunky UA default. */
+#header-colors input[type="color"] {
+  width: 22px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
+}
+
 #help-link,
-#reset-view {
+#reset-view,
+#reset-colors {
   font: inherit;
   color: var(--text);
   background: none;
@@ -101,7 +128,8 @@ body {
 }
 
 #help-link:hover,
-#reset-view:hover {
+#reset-view:hover,
+#reset-colors:hover {
   background: rgba(0, 0, 0, 0.05);
 }
 

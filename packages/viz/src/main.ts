@@ -12,6 +12,15 @@ import {
 import type { ArrowToggles } from "./scene/focus.js";
 import { HELP_SEEN_KEY, helpModel } from "./scene/help.js";
 import { buildingLabel, districtLabel } from "./scene/labels.js";
+import {
+  DEFAULT_PALETTE,
+  PALETTE_KEY,
+  cssToHex,
+  hexToCss,
+  parsePalette,
+  serializePalette,
+  type CityPalette,
+} from "./scene/palette.js";
 import { createCityScene, type CityScene } from "./three/cityScene.js";
 import { BuildingPicker } from "./three/picking.js";
 import { COLORS } from "./theme.js";
@@ -51,6 +60,10 @@ const toggleFanIn = must<HTMLInputElement>("#toggle-fan-in");
 const toggleFanOut = must<HTMLInputElement>("#toggle-fan-out");
 const toggleExternals = must<HTMLInputElement>("#toggle-externals");
 const resetView = must<HTMLButtonElement>("#reset-view");
+const colorBuilding = must<HTMLInputElement>("#color-building");
+const colorStub = must<HTMLInputElement>("#color-stub");
+const colorDistrict = must<HTMLInputElement>("#color-district");
+const resetColors = must<HTMLButtonElement>("#reset-colors");
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -156,6 +169,46 @@ resetView.addEventListener("click", () => {
   if (currentCity) frameCity(currentCity);
 });
 
+// --- palette ----------------------------------------------------------------
+
+// The palette survives reloads via localStorage; storage may throw (file://,
+// blocked storage) — then the session just runs on what it last set.
+let palette: CityPalette = (() => {
+  try {
+    return parsePalette(localStorage.getItem(PALETTE_KEY));
+  } catch {
+    return DEFAULT_PALETTE;
+  }
+})();
+
+const paletteInputs: readonly (readonly [HTMLInputElement, keyof CityPalette])[] = [
+  [colorBuilding, "building"],
+  [colorStub, "buildingStub"],
+  [colorDistrict, "districtPlate"],
+];
+
+/** One sink for every palette change: repaint, legend refresh, persistence. */
+function applyPalette(next: CityPalette): void {
+  palette = next;
+  for (const [input, key] of paletteInputs) input.value = hexToCss(palette[key]);
+  cityScene?.setPalette(palette);
+  renderHelp(currentCity); // the legend swatches must show the live colors
+  try {
+    localStorage.setItem(PALETTE_KEY, serializePalette(palette));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+for (const [input, key] of paletteInputs) {
+  input.value = hexToCss(palette[key]);
+  input.addEventListener("input", () => {
+    const hex = cssToHex(input.value);
+    if (hex !== null) applyPalette({ ...palette, [key]: hex });
+  });
+}
+resetColors.addEventListener("click", () => applyPalette(DEFAULT_PALETTE));
+
 function showCity(city: CityLayout): void {
   if (cityScene) {
     scene.remove(cityScene.root);
@@ -165,7 +218,7 @@ function showCity(city: CityLayout): void {
     tooltip.hidden = true;
     detailsPanel.hidden = true;
   }
-  cityScene = createCityScene(city);
+  cityScene = createCityScene(city, palette);
   currentCity = city;
   scene.add(cityScene.root);
   frameCity(city);
@@ -197,17 +250,21 @@ function frameCity(city: CityLayout): void {
 
 // --- header, help dialog, tooltip and details panel -------------------------
 
-const SWATCH_COLORS: Record<string, number> = {
-  building: COLORS.building,
-  stub: COLORS.buildingStub,
-  fanIn: COLORS.arrowFanIn,
-  fanOut: COLORS.arrowFanOut,
-};
+// Building and stub swatches read the LIVE palette — the legend must show the
+// colors the city actually renders with, not the defaults.
+function swatchColor(kind: string): number | undefined {
+  if (kind === "building") return palette.building;
+  if (kind === "stub") return palette.buildingStub;
+  if (kind === "fanIn") return COLORS.arrowFanIn;
+  if (kind === "fanOut") return COLORS.arrowFanOut;
+  return undefined;
+}
 
 function swatchOf(kind: string): HTMLElement {
   const swatch = document.createElement("span");
   swatch.className = "swatch";
-  swatch.style.background = `#${SWATCH_COLORS[kind]?.toString(16).padStart(6, "0")}`;
+  const color = swatchColor(kind);
+  if (color !== undefined) swatch.style.background = hexToCss(color);
   return swatch;
 }
 

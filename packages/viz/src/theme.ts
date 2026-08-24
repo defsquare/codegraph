@@ -3,14 +3,14 @@
  * (CLAUDE.md: "meaning controls appearance", no decorative effects).
  *
  * Colors are semantic, never aesthetic:
- *  - building        a corpus-declared type; the concrete of the city
- *  - buildingStub    an external type the model degraded to a stub — paler,
- *                    fading toward the background, because the model knows
- *                    less about it
  *  - arrowFanIn / arrowFanOut   dependency direction relative to the selected
  *                    element; provenance rides the saturation channel — an
  *                    `inferred` arc (the artifact's flag, never recomputed
  *                    here) desaturates toward INFERRED_GRAY
+ *
+ * Building, stub and district-plate colors are the USER-CONFIGURABLE palette
+ * and live in scene/palette.ts (defaults included) — their meanings hold
+ * regardless of the hues chosen.
  *
  * Dimensions of plates and arcs are presentation geometry only; they encode no
  * metric and therefore live here, not in the city model.
@@ -18,9 +18,6 @@
 export const COLORS = {
   background: 0xeef1f5,
   ground: 0xdde2e9,
-  districtPlate: 0xc6cdd8,
-  building: 0x8a957e,
-  buildingStub: 0xb9beb3,
   /** Fan-in: arrows INTO the selected district — who depends on it. */
   arrowFanIn: 0xd97a12,
   /** Fan-out: arrows OUT of the selected district — what it depends on. */
