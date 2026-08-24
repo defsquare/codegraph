@@ -171,8 +171,9 @@ function showCity(city: CityLayout): void {
 
 /**
  * Aim the camera like the reference shot: elevated three-quarter view. The
- * scene group is centered on the world origin (cityScene root offset), so the
- * orbit target — and what "Reset view" returns to — is (0, 0, 0).
+ * scene group puts the landscape's visual center (the built mass's centroid,
+ * per landscapeCenter) at the world origin, so the orbit target — and what
+ * "Reset view" returns to — is (0, 0, 0).
  */
 function frameCity(city: CityLayout): void {
   const span = Math.max(city.bounds.width, city.bounds.depth, 1);

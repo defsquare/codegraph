@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { CityLayout } from "@codegraph/city";
 import { arrowArcs, type ArrowArc } from "../scene/arrows.js";
 import { buildingBoxes, type BuildingBox } from "../scene/buildings.js";
+import { landscapeCenter } from "../scene/center.js";
 import { districtArcs, type DistrictArc } from "../scene/districtArrows.js";
 import { districtPlates, groundPlate, type Plate } from "../scene/districts.js";
 import { arcState, type ArrowToggles } from "../scene/focus.js";
@@ -48,13 +49,11 @@ const VERTICES_PER_ARC = ARC_SEGMENTS * 2; // line-segment pairs between samples
 
 export function createCityScene(city: CityLayout): CityScene {
   const root = new THREE.Group();
-  // The layout's origin is a corner; the world's is the city center, so the
-  // camera orbits (and "Reset view" targets) the middle of the landscape.
-  root.position.set(
-    -(city.bounds.x + city.bounds.width / 2),
-    0,
-    -(city.bounds.y + city.bounds.depth / 2),
-  );
+  // The layout's origin is a corner; the world's is the landscape's visual
+  // center — the built mass's centroid, not the bounds rectangle's middle — so
+  // the camera orbits (and "Reset view" targets) the middle of the actual city.
+  const center = landscapeCenter(city);
+  root.position.set(-center.x, 0, -center.z);
   const disposables: { dispose(): void }[] = [];
   const boxes = buildingBoxes(city);
   const arcs = arrowArcs(city, boxes);
