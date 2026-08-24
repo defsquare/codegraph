@@ -1193,7 +1193,118 @@ that it cannot be detected by construction.
 Documented static limits (all languages, per profile `notes`): reflection,
 `Class.forName`/Spring XML, service loaders, pre-expansion macro code.
 
-## 11. Milestones
+## 11. Phase 8 — Evolution: SCM mining, temporal store, city replay
+
+Motivation: `model.jsonl` is a snapshot — it says what the code IS, not what
+happened to it. The crime-scene analyses (hotspots, logical coupling,
+knowledge maps — Tornhill, *Your Code as a Crime Scene*) and a Gource-style
+replay of the city both need the time axis. Two prior decisions make this
+phase cheaper than it looks: identity is the natural key (invariant 7), so
+"the same entity across two snapshots" is key equality — no diff heuristics
+for named entities; and Spoon runs noClasspath, so historic commits that no
+longer compile still extract.
+
+Three principles, locked up front:
+
+1. **Evolution facts are a third artifact.** `history.jsonl` sits beside
+   `model.jsonl`: repo-scoped, language-agnostic, and changing on every
+   commit while structure does not. It never merges into the model file and
+   never grows a fifth provenance value — code facts and history inferences
+   stay unmixable. The join happens in the analyzer, on `anchor.file` /
+   `TModule.definedIn` paths relative to the analyzed root.
+2. **The miner has no code intelligence** — the extractor rule, mirrored.
+   It emits paths, authors, timestamps, and line deltas from one `git log`
+   pass; everything smarter is derived downstream.
+3. **Lineage v1 is the natural key, exactly.** A renamed symbol is a death
+   plus a birth; anonymous entities (`file:line:column` disambiguators
+   shift under any edit above them) are not tracked over time. Both
+   restrictions are documented, not silent.
+
+### 11.1 M9a — SCM miner + file-level replay (the Gource milestone)
+
+Everything Gource shows comes from `git log` alone — so the replay
+experience ships before any extractor touches the time axis, and the one
+genuinely hard viz problem (layout stability) is forced on cheap data.
+
+- [ ] `codegraph scm <repo> [--since <date>] --out history.jsonl`
+      (`scm`, not `git`: the door stays open for hg/fossil): one
+      `git log --numstat --no-merges --find-renames` subprocess, parsed
+      streaming. M6 discipline reused: header dictionaries (author table,
+      path table), surrogate ints, sorted deterministic output, `eof`
+      count trailer.
+- [ ] Two record types: `commit` (hash, author ref, timestamp,
+      `isFix`/`isRevert` subject-regex flags — labeled heuristic) and
+      `change` (commit ref, path ref, added, deleted, rename-from).
+      Rename chains are resolved at mine time so one path surrogate names
+      one file lineage — unresolved renames corrupt every downstream
+      metric.
+- [ ] Reports, file-level only, no model join yet:
+      `codegraph history summary|hotspots|authors` — churn, bus factor,
+      bug density, momentum, firefighting frequency.
+- [ ] File-level city replay: buildings = files (height = running LOC sum
+      of numstat deltas), districts = directories, timeline scrubber in
+      viz, commits as ticks.
+- [ ] Fixture: a scripted git repo built by the test suite in a temp dir
+      (two authors, a rename, a `fix:` commit, a deletion) —
+      deterministic, and it exercises the rename chain.
+- **DoD**: miner output byte-identical across runs on the scripted repo;
+  summary reports match hand-counted fixture numbers; file-level replay
+  runs end to end on codegraph's own history.
+
+### 11.2 M9b — temporal store + entity timelines
+
+- [ ] Sampled snapshots: extract at K chosen revisions (tags/releases, or
+      every N commits — 50–200 frames suffice for replay) via
+      `git worktree add`, never mutating the main checkout.
+- [ ] `codegraph import --at <sha>` extends `model.db` (M7) with
+      `revision`, `entity_version` (key ref, revision ref, LOC, metrics)
+      and `edge_version` tables. Lifespans (`appeared`, `disappeared`) are
+      derived per key at query time — inverse indexes over the time axis,
+      never serialized (invariant 4 applied to time).
+- [ ] Cross-graph queries — the ones only a tool holding BOTH graphs can
+      ask: **hidden coupling** (co-change pairs with no path in the
+      declared graph) and **dead weight** (declared dependencies that
+      never co-change). Plus hotspots (revisions × LOC), logical coupling
+      with support/confidence thresholds, ownership/knowledge map, truck
+      factor, code age.
+- [ ] `codegraph timeline <id>`: first/last revision containing the key,
+      metric series between them. Exact birth commit on demand via
+      targeted bisect (extract one file at ~log₂ N revisions) — a
+      query-time feature, not an ingest-time cost.
+- **DoD**: property suite (closure, profile validity, determinism) green
+  at every keyframe unconditionally; timeline and coupling queries
+  verified on a real corpus history (google/gson).
+
+### 11.3 M9c — entity-level city replay
+
+- [ ] Layout computed ONCE on the union of every key that ever existed;
+      every plot frozen. Buildings animate in place — rise from zero at
+      birth, sink at death; land is vacant before its time. Early sparse
+      frames are the honest picture of a city that will grow, not a
+      defect.
+- [ ] One temporal `city.json`: per building
+      `{plot, birth, death, series: [{t, height, heat, …}]}` — viz
+      interpolates between keyframes and still renders a laid-out
+      artifact only.
+- [ ] Time-aware channels documented like every other: change heat as
+      color, age as desaturation, ownership as a toggleable color mode;
+      co-change arcs visually distinct from declared edges (they are
+      inferences, and the city never lies).
+- **DoD**: replay on a real corpus reviewed as screenshots at user-facing
+  camera angles; no per-frame allocation in the scrub path.
+
+### 11.4 Deferred, explicitly
+
+- **Per-commit incremental extraction** (keyframes + deltas): Spoon's
+  resolution is corpus-wide — the stub whitelist depends on all
+  corpus-declared ids — so between-keyframe models are approximate. Build
+  only if sampling proves too coarse; keyframes bound the staleness.
+- **Symbol rename lineage** (same-parent + similar-body matching).
+- **Lambda/anonymous-entity tracking** over time.
+- **`.mailmap` author normalization** (start with email identity; add it
+  when it bites).
+
+## 12. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -1206,8 +1317,11 @@ Documented static limits (all languages, per profile `notes`): reflection,
 | M6 | JSONL interchange | ✅ in-place clean break (`schemaVersion` unchanged): streaming reader/writer, per-record schemas + generated container contract, extractor emits `.jsonl`, fixtures regenerated, v1 deleted; fineract 559.5MB → 127.4MB and analyzable end to end; 1 149 TS + 153 Java tests |
 | M7 | SQLite store | `codegraph import` → `model.db` cache; DB-backed analyzer facade; repeat runs skip parsing; reports byte-identical to M6 outputs |
 | M8 | 2nd language | clj-kondo adapter; cross-language import-graph query works |
+| M9a | SCM miner + Gource replay | `codegraph scm` → deterministic `history.jsonl`; `history summary/hotspots/authors` reports match hand-counted fixture numbers; file-level city replay with timeline scrubber runs on codegraph's own history |
+| M9b | Temporal store | sampled `import --at` revisions in `model.db`; lifespans + `codegraph timeline`; hidden-coupling/ownership queries verified on gson history; property suite green at every keyframe |
+| M9c | Entity-level city replay | frozen union layout; temporal `city.json` with per-building series; scrubbed replay reviewed as screenshots at user-facing angles, allocation-free scrub path |
 
-## 12. Decisions made in this plan (deltas vs. the design doc)
+## 13. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -1230,3 +1344,7 @@ Documented static limits (all languages, per profile `notes`): reflection,
 | Key separators (M5) | `/` and `#` reserved in the key's components; `renderId` validates and throws | rendering must be injective, or two distinct keys merge into one entity with no error — the M2 overload collision one level up |
 | Module component (M5) | a module names ITSELF, with an empty symbol — not its parent module | the parent form breaks the frozen `java:com.acme.order` id shape and needs a fabricated `java` module to place the stub package `java:java.util` |
 | Trait-set interning (v2) | rejected — traits ride inline as int arrays; MM-4's validate-once-per-set is reader-side memoization | set indirection saved ~4MB on a ~90MB file but cost a record type, a dedup pass in every extractor, and lines unreadable in isolation |
+| Evolution facts (Phase 8) | separate `history.jsonl` joined on `anchor.file` paths — never merged into `model.jsonl`, no fifth provenance value | repo-scoped facts with a per-commit lifecycle don't belong in a language-scoped structural contract; the provenance set keeps code facts and history inferences unmixable |
+| Lineage over time (Phase 8) | natural-key equality across snapshots; a rename is a death + a birth; anonymous entities untracked | invariant 7 makes temporal identity free for named entities; rename matching is heuristic machinery, deferred until a corpus proves it necessary |
+| Replay layout (Phase 8) | one layout over the union of all keys that ever existed, plots frozen; buildings animate in place | shelf packing is chaotic — one insertion reshuffles the city; a readable replay needs positional stability more than land density |
+| Snapshot strategy (Phase 8) | sampled keyframes via `git worktree`; per-commit incremental extraction deferred | full extraction × thousands of commits is prohibitive, 50–200 frames give the replay effect; noClasspath makes non-compiling historic commits extractable |
