@@ -95,7 +95,11 @@ let locked: number | null = null;
 let selectedDistrict: string | null = null;
 
 function resize(): void {
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  // updateStyle must stay true: the buffer is dpr times the window, and with
+  // no CSS rule sizing #city the canvas would DISPLAY at buffer size — on a
+  // dpr-2 screen only its top-left quarter fits the window, parking the city
+  // (the buffer's center) at the bottom-right corner.
+  renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 }
