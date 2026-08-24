@@ -48,6 +48,7 @@ Four rules make the model trustworthy rather than merely rich:
 | `packages/core` | `@codegraph/core` — traits, edges, language profiles, Zod validation, JSON Schema export |
 | `packages/analyzer` | `@codegraph/analyzer` — graph construction, derived indexes, queries, metrics |
 | `packages/city` | `@codegraph/city` — the city **model**: districts, buildings, arrows, layout; no rendering |
+| `packages/scm` | `@codegraph/scm` — the SCM miner: git history → deterministic `history.jsonl`, plus churn/hotspot/authorship reports |
 | `packages/cli` | `@codegraph/cli` — the `codegraph` command |
 | `packages/viz` | `@codegraph/viz` — the Three.js code city renderer — the only package allowed to depend on `three` |
 | `extractors/java` | Maven/Spoon extractor (noClasspath), emits `model.jsonl` |
@@ -96,8 +97,20 @@ codegraph city     [model.jsonl] [--serve [--port N] [--host ADDR]] [--layout] [
                    [--height METRIC] [--footprint METRIC] [--carry M1,M2]
                    [--internal-only] [--declared-only]
 
+codegraph scm      [repo] [--since DATE] [--out FILE] [--json]
+                   # mine git history -> <repo>-history.jsonl (deterministic)
+
+codegraph history  [history.jsonl] [--report summary|hotspots|authors]
+                   [--top N] [--json]
+
 codegraph profiles [--lang java] [--json]
 ```
+
+Evolution facts are a **third artifact**: `history.jsonl` sits beside
+`model.jsonl` — repo-scoped, language-agnostic, mined from one `git log` pass
+with rename chains resolved so one surrogate names one file lineage. Author
+identity is the `Name <email>` pair (`.mailmap` applies when the repo has
+one); a path recreated after a deletion continues the same lineage.
 
 After `pnpm -r build`, run it from the clone as `./bin/codegraph …` — an
 executable that finds its own `dist/`, so it works from a worktree and from a

@@ -1226,25 +1226,26 @@ Everything Gource shows comes from `git log` alone — so the replay
 experience ships before any extractor touches the time axis, and the one
 genuinely hard viz problem (layout stability) is forced on cheap data.
 
-- [ ] `codegraph scm <repo> [--since <date>] --out history.jsonl`
+- [x] `codegraph scm <repo> [--since <date>] --out history.jsonl`
       (`scm`, not `git`: the door stays open for hg/fossil): one
-      `git log --numstat --no-merges --find-renames` subprocess, parsed
-      streaming. M6 discipline reused: header dictionaries (author table,
-      path table), surrogate ints, sorted deterministic output, `eof`
-      count trailer.
-- [ ] Two record types: `commit` (hash, author ref, timestamp,
+      `git log --numstat --no-merges --find-renames -z` subprocess, parsed
+      by pure `@codegraph/scm`. M6 discipline reused: header dictionary
+      (author table), interned path table, surrogate ints, sorted
+      deterministic output (encoder canonicalizes), `eof` count trailer.
+- [x] Two record types: `commit` (hash, author ref, timestamp,
       `isFix`/`isRevert` subject-regex flags — labeled heuristic) and
       `change` (commit ref, path ref, added, deleted, rename-from).
       Rename chains are resolved at mine time so one path surrogate names
       one file lineage — unresolved renames corrupt every downstream
-      metric.
-- [ ] Reports, file-level only, no model join yet:
-      `codegraph history summary|hotspots|authors` — churn, bus factor,
-      bug density, momentum, firefighting frequency.
+      metric. (Documented approximation: a path recreated after a
+      deletion continues the same lineage — lineages are named by paths.)
+- [x] Reports, file-level only, no model join yet:
+      `codegraph history --report summary|hotspots|authors` — churn, bus
+      factor, bug density, momentum, firefighting frequency.
 - [ ] File-level city replay: buildings = files (height = running LOC sum
       of numstat deltas), districts = directories, timeline scrubber in
       viz, commits as ticks.
-- [ ] Fixture: a scripted git repo built by the test suite in a temp dir
+- [x] Fixture: a scripted git repo built by the test suite in a temp dir
       (two authors, a rename, a `fix:` commit, a deletion) —
       deterministic, and it exercises the rename chain.
 - **DoD**: miner output byte-identical across runs on the scripted repo;

@@ -18,7 +18,16 @@ export { UsageError } from "./exit.js";
  * an option means adding one entry to one array.
  */
 
-export const COMMAND_NAMES = ["validate", "analyze", "import", "export", "city", "profiles"] as const;
+export const COMMAND_NAMES = [
+  "validate",
+  "analyze",
+  "import",
+  "export",
+  "city",
+  "scm",
+  "history",
+  "profiles",
+] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 /** `analyze --report` values. */
@@ -28,6 +37,11 @@ export type ReportName = (typeof REPORTS)[number];
 /** `export --format` values. */
 export const FORMATS = ["dot", "json", "csv", "plantuml"] as const;
 export type FormatName = (typeof FORMATS)[number];
+
+/** `history --report` values. */
+export const HISTORY_REPORTS = ["summary", "hotspots", "authors"] as const;
+export type HistoryReportName = (typeof HISTORY_REPORTS)[number];
+export const DEFAULT_HISTORY_REPORT: HistoryReportName = "summary";
 
 /**
  * `--level` values come from the analyzer's `FOLD_LEVELS`, never from a local
@@ -72,6 +86,8 @@ export interface PositionalSpec {
    * process's working directory, which is not known when the specs are built.
    */
   readonly defaultPath?: (() => string) | undefined;
+  /** How to produce the default when it is missing — each artifact has its own maker. */
+  readonly missingHint?: string | undefined;
 }
 
 export interface CommandSpec {
@@ -98,6 +114,12 @@ const MODELS_POSITIONAL: PositionalSpec = {
 export function defaultModelPath(): string {
   const directory = basename(resolve("."));
   return directory.length === 0 ? "codegraph.jsonl" : `${directory}-codegraph.jsonl`;
+}
+
+/** `<current-dir>-history.jsonl` — exactly what `codegraph scm .` writes here. */
+export function defaultHistoryPath(): string {
+  const directory = basename(resolve("."));
+  return directory.length === 0 ? "history.jsonl" : `${directory}-history.jsonl`;
 }
 
 /** The same models, defaulted: for the commands run against the corpus at hand. */
@@ -326,6 +348,68 @@ export const IMPORT_SPEC: CommandSpec = {
   ],
 };
 
+/**
+ * `codegraph scm` — the miner. Named `scm`, not `git`, so the door stays open
+ * for hg/fossil (PLAN §11.1); the repo positional defaults to `.` because
+ * standing in the corpus is the whole workflow, as with the extractor.
+ */
+export const SCM_SPEC: CommandSpec = {
+  name: "scm",
+  summary: "Mine a repository's history into a deterministic history.jsonl.",
+  positional: {
+    name: "repo",
+    describe: "Path to the repository to mine.",
+    variadic: false,
+    required: false,
+    defaultPath: () => ".",
+  },
+  options: [
+    {
+      name: "since",
+      type: "string",
+      describe: "Mine only commits newer than this date (passed to git log --since).",
+      placeholder: "DATE",
+    },
+    {
+      name: "out",
+      type: "string",
+      describe: "Write the history here instead of <repo>-history.jsonl.",
+      placeholder: "FILE",
+    },
+    JSON_OPTION,
+  ],
+};
+
+export const HISTORY_SPEC: CommandSpec = {
+  name: "history",
+  summary: "Report churn, hotspots and authorship over a mined history.jsonl.",
+  positional: {
+    name: "history.jsonl",
+    describe: "A history.jsonl mined by `codegraph scm`.",
+    variadic: false,
+    required: false,
+    defaultPath: defaultHistoryPath,
+    missingHint: "Mine this directory first: codegraph scm .",
+  },
+  options: [
+    {
+      name: "report",
+      type: "string",
+      describe: "Which report to print.",
+      choices: HISTORY_REPORTS,
+      defaultValue: DEFAULT_HISTORY_REPORT,
+    },
+    {
+      name: "top",
+      type: "string",
+      describe: "Show only the N highest-ranked rows (hotspots defaults to 20).",
+      placeholder: "N",
+      integer: true,
+    },
+    JSON_OPTION,
+  ],
+};
+
 export const PROFILES_SPEC: CommandSpec = {
   name: "profiles",
   summary: "Print the language profiles core ships.",
@@ -346,6 +430,8 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   IMPORT_SPEC,
   EXPORT_SPEC,
   CITY_SPEC,
+  SCM_SPEC,
+  HISTORY_SPEC,
   PROFILES_SPEC,
 ];
 
@@ -417,6 +503,25 @@ export interface ImportOptions extends ModelInputOptions {
   readonly json: boolean;
 }
 
+export interface ScmOptions {
+  /** The repository to mine; `.` when nothing was typed. */
+  readonly repo: string;
+  /** `--since DATE`, passed through to `git log --since`. */
+  readonly since: string | undefined;
+  /** `--out FILE`; undefined means `<repo-basename>-history.jsonl`. */
+  readonly out: string | undefined;
+  readonly json: boolean;
+}
+
+export interface HistoryOptions {
+  /** The history.jsonl to report over. */
+  readonly history: string;
+  readonly report: HistoryReportName;
+  /** `--top N`; undefined lets each report pick its own default. */
+  readonly top: number | undefined;
+  readonly json: boolean;
+}
+
 export interface ProfilesOptions {
   readonly lang: string | undefined;
   readonly json: boolean;
@@ -435,6 +540,8 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "import"; readonly options: ImportOptions }
   | { readonly kind: "run"; readonly command: "export"; readonly options: ExportOptions }
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
+  | { readonly kind: "run"; readonly command: "scm"; readonly options: ScmOptions }
+  | { readonly kind: "run"; readonly command: "history"; readonly options: HistoryOptions }
   | { readonly kind: "run"; readonly command: "profiles"; readonly options: ProfilesOptions };
 
 const HELP_FLAGS = new Set(["--help", "-h"]);
@@ -521,7 +628,9 @@ export function renderHelp(spec: CommandSpec | undefined): string {
       const describe =
         fallback === undefined
           ? spec.positional.describe
-          : `${spec.positional.describe} (default: ${fallback()}, what the extractor writes here)`;
+          : spec.positional.missingHint === undefined
+            ? `${spec.positional.describe} (default: ${fallback()}, what the extractor writes here)`
+            : `${spec.positional.describe} (default: ${fallback()})`;
       lines.push(`  ${name}   ${describe}`);
     }
     lines.push("");
@@ -643,10 +752,10 @@ function readableDefault(spec: CommandSpec, path: string): string {
   try {
     accessSync(path, constants.R_OK);
   } catch (error) {
+    const make = spec.positional?.missingHint ?? "Extract this directory first: java -jar codegraph-java.jar";
     throw new UsageError(
-      `no model given, and the default '${path}' is not here`,
-      `Extract this directory first: java -jar codegraph-java.jar\n` +
-        `or pass a path: ${usageLine(spec)}`,
+      `no ${spec.positional?.name ?? "path"} given, and the default '${path}' is not here`,
+      `${make}\nor pass a path: ${usageLine(spec)}`,
       { cause: error },
     );
   }
@@ -802,6 +911,28 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           host: stringOf(values, "host") ?? "0.0.0.0",
           ...viewOf(values),
           out: stringOf(values, "out"),
+        },
+      };
+    case "scm":
+      return {
+        kind: "run",
+        command: "scm",
+        options: {
+          repo: models[0] as string,
+          since: stringOf(values, "since"),
+          out: stringOf(values, "out"),
+          json: flagOf(values, "json"),
+        },
+      };
+    case "history":
+      return {
+        kind: "run",
+        command: "history",
+        options: {
+          history: models[0] as string,
+          report: (stringOf(values, "report") ?? DEFAULT_HISTORY_REPORT) as HistoryReportName,
+          top: integerOf(values, "top"),
+          json: flagOf(values, "json"),
         },
       };
     case "profiles":

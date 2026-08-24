@@ -16,6 +16,7 @@
     "@codegraph/analyzer": "workspace:*",
     "@codegraph/city": "workspace:*",
     "@codegraph/core": "workspace:*",
+    "@codegraph/scm": "workspace:*",
     "@codegraph/viz": "workspace:*"
   },
   "devDependencies": {
