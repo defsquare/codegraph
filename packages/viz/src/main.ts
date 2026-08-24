@@ -58,12 +58,18 @@ controls.maxPolarAngle = Math.PI / 2 - 0.02; // never dive below the ground
 // Pan slides along the GROUND, not the screen plane, so the target — the
 // orbit pivot — can never be lifted into mid-air by a vertical pan.
 controls.screenSpacePanning = false;
+// Zoom dollies toward the point under the CURSOR, not the orbit pivot. With
+// screenSpacePanning off, OrbitControls re-plants the target on the ground
+// plane after each cursor zoom, so the pivot never leaves the ground.
+controls.zoomToCursor = true;
 
 // THE ORBIT CENTER IS THE CENTER OF THE SCREEN. Before every interaction the
 // pivot snaps to the ground point under the viewport center: rotation spins
 // the city about what the user is looking at, never about a point an earlier
 // pan or zoom left elsewhere. The point lies on the view axis, so re-anchoring
 // never visibly jumps the camera. (Reused objects — no per-gesture allocation.)
+// Zoom is the exception by design: zoomToCursor dollies toward the pointer and
+// then moves the pivot itself, and the next gesture re-snaps it to center.
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const centerRay = new THREE.Raycaster();
 const centerNdc = new THREE.Vector2(0, 0);
