@@ -129,10 +129,19 @@ export interface BuildingAttribute {
   readonly type?: string;
 }
 
+/** One declared parameter of an operation; `type` is the resolved entity's
+ * name, absent when the model cannot resolve it (same rule as attributes). */
+export interface BuildingParameter {
+  readonly name: string;
+  readonly type?: string;
+}
+
 /** One invocable of a type — methods, constructors and lambdas alike carry a
  * signature; a name alone stands in when the model gives none. */
 export interface BuildingOperation {
   readonly signature: string;
+  /** In declaration order; absent when the model declares no parameter list. */
+  readonly parameters?: readonly BuildingParameter[];
 }
 
 export interface Building {
@@ -380,7 +389,7 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
       footprint: { width: side, depth: side },
       metrics,
       attributes: attributesOf(graph, building.node.id, members),
-      operations: operationsOf(members),
+      operations: operationsOf(graph, members),
     };
   });
 
@@ -580,15 +589,30 @@ function attributesOf(
     .sort((a, b) => compareStrings(a.name, b.name));
 }
 
-function operationsOf(members: readonly Entity[]): readonly BuildingOperation[] {
+function operationsOf(graph: CodeGraph, members: readonly Entity[]): readonly BuildingOperation[] {
   return members
     .filter(isOperation)
-    .map((member) => ({
-      signature:
+    .map((member) => {
+      const signature =
         (member as { signature?: string }).signature ??
         (member as { name?: string }).name ??
-        member.id,
-    }))
+        member.id;
+      const declared = (member as { parameters?: readonly EntityId[] }).parameters;
+      if (declared === undefined) return { signature };
+      // Declaration order, never re-sorted — position IS the parameter's
+      // meaning. An unresolvable parameter id is skipped, an unresolvable
+      // declaredType drops just the type key (the attributesOf rule).
+      const parameters = declared.flatMap((id) => {
+        const parameter = graph.entity(id) as { name?: string; declaredType?: EntityId } | undefined;
+        if (parameter?.name === undefined) return [];
+        const typeName =
+          parameter.declaredType === undefined
+            ? undefined
+            : (graph.entity(parameter.declaredType) as { name?: string } | undefined)?.name;
+        return [{ name: parameter.name, ...(typeName === undefined ? {} : { type: typeName }) }];
+      });
+      return { signature, parameters };
+    })
     .sort((a, b) => compareStrings(a.signature, b.signature));
 }
 

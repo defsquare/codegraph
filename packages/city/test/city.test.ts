@@ -2,7 +2,7 @@ import { renderId, type Entity } from "@codegraph/core";
 import { internalOnly } from "@codegraph/analyzer";
 import { describe, expect, it } from "vitest";
 import { buildCity, CITY_ARTEFACT_KIND } from "../src/city.js";
-import { edge, field, graphOf, graphOfModels, javaGraph, method, pkg, stubType, type } from "./fixture.js";
+import { edge, field, graphOf, graphOfModels, javaGraph, method, param, pkg, stubType, type } from "./fixture.js";
 
 /**
  * The city is a SECOND MODEL, so what these tests guard is the mapping, not a
@@ -353,6 +353,35 @@ describe("buildCity: members on buildings", () => {
     // x resolves through the graph; y's type is unknown, so the key is absent —
     // an unresolvable type never leaks as an id string.
     expect(t?.attributes).toEqual([{ name: "java:a/T.x", type: "Other" }, { name: "java:a/T.y" }]);
+  });
+
+  it("carries parameter names and resolved types on operations, in declaration order", () => {
+    const graph = graphOf([
+      pkg("java:a"),
+      type("java:a/T", "java:a", 5),
+      type("java:a/Other", "java:a", 5, { name: "Other" }),
+      {
+        ...method("java:a/T.m", "java:a/T"),
+        parameters: ["java:a/T.m#b", "java:a/T.m#a"],
+      } as Entity,
+      { ...param("java:a/T.m#b", "java:a/T.m"), name: "b", declaredType: "java:a/Other" } as Entity,
+      { ...param("java:a/T.m#a", "java:a/T.m"), name: "a", declaredType: "java:gone/Missing" } as Entity,
+    ]);
+    const t = buildCity(graph).buildings.find((building) => building.id === "java:a/T");
+    // Declaration order (b before a), never re-sorted; an unresolvable
+    // declaredType drops the key, exactly as it does on attributes.
+    expect(t?.operations).toEqual([
+      {
+        signature: "java:a/T.m",
+        parameters: [{ name: "b", type: "Other" }, { name: "a" }],
+      },
+    ]);
+  });
+
+  it("omits the parameters key when the model declares no parameter list", () => {
+    const city = buildCity(toyGraph());
+    const big = city.buildings.find((building) => building.id === "java:a/Big");
+    expect(big?.operations.every((operation) => !("parameters" in operation))).toBe(true);
   });
 
   it("agrees with the methods and fields metrics on every real building", () => {

@@ -57,19 +57,34 @@ export function districtDetails(
 }
 
 /**
- * How the panel prints one operation: the name apart (the shell bolds it) and
- * the parameter list with `java.lang.*` / `java.util.*` types — subpackages
- * included — shortened to their symbol name. Those packages are ubiquitous
- * noise (`String`, `List`, `Function`); every other package stays whole
- * because it is what distinguishes two same-named types.
+ * How the panel prints one operation: the name apart (the shell bolds it),
+ * then the parameter list. With the artifact's declared parameters it is
+ * `name: Type` pairs (a parameter whose type did not resolve shows its name
+ * alone); without them it falls back to the signature's type list. Either
+ * way `java.lang.*` / `java.util.*` types — subpackages included — shorten
+ * to their symbol name: those packages are ubiquitous noise (`String`,
+ * `List`, `Function`); every other package stays whole because it is what
+ * distinguishes two same-named types.
  */
-export function operationDisplay(signature: string): { name: string; params: string } {
+export function operationDisplay(
+  signature: string,
+  parameters?: BuildingBox["operations"][number]["parameters"],
+): { name: string; params: string } {
   const paren = signature.indexOf("(");
-  if (paren < 0) return { name: signature, params: "" };
-  const params = signature
-    .slice(paren)
-    .replace(/\bjava\.(?:lang|util)(?:\.[a-z][\w$]*)*\.(?=[A-Z])/g, "");
-  return { name: signature.slice(0, paren), params };
+  const name = paren < 0 ? signature : signature.slice(0, paren);
+  const raw =
+    parameters === undefined
+      ? paren < 0
+        ? ""
+        : signature.slice(paren)
+      : `(${parameters
+          .map((p) => (p.type === undefined ? p.name : `${p.name}: ${p.type}`))
+          .join(", ")})`;
+  return { name, params: shortenUbiquitous(raw) };
+}
+
+function shortenUbiquitous(params: string): string {
+  return params.replace(/\bjava\.(?:lang|util)(?:\.[a-z][\w$]*)*\.(?=[A-Z])/g, "");
 }
 
 /**
@@ -84,7 +99,7 @@ export function operationList(operations: BuildingBox["operations"]): {
 } {
   const named = operations.filter((operation) => !operation.signature.startsWith("("));
   return {
-    items: named.map((operation) => operationDisplay(operation.signature)),
+    items: named.map((operation) => operationDisplay(operation.signature, operation.parameters)),
     anonymous: operations.length - named.length,
   };
 }

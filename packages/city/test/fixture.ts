@@ -107,6 +107,16 @@ export function method(id: string, parent: string, extra: Record<string, unknown
   } as Entity;
 }
 
+export function param(id: string, parent: string): Entity {
+  return {
+    id,
+    kind: "parameter",
+    traits: ["TNamed", "TChildOf", "TTypedEntity"],
+    name: id,
+    parent,
+  } as Entity;
+}
+
 export function field(id: string, parent: string): Entity {
   return {
     id,

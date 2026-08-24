@@ -74,6 +74,26 @@ describe("operationDisplay", () => {
   it("treats a signature without a parameter list as all name", () => {
     expect(operationDisplay("toString")).toEqual({ name: "toString", params: "" });
   });
+
+  it("prints declared parameters as name: Type pairs, over the signature's types", () => {
+    expect(
+      operationDisplay("bill(com.acme.Order, int)", [
+        { name: "order", type: "Order" },
+        { name: "count", type: "int" },
+      ]),
+    ).toEqual({ name: "bill", params: "(order: Order, count: int)" });
+  });
+
+  it("prints a bare name for a declared parameter whose type is unresolved", () => {
+    expect(operationDisplay("bill(com.acme.Order)", [{ name: "order" }])).toEqual({
+      name: "bill",
+      params: "(order)",
+    });
+  });
+
+  it("prints () for an explicitly empty parameter list", () => {
+    expect(operationDisplay("run()", [])).toEqual({ name: "run", params: "()" });
+  });
 });
 
 describe("operationList", () => {
@@ -89,6 +109,13 @@ describe("operationList", () => {
       { name: "place", params: "(Order)" },
     ]);
     expect(anonymous).toBe(2);
+  });
+
+  it("uses declared parameters when the artifact carries them", () => {
+    const { items } = operationList([
+      { signature: "bill(java.lang.String)", parameters: [{ name: "reference", type: "String" }] },
+    ]);
+    expect(items).toEqual([{ name: "bill", params: "(reference: String)" }]);
   });
 
   it("keeps constructors — <init> is a name", () => {
