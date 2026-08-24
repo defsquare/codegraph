@@ -31,6 +31,7 @@ function options(overrides: Partial<CityOptions> = {}): CityOptions {
     layout: false,
     serve: false,
     port: 4177,
+    host: "0.0.0.0",
     out: undefined,
     ...overrides,
   };
@@ -268,6 +269,7 @@ describe("city --serve", () => {
     artifact: string;
     assets: string;
     port: number;
+    host: string;
   }
 
   /** The seam: no sockets, no built viz — just what the command handed over. */
@@ -281,6 +283,7 @@ describe("city --serve", () => {
           artifact: serverOptions.artifact,
           assets: serverOptions.assets,
           port: serverOptions.port,
+          host: serverOptions.host,
         });
         return undefined;
       },
@@ -315,6 +318,11 @@ describe("city --serve", () => {
   it("passes the requested port through", () => {
     const { started } = serveTo({ port: 0 });
     expect(started[0]?.port).toBe(0);
+  });
+
+  it("passes the requested host through", () => {
+    const { started } = serveTo({ host: "127.0.0.1" });
+    expect(started[0]?.host).toBe("127.0.0.1");
   });
 
   it("fails BEFORE loading models when the visualizer is not built", () => {

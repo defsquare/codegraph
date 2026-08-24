@@ -92,7 +92,7 @@ codegraph export   model.jsonl --format dot|json|csv|plantuml
                    [--level module|type] [--internal-only] [--declared-only]
                    [--out FILE]
 
-codegraph city     [model.jsonl] [--serve [--port N]] [--layout] [--out FILE]
+codegraph city     [model.jsonl] [--serve [--port N] [--host ADDR]] [--layout] [--out FILE]
                    [--height METRIC] [--footprint METRIC] [--carry M1,M2]
                    [--internal-only] [--declared-only]
 
@@ -161,11 +161,14 @@ dropped, and the legend describes only the encodings the diagram actually drew.
 One command serves the 3D city for any `model.jsonl`:
 
 ```bash
-codegraph city model.jsonl --serve            # → http://localhost:4177, Ctrl-C stops
-codegraph city model.jsonl --serve --port 0   # any free port, printed on stderr
+codegraph city model.jsonl --serve                   # → http://localhost:4177, Ctrl-C stops
+codegraph city model.jsonl --serve --port 0          # any free port, printed on stderr
+codegraph city model.jsonl --serve --host 127.0.0.1  # this machine only
 ```
 
-`--serve` binds **localhost only** (a code model can be sensitive), implies
+`--serve` binds **all interfaces** (`0.0.0.0`) so the city is reachable from
+the network — narrow it with `--host 127.0.0.1` when the model is sensitive. It
+implies
 `--layout`, and needs the built visualizer — `pnpm -r build` covers it. In the
 city: **modules are districts** (nested when the model declares package
 containment), **types are buildings** whose height and footprint follow

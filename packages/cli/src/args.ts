@@ -273,7 +273,7 @@ export const CITY_SPEC: CommandSpec = {
       name: "serve",
       type: "boolean",
       describe:
-        "Serve the 3D visualizer on localhost with this city loaded (implies --layout; " +
+        "Serve the 3D visualizer with this city loaded (implies --layout; " +
         "stdout stays empty; Ctrl-C stops it). Needs the built viz app (pnpm -r build).",
     },
     {
@@ -282,6 +282,13 @@ export const CITY_SPEC: CommandSpec = {
       describe: "Port for --serve; 0 picks a free one.",
       placeholder: "N",
       defaultValue: "4177",
+    },
+    {
+      name: "host",
+      type: "string",
+      describe: "Interface for --serve to bind; 127.0.0.1 keeps the city on this machine only.",
+      placeholder: "ADDR",
+      defaultValue: "0.0.0.0",
     },
     ...VIEW_OPTIONS,
     {
@@ -394,10 +401,12 @@ export interface CityOptions extends ModelInputOptions, ViewOptions {
   readonly name: string | undefined;
   /** `--layout`: add placement (positions, bounds) to the artifact. */
   readonly layout: boolean;
-  /** `--serve`: host the visualizer on localhost with this city loaded. */
+  /** `--serve`: host the visualizer with this city loaded. */
   readonly serve: boolean;
   /** `--port N` for `--serve`; 0 = an ephemeral port. */
   readonly port: number;
+  /** `--host ADDR` for `--serve`; all interfaces unless the user narrows it. */
+  readonly host: string;
   /** `--out FILE`; undefined means stdout. */
   readonly out: string | undefined;
 }
@@ -790,6 +799,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           layout: flagOf(values, "layout"),
           serve: flagOf(values, "serve"),
           port: portOf(values),
+          host: stringOf(values, "host") ?? "0.0.0.0",
           ...viewOf(values),
           out: stringOf(values, "out"),
         },

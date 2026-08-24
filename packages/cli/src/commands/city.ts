@@ -37,7 +37,8 @@ import { resolveView } from "../view.js";
  * throws `UnknownMetricError` naming what exists, and the CLI's job is to hand
  * that to the user with the flag they typed.
  *
- * `--serve` hosts the visualizer on localhost with this city as /city.json.
+ * `--serve` hosts the visualizer with this city as /city.json (all interfaces
+ * unless --host narrows the binding).
  * It implies --layout (the viewer refuses a city with no placement), keeps
  * stdout empty (the server is the artifact's destination; --out still writes
  * the file too), and returns immediately — the LIVE SERVER is what keeps the
@@ -81,7 +82,7 @@ export function cityCommand(
   }
 
   if (assets !== undefined) {
-    deps.startServer({ artifact, assets, port: options.port, io });
+    deps.startServer({ artifact, assets, port: options.port, host: options.host, io });
   }
 
   return loadExitCode(loaded);

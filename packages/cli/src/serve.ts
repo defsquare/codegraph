@@ -14,8 +14,9 @@ import { errLine, type IoSink } from "./io.js";
  * the artifact is handed to the page as `/city.json`, exactly the file
  * `--layout --out city.json` would have written. Nothing is computed here.
  *
- * Localhost only: the server binds 127.0.0.1 — a code model can be sensitive,
- * and serving it on all interfaces is a decision the user has not made.
+ * Binds all interfaces (0.0.0.0) by default so the city is reachable from
+ * other machines on the network; `--host 127.0.0.1` narrows it back to this
+ * machine when the model is sensitive.
  */
 
 /** Where the built visualizer lives; a usage-shaped error names the fix. */
@@ -59,6 +60,8 @@ export interface CityServerOptions {
   readonly assets: string;
   /** 0 = ephemeral; the actual port is announced on stderr once listening. */
   readonly port: number;
+  /** Interface to bind; "0.0.0.0" (or "::") serves every interface. */
+  readonly host: string;
   readonly io: IoSink;
 }
 
@@ -120,10 +123,15 @@ export function startCityServer(options: CityServerOptions): Server {
     server.close();
   });
 
-  server.listen(options.port, "127.0.0.1", () => {
+  server.listen(options.port, options.host, () => {
     const address = server.address();
     const port = typeof address === "object" && address !== null ? address.port : options.port;
-    errLine(io, `city visualizer at http://localhost:${port}/ — Ctrl-C to stop.`);
+    // A wildcard address is not browsable; announce a URL that is, and say
+    // what was actually bound so the exposure is visible.
+    const wildcard = options.host === "0.0.0.0" || options.host === "::";
+    const shown = wildcard ? "localhost" : options.host;
+    const bound = wildcard ? ` (bound to ${options.host}, all interfaces)` : "";
+    errLine(io, `city visualizer at http://${shown}:${port}/${bound} — Ctrl-C to stop.`);
   });
 
   return server;

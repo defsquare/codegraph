@@ -27,14 +27,17 @@ afterAll(async () => {
   );
 });
 
-async function started(): Promise<{ base: string; io: CapturedIo }> {
+async function started(
+  host = "127.0.0.1",
+): Promise<{ base: string; io: CapturedIo; bound: string }> {
   const io = captureIo();
-  const server = startCityServer({ artifact: ARTIFACT, assets: fakeAssets(), port: 0, io });
+  const server = startCityServer({ artifact: ARTIFACT, assets: fakeAssets(), port: 0, host, io });
   servers.push(server);
   await new Promise((resolve) => server.once("listening", resolve));
   const address = server.address();
   const port = typeof address === "object" && address !== null ? address.port : 0;
-  return { base: `http://127.0.0.1:${port}`, io };
+  const bound = typeof address === "object" && address !== null ? address.address : "";
+  return { base: `http://127.0.0.1:${port}`, io, bound };
 }
 
 describe("startCityServer", () => {
@@ -71,7 +74,18 @@ describe("startCityServer", () => {
 
   it("announces the ACTUAL port on stderr once listening", async () => {
     const { base, io } = await started();
-    expect(io.stderr()).toContain(`city visualizer at http://localhost:${base.split(":")[2]}/`);
+    expect(io.stderr()).toContain(`city visualizer at http://127.0.0.1:${base.split(":")[2]}/`);
     expect(io.stderr()).toContain("Ctrl-C to stop");
+  });
+
+  it("binds the requested host", async () => {
+    const { bound } = await started("0.0.0.0");
+    expect(bound).toBe("0.0.0.0");
+  });
+
+  it("announces a BROWSABLE url when bound to all interfaces", async () => {
+    const { base, io } = await started("0.0.0.0");
+    expect(io.stderr()).toContain(`city visualizer at http://localhost:${base.split(":")[2]}/`);
+    expect(io.stderr()).toContain("bound to 0.0.0.0");
   });
 });

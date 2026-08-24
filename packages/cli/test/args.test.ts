@@ -302,6 +302,22 @@ describe("parseArgs errors are re-said in codegraph's terms", () => {
   });
 });
 
+describe("city --serve binding", () => {
+  it("defaults the host to all interfaces", () => {
+    expect(parse(["city", "a.json"])).toMatchObject({
+      command: "city",
+      options: { host: "0.0.0.0", port: 4177 },
+    });
+  });
+
+  it("lets --host narrow the binding", () => {
+    expect(parse(["city", "a.json", "--host", "127.0.0.1"])).toMatchObject({
+      command: "city",
+      options: { host: "127.0.0.1" },
+    });
+  });
+});
+
 /**
  * The extractor writes `<current-dir>-codegraph.jsonl` when run bare; the two
  * commands that consume a model day to day pick that same file up when no path
