@@ -42,6 +42,16 @@ export const PLATE_TINT_PER_LEVEL = 0.07;
 /** A selected district's plate moves this much further toward the target. */
 export const PLATE_SELECT_TINT = 0.25;
 
+/** The selected (origin) building darkens toward PLATE_LEVEL_TARGET this far —
+ * the same "selected = darker" semantic a district plate uses, just stronger
+ * because a building is small. */
+export const BUILDING_SELECT_TINT = 0.5;
+
+/** The far end of every visible arc tints this far toward that arc's
+ * direction hue — the building or plate wears the same color as the arrow
+ * pointing at it, so target and edge read as one fact. */
+export const HIGHLIGHT_TINT = 0.55;
+
 /**
  * An INFERRED district arrow keeps its direction hue but collapses most of the
  * way toward gray — the saturation channel carries provenance, the hue carries

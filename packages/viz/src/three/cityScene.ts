@@ -5,11 +5,13 @@ import { buildingBoxes, type BuildingBox } from "../scene/buildings.js";
 import { landscapeCenter } from "../scene/center.js";
 import { districtArcs, type DistrictArc } from "../scene/districtArrows.js";
 import { districtPlates, groundPlate, type Plate } from "../scene/districts.js";
-import { arcState, type ArrowToggles } from "../scene/focus.js";
+import { arcState, highlightMap, type ArrowToggles } from "../scene/focus.js";
 import type { CityPalette } from "../scene/palette.js";
 import {
   ARC_SEGMENTS,
+  BUILDING_SELECT_TINT,
   COLORS,
+  HIGHLIGHT_TINT,
   INFERRED_DESATURATION,
   INFERRED_GRAY,
   PLATE_LEVEL_TARGET,
@@ -159,28 +161,62 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     layer.commit();
   }
 
+  // SELECTION LIGHTS UP THE NEIGHBORHOOD: the origin darkens (selected =
+  // darker, the plate rule), and the far end of every VISIBLE arc tints toward
+  // that arc's direction hue — highlightMap shares the arcs' decision table,
+  // so a tinted element and an on-screen arc can never disagree. In-place
+  // instance recolors; the previous highlight set is restored first.
+  const boxIndexById = new Map(boxes.map((box, i) => [box.id, i] as const));
+  const plateIndexById = new Map(plates.map((plate, i) => [plate.id, i] as const));
+  let highlightedBoxes: number[] = [];
+  let highlightedPlates: number[] = [];
+  // What setPalette re-applies after repainting every base color.
+  let lastFocus: { index: number | null; toggles: ArrowToggles } | null = null;
+  let lastDistrict: { id: string | null; toggles: ArrowToggles } | null = null;
+
   function setFocus(index: number | null, toggles: ArrowToggles): void {
+    lastFocus = { index, toggles };
     const focusId = index === null ? null : boxes[index]?.id ?? null;
     paintArcs(typeArrows, arcs, focusId, toggles);
-  }
-
-  let selectedPlate: number | null = null;
-  function setDistrictFocus(districtId: string | null, toggles: ArrowToggles): void {
-    // Plate highlight, in place.
-    if (selectedPlate !== null) {
-      const plate = plates[selectedPlate];
-      if (plate !== undefined) platesMesh.setColorAt(selectedPlate, plateBaseColor(plate));
-    }
-    selectedPlate = districtId === null ? null : plates.findIndex((p) => p.id === districtId);
-    if (selectedPlate === -1) selectedPlate = null;
-    if (selectedPlate !== null) {
-      const plate = plates[selectedPlate];
-      if (plate !== undefined) {
-        platesMesh.setColorAt(
-          selectedPlate,
-          plateBaseColor(plate).lerp(plateTintTarget, PLATE_SELECT_TINT),
+    for (const i of highlightedBoxes) {
+      const box = boxes[i];
+      if (box !== undefined) {
+        buildingsMesh.setColorAt(
+          i,
+          color.setHex(box.isStub ? palette.buildingStub : palette.building),
         );
       }
+    }
+    highlightedBoxes = [];
+    for (const [id, role] of highlightMap(arcs, focusId, toggles)) {
+      const i = boxIndexById.get(id);
+      const box = i === undefined ? undefined : boxes[i];
+      if (i === undefined || box === undefined) continue;
+      color.setHex(box.isStub ? palette.buildingStub : palette.building);
+      if (role === "origin") color.lerp(plateTintTarget, BUILDING_SELECT_TINT);
+      else color.lerp(role === "fanIn" ? fanInColor : fanOutColor, HIGHLIGHT_TINT);
+      buildingsMesh.setColorAt(i, color);
+      highlightedBoxes.push(i);
+    }
+    if (buildingsMesh.instanceColor) buildingsMesh.instanceColor.needsUpdate = true;
+  }
+
+  function setDistrictFocus(districtId: string | null, toggles: ArrowToggles): void {
+    lastDistrict = { id: districtId, toggles };
+    for (const i of highlightedPlates) {
+      const plate = plates[i];
+      if (plate !== undefined) platesMesh.setColorAt(i, plateBaseColor(plate));
+    }
+    highlightedPlates = [];
+    for (const [id, role] of highlightMap(dArcs, districtId, toggles)) {
+      const i = plateIndexById.get(id);
+      const plate = i === undefined ? undefined : plates[i];
+      if (i === undefined || plate === undefined) continue;
+      const painted = plateBaseColor(plate);
+      if (role === "origin") painted.lerp(plateTintTarget, PLATE_SELECT_TINT);
+      else painted.lerp(role === "fanIn" ? fanInColor : fanOutColor, HIGHLIGHT_TINT);
+      platesMesh.setColorAt(i, painted);
+      highlightedPlates.push(i);
     }
     if (platesMesh.instanceColor) platesMesh.instanceColor.needsUpdate = true;
 
@@ -207,7 +243,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
   }
 
   // Event-driven repaint (never per-frame): rewrite the instance colors the
-  // palette feeds, keeping the selected plate's extra tint.
+  // palette feeds, then re-apply the current selection's highlights on top.
   function setPalette(next: CityPalette): void {
     palette = next;
     boxes.forEach((box, i) => {
@@ -216,11 +252,14 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     if (buildingsMesh.instanceColor) buildingsMesh.instanceColor.needsUpdate = true;
     plates.forEach((plate, i) => {
       platesMesh.setColorAt(i, plateBaseColor(plate));
-      if (i === selectedPlate) {
-        platesMesh.setColorAt(i, plateBaseColor(plate).lerp(plateTintTarget, PLATE_SELECT_TINT));
-      }
     });
     if (platesMesh.instanceColor) platesMesh.instanceColor.needsUpdate = true;
+    // Every instance now wears its base color; the trackers must not "restore"
+    // stale entries over the fresh paint.
+    highlightedBoxes = [];
+    highlightedPlates = [];
+    if (lastFocus !== null) setFocus(lastFocus.index, lastFocus.toggles);
+    if (lastDistrict !== null) setDistrictFocus(lastDistrict.id, lastDistrict.toggles);
   }
 
   return {

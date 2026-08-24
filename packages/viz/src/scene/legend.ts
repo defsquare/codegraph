@@ -42,12 +42,20 @@ export function legendModel(city: CityLayout): readonly LegendEntry[] {
     {
       swatch: "fanIn",
       label: "fan-in",
-      detail: "arrows into the selected element — who depends on it",
+      detail:
+        "arrows into the selected element — who depends on it; those neighbors tint this hue",
     },
     {
       swatch: "fanOut",
       label: "fan-out",
-      detail: "arrows out of the selected element — what it depends on (inferred = desaturated)",
+      detail:
+        "arrows out of the selected element — what it depends on; those neighbors tint " +
+        "this hue (inferred = desaturated)",
+    },
+    {
+      swatch: null,
+      label: "selection",
+      detail: "the clicked building or district darkens; each arc's far end tints by direction",
     },
   );
 

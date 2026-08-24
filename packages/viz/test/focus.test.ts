@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arcState, type ArrowToggles } from "../src/scene/focus.js";
+import { arcState, highlightMap, type ArrowToggles } from "../src/scene/focus.js";
 import { ARROW_ALPHA_FOCUS, ARROW_ALPHA_MIN } from "../src/theme.js";
 
 /**
@@ -49,5 +49,54 @@ describe("arcState", () => {
     expect(arcState(external, "a", toggles()).role).toBe("fanOut");
     // An internal arc is untouched by the externals toggle.
     expect(arcState(arc, "a", toggles({ externals: false })).role).toBe("fanOut");
+  });
+});
+
+describe("highlightMap", () => {
+  const arcs = [
+    { from: "s", to: "dep", weight: 0.5, external: false },
+    { from: "user", to: "s", weight: 0.5, external: false },
+    { from: "x", to: "y", weight: 0.5, external: false },
+  ];
+
+  it("marks the selection as origin and each visible arc's far end by direction", () => {
+    const map = highlightMap(arcs, "s", toggles());
+    expect(map.get("s")).toBe("origin");
+    expect(map.get("dep")).toBe("fanOut");
+    expect(map.get("user")).toBe("fanIn");
+    // Non-incident endpoints are untouched.
+    expect(map.has("x")).toBe(false);
+    expect(map.has("y")).toBe(false);
+  });
+
+  it("is empty when nothing is selected", () => {
+    expect(highlightMap(arcs, null, toggles()).size).toBe(0);
+  });
+
+  it("follows the arc decision table: a toggled-off direction highlights nothing", () => {
+    const map = highlightMap(arcs, "s", toggles({ fanOut: false }));
+    expect(map.has("dep")).toBe(false);
+    expect(map.get("user")).toBe("fanIn");
+    expect(map.get("s")).toBe("origin");
+  });
+
+  it("keeps the origin highlighted even with every direction off", () => {
+    const map = highlightMap(arcs, "s", toggles({ fanIn: false, fanOut: false }));
+    expect(map.get("s")).toBe("origin");
+    expect(map.size).toBe(1);
+  });
+
+  it("hides the far end of a hidden external arc", () => {
+    const external = [{ from: "s", to: "stub", weight: 0.5, external: true }];
+    expect(highlightMap(external, "s", toggles({ externals: false })).has("stub")).toBe(false);
+    expect(highlightMap(external, "s", toggles()).get("stub")).toBe("fanOut");
+  });
+
+  it("lets fan-in win on a mutual dependency", () => {
+    const mutual = [
+      { from: "s", to: "peer", weight: 0.5, external: false },
+      { from: "peer", to: "s", weight: 0.5, external: false },
+    ];
+    expect(highlightMap(mutual, "s", toggles()).get("peer")).toBe("fanIn");
   });
 });
