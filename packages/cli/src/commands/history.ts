@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { Buffer } from "node:buffer";
+import { buildFileCity, cityToJsonString, layoutFileCity } from "@codegraph/city";
 import {
   HistoryError,
   authorStats,
@@ -10,19 +12,41 @@ import {
 import type { HistoryOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, outLines, type IoSink } from "../io.js";
+import { startCityServer, vizAssetsDir, type CityServerOptions } from "../serve.js";
 
 /**
  * `codegraph history [history.jsonl] [--report summary|hotspots|authors]
- * [--top N] [--json]`.
+ * [--top N] [--serve] [--city FILE] [--json]`.
  *
  * File-level only, no model join (PLAN §11.1) — every number here comes from
  * `git log` alone; joining evolution onto the code graph is M9b's work.
+ *
+ * `--serve` hosts the FILE-LEVEL REPLAY: the history becomes a laid-out city
+ * artifact (buildings = file lineages, districts = directories) with a
+ * `replay` block — commits as ticks, heights as keyframe series — and the
+ * visualizer scrubs it. `--city FILE` writes that same artifact. With either,
+ * the replay is the deliverable and no report reaches stdout.
  *
  * EXIT (decision 2): an unreadable PATH is a usage error; a readable file
  * that is not a history is a FINDING about the file (exit 3), exactly as the
  * model commands treat a broken model.
  */
-export function historyCommand(options: HistoryOptions, io: IoSink): ExitCode {
+
+/** The server seam, injectable so tests need no sockets and no built viz. */
+export interface ServeDeps {
+  readonly assetsDir: typeof vizAssetsDir;
+  readonly startServer: (serverOptions: CityServerOptions) => unknown;
+}
+const REAL_SERVE: ServeDeps = { assetsDir: vizAssetsDir, startServer: startCityServer };
+
+export function historyCommand(
+  options: HistoryOptions,
+  io: IoSink,
+  deps: ServeDeps = REAL_SERVE,
+): ExitCode {
+  // Resolve the assets FIRST: an unbuilt visualizer must fail before work is done.
+  const assets = options.serve ? deps.assetsDir() : undefined;
+
   let text: string;
   try {
     text = readFileSync(options.history, "utf8");
@@ -41,6 +65,22 @@ export function historyCommand(options: HistoryOptions, io: IoSink): ExitCode {
     if (!(error instanceof HistoryError)) throw error;
     errLine(io, `${options.history} is not a history.jsonl: ${error.message}`);
     return EXIT.FINDINGS;
+  }
+
+  if (options.serve || options.city !== undefined) {
+    const artifact = cityToJsonString(layoutFileCity(buildFileCity(history)));
+    if (options.city !== undefined) {
+      io.writeFile(options.city, artifact);
+      errLine(
+        io,
+        `wrote ${Buffer.byteLength(artifact, "utf8")} bytes to ${options.city} ` +
+          `(replay city: ${history.paths.length} files, ${history.commits.length} ticks).`,
+      );
+    }
+    if (assets !== undefined) {
+      deps.startServer({ artifact, assets, port: options.port, host: options.host, io });
+    }
+    return EXIT.OK;
   }
 
   switch (options.report) {

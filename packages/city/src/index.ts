@@ -19,4 +19,5 @@ export * from "./metrics.js";
 export * from "./scale.js";
 export * from "./city.js";
 export * from "./layout.js";
+export * from "./replay.js";
 export * from "./json.js";

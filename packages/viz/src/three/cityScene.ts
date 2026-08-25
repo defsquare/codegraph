@@ -47,6 +47,13 @@ export interface CityScene {
   setExternalsVisible(visible: boolean): void;
   /** Repaint buildings, stubs and plates from a new palette, in place. */
   setPalette(palette: CityPalette): void;
+  /**
+   * Replay scrub: per-instance heights (city units, artifact keyframes), or
+   * null to restore the artifact's own heights. Height 0 collapses the
+   * instance — an unborn or deleted building is vacant land, and unpickable.
+   * In-place matrix rewrite; the scrub path allocates nothing.
+   */
+  setHeights(heights: ArrayLike<number> | null): void;
   dispose(): void;
 }
 
@@ -223,6 +230,22 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     paintArcs(districtArrows, dArcs, districtId, toggles);
   }
 
+  function setHeights(heights: ArrayLike<number> | null): void {
+    boxes.forEach((box, i) => {
+      const height = heights === null ? box.size[1] : heights[i] ?? 0;
+      const base = box.center[1] - box.size[1] / 2;
+      if (height <= 0) {
+        matrix.makeScale(0, 0, 0).setPosition(box.center[0], base, box.center[2]);
+      } else {
+        matrix
+          .makeScale(box.size[0], height, box.size[2])
+          .setPosition(box.center[0], base + height / 2, box.center[2]);
+      }
+      buildingsMesh.setMatrixAt(i, matrix);
+    });
+    buildingsMesh.instanceMatrix.needsUpdate = true;
+  }
+
   // Stubs hide by collapsing their instance to zero scale — the one instanced
   // mesh stays one draw call, and a zero-scaled instance cannot be picked.
   function setExternalsVisible(visible: boolean): void {
@@ -277,6 +300,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
       buildingsMesh.visible = visible;
     },
     setExternalsVisible,
+    setHeights,
     dispose: () => disposables.forEach((d) => d.dispose()),
   };
 }

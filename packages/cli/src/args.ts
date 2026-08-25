@@ -406,6 +406,33 @@ export const HISTORY_SPEC: CommandSpec = {
       placeholder: "N",
       integer: true,
     },
+    {
+      name: "serve",
+      type: "boolean",
+      describe:
+        "Serve the file-level city REPLAY of this history — buildings are files, " +
+        "a timeline scrubs the commits (stdout stays empty; Ctrl-C stops it).",
+    },
+    {
+      name: "port",
+      type: "string",
+      describe: "Port for --serve; 0 picks a free one.",
+      placeholder: "N",
+      defaultValue: "4177",
+    },
+    {
+      name: "host",
+      type: "string",
+      describe: "Interface for --serve to bind; 127.0.0.1 keeps the replay on this machine only.",
+      placeholder: "ADDR",
+      defaultValue: "0.0.0.0",
+    },
+    {
+      name: "city",
+      type: "string",
+      describe: "Write the laid-out replay city artifact (city.json with a replay block) to FILE.",
+      placeholder: "FILE",
+    },
     JSON_OPTION,
   ],
 };
@@ -519,6 +546,12 @@ export interface HistoryOptions {
   readonly report: HistoryReportName;
   /** `--top N`; undefined lets each report pick its own default. */
   readonly top: number | undefined;
+  /** `--serve`: host the visualizer with the file-level replay loaded. */
+  readonly serve: boolean;
+  readonly port: number;
+  readonly host: string;
+  /** `--city FILE`: write the laid-out replay artifact. */
+  readonly city: string | undefined;
   readonly json: boolean;
 }
 
@@ -932,6 +965,10 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           history: models[0] as string,
           report: (stringOf(values, "report") ?? DEFAULT_HISTORY_REPORT) as HistoryReportName,
           top: integerOf(values, "top"),
+          serve: flagOf(values, "serve"),
+          port: portOf(values),
+          host: stringOf(values, "host") ?? "0.0.0.0",
+          city: stringOf(values, "city"),
           json: flagOf(values, "json"),
         },
       };

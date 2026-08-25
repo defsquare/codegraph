@@ -102,6 +102,9 @@ codegraph scm      [repo] [--since DATE] [--out FILE] [--json]
 
 codegraph history  [history.jsonl] [--report summary|hotspots|authors]
                    [--top N] [--json]
+                   [--serve [--port N] [--host ADDR]] [--city FILE]
+                   # --serve: the file-level city REPLAY — buildings are
+                   # files, a timeline scrubs the commits (Gource-style)
 
 codegraph profiles [--lang java] [--json]
 ```

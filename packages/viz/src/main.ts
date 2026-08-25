@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import type { CityLayout } from "@codegraph/city";
+import type { CityLayout, ReplayCityLayout } from "@codegraph/city";
 import { CityLoadError, parseCityLayout } from "./guard.js";
+import { timelineModel, type TimelineModel } from "./scene/timeline.js";
 import {
   buildingDetails,
   districtDetails,
@@ -64,6 +65,10 @@ const colorBuilding = must<HTMLInputElement>("#color-building");
 const colorStub = must<HTMLInputElement>("#color-stub");
 const colorDistrict = must<HTMLInputElement>("#color-district");
 const resetColors = must<HTMLButtonElement>("#reset-colors");
+const timelineBar = must<HTMLElement>("#timeline");
+const timelinePlay = must<HTMLButtonElement>("#timeline-play");
+const timelineScrub = must<HTMLInputElement>("#timeline-scrub");
+const timelineLabel = must<HTMLElement>("#timeline-label");
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -222,6 +227,7 @@ function showCity(city: CityLayout): void {
   currentCity = city;
   scene.add(cityScene.root);
   frameCity(city);
+  setupReplay(city);
   // `corpus` arrived with this feature; older artifacts fall back to the view.
   const corpus = (city as { corpus?: { name?: string } }).corpus;
   corpusName.textContent = corpus?.name ?? city.view.name ?? "city.json";
@@ -247,6 +253,76 @@ function frameCity(city: CityLayout): void {
   camera.updateProjectionMatrix();
   sun.position.set(-span, span * 1.5, span * 0.6);
 }
+
+// --- replay timeline --------------------------------------------------------
+
+/**
+ * Present only when the artifact carries a `replay` block (`codegraph history
+ * --serve`): one tick per commit, buildings rise and sink along their
+ * keyframe series. The scrub path is allocation-free — one Float32Array is
+ * reused for every tick, and the scene rewrites instance matrices in place.
+ */
+let timeline: TimelineModel | null = null;
+let heightsBuffer: Float32Array | null = null;
+let replayTimer: number | null = null;
+const PLAY_TICK_MS = 140;
+
+function stopPlayback(): void {
+  if (replayTimer !== null) {
+    window.clearInterval(replayTimer);
+    replayTimer = null;
+  }
+  timelinePlay.textContent = "▶";
+}
+
+function setTick(tick: number): void {
+  if (!cityScene || timeline === null || heightsBuffer === null) return;
+  cityScene.setHeights(timeline.heightsAt(tick, heightsBuffer));
+  timelineLabel.textContent = timeline.label(tick);
+  timelineScrub.value = String(tick);
+}
+
+function setupReplay(city: CityLayout): void {
+  stopPlayback();
+  const replay = (city as Partial<ReplayCityLayout>).replay;
+  if (!cityScene || replay === undefined || replay.ticks.length === 0) {
+    timeline = null;
+    heightsBuffer = null;
+    timelineBar.hidden = true;
+    return;
+  }
+  timeline = timelineModel(replay, cityScene.boxes.map((box) => box.id));
+  heightsBuffer = new Float32Array(cityScene.boxes.length);
+  timelineScrub.max = String(timeline.count - 1);
+  timelineBar.hidden = false;
+  setTick(timeline.count - 1); // start at "now": the full city
+}
+
+timelineScrub.addEventListener("input", () => {
+  stopPlayback();
+  setTick(Number(timelineScrub.value));
+});
+
+timelinePlay.addEventListener("click", () => {
+  if (timeline === null) return;
+  if (replayTimer !== null) {
+    stopPlayback();
+    return;
+  }
+  // Playing from the end means replaying from the beginning.
+  let tick = Number(timelineScrub.value);
+  if (tick >= timeline.count - 1) tick = -1;
+  timelinePlay.textContent = "❚❚";
+  replayTimer = window.setInterval(() => {
+    if (timeline === null) {
+      stopPlayback();
+      return;
+    }
+    tick += 1;
+    setTick(Math.min(tick, timeline.count - 1));
+    if (tick >= timeline.count - 1) stopPlayback();
+  }, PLAY_TICK_MS);
+});
 
 // --- header, help dialog, tooltip and details panel -------------------------
 

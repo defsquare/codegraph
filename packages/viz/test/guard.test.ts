@@ -53,6 +53,18 @@ describe("parseCityLayout", () => {
     expect(() => parseCityLayout(JSON.stringify(unplaced))).toThrow(/--layout/);
   });
 
+  it("passes a well-formed replay block through untouched", () => {
+    const replay = { clock: "commits", ticks: [], series: {} };
+    const parsed = parseCityLayout(JSON.stringify({ ...(makeCity() as object), replay }));
+    expect((parsed as unknown as Record<string, unknown>)["replay"]).toEqual(replay);
+  });
+
+  it("rejects a half-shaped replay block — a scrubber must not lie", () => {
+    const broken = { ...(makeCity() as object), replay: { ticks: "not-an-array" } };
+    expect(() => parseCityLayout(JSON.stringify(broken))).toThrow(/replay/);
+    expect(() => parseCityLayout(JSON.stringify(broken))).toThrow(CityLoadError);
+  });
+
   it("rejects conventions this renderer does not implement", () => {
     const city = makeCity({
       conventions: {

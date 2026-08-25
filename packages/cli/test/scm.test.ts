@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { decodeHistoryText } from "@codegraph/scm";
 
+import { historyCommand, type ServeDeps } from "../src/commands/history.js";
 import { EXIT } from "../src/exit.js";
 import { captureIo, type CapturedIo } from "../src/io.js";
 import { run } from "../src/main.js";
@@ -227,6 +228,60 @@ describe("codegraph history reports hand-counted numbers", () => {
     const { io, code } = invoke(["history", join(scratch, "nowhere.jsonl")]);
     expect(code).toBe(EXIT.USAGE);
     expect(io.stderr()).toContain("codegraph scm");
+  });
+
+  it("--city writes the laid-out replay artifact: files as buildings, commits as ticks", () => {
+    const out = join(scratch, "replay-city.json");
+    const { io, code } = invoke(["history", historyPath, "--city", out]);
+    expect(code).toBe(EXIT.OK);
+    expect(io.stdout()).toBe(""); // the artifact is the deliverable, not a report
+    const city = JSON.parse(io.files().get(out) ?? "") as {
+      kind: string;
+      buildings: { id: string; position?: object }[];
+      districts: { id: string }[];
+      replay: { clock: string; ticks: unknown[]; series: Record<string, unknown> };
+    };
+    expect(city.kind).toBe("codegraph.city/1");
+    expect(city.buildings.map((b) => b.id)).toEqual(["file:docs/readme.md", "file:src/two.txt"]);
+    expect(city.buildings.every((b) => typeof b.position === "object")).toBe(true);
+    expect(city.districts.map((d) => d.id)).toEqual(["dir:docs", "dir:src"]);
+    expect(city.replay.clock).toBe("commits");
+    expect(city.replay.ticks).toHaveLength(4);
+    expect(Object.keys(city.replay.series).sort()).toEqual([
+      "file:docs/readme.md",
+      "file:src/two.txt",
+    ]);
+  });
+
+  it("--serve hands the same artifact to the server seam", () => {
+    const io = captureIo();
+    const served: string[] = [];
+    const deps: ServeDeps = {
+      assetsDir: () => "/fake/assets",
+      startServer: (serverOptions) => {
+        served.push(serverOptions.artifact);
+        return undefined;
+      },
+    };
+    const code = historyCommand(
+      {
+        history: historyPath,
+        report: "summary",
+        top: undefined,
+        serve: true,
+        port: 0,
+        host: "127.0.0.1",
+        city: undefined,
+        json: false,
+      },
+      io,
+      deps,
+    );
+    expect(code).toBe(EXIT.OK);
+    expect(io.stdout()).toBe("");
+    expect(served).toHaveLength(1);
+    const artifact = JSON.parse(served[0] ?? "") as { replay?: { ticks: unknown[] } };
+    expect(artifact.replay?.ticks).toHaveLength(4);
   });
 
   it("treats a readable non-history file as a finding (exit 3)", () => {

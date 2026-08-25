@@ -1242,9 +1242,11 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
 - [x] Reports, file-level only, no model join yet:
       `codegraph history --report summary|hotspots|authors` — churn, bus
       factor, bug density, momentum, firefighting frequency.
-- [ ] File-level city replay: buildings = files (height = running LOC sum
+- [x] File-level city replay: buildings = files (height = running LOC sum
       of numstat deltas), districts = directories, timeline scrubber in
-      viz, commits as ticks.
+      viz, commits as ticks. (`codegraph history --serve` / `--city FILE`:
+      a laid-out city artifact with a `replay` block — frozen union
+      layout and keyframe height series, M9c's shape adopted early.)
 - [x] Fixture: a scripted git repo built by the test suite in a temp dir
       (two authors, a rename, a `fix:` commit, a deletion) —
       deterministic, and it exercises the rename chain.

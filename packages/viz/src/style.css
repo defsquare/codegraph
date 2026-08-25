@@ -295,6 +295,55 @@ dialog#help::backdrop {
 }
 
 /* An author `display` beats the UA's `[hidden] { display: none }`; restate it. */
+#timeline[hidden] {
+  display: none;
+}
+
+/* The replay scrubber: a bottom bar, only when the artifact carries `replay`. */
+#timeline {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  font-size: 12px;
+  user-select: none;
+  max-width: calc(100vw - 24px);
+}
+
+#timeline-play {
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+#timeline-play:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+#timeline-scrub {
+  width: min(420px, 50vw);
+  accent-color: #4a5c75;
+  margin: 0;
+}
+
+#timeline-label {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
+/* An author `display` beats the UA's `[hidden] { display: none }`; restate it. */
 #loader[hidden] {
   display: none;
 }

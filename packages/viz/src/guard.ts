@@ -59,6 +59,25 @@ export function parseCityLayout(text: string): CityLayout {
     city["districtArrows"] = [];
   }
 
+  // `replay` is optional (a static city has none), but when present it must
+  // be usable — a half-shaped replay would render a scrubber that lies.
+  const replay = city["replay"];
+  if (replay !== undefined) {
+    const block = replay as Record<string, unknown> | null;
+    if (
+      typeof block !== "object" ||
+      block === null ||
+      !Array.isArray(block["ticks"]) ||
+      typeof block["series"] !== "object" ||
+      block["series"] === null
+    ) {
+      throw new CityLoadError(
+        "Malformed replay block: expected { ticks: [...], series: {...} }. " +
+          "Produce one with 'codegraph history <history.jsonl> --serve'.",
+      );
+    }
+  }
+
   // Placement is opt-in on the CLI; a city without it has sizes but no
   // coordinates, and inventing them here would be a second, undeclared layout.
   const laidOut =
