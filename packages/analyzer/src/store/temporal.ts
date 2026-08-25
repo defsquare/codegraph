@@ -299,6 +299,91 @@ function writeVersions(
 /** Chronological when times are given, import order otherwise. */
 const REVISION_ORDER = "ORDER BY (time IS NULL), time, id";
 
+/** One key's whole corpus life, for the replay city (M9c). */
+export interface EntityHistoryEntry {
+  readonly module: string;
+  readonly symbol: string;
+  /** '' = none — the store's encoding, kept as-is for renderId round-trips. */
+  readonly disambiguator: string;
+  /** The kind at the entity's LAST corpus revision. */
+  readonly kind: string;
+  /**
+   * `[revision ordinal, loc]` per revision that DECLARES the key (stub
+   * versions are not part of an entity's life — the replay city is the
+   * internal city, and membership is corpus declaration, invariant 6).
+   * `loc` is null when the version is declared but unanchored.
+   */
+  readonly series: readonly (readonly [number, number | null])[];
+}
+
+export interface EntityHistoryData {
+  readonly lang: string;
+  /** Chronological; series ordinals index into this array. */
+  readonly revisions: readonly RevisionRef[];
+  /** Every key with at least one corpus (non-stub) version, sorted by key. */
+  readonly entities: readonly EntityHistoryEntry[];
+}
+
+/**
+ * The whole store's entity time axis in one pass — the structural input the
+ * replay city builds from (the dependency flows through the CLI, exactly as
+ * history.jsonl reaches the analyzer as data). Derived at query time from
+ * `entity_version`; nothing here is serialized (invariant 4 on time).
+ */
+export function readEntityHistory(db: SqliteDatabase): EntityHistoryData {
+  const lang = (metaOf(db, "lang") ?? "") as string;
+  const revisions = listRevisions(db);
+  const ordinalOf = new Map(revisions.map((revision, ordinal) => [revision.id, ordinal]));
+
+  const entries = new Map<number, {
+    module: string;
+    symbol: string;
+    disambiguator: string;
+    kind: string;
+    kindOrdinal: number;
+    series: [number, number | null][];
+  }>();
+  for (const row of db
+    .prepare(
+      `SELECT v.key_id, v.revision_id, v.kind, v.loc,
+              k.module, k.symbol, k.disambiguator
+       FROM entity_version v
+       JOIN entity_key k ON k.id = v.key_id
+       WHERE v.is_stub = 0
+       ORDER BY k.module, k.symbol, k.disambiguator, v.revision_id`,
+    )
+    .iterate()) {
+    const ordinal = ordinalOf.get(row.revision_id as number);
+    if (ordinal === undefined) continue;
+    const keyId = row.key_id as number;
+    let entry = entries.get(keyId);
+    if (entry === undefined) {
+      entry = {
+        module: row.module as string,
+        symbol: row.symbol as string,
+        disambiguator: row.disambiguator as string,
+        kind: row.kind as string,
+        kindOrdinal: -1,
+        series: [],
+      };
+      entries.set(keyId, entry);
+    }
+    entry.series.push([ordinal, row.loc as number | null]);
+    // "Latest kind" is by CHRONOLOGICAL ordinal, which can differ from the
+    // row order (revision ids) when imports arrived out of commit order.
+    if (ordinal >= entry.kindOrdinal) {
+      entry.kind = row.kind as string;
+      entry.kindOrdinal = ordinal;
+    }
+  }
+
+  const entities = [...entries.values()].map(({ kindOrdinal: _, ...entry }) => ({
+    ...entry,
+    series: entry.series.sort((a, b) => a[0] - b[0]),
+  }));
+  return { lang, revisions, entities };
+}
+
 export function listRevisions(db: SqliteDatabase): RevisionRef[] {
   return [...db.prepare(`SELECT id, sha, time FROM revision ${REVISION_ORDER}`).iterate()].map(
     (row) => ({

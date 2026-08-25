@@ -1,3 +1,4 @@
+import { getProfile, renderId } from "@codegraph/core";
 import {
   CITY_ARTEFACT_KIND,
   CITY_GENERATOR,
@@ -49,8 +50,12 @@ export interface ReplayTick {
 }
 
 export interface CityReplay {
-  /** What a tick IS. Commits are the only clock M9a knows. */
-  readonly clock: "commits";
+  /**
+   * What a tick IS: every commit of a mined history (the file-level replay,
+   * M9a), or the sampled revisions of a temporal store (the entity-level
+   * replay, M9c) — named so the scrubber can say which axis it walks.
+   */
+  readonly clock: "commits" | "revisions";
   /** Chronological, aligned with the mined history. */
   readonly ticks: readonly ReplayTick[];
   /**
@@ -75,9 +80,12 @@ export interface FileCityOptions {
 }
 
 /** `layoutCity`, keeping the replay block in the static type as well as the JSON. */
-export function layoutFileCity(city: ReplayCityModel, options: LayoutOptions = {}): ReplayCityLayout {
+export function layoutReplayCity(city: ReplayCityModel, options: LayoutOptions = {}): ReplayCityLayout {
   return { ...layoutCity(city, options), replay: city.replay };
 }
+
+/** The M9a name for {@link layoutReplayCity}, kept: the pass never cared what a tick is. */
+export const layoutFileCity = layoutReplayCity;
 
 /** Same visual grammar as the static city: height linear, footprint-side sqrt. */
 const HEIGHT_RANGE: Range = { min: 1, max: 40 };
@@ -233,6 +241,242 @@ export function buildFileCity(history: FileHistory, options: FileCityOptions = {
         time: commit.time,
         author: history.authors[commit.author] ?? "",
         ...(commit.isFix ? { fix: true as const } : {}),
+      })),
+      series,
+    },
+  };
+}
+
+// ───────────────────────────────────────── the entity-level replay (M9c)
+
+/**
+ * The analyzer's `readEntityHistory` output, mirrored STRUCTURALLY — the
+ * dependency between the packages flows through the CLI, exactly as the
+ * file history does. Series carry `[revision ordinal, loc]` for the
+ * revisions that DECLARE the key; `loc` null = declared but unanchored.
+ */
+export interface EntityHistory {
+  readonly lang: string;
+  readonly revisions: readonly { readonly sha: string; readonly time: number | null }[];
+  readonly entities: readonly {
+    readonly module: string;
+    readonly symbol: string;
+    /** '' = none; anything else means the key is positional and shifts. */
+    readonly disambiguator: string;
+    /** The kind at the entity's last corpus revision. */
+    readonly kind: string;
+    readonly series: readonly (readonly [number, number | null])[];
+  }[];
+}
+
+export interface EntityCityOptions {
+  /** Display name for the corpus (typically the store's basename). */
+  readonly name: string;
+}
+
+/**
+ * Kinds that raise a building when the language ships no profile: the common
+ * type nouns. With a profile, the canonical answer is the kinds whose REQUIRED
+ * traits include TType — profiles are data (invariant 8), so the city derives
+ * the set instead of owning a copy of the vocabulary.
+ */
+const FALLBACK_TYPE_KINDS: ReadonlySet<string> = new Set([
+  "class", "interface", "enum", "record", "annotation", "struct", "trait", "protocol",
+]);
+
+function typeKindsOf(lang: string): ReadonlySet<string> {
+  const profile = getProfile(lang);
+  if (profile === undefined) return FALLBACK_TYPE_KINDS;
+  return new Set(
+    Object.entries(profile.kinds)
+      .filter(([, spec]) => spec.required.includes("TType"))
+      .map(([kind]) => kind),
+  );
+}
+
+/**
+ * Temporal store → a laid-out-able replay city (PLAN §11.3): every TYPE that
+ * EVER existed gets a frozen plot (layout runs once, on the union), modules
+ * are FLAT districts (nesting a package hierarchy from its name would be an
+ * inference, the static city's rule), and the `replay` block carries one tick
+ * per sampled revision. Members and anonymous types (positional
+ * disambiguators — their keys shift under edits, PLAN §11 principle 3) raise
+ * no building.
+ *
+ * A presence GAP becomes an EXPLICIT 0 keyframe: a keyframe holds until the
+ * next one, so an absence the series does not state would be a lie on screen —
+ * the building sinks at death and rises again at rebirth, honestly vacant
+ * in between.
+ */
+export function buildEntityCity(history: EntityHistory, options: EntityCityOptions): ReplayCityModel {
+  const typeKinds = typeKindsOf(history.lang);
+  const latest = history.revisions.length - 1;
+
+  interface Life {
+    readonly module: string;
+    readonly symbol: string;
+    readonly kind: string;
+    /** Presence keyframes plus explicit 0s for gaps and death. */
+    readonly keyframes: readonly (readonly [number, number | null])[];
+    readonly peak: number;
+    readonly finalLoc: number;
+    readonly born: number;
+    readonly revisions: number;
+    readonly unmeasured: boolean;
+  }
+
+  const lives: Life[] = history.entities
+    .filter((entity) => entity.disambiguator === "" && entity.symbol !== "" && typeKinds.has(entity.kind))
+    .map((entity) => {
+      const keyframes: (readonly [number, number | null])[] = [];
+      let previous = -1;
+      for (const [ordinal, loc] of entity.series) {
+        // A skipped ordinal after a presence is a death; the next presence a rebirth.
+        if (previous !== -1 && ordinal > previous + 1) keyframes.push([previous + 1, 0]);
+        keyframes.push([ordinal, loc]);
+        previous = ordinal;
+      }
+      if (previous !== -1 && previous < latest) keyframes.push([previous + 1, 0]);
+
+      const measured = entity.series.map(([, loc]) => loc).filter((loc): loc is number => loc !== null);
+      const last = entity.series[entity.series.length - 1];
+      return {
+        module: entity.module,
+        symbol: entity.symbol,
+        kind: entity.kind,
+        keyframes,
+        peak: measured.length === 0 ? 0 : Math.max(...measured),
+        finalLoc: last?.[0] === latest ? (last[1] ?? 0) : 0,
+        born: entity.series[0]?.[0] ?? 0,
+        revisions: entity.series.length,
+        unmeasured: measured.length < entity.series.length,
+      };
+    })
+    .sort((a, b) => (a.module < b.module ? -1 : a.module > b.module ? 1 : a.symbol < b.symbol ? -1 : 1));
+
+  // Frozen domains over the whole run of time, as in the file city: a height
+  // at tick T must mean the same thing at every T.
+  const peaks = lives.map((life) => life.peak).filter((peak) => peak > 0);
+  const heightDomain: Domain = { min: 0, max: peaks.length === 0 ? 0 : Math.max(...peaks) };
+  const footprintDomain: Domain | undefined =
+    peaks.length === 0 ? undefined : { min: Math.min(...peaks), max: Math.max(...peaks) };
+
+  /** null = declared but unmeasured: floored to the minimum, never zeroed. */
+  const heightOf = (loc: number | null): number => {
+    if (loc === null) return HEIGHT_RANGE.min;
+    return loc <= 0 ? 0 : round(scaleValue(loc, heightDomain, HEIGHT_RANGE, "linear"));
+  };
+
+  const idOf = (module: string, symbol: string): string =>
+    renderId({ lang: history.lang, module, symbol });
+
+  let unmeasuredCount = 0;
+  const buildings: Building[] = lives.map((life) => {
+    if (life.unmeasured) unmeasuredCount += 1;
+    const side =
+      footprintDomain === undefined || life.peak <= 0
+        ? FOOTPRINT_RANGE.min
+        : round(scaleValue(life.peak, footprintDomain, FOOTPRINT_RANGE, "sqrt"));
+    return {
+      id: idOf(life.module, life.symbol),
+      name: life.symbol,
+      kind: life.kind,
+      isStub: false,
+      district: idOf(life.module, ""),
+      height: heightOf(life.finalLoc),
+      footprint: { width: side, depth: side },
+      metrics: {
+        loc: life.finalLoc,
+        "peak-loc": life.peak,
+        revisions: life.revisions,
+        born: life.born,
+      },
+      attributes: [],
+      operations: [],
+    };
+  });
+
+  // Flat districts: one per module that holds a building, named by the module.
+  const moduleOf = new Map<string, string>();
+  for (const life of lives) moduleOf.set(idOf(life.module, ""), life.module);
+  const grouped = new Map<string, Building[]>();
+  for (const building of buildings) {
+    const bucket = grouped.get(building.district);
+    if (bucket === undefined) grouped.set(building.district, [building]);
+    else bucket.push(building);
+  }
+  const districts: District[] = [...grouped.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([districtIdent, members]) => ({
+      id: districtIdent,
+      name: moduleOf.get(districtIdent) ?? districtIdent,
+      kind: "module",
+      isStub: false,
+      buildings: members.map((building) => building.id).sort(),
+      footprintDemand: round(
+        members.reduce((total, building) => total + building.footprint.width * building.footprint.depth, 0),
+      ),
+    }));
+
+  const series: Record<string, readonly (readonly [number, number])[]> = {};
+  for (const life of lives) {
+    series[idOf(life.module, life.symbol)] = life.keyframes.map(
+      ([ordinal, loc]) => [ordinal, heightOf(loc)] as const,
+    );
+  }
+
+  return {
+    kind: CITY_ARTEFACT_KIND,
+    generatedBy: CITY_GENERATOR,
+    view: { name: "internal", filters: ["internal-only"] },
+    corpus: { name: options.name, roots: [] },
+    conventions: {
+      arrowAttachment: "roof",
+      heightAxis: "y",
+      groundPlane: "xz",
+      units: "city",
+    },
+    bindings: [
+      {
+        channel: "height",
+        metric: "loc",
+        unit: "lines",
+        describe: "Anchor span lines of the type at the scrubbed revision.",
+        scale: "linear",
+        range: HEIGHT_RANGE,
+        domain: heightDomain,
+        unmeasured: unmeasuredCount,
+      },
+      {
+        channel: "footprint",
+        metric: "peak-loc",
+        unit: "lines",
+        describe: "The largest LOC the type ever reached — the plot is frozen at its peak.",
+        scale: "sqrt",
+        range: FOOTPRINT_RANGE,
+        domain: footprintDomain,
+        unmeasured: unmeasuredCount,
+      },
+    ],
+    districts,
+    buildings,
+    arrows: [],
+    districtArrows: [],
+    diagnostics: {
+      unplacedBuildings: [],
+      droppedArrows: 0,
+      selfArrows: 0,
+      droppedDistrictArrows: 0,
+      selfDistrictArrows: 0,
+      unmeasured: { loc: unmeasuredCount, "peak-loc": unmeasuredCount },
+      fold: { unfoldableEntities: 0, droppedEdges: 0, foldedEdges: 0 },
+    },
+    replay: {
+      clock: "revisions",
+      ticks: history.revisions.map((revision) => ({
+        hash: revision.sha,
+        time: revision.time ?? 0,
+        author: "",
       })),
       series,
     },

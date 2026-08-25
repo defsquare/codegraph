@@ -69,4 +69,17 @@ describe("label", () => {
     expect(model.label(99)).toBe("no commits");
     expect(timelineModel({ clock: "commits", ticks: [], series: {} }, []).count).toBe(0);
   });
+
+  it("calls a tick by its clock: revisions, with no author segment", () => {
+    const revisions = timelineModel(
+      {
+        clock: "revisions",
+        ticks: [{ hash: "d".repeat(40), time: 1704103200, author: "" }],
+        series: {},
+      },
+      [],
+    );
+    expect(revisions.label(0)).toBe("revision 1/1 · 2024-01-01 · ddddddd");
+    expect(revisions.label(9)).toBe("no revisions");
+  });
 });

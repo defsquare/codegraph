@@ -28,6 +28,7 @@ export const COMMAND_NAMES = [
   "snapshots",
   "history",
   "timeline",
+  "replay",
   "profiles",
 ] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
@@ -568,6 +569,60 @@ export const HISTORY_SPEC: CommandSpec = {
   ],
 };
 
+/**
+ * `codegraph replay` — the M9c deliverable: the temporal store becomes ONE
+ * laid-out city artifact whose `replay` block scrubs the sampled revisions.
+ * Layout runs ONCE on the union of every type that ever existed; plots are
+ * frozen, buildings rise at birth and sink at death.
+ */
+export const REPLAY_SPEC: CommandSpec = {
+  name: "replay",
+  summary: "Build the entity-level city replay of a temporal store.",
+  options: [
+    {
+      name: "store",
+      type: "string",
+      describe:
+        "The temporal model.db (built by `codegraph snapshots` or `import --at`); " +
+        "defaults to the store beside this directory's default model.",
+      placeholder: "FILE",
+    },
+    {
+      name: "name",
+      type: "string",
+      describe: "Corpus display name; defaults to the store's basename.",
+      placeholder: "STR",
+    },
+    {
+      name: "out",
+      type: "string",
+      describe: "Write the laid-out replay city artifact here instead of stdout.",
+      placeholder: "FILE",
+    },
+    {
+      name: "serve",
+      type: "boolean",
+      describe:
+        "Serve the replay in the visualizer — a timeline scrubs the revisions " +
+        "(stdout stays empty; Ctrl-C stops it).",
+    },
+    {
+      name: "port",
+      type: "string",
+      describe: "Port for --serve; 0 picks a free one.",
+      placeholder: "N",
+      defaultValue: "4177",
+    },
+    {
+      name: "host",
+      type: "string",
+      describe: "Interface for --serve to bind; 127.0.0.1 keeps the replay on this machine only.",
+      placeholder: "ADDR",
+      defaultValue: "0.0.0.0",
+    },
+  ],
+};
+
 export const PROFILES_SPEC: CommandSpec = {
   name: "profiles",
   summary: "Print the language profiles core ships.",
@@ -592,6 +647,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   SNAPSHOTS_SPEC,
   HISTORY_SPEC,
   TIMELINE_SPEC,
+  REPLAY_SPEC,
   PROFILES_SPEC,
 ];
 
@@ -721,6 +777,18 @@ export interface HistoryOptions {
   readonly json: boolean;
 }
 
+export interface ReplayOptions {
+  /** `--store FILE`; undefined means the store beside the default model. */
+  readonly store: string | undefined;
+  /** `--name STR`: corpus display name; undefined derives it from the store path. */
+  readonly name: string | undefined;
+  /** `--out FILE`; undefined means stdout (unless --serve). */
+  readonly out: string | undefined;
+  readonly serve: boolean;
+  readonly port: number;
+  readonly host: string;
+}
+
 export interface ProfilesOptions {
   readonly lang: string | undefined;
   readonly json: boolean;
@@ -743,6 +811,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "snapshots"; readonly options: SnapshotsOptions }
   | { readonly kind: "run"; readonly command: "history"; readonly options: HistoryOptions }
   | { readonly kind: "run"; readonly command: "timeline"; readonly options: TimelineOptions }
+  | { readonly kind: "run"; readonly command: "replay"; readonly options: ReplayOptions }
   | { readonly kind: "run"; readonly command: "profiles"; readonly options: ProfilesOptions };
 
 const HELP_FLAGS = new Set(["--help", "-h"]);
@@ -1197,6 +1266,19 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           id: models[0] as string,
           store: stringOf(values, "store"),
           json: flagOf(values, "json"),
+        },
+      };
+    case "replay":
+      return {
+        kind: "run",
+        command: "replay",
+        options: {
+          store: stringOf(values, "store"),
+          name: stringOf(values, "name"),
+          out: stringOf(values, "out"),
+          serve: flagOf(values, "serve"),
+          port: portOf(values),
+          host: stringOf(values, "host") ?? "0.0.0.0",
         },
       };
     case "profiles":

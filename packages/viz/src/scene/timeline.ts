@@ -53,15 +53,20 @@ export function timelineModel(replay: CityReplay, buildingIds: readonly string[]
     return found === -1 ? 0 : (heights[found] as number);
   };
 
+  // The clock names what a tick IS — commits (file replay) or sampled
+  // revisions (entity replay); the label must not claim one for the other.
+  const noun = replay.clock === "revisions" ? "revision" : "commit";
+
   return {
     count: replay.ticks.length,
     label(tick: number): string {
       const at = replay.ticks[tick];
-      if (at === undefined) return "no commits";
+      if (at === undefined) return `no ${noun}s`;
       const date = new Date(at.time * 1000).toISOString().slice(0, 10);
       const author = at.author.split(" <")[0] ?? at.author;
       const fix = at.fix === true ? " · fix" : "";
-      return `commit ${tick + 1}/${replay.ticks.length} · ${date} · ${at.hash.slice(0, 7)} · ${author}${fix}`;
+      const who = author === "" ? "" : ` · ${author}`;
+      return `${noun} ${tick + 1}/${replay.ticks.length} · ${date} · ${at.hash.slice(0, 7)}${who}${fix}`;
     },
     heightsAt(tick: number, out: Float32Array): Float32Array {
       for (let at = 0; at < buildingIds.length; at += 1) out[at] = heightOf(at, tick);

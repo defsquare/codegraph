@@ -1304,15 +1304,23 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
 
 ### 11.3 M9c — entity-level city replay
 
-- [ ] Layout computed ONCE on the union of every key that ever existed;
+- [x] Layout computed ONCE on the union of every key that ever existed;
       every plot frozen. Buildings animate in place — rise from zero at
       birth, sink at death; land is vacant before its time. Early sparse
       frames are the honest picture of a city that will grow, not a
-      defect.
-- [ ] One temporal `city.json`: per building
+      defect. (`buildEntityCity`: types are buildings, modules are FLAT
+      districts — nesting a package hierarchy from its name would be an
+      inference; presence GAPS become explicit 0 keyframes so a rebirth
+      scrubs honestly; members and anonymous types raise no building.)
+- [x] One temporal `city.json`: per building
       `{plot, birth, death, series: [{t, height, heat, …}]}` — viz
       interpolates between keyframes and still renders a laid-out
-      artifact only.
+      artifact only. (`codegraph replay [--store S] [--out F] [--serve]`:
+      analyzer `readEntityHistory` → city `buildEntityCity` → the M9a
+      replay block with `clock: "revisions"`; metrics carried per
+      building: loc, peak-loc, revisions, born. Verified on gson's 55
+      release keyframes: rev 1/55 is one sparse district of 2008, dead
+      types leave vacant plots, JsonReader born at gson-1.6.)
 - [ ] Time-aware channels documented like every other: change heat as
       color, age as desaturation, ownership as a toggleable color mode;
       co-change arcs visually distinct from declared edges (they are

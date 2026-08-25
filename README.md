@@ -124,6 +124,12 @@ codegraph history  [history.jsonl] [--top N] [--json]
                    # --serve: the file-level city REPLAY — buildings are
                    # files, a timeline scrubs the commits (Gource-style)
 
+codegraph replay   [--store FILE] [--name STR] [--out FILE]
+                   [--serve [--port N] [--host ADDR]]
+                   # the temporal store as ONE laid-out city whose
+                   # timeline scrubs the sampled revisions: frozen
+                   # union layout, buildings rise at birth, sink at death
+
 codegraph profiles [--lang java] [--json]
 ```
 

@@ -12,6 +12,7 @@ import {
   TemporalStoreError,
   importModelAt,
   listRevisions,
+  readEntityHistory,
   readTimeline,
 } from "../src/store/temporal.js";
 
@@ -227,6 +228,52 @@ describe("determinism", () => {
       }
     };
     expect(dump(other)).toEqual(dump(storePath));
+  });
+});
+
+describe("entity history — the replay city's input", () => {
+  it("mirrors every key's LOC series by revision ordinal", () => {
+    const history = opened(readEntityHistory);
+    expect(history.lang).toBe("java");
+    expect(history.revisions.map((revision) => revision.sha)).toEqual([SHA.a, SHA.b, SHA.c]);
+    expect(history.revisions.map((revision) => revision.time)).toEqual([1000, 2000, 3000]);
+
+    const bySymbol = new Map(history.entities.map((entity) => [entity.symbol, entity]));
+    expect(bySymbol.get("A")?.series).toEqual([[0, 20], [1, 35], [2, 30]]);
+    expect(bySymbol.get("B")?.series).toEqual([[0, 10]]);
+    expect(bySymbol.get("C")?.series).toEqual([[1, 5], [2, 8]]);
+    expect(bySymbol.get("A")?.kind).toBe("class");
+    expect(bySymbol.get("A")?.module).toBe("app");
+    // The module rides along (kind "package"); consumers filter by kind.
+    expect(bySymbol.get("")?.kind).toBe("package");
+  });
+
+  it("keeps only CORPUS versions: stub revisions are not part of an entity's life", () => {
+    // S is a stub at rev 1 (referenced, not declared) and declared at rev 2:
+    // its corpus life starts at ordinal 1. X is stub-only and never lives.
+    const dbPath = join(scratch, "stubs.db");
+    const stub = (symbol: string): Entity =>
+      ({ id: id(symbol), kind: "class", traits: ["TNamed", "TType"], name: symbol, isStub: true }) as unknown as Entity;
+    importModelAt(
+      jsonlOf("stubs-r0", model([appModule(), type("A", 10), stub("S"), stub("X")], [["A", "S"], ["A", "X"]])),
+      dbPath,
+      { sha: SHA.a, time: 1000 },
+    );
+    importModelAt(
+      jsonlOf("stubs-r1", model([appModule(), type("A", 12), type("S", 7), stub("X")], [["A", "S"], ["A", "X"]])),
+      dbPath,
+      { sha: SHA.b, time: 2000 },
+    );
+
+    const db = openStore(dbPath);
+    try {
+      const history = readEntityHistory(db);
+      const bySymbol = new Map(history.entities.map((entity) => [entity.symbol, entity]));
+      expect(bySymbol.get("S")?.series).toEqual([[1, 7]]);
+      expect(bySymbol.has("X")).toBe(false);
+    } finally {
+      db.close();
+    }
   });
 });
 
