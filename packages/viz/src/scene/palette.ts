@@ -4,9 +4,12 @@
  * from localStorage. Storage itself stays in the shell (it can throw); this
  * module never touches the DOM, so the round-trip is unit-tested.
  *
- * The defaults are the brand palette: primary blue for corpus-declared
- * buildings, the pale neutral for stubs (the model knows less about them),
- * secondary beige for district plates.
+ * The defaults are an architect's-model scheme, built to keep the semantic
+ * accents loud: verdigris teal for corpus-declared buildings — a material
+ * hue off every accent (fan-in orange, fan-out blue, selection violet); a
+ * washed pale of the same family for stubs (the model knows less about
+ * them); cool paper for district plates, sitting between the ground and the
+ * background so the nesting darkening stays readable.
  */
 export interface CityPalette {
   readonly building: number;
@@ -15,9 +18,9 @@ export interface CityPalette {
 }
 
 export const DEFAULT_PALETTE: CityPalette = {
-  building: 0x172741,
-  buildingStub: 0x9fb1d6,
-  districtPlate: 0xe2ca9e,
+  building: 0x4e8c86,
+  buildingStub: 0xa3b5b0,
+  districtPlate: 0xc9d0da,
 };
 
 /** Where the shell persists the palette. */

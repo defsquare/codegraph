@@ -7,15 +7,15 @@ import {
   serializePalette,
 } from "../src/scene/palette.js";
 
-describe("the default palette is the brand palette", () => {
-  it("colors buildings with the primary blue", () => {
-    expect(DEFAULT_PALETTE.building).toBe(0x172741);
+describe("the default palette is the architect's-model scheme", () => {
+  it("colors buildings verdigris teal — off every accent hue", () => {
+    expect(DEFAULT_PALETTE.building).toBe(0x4e8c86);
   });
-  it("colors stubs with the neutral — paler because the model knows less", () => {
-    expect(DEFAULT_PALETTE.buildingStub).toBe(0x9fb1d6);
+  it("colors stubs a washed pale of the same family — the model knows less", () => {
+    expect(DEFAULT_PALETTE.buildingStub).toBe(0xa3b5b0);
   });
-  it("colors district plates with the secondary beige", () => {
-    expect(DEFAULT_PALETTE.districtPlate).toBe(0xe2ca9e);
+  it("colors district plates cool paper, between ground and background", () => {
+    expect(DEFAULT_PALETTE.districtPlate).toBe(0xc9d0da);
   });
 });
 
