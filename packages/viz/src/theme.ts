@@ -39,18 +39,18 @@ export const PLATE_LEVEL_TARGET = 0x39404d;
  */
 export const PLATE_TINT_PER_LEVEL = 0.07;
 
-/** A selected district's plate moves this much further toward the target. */
-export const PLATE_SELECT_TINT = 0.25;
+/**
+ * The selection (origin) color — a hue no other channel uses, so "the clicked
+ * element" can never be confused with direction (orange/blue) or with any
+ * user-configured building/plate color. Buildings wear it outright; plates
+ * lerp toward it by HIGHLIGHT_TINT to keep their nesting readable.
+ */
+export const SELECT_COLOR = 0x8e44ad;
 
-/** The selected (origin) building darkens toward PLATE_LEVEL_TARGET this far —
- * the same "selected = darker" semantic a district plate uses, just stronger
- * because a building is small. */
-export const BUILDING_SELECT_TINT = 0.5;
-
-/** The far end of every visible arc tints this far toward that arc's
- * direction hue — the building or plate wears the same color as the arrow
- * pointing at it, so target and edge read as one fact. */
-export const HIGHLIGHT_TINT = 0.55;
+/** How far a highlighted PLATE lerps toward its highlight hue (selection or
+ * arrow direction). Buildings take the hue outright — they are small and the
+ * palette underneath is user-configurable, so a relative tint can vanish. */
+export const HIGHLIGHT_TINT = 0.65;
 
 /**
  * An INFERRED district arrow keeps its direction hue but collapses most of the

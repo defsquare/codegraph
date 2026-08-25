@@ -55,7 +55,7 @@ export function legendModel(city: CityLayout): readonly LegendEntry[] {
     {
       swatch: null,
       label: "selection",
-      detail: "the clicked building or district darkens; each arc's far end tints by direction",
+      detail: "the clicked building or district turns violet; each arc's far end tints by direction",
     },
   );
 

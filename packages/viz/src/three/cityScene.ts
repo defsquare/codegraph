@@ -9,14 +9,13 @@ import { arcState, highlightMap, type ArrowToggles } from "../scene/focus.js";
 import type { CityPalette } from "../scene/palette.js";
 import {
   ARC_SEGMENTS,
-  BUILDING_SELECT_TINT,
   COLORS,
   HIGHLIGHT_TINT,
   INFERRED_DESATURATION,
   INFERRED_GRAY,
   PLATE_LEVEL_TARGET,
-  PLATE_SELECT_TINT,
   PLATE_TINT_PER_LEVEL,
+  SELECT_COLOR,
 } from "../theme.js";
 
 /**
@@ -143,6 +142,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
   // provenance hue when resting in the showAll overview.
   const fanInColor = new THREE.Color(COLORS.arrowFanIn);
   const fanOutColor = new THREE.Color(COLORS.arrowFanOut);
+  const selectColor = new THREE.Color(SELECT_COLOR);
   const inferredGray = new THREE.Color(INFERRED_GRAY);
   function paintArcs(
     layer: ReturnType<typeof buildArcLines>,
@@ -199,9 +199,9 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
       const i = boxIndexById.get(id);
       const box = i === undefined ? undefined : boxes[i];
       if (i === undefined || box === undefined) continue;
-      color.setHex(box.isStub ? palette.buildingStub : palette.building);
-      if (role === "origin") color.lerp(plateTintTarget, BUILDING_SELECT_TINT);
-      else color.lerp(role === "fanIn" ? fanInColor : fanOutColor, HIGHLIGHT_TINT);
+      // The highlight hue outright — the base color is user-configurable, so
+      // any relative tint could be invisible on the palette the user picked.
+      color.copy(role === "origin" ? selectColor : role === "fanIn" ? fanInColor : fanOutColor);
       buildingsMesh.setColorAt(i, color);
       highlightedBoxes.push(i);
     }
@@ -219,9 +219,10 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
       const i = plateIndexById.get(id);
       const plate = i === undefined ? undefined : plates[i];
       if (i === undefined || plate === undefined) continue;
-      const painted = plateBaseColor(plate);
-      if (role === "origin") painted.lerp(plateTintTarget, PLATE_SELECT_TINT);
-      else painted.lerp(role === "fanIn" ? fanInColor : fanOutColor, HIGHLIGHT_TINT);
+      const painted = plateBaseColor(plate).lerp(
+        role === "origin" ? selectColor : role === "fanIn" ? fanInColor : fanOutColor,
+        HIGHLIGHT_TINT,
+      );
       platesMesh.setColorAt(i, painted);
       highlightedPlates.push(i);
     }
