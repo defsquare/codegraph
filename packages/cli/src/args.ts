@@ -26,6 +26,7 @@ export const COMMAND_NAMES = [
   "city",
   "scm",
   "history",
+  "timeline",
   "profiles",
 ] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
@@ -344,6 +345,47 @@ export const IMPORT_SPEC: CommandSpec = {
       describe: "Write the store here instead of beside the model. One model only.",
       placeholder: "FILE",
     },
+    {
+      name: "at",
+      type: "string",
+      describe:
+        "Append this model as the snapshot extracted at commit SHA — the temporal " +
+        "store: revisions accumulate, and the flat tables mirror the latest import.",
+      placeholder: "SHA",
+    },
+    {
+      name: "time",
+      type: "string",
+      describe: "Commit time for --at (unix seconds or an ISO date); queries order by it.",
+      placeholder: "T",
+    },
+    JSON_OPTION,
+  ],
+};
+
+/**
+ * `codegraph timeline` reads the TEMPORAL store: an entity's life across the
+ * revisions `import --at` accumulated. Lifespans are derived by the query,
+ * never stored (invariant 4 on the time axis).
+ */
+export const TIMELINE_SPEC: CommandSpec = {
+  name: "timeline",
+  summary: "Report an entity's life across the revisions of a temporal store.",
+  positional: {
+    name: "id",
+    describe: "The entity id, rendered form: java:com.acme.order/Basket",
+    variadic: false,
+    required: true,
+  },
+  options: [
+    {
+      name: "store",
+      type: "string",
+      describe:
+        "The temporal model.db (built with `codegraph import --at`); " +
+        "defaults to the store beside this directory's default model.",
+      placeholder: "FILE",
+    },
     JSON_OPTION,
   ],
 };
@@ -459,6 +501,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   CITY_SPEC,
   SCM_SPEC,
   HISTORY_SPEC,
+  TIMELINE_SPEC,
   PROFILES_SPEC,
 ];
 
@@ -527,6 +570,18 @@ export interface CityOptions extends ModelInputOptions, ViewOptions {
 export interface ImportOptions extends ModelInputOptions {
   /** `--out FILE`; undefined means `storePathFor` each model. */
   readonly out: string | undefined;
+  /** `--at SHA`: append the model as the snapshot at this commit (M9b). */
+  readonly at: string | undefined;
+  /** `--time T`, parsed to unix seconds; only meaningful with `--at`. */
+  readonly time: number | undefined;
+  readonly json: boolean;
+}
+
+export interface TimelineOptions {
+  /** The rendered entity id to look up. */
+  readonly id: string;
+  /** `--store FILE`; undefined means the store beside the default model. */
+  readonly store: string | undefined;
   readonly json: boolean;
 }
 
@@ -575,6 +630,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
   | { readonly kind: "run"; readonly command: "scm"; readonly options: ScmOptions }
   | { readonly kind: "run"; readonly command: "history"; readonly options: HistoryOptions }
+  | { readonly kind: "run"; readonly command: "timeline"; readonly options: TimelineOptions }
   | { readonly kind: "run"; readonly command: "profiles"; readonly options: ProfilesOptions };
 
 const HELP_FLAGS = new Set(["--help", "-h"]);
@@ -911,7 +967,26 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           "Import them one at a time, or drop --out to write each store beside its model.",
         );
       }
-      return { kind: "run", command: "import", options: { models, out, json: flagOf(values, "json") } };
+      const at = stringOf(values, "at");
+      // A snapshot is ONE model at ONE commit — several models cannot share a sha.
+      if (at !== undefined && models.length > 1) {
+        throw new UsageError(
+          `--at takes one model, but ${models.length} were given`,
+          "A snapshot is one model at one commit; import each revision separately.",
+        );
+      }
+      const rawTime = stringOf(values, "time");
+      if (rawTime !== undefined && at === undefined) {
+        throw new UsageError(
+          "--time only means something with --at",
+          "It is the commit time of the snapshot --at names.",
+        );
+      }
+      return {
+        kind: "run",
+        command: "import",
+        options: { models, out, at, time: timeOf(rawTime), json: flagOf(values, "json") },
+      };
     }
     case "export":
       return {
@@ -972,6 +1047,16 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           json: flagOf(values, "json"),
         },
       };
+    case "timeline":
+      return {
+        kind: "run",
+        command: "timeline",
+        options: {
+          id: models[0] as string,
+          store: stringOf(values, "store"),
+          json: flagOf(values, "json"),
+        },
+      };
     case "profiles":
       return {
         kind: "run",
@@ -979,4 +1064,18 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         options: { lang: stringOf(values, "lang"), json: flagOf(values, "json") },
       };
   }
+}
+
+/** `--time`: unix seconds, or anything `Date.parse` reads (ISO dates). */
+function timeOf(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  if (/^\d+$/.test(raw)) return Number(raw);
+  const parsed = Date.parse(raw);
+  if (Number.isNaN(parsed)) {
+    throw new UsageError(
+      `invalid value '${raw}' for --time`,
+      "Pass unix seconds (1704103200) or an ISO date (2024-01-01T10:00:00Z).",
+    );
+  }
+  return Math.floor(parsed / 1000);
 }

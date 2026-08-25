@@ -90,6 +90,9 @@ edge_candidate(edge_id INTEGER NOT NULL PK1, ord INTEGER NOT NULL PK2, candidate
   unique index <pk> (edge_id, ord)
 edge_kind(id INTEGER PK1, name TEXT NOT NULL)
   unique index <u> (name)
+edge_version(revision_id INTEGER NOT NULL PK1, from_key INTEGER NOT NULL PK2, to_key INTEGER NOT NULL PK3, kind TEXT NOT NULL PK4, provenance TEXT NOT NULL PK5, count INTEGER NOT NULL) WITHOUT ROWID
+  index edge_version_keys (from_key, to_key)
+  unique index <pk> (revision_id, from_key, to_key, kind, provenance)
 entity(id INTEGER PK1, kind_id INTEGER NOT NULL, trait_set_id INTEGER NOT NULL, module_id INTEGER NOT NULL, symbol TEXT NOT NULL, disambiguator TEXT, name TEXT, signature TEXT, parent_id INTEGER, attached_to_id INTEGER, declared_type_id INTEGER, is_stub INTEGER, anchor_file_id INTEGER, anchor_start INTEGER, anchor_end INTEGER, space TEXT, extra TEXT)
   index entity_anchor_file (anchor_file_id)
   index entity_kind (kind_id)
@@ -100,12 +103,17 @@ entity_comment(entity_id INTEGER NOT NULL PK1, ord INTEGER NOT NULL PK2, text TE
   unique index <pk> (entity_id, ord)
 entity_defined_in(entity_id INTEGER NOT NULL PK1, ord INTEGER NOT NULL PK2, file_id INTEGER NOT NULL) WITHOUT ROWID
   unique index <pk> (entity_id, ord)
+entity_key(id INTEGER PK1, module TEXT NOT NULL, symbol TEXT NOT NULL, disambiguator TEXT NOT NULL)
+  unique index <u> (module, symbol, disambiguator)
 entity_local_variable(entity_id INTEGER NOT NULL PK1, ord INTEGER NOT NULL PK2, variable_id INTEGER NOT NULL) WITHOUT ROWID
   index entity_local_target (variable_id)
   unique index <pk> (entity_id, ord)
 entity_parameter(entity_id INTEGER NOT NULL PK1, ord INTEGER NOT NULL PK2, parameter_id INTEGER NOT NULL) WITHOUT ROWID
   index entity_parameter_target (parameter_id)
   unique index <pk> (entity_id, ord)
+entity_version(revision_id INTEGER NOT NULL PK1, key_id INTEGER NOT NULL PK2, kind TEXT NOT NULL, is_stub INTEGER NOT NULL, loc INTEGER, file TEXT) WITHOUT ROWID
+  index entity_version_key (key_id, revision_id)
+  unique index <pk> (revision_id, key_id)
 file(id INTEGER PK1, path TEXT NOT NULL)
   unique index <u> (path)
 kind(id INTEGER PK1, name TEXT NOT NULL)
@@ -114,6 +122,8 @@ meta(key TEXT NOT NULL PK1, value TEXT NOT NULL) WITHOUT ROWID
   unique index <pk> (key)
 provenance(id INTEGER PK1, name TEXT NOT NULL)
   unique index <u> (name)
+revision(id INTEGER PK1, sha TEXT NOT NULL, time INTEGER)
+  unique index <u> (sha)
 trait(id INTEGER PK1, name TEXT NOT NULL)
   unique index <u> (name)
 trait_set(id INTEGER PK1)

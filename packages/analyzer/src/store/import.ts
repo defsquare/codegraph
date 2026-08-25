@@ -120,7 +120,7 @@ export function importModel(jsonlPath: string, dbPath = storePathFor(jsonlPath))
     // inserts. `createSchema` applies both, so the result is the same schema.
     db.exec(SCHEMA_TABLES_SQL);
     db.exec("BEGIN");
-    const counts = writeRecords(db, jsonlPath);
+    const counts = writeModelRows(db, jsonlPath);
     db.exec(SCHEMA_INDEXES_SQL);
     db.exec("COMMIT");
     committed = true;
@@ -141,8 +141,13 @@ export function importModel(jsonlPath: string, dbPath = storePathFor(jsonlPath))
   }
 }
 
-/** Everything between BEGIN and COMMIT. Split out to keep the file lifecycle above readable. */
-function writeRecords(db: SqliteDatabase, jsonlPath: string): ImportResult["counts"] {
+/**
+ * Everything between BEGIN and COMMIT. Split out to keep the file lifecycle
+ * above readable — and exported for the temporal importer (`temporal.ts`),
+ * which refreshes the flat tables in place inside its own transaction after
+ * deleting their rows. Tables must be empty when this runs.
+ */
+export function writeModelRows(db: SqliteDatabase, jsonlPath: string): ImportResult["counts"] {
   const insert = {
     meta: db.prepare("INSERT INTO meta(key, value) VALUES (?, ?)"),
     kind: db.prepare("INSERT INTO kind(id, name) VALUES (?, ?)"),

@@ -41,7 +41,13 @@ export type CacheState =
   /** Built by a different version of the schema; regenerate, never migrate. */
   | "version"
   /** Present but unreadable — corrupt, truncated, or not a database at all. */
-  | "unreadable";
+  | "unreadable"
+  /**
+   * Would be regenerated, but the store holds `import --at` revisions (M9b).
+   * K snapshots cost K extractions — regeneration would silently destroy them,
+   * so the cache steps aside and the command reads the `.jsonl` directly.
+   */
+  | "temporal";
 
 export interface CacheStatus {
   readonly state: CacheState;
@@ -87,15 +93,23 @@ export function cacheStatus(jsonlPath: string, dbPath = storePathFor(jsonlPath))
       meta.set(row.key as string, row.value as string);
     }
 
+    // A store holding revisions is not a disposable cache: whatever would
+    // normally force regeneration instead makes the cache stand aside.
+    const revisions = Number(meta.get("revisions") ?? 0);
+    const protect = (state: CacheState, reason: string): CacheStatus =>
+      revisions > 0
+        ? at("temporal", `${reason}, but the store holds ${revisions} imported revisions and is kept`)
+        : at(state, reason);
+
     const version = Number(meta.get("dbVersion") ?? -1);
     if (version !== DB_VERSION) {
-      return at("version", `built for store version ${version}, this build reads ${DB_VERSION}`);
+      return protect("version", `built for store version ${version}, this build reads ${DB_VERSION}`);
     }
     if (meta.get("sourceBytes") !== String(source.size)) {
-      return at("stale", "the model has changed size since the store was built");
+      return protect("stale", "the model has changed size since the store was built");
     }
     if (meta.get("sourceMtimeMs") !== String(source.mtimeMs)) {
-      return at("stale", "the model has been modified since the store was built");
+      return protect("stale", "the model has been modified since the store was built");
     }
     return at("fresh", "reused");
   } catch {
@@ -156,6 +170,11 @@ export function openCache(jsonlPath: string, dbPath?: string): CacheAttempt {
     } catch {
       return { store: undefined, reason: "the store could not be opened" };
     }
+  }
+
+  // Never overwrite a temporal store: no store, read the model directly.
+  if (status.state === "temporal") {
+    return { store: undefined, reason: status.reason };
   }
 
   const started = performance.now();

@@ -97,6 +97,14 @@ codegraph city     [model.jsonl] [--serve [--port N] [--host ADDR]] [--layout] [
                    [--height METRIC] [--footprint METRIC] [--carry M1,M2]
                    [--internal-only] [--declared-only]
 
+codegraph import   model.jsonl --at SHA [--time T] [--out FILE]
+                   # append a snapshot to the TEMPORAL store: revisions
+                   # accumulate, keyed by the natural key across time
+
+codegraph timeline java:com.acme/Basket [--store FILE] [--json]
+                   # an entity's life across the store's revisions:
+                   # appeared, last seen, LOC series (derived, never stored)
+
 codegraph scm      [repo] [--since DATE] [--out FILE] [--json]
                    # mine git history -> <repo>-history.jsonl (deterministic)
 

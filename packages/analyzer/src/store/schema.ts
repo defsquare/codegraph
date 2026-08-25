@@ -95,8 +95,10 @@ export const STORE_OPEN_OPTIONS: SqliteOpenOptions = { enableForeignKeyConstrain
 /**
  * Bumped whenever the DDL below changes in any way a reader could notice.
  * On mismatch the importer regenerates — there is no ALTER path, by design.
+ * (A store that holds revisions is the one exception: the cache refuses to
+ * touch it, because K snapshots cost K extractions — see `cache.ts`.)
  */
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 /**
  * `meta` keys the importer writes. Values are TEXT; anything structured is
@@ -120,6 +122,9 @@ export const META_KEYS = [
   "entities",
   "edges",
   "files",
+  // M9b: how many `import --at` revisions the temporal tables hold. Written
+  // by `importModelAt`; absent or "0" on a plain single-model cache.
+  "revisions",
 ] as const;
 export type MetaKey = (typeof META_KEYS)[number];
 
@@ -289,6 +294,53 @@ CREATE TABLE edge_candidate (
   PRIMARY KEY (edge_id, ord)
 ) WITHOUT ROWID;
 
+-- ── The time axis (M9b, PLAN §11.2). Empty on a plain single-model cache ─────
+-- Snapshots keyed by the NATURAL key, never by surrogates: surrogates are
+-- file-scoped (MM-1) and two revisions number their entities independently.
+-- Names (kind, provenance) are stored as TEXT for the same reason — dictionary
+-- ids are the header's own indices and are not stable across revisions.
+-- Lifespans (appeared/disappeared) are DERIVED at query time, never stored
+-- (invariant 4 applied to time).
+CREATE TABLE revision (
+  id   INTEGER PRIMARY KEY,      -- import order; queries order by (time, id)
+  sha  TEXT    NOT NULL UNIQUE,  -- SCM-native identity, never abbreviated
+  time INTEGER                   -- commit time, unix seconds; NULL = not given
+);
+
+-- The corpus's identities across all revisions; lang lives once, in meta.
+-- disambiguator '' = none: a NULL would defeat the UNIQUE (SQL NULLs are
+-- pairwise distinct), and '' cannot collide — the component is never empty.
+CREATE TABLE entity_key (
+  id            INTEGER PRIMARY KEY,
+  module        TEXT NOT NULL,
+  symbol        TEXT NOT NULL,
+  disambiguator TEXT NOT NULL,
+  UNIQUE (module, symbol, disambiguator)
+);
+
+CREATE TABLE entity_version (
+  revision_id INTEGER NOT NULL REFERENCES revision,
+  key_id      INTEGER NOT NULL REFERENCES entity_key,
+  kind        TEXT    NOT NULL,
+  is_stub     INTEGER NOT NULL,
+  loc         INTEGER,           -- anchor span lines; NULL = unanchored
+  file        TEXT,              -- anchor path; NULL = unanchored
+  PRIMARY KEY (revision_id, key_id)
+) WITHOUT ROWID;
+
+-- Edges per revision, aggregated: (from, to, kind, provenance) with a count.
+-- Anchors are dropped on purpose — the flat tables keep the latest snapshot's
+-- evidence; the time axis asks WHETHER a dependency held, not where it stood.
+CREATE TABLE edge_version (
+  revision_id INTEGER NOT NULL REFERENCES revision,
+  from_key    INTEGER NOT NULL REFERENCES entity_key,
+  to_key      INTEGER NOT NULL REFERENCES entity_key,
+  kind        TEXT    NOT NULL,
+  provenance  TEXT    NOT NULL,
+  count       INTEGER NOT NULL,
+  PRIMARY KEY (revision_id, from_key, to_key, kind, provenance)
+) WITHOUT ROWID;
+
 `;
 
 /**
@@ -317,6 +369,10 @@ CREATE INDEX trait_set_member_by_trait ON trait_set_member(trait_id);
 CREATE INDEX entity_parameter_target   ON entity_parameter(parameter_id);
 CREATE INDEX entity_local_target       ON entity_local_variable(variable_id);
 CREATE INDEX edge_candidate_target     ON edge_candidate(candidate_id);
+
+-- Timeline lookups walk one key across every revision.
+CREATE INDEX entity_version_key ON entity_version(key_id, revision_id);
+CREATE INDEX edge_version_keys  ON edge_version(from_key, to_key);
 `;
 
 /** Create every table and index. The caller owns the transaction. */

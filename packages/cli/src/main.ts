@@ -5,6 +5,7 @@ import { exportCommand } from "./commands/export.js";
 import { historyCommand } from "./commands/history.js";
 import { importCommand } from "./commands/import.js";
 import { scmCommand } from "./commands/scm.js";
+import { timelineCommand } from "./commands/timeline.js";
 import { profilesCommand } from "./commands/profiles.js";
 import { validateCommand } from "./commands/validate.js";
 import { EXIT, isUsageError, type ExitCode } from "./exit.js";
@@ -72,6 +73,8 @@ function dispatch(invocation: Invocation, io: IoSink): ExitCode {
           return scmCommand(invocation.options, io);
         case "history":
           return historyCommand(invocation.options, io);
+        case "timeline":
+          return timelineCommand(invocation.options, io);
         case "profiles":
           return profilesCommand(invocation.options, io);
       }

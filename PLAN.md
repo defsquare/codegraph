@@ -1259,21 +1259,25 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
 - [ ] Sampled snapshots: extract at K chosen revisions (tags/releases, or
       every N commits — 50–200 frames suffice for replay) via
       `git worktree add`, never mutating the main checkout.
-- [ ] `codegraph import --at <sha>` extends `model.db` (M7) with
-      `revision`, `entity_version` (key ref, revision ref, LOC, metrics)
-      and `edge_version` tables. Lifespans (`appeared`, `disappeared`) are
-      derived per key at query time — inverse indexes over the time axis,
-      never serialized (invariant 4 applied to time).
+- [x] `codegraph import --at <sha> [--time <t>]` extends `model.db` (M7)
+      with `revision`, `entity_key` (interned natural keys), and
+      `entity_version` / `edge_version` tables (names as TEXT — dictionary
+      ids are file-scoped). The flat tables mirror the latest import; the
+      cache NEVER regenerates a store holding revisions (state `temporal`
+      — it stands aside and the model is read directly). Lifespans
+      (`appeared`, `disappeared`) are derived per key at query time —
+      inverse indexes over the time axis, never serialized (invariant 4
+      applied to time).
 - [ ] Cross-graph queries — the ones only a tool holding BOTH graphs can
       ask: **hidden coupling** (co-change pairs with no path in the
       declared graph) and **dead weight** (declared dependencies that
       never co-change). Plus hotspots (revisions × LOC), logical coupling
       with support/confidence thresholds, ownership/knowledge map, truck
       factor, code age.
-- [ ] `codegraph timeline <id>`: first/last revision containing the key,
-      metric series between them. Exact birth commit on demand via
-      targeted bisect (extract one file at ~log₂ N revisions) — a
-      query-time feature, not an ingest-time cost.
+- [x] `codegraph timeline <id>`: first/last revision containing the key,
+      LOC series between them, still-present flag. (Exact birth commit
+      via targeted bisect — extract one file at ~log₂ N revisions — is
+      still open; a query-time feature, not an ingest-time cost.)
 - **DoD**: property suite (closure, profile validity, determinism) green
   at every keyframe unconditionally; timeline and coupling queries
   verified on a real corpus history (google/gson).

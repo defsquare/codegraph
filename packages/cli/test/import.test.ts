@@ -35,7 +35,7 @@ const scratch = mkdtempSync(join(tmpdir(), "codegraph-cli-import-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 function options(overrides: Partial<ImportOptions> = {}): ImportOptions {
-  return { models: [FIXTURE], out: undefined, json: false, ...overrides };
+  return { models: [FIXTURE], out: undefined, at: undefined, time: undefined, json: false, ...overrides };
 }
 
 function importTo(overrides: Partial<ImportOptions> = {}): { io: CapturedIo; code: number } {

@@ -1,13 +1,16 @@
 import { statSync } from "node:fs";
 import { JsonlError } from "@codegraph/core";
 import {
+  TemporalStoreError,
   diagnoseStore,
   importModel,
+  importModelAt,
   isClean,
   openStore,
   storePathFor,
   type ImportResult,
   type LoadDiagnostics,
+  type TemporalImportResult,
 } from "@codegraph/analyzer";
 import type { ImportOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
@@ -47,8 +50,21 @@ export function importCommand(options: ImportOptions, io: IoSink): ExitCode {
   for (const model of options.models) {
     const started = performance.now();
     let result: ImportResult;
+    let revision: TemporalImportResult | undefined;
     try {
-      result = importOne(model, options.out);
+      if (options.at === undefined) {
+        result = importOne(model, options.out);
+      } else {
+        // The temporal path (M9b): append this model as one revision. The
+        // flat tables mirror it afterwards, so the counts and diagnostics
+        // below describe exactly this snapshot.
+        revision = importAt(model, options.out, options.at, options.time);
+        result = {
+          path: revision.path,
+          counts: { files: 0, entities: revision.counts.entities, edges: revision.counts.edges },
+          bytes: statSync(revision.path).size,
+        };
+      }
     } catch (error) {
       // A readable file that is not a model is a FINDING, not a crash — the
       // record reader refusing it says something about the MODEL. Collected
@@ -64,7 +80,13 @@ export function importCommand(options: ImportOptions, io: IoSink): ExitCode {
     let diagnostics: LoadDiagnostics;
     try {
       diagnostics = diagnoseStore(store, { label: model, modelIndex: 0 });
-      results.push({ ...describe(store, model, result), diagnostics });
+      results.push({
+        ...describe(store, model, result),
+        ...(revision === undefined
+          ? {}
+          : { revision: { sha: revision.revision.sha, ordinal: revision.revisions } }),
+        diagnostics,
+      });
     } finally {
       store.close();
     }
@@ -92,7 +114,37 @@ interface StoreSummary {
   readonly stubs: number;
   readonly edges: number;
   readonly files: number;
+  /** Present on `--at`: which snapshot this was, and how many the store holds. */
+  readonly revision?: { readonly sha: string; readonly ordinal: number } | undefined;
   readonly diagnostics: LoadDiagnostics;
+}
+
+/** `--at`: append a revision. Store-level refusals are usage errors — the
+ * store is precious (it accumulates extractions) and is never regenerated. */
+function importAt(
+  model: string,
+  out: string | undefined,
+  sha: string,
+  time: number | undefined,
+): TemporalImportResult {
+  try {
+    return importModelAt(model, out ?? storePathFor(model), { sha, time });
+  } catch (error) {
+    if (error instanceof TemporalStoreError) {
+      throw new UsageError(error.message, "Temporal stores accumulate; nothing was changed.", {
+        cause: error,
+      });
+    }
+    const code = (error as { code?: string }).code;
+    if (code === "ENOENT" || code === "EACCES" || code === "EISDIR" || code === "ENOTDIR") {
+      throw new UsageError(
+        `cannot import ${model}: ${error instanceof Error ? error.message : String(error)}`,
+        "Check the model path exists and the target directory is writable.",
+        { cause: error },
+      );
+    }
+    throw error;
+  }
 }
 
 function importOne(model: string, out: string | undefined): ImportResult {
@@ -126,10 +178,12 @@ function describe(
     source,
     store: result.path,
     lang: (lang?.value as string | undefined) ?? "",
-    entities: result.counts.entities,
+    // Queried, not echoed from the result: the `--at` path's counts describe
+    // the revision, and these lines describe the store a later analyze sees.
+    entities: scalar("SELECT count(*) AS n FROM entity"),
     stubs: scalar("SELECT count(*) AS n FROM entity WHERE is_stub = 1"),
-    edges: result.counts.edges,
-    files: result.counts.files,
+    edges: scalar("SELECT count(*) AS n FROM edge"),
+    files: scalar("SELECT count(*) AS n FROM file"),
   };
 }
 
@@ -139,7 +193,12 @@ function renderText(
 ): readonly string[] {
   const lines: string[] = [];
   for (const one of results) {
-    lines.push(`imported ${one.source} -> ${one.store}`);
+    lines.push(
+      one.revision === undefined
+        ? `imported ${one.source} -> ${one.store}`
+        : `imported ${one.source} -> ${one.store} @ ${one.revision.sha} ` +
+            `(revision ${one.revision.ordinal} in the store)`,
+    );
     lines.push(
       `  ${plural(one.entities, "entity", "entities")} (${one.stubs} stub${one.stubs === 1 ? "" : "s"}), ` +
         `${plural(one.edges, "edge")}, ${plural(one.files, "file")}` +
@@ -178,6 +237,7 @@ function renderJson(
         source: one.source,
         store: one.store,
         lang: one.lang,
+        ...(one.revision === undefined ? {} : { revision: one.revision }),
         counts: {
           entities: one.entities,
           stubs: one.stubs,
