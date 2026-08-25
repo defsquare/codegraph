@@ -46,6 +46,10 @@
         Drop a <code>city.json</code> here, or pick one. Produce it with<br />
         <code>codegraph city model.jsonl --layout --out city.json</code>
       </p>
+      <div id="loader-progress" hidden>
+        <div id="loader-progress-track"><div id="loader-progress-fill"></div></div>
+        <span id="loader-progress-text"></span>
+      </div>
       <p><input type="file" id="loader-file" accept=".json,application/json" /></p>
     </div>
     <script type="module" src="/src/main.ts"></script>

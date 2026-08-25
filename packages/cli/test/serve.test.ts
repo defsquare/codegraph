@@ -47,6 +47,8 @@ describe("startCityServer", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/json");
     expect(response.headers.get("cache-control")).toBe("no-store");
+    // The byte size up front — the visualizer's loading bar needs a total.
+    expect(response.headers.get("content-length")).toBe(String(Buffer.byteLength(ARTIFACT)));
     expect(await response.text()).toBe(ARTIFACT);
   });
 

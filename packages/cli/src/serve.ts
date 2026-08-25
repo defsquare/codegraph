@@ -87,6 +87,9 @@ export function startCityServer(options: CityServerOptions): Server {
       response.writeHead(200, {
         "content-type": "application/json",
         "cache-control": "no-store",
+        // The byte size up front (avoids chunked transfer), so the
+        // visualizer's loading bar has a denominator.
+        "content-length": Buffer.byteLength(artifact),
       });
       response.end(method === "HEAD" ? undefined : artifact);
       return;

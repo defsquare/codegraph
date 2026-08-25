@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { CityLayout, ReplayCityLayout } from "@codegraph/city";
 import { CityLoadError, parseCityLayout } from "./guard.js";
+import { progressFraction, progressLabel } from "./progress.js";
 import { timelineModel, type TimelineModel } from "./scene/timeline.js";
 import {
   buildingDetails,
@@ -48,6 +49,10 @@ const tooltip = must<HTMLElement>("#tooltip");
 const loader = must<HTMLElement>("#loader");
 const loaderMessage = must<HTMLElement>("#loader-message");
 const loaderFile = must<HTMLInputElement>("#loader-file");
+const loaderProgress = must<HTMLElement>("#loader-progress");
+const loaderProgressTrack = must<HTMLElement>("#loader-progress-track");
+const loaderProgressFill = must<HTMLElement>("#loader-progress-fill");
+const loaderProgressText = must<HTMLElement>("#loader-progress-text");
 const header = must<HTMLElement>("#app-header");
 const corpusName = must<HTMLElement>("#corpus-name");
 const helpDialog = must<HTMLDialogElement>("#help");
@@ -622,6 +627,41 @@ function loadText(text: string): void {
   }
 }
 
+/** The download bar, over the welcome page: fraction when the server stated a
+ * total, received count alone when it did not. The picker stays usable. */
+function showProgress(received: number, total: number | null): void {
+  loaderProgress.hidden = false;
+  const fraction = progressFraction(received, total);
+  loaderProgressTrack.hidden = fraction === null;
+  if (fraction !== null) loaderProgressFill.style.width = `${(fraction * 100).toFixed(1)}%`;
+  loaderProgressText.textContent = progressLabel(received, total);
+}
+
+/** Read the body streaming, reporting progress chunk by chunk. */
+async function readBody(response: Response): Promise<string> {
+  const body = response.body;
+  if (body === null) return response.text();
+  const header = response.headers.get("content-length");
+  const total = header === null ? null : Number(header) || null;
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.byteLength;
+    showProgress(received, total);
+  }
+  const bytes = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 async function loadUrl(url: string, quietWhenAbsent: boolean): Promise<void> {
   try {
     const response = await fetch(url);
@@ -629,9 +669,11 @@ async function loadUrl(url: string, quietWhenAbsent: boolean): Promise<void> {
       if (!quietWhenAbsent) fail(new Error(`${url}: HTTP ${response.status}`));
       return;
     }
-    loadText(await response.text());
+    loadText(await readBody(response));
   } catch (error) {
     if (!quietWhenAbsent) fail(error);
+  } finally {
+    loaderProgress.hidden = true;
   }
 }
 

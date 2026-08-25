@@ -384,6 +384,44 @@ dialog#help::backdrop {
   pointer-events: auto;
 }
 
+/* The artifact download: a determinate bar when the server states a total
+   (the fill is the verdigris the city itself is built of), the text alone
+   when it cannot. Restate display against the UA's [hidden]. */
+#loader-progress[hidden] {
+  display: none;
+}
+
+#loader-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+#loader-progress-track {
+  width: 280px;
+  height: 6px;
+  border-radius: 3px;
+  background: #d3d9e1;
+  overflow: hidden;
+}
+
+#loader-progress-track[hidden] {
+  display: none;
+}
+
+#loader-progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: #4e8c86;
+}
+
+#loader-progress-text {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
 body.dragging #loader {
   outline: 2px dashed #8a93a0;
   outline-offset: -16px;
