@@ -1,8 +1,9 @@
 /**
  * The user-configurable colors of the city — buildings, stubs, district
- * plates — as a MODEL: pure values plus the (de)serialization the shell feeds
- * from localStorage. Storage itself stays in the shell (it can throw); this
- * module never touches the DOM, so the round-trip is unit-tested.
+ * plates, and the two arrow direction hues — as a MODEL: pure values plus the
+ * (de)serialization the shell feeds from localStorage. Storage itself stays in
+ * the shell (it can throw); this module never touches the DOM, so the
+ * round-trip is unit-tested.
  *
  * The defaults are an architect's-model scheme, built to keep the semantic
  * accents loud: verdigris teal for corpus-declared buildings — a material
@@ -15,13 +16,21 @@ export interface CityPalette {
   readonly building: number;
   readonly buildingStub: number;
   readonly districtPlate: number;
+  /** Fan-in: arrows INTO the selected element — who depends on it. */
+  readonly arrowFanIn: number;
+  /** Fan-out: arrows OUT of the selected element — what it depends on. */
+  readonly arrowFanOut: number;
 }
 
 export const DEFAULT_PALETTE: CityPalette = {
   building: 0x4e8c86,
   buildingStub: 0xa3b5b0,
   districtPlate: 0xc9d0da,
+  arrowFanIn: 0xd97a12,
+  arrowFanOut: 0x1273c2,
 };
+
+const PALETTE_KEYS = Object.keys(DEFAULT_PALETTE) as readonly (keyof CityPalette)[];
 
 /** Where the shell persists the palette. */
 export const PALETTE_KEY = "codegraph.city.palette";
@@ -56,13 +65,13 @@ export function parsePalette(text: string | null): CityPalette {
     building: read("building"),
     buildingStub: read("buildingStub"),
     districtPlate: read("districtPlate"),
+    arrowFanIn: read("arrowFanIn"),
+    arrowFanOut: read("arrowFanOut"),
   };
 }
 
 export function serializePalette(palette: CityPalette): string {
-  return JSON.stringify({
-    building: hexToCss(palette.building),
-    buildingStub: hexToCss(palette.buildingStub),
-    districtPlate: hexToCss(palette.districtPlate),
-  });
+  return JSON.stringify(
+    Object.fromEntries(PALETTE_KEYS.map((key) => [key, hexToCss(palette[key])])),
+  );
 }

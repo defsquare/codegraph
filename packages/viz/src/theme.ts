@@ -2,15 +2,12 @@
  * The renderer's visual constants — every one maps to a documented meaning
  * (CLAUDE.md: "meaning controls appearance", no decorative effects).
  *
- * Colors are semantic, never aesthetic:
- *  - arrowFanIn / arrowFanOut   dependency direction relative to the selected
- *                    element; provenance rides the saturation channel — an
- *                    `inferred` arc (the artifact's flag, never recomputed
- *                    here) desaturates toward INFERRED_GRAY
- *
- * Building, stub and district-plate colors are the USER-CONFIGURABLE palette
- * and live in scene/palette.ts (defaults included) — their meanings hold
- * regardless of the hues chosen.
+ * Colors are semantic, never aesthetic. Building, stub, district-plate and the
+ * two arrow direction hues (fan-in / fan-out) are the USER-CONFIGURABLE
+ * palette and live in scene/palette.ts (defaults included) — their meanings
+ * hold regardless of the hues chosen: direction stays a hue channel, and an
+ * `inferred` arc (the artifact's flag, never recomputed here) still
+ * desaturates toward INFERRED_GRAY whatever the hue.
  *
  * Dimensions of plates and arcs are presentation geometry only; they encode no
  * metric and therefore live here, not in the city model.
@@ -18,10 +15,6 @@
 export const COLORS = {
   background: 0xeef1f5,
   ground: 0xdde2e9,
-  /** Fan-in: arrows INTO the selected district — who depends on it. */
-  arrowFanIn: 0xd97a12,
-  /** Fan-out: arrows OUT of the selected district — what it depends on. */
-  arrowFanOut: 0x1273c2,
 } as const;
 
 /**
@@ -70,6 +63,11 @@ export const GROUND_MARGIN = 4;
 
 /** Samples per arrow arc; straight-line segments between them. */
 export const ARC_SEGMENTS = 24;
+/** Arrow line width in CSS pixels (fat lines — WebGL ignores linewidth). */
+export const ARROW_WIDTH = 3;
+/** Fan-in arcs draw this much wider: who-depends-on-it is the rarer, louder
+ * reading, and width keeps it findable even against a busy skyline. */
+export const ARROW_FAN_IN_WIDTH = 1.6;
 /** Arc apex rises with roof-to-roof distance, so long arrows clear the skyline. */
 export const ARC_LIFT_RATIO = 0.3;
 export const ARC_MIN_LIFT = 2;

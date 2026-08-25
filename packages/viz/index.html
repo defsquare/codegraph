@@ -17,12 +17,17 @@
         <label><input type="checkbox" id="toggle-fan-out" checked /> Show fan-out</label>
         <label><input type="checkbox" id="toggle-externals" checked /> Show externals</label>
       </nav>
-      <nav id="header-colors">
-        <label title="Building color"><input type="color" id="color-building" /> Buildings</label>
-        <label title="Stub (external type) color"><input type="color" id="color-stub" /> Stubs</label>
-        <label title="District plate color"><input type="color" id="color-district" /> Districts</label>
-        <button id="reset-colors" type="button">Reset colors</button>
-      </nav>
+      <details id="colors-menu">
+        <summary>Colors</summary>
+        <div id="colors-panel">
+          <label title="Building color"><input type="color" id="color-building" /> Buildings</label>
+          <label title="Stub (external type) color"><input type="color" id="color-stub" /> Stubs</label>
+          <label title="District plate color"><input type="color" id="color-district" /> Districts</label>
+          <label title="Fan-in arrow color — who depends on the selection"><input type="color" id="color-fan-in" /> Fan-in arrows</label>
+          <label title="Fan-out arrow color — what the selection depends on"><input type="color" id="color-fan-out" /> Fan-out arrows</label>
+          <button id="reset-colors" type="button">Reset colors</button>
+        </div>
+      </details>
       <button id="reset-view" type="button">Reset view</button>
       <button id="help-link" type="button">Help</button>
     </header>

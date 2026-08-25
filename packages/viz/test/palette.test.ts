@@ -17,6 +17,10 @@ describe("the default palette is the architect's-model scheme", () => {
   it("colors district plates cool paper, between ground and background", () => {
     expect(DEFAULT_PALETTE.districtPlate).toBe(0xc9d0da);
   });
+  it("keeps the semantic direction hues for arrows — fan-in orange, fan-out blue", () => {
+    expect(DEFAULT_PALETTE.arrowFanIn).toBe(0xd97a12);
+    expect(DEFAULT_PALETTE.arrowFanOut).toBe(0x1273c2);
+  });
 });
 
 describe("hex <-> css conversion", () => {
@@ -46,16 +50,23 @@ describe("parsePalette — what localStorage hands back", () => {
     expect(parsePalette("42")).toEqual(DEFAULT_PALETTE);
   });
   it("merges stored keys over the defaults, so a partial store still works", () => {
-    expect(parsePalette('{"building":"#f65e5e"}')).toEqual({
+    expect(parsePalette('{"building":"#f65e5e","arrowFanIn":"#3dbf9e"}')).toEqual({
       ...DEFAULT_PALETTE,
       building: 0xf65e5e,
+      arrowFanIn: 0x3dbf9e,
     });
   });
   it("ignores invalid or unknown keys, keeping the default for each", () => {
     expect(parsePalette('{"building":"red","ground":"#000000"}')).toEqual(DEFAULT_PALETTE);
   });
   it("round-trips through serializePalette", () => {
-    const palette = { building: 0xf65e5e, buildingStub: 0x0d0c09, districtPlate: 0x3dbf9e };
+    const palette = {
+      building: 0xf65e5e,
+      buildingStub: 0x0d0c09,
+      districtPlate: 0x3dbf9e,
+      arrowFanIn: 0x942f49,
+      arrowFanOut: 0x9eb6e2,
+    };
     expect(parsePalette(serializePalette(palette))).toEqual(palette);
   });
 });

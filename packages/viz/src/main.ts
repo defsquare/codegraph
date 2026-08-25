@@ -66,9 +66,12 @@ const toggleFanIn = must<HTMLInputElement>("#toggle-fan-in");
 const toggleFanOut = must<HTMLInputElement>("#toggle-fan-out");
 const toggleExternals = must<HTMLInputElement>("#toggle-externals");
 const resetView = must<HTMLButtonElement>("#reset-view");
+const colorsMenu = must<HTMLDetailsElement>("#colors-menu");
 const colorBuilding = must<HTMLInputElement>("#color-building");
 const colorStub = must<HTMLInputElement>("#color-stub");
 const colorDistrict = must<HTMLInputElement>("#color-district");
+const colorFanIn = must<HTMLInputElement>("#color-fan-in");
+const colorFanOut = must<HTMLInputElement>("#color-fan-out");
 const resetColors = must<HTMLButtonElement>("#reset-colors");
 const timelineBar = must<HTMLElement>("#timeline");
 const timelinePlay = must<HTMLButtonElement>("#timeline-play");
@@ -131,6 +134,8 @@ function resize(): void {
   renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  // Fat-line arrow widths are in CSS pixels; the materials need the viewport.
+  cityScene?.setResolution(window.innerWidth, window.innerHeight);
 }
 window.addEventListener("resize", resize);
 resize();
@@ -195,6 +200,8 @@ const paletteInputs: readonly (readonly [HTMLInputElement, keyof CityPalette])[]
   [colorBuilding, "building"],
   [colorStub, "buildingStub"],
   [colorDistrict, "districtPlate"],
+  [colorFanIn, "arrowFanIn"],
+  [colorFanOut, "arrowFanOut"],
 ];
 
 /** One sink for every palette change: repaint, legend refresh, persistence. */
@@ -219,6 +226,15 @@ for (const [input, key] of paletteInputs) {
 }
 resetColors.addEventListener("click", () => applyPalette(DEFAULT_PALETTE));
 
+// The colors menu is a dropdown — a click anywhere else closes it, so it
+// never lingers over the city. (Color pickers live inside; their native
+// popups are not DOM children, but the wells themselves are.)
+document.addEventListener("pointerdown", (event) => {
+  if (colorsMenu.open && event.target instanceof Node && !colorsMenu.contains(event.target)) {
+    colorsMenu.open = false;
+  }
+});
+
 function showCity(city: CityLayout): void {
   if (cityScene) {
     scene.remove(cityScene.root);
@@ -229,6 +245,7 @@ function showCity(city: CityLayout): void {
     detailsPanel.hidden = true;
   }
   cityScene = createCityScene(city, palette);
+  cityScene.setResolution(window.innerWidth, window.innerHeight);
   currentCity = city;
   scene.add(cityScene.root);
   frameCity(city);
@@ -336,8 +353,8 @@ timelinePlay.addEventListener("click", () => {
 function swatchColor(kind: string): number | undefined {
   if (kind === "building") return palette.building;
   if (kind === "stub") return palette.buildingStub;
-  if (kind === "fanIn") return COLORS.arrowFanIn;
-  if (kind === "fanOut") return COLORS.arrowFanOut;
+  if (kind === "fanIn") return palette.arrowFanIn;
+  if (kind === "fanOut") return palette.arrowFanOut;
   return undefined;
 }
 

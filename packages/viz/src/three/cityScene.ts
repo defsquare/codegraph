@@ -1,4 +1,7 @@
 import * as THREE from "three";
+import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import type { CityLayout } from "@codegraph/city";
 import { arrowArcs, type ArrowArc } from "../scene/arrows.js";
 import { buildingBoxes, type BuildingBox } from "../scene/buildings.js";
@@ -9,6 +12,8 @@ import { arcState, highlightMap, type ArrowToggles } from "../scene/focus.js";
 import type { CityPalette } from "../scene/palette.js";
 import {
   ARC_SEGMENTS,
+  ARROW_FAN_IN_WIDTH,
+  ARROW_WIDTH,
   COLORS,
   HIGHLIGHT_TINT,
   INFERRED_DESATURATION,
@@ -22,7 +27,7 @@ import {
  * The Three.js upload of the scene model. All geometry is built ONCE here;
  * the render loop touches nothing but the camera. Draw calls stay constant in
  * city size: one instanced mesh for buildings, one for district plates, one
- * ground mesh, one LineSegments for type arrows and one for district arrows.
+ * ground mesh, one fat-line mesh for type arrows and one for district arrows.
  * Every interactive state change is an in-place attribute rewrite.
  */
 export interface CityScene {
@@ -44,8 +49,11 @@ export interface CityScene {
   setBuildingsVisible(visible: boolean): void;
   /** Show or hide stubs — buildings and plates the corpus does not declare. */
   setExternalsVisible(visible: boolean): void;
-  /** Repaint buildings, stubs and plates from a new palette, in place. */
+  /** Repaint buildings, stubs, plates and arrow hues from a new palette, in place. */
   setPalette(palette: CityPalette): void;
+  /** Arrow width is in CSS pixels — the fat-line materials must know the
+   * viewport size; call on creation and on every resize. */
+  setResolution(width: number, height: number): void;
   /**
    * Replay scrub: per-instance heights (city units, artifact keyframes), or
    * null to restore the artifact's own heights. Height 0 collapses the
@@ -55,8 +63,6 @@ export interface CityScene {
   setHeights(heights: ArrayLike<number> | null): void;
   dispose(): void;
 }
-
-const VERTICES_PER_ARC = ARC_SEGMENTS * 2; // line-segment pairs between samples
 
 export function createCityScene(city: CityLayout, initialPalette: CityPalette): CityScene {
   let palette = initialPalette;
@@ -114,10 +120,12 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
   root.add(buildingsMesh);
   disposables.push(buildingGeometry, buildingMaterial, buildingsMesh);
 
-  // Type arrows: one LineSegments, RGBA vertex colors. RGB is rewritten per
-  // selection (direction hue, provenance as saturation), alpha by the table.
+  // Type arrows: one fat-line mesh (LineSegments2 — real pixel width, WebGL
+  // ignores linewidth on plain lines), per-segment RGB plus a patched-in
+  // per-segment alpha and width. RGB is rewritten per selection (direction
+  // hue, provenance as saturation), alpha by the table, width by direction.
   const typeArrows = buildArcLines(
-    arcs.map((arc) => ({ arc, tint: new THREE.Color(COLORS.arrowFanOut) })),
+    arcs.map((arc) => ({ arc, tint: new THREE.Color(palette.arrowFanOut) })),
   );
   typeArrows.lines.raycast = () => undefined;
   root.add(typeArrows.lines);
@@ -130,7 +138,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
   // (fan-in vs fan-out is a property of the SELECTED district, not of the
   // arrow), and everything rests hidden until a district is selected.
   const districtArrows = buildArcLines(
-    dArcs.map((arc) => ({ arc, tint: new THREE.Color(COLORS.arrowFanOut) })),
+    dArcs.map((arc) => ({ arc, tint: new THREE.Color(palette.arrowFanOut) })),
   );
   districtArrows.lines.raycast = () => undefined;
   root.add(districtArrows.lines);
@@ -139,9 +147,9 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
 
   // One painter for both arc families: role from the decision table, hue by
   // direction under a selection (provenance moves to the saturation channel),
-  // provenance hue when resting in the showAll overview.
-  const fanInColor = new THREE.Color(COLORS.arrowFanIn);
-  const fanOutColor = new THREE.Color(COLORS.arrowFanOut);
+  // and WIDTH by direction too — fan-in draws wider, the rarer louder reading.
+  const fanInColor = new THREE.Color(palette.arrowFanIn);
+  const fanOutColor = new THREE.Color(palette.arrowFanOut);
   const selectColor = new THREE.Color(SELECT_COLOR);
   const inferredGray = new THREE.Color(INFERRED_GRAY);
   function paintArcs(
@@ -162,6 +170,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
         color.copy(state.role === "fanOut" ? fanOutColor : fanInColor);
         if (arc.inferred) color.lerp(inferredGray, INFERRED_DESATURATION);
         layer.setTint(i, color);
+        layer.setWidth(i, state.role === "fanIn" ? ARROW_FAN_IN_WIDTH : 1);
       }
       layer.setAlpha(i, state.alpha);
     });
@@ -268,8 +277,12 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
 
   // Event-driven repaint (never per-frame): rewrite the instance colors the
   // palette feeds, then re-apply the current selection's highlights on top.
+  // Arrow hues live in closure Colors that paintArcs (re-run below through
+  // setFocus/setDistrictFocus) and the highlight painters read.
   function setPalette(next: CityPalette): void {
     palette = next;
+    fanInColor.setHex(palette.arrowFanIn);
+    fanOutColor.setHex(palette.arrowFanOut);
     boxes.forEach((box, i) => {
       buildingsMesh.setColorAt(i, color.setHex(box.isStub ? palette.buildingStub : palette.building));
     });
@@ -297,6 +310,10 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     setFocus,
     setDistrictFocus,
     setPalette,
+    setResolution: (width, height) => {
+      typeArrows.material.resolution.set(width, height);
+      districtArrows.material.resolution.set(width, height);
+    },
     setBuildingsVisible: (visible) => {
       buildingsMesh.visible = visible;
     },
@@ -311,53 +328,109 @@ interface ArcSource {
   readonly tint: THREE.Color;
 }
 
-/** Shared LineSegments builder: one geometry, RGBA vertex colors, per-arc ranges. */
-function buildArcLines(sources: readonly ArcSource[]) {
-  const positions = new Float32Array(sources.length * VERTICES_PER_ARC * 3);
-  const colors = new Float32Array(sources.length * VERTICES_PER_ARC * 4);
-  sources.forEach(({ arc, tint }, arcIndex) => {
-    for (let segment = 0; segment < ARC_SEGMENTS; segment += 1) {
-      for (let end = 0; end < 2; end += 1) {
-        const vertex = arcIndex * VERTICES_PER_ARC + segment * 2 + end;
-        const point = arc.points[segment + end] as readonly [number, number, number];
-        positions.set(point, vertex * 3);
-        colors[vertex * 4] = tint.r;
-        colors[vertex * 4 + 1] = tint.g;
-        colors[vertex * 4 + 2] = tint.b;
-        colors[vertex * 4 + 3] = 0;
-      }
-    }
-  });
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  const colorAttribute = new THREE.BufferAttribute(colors, 4);
-  geometry.setAttribute("color", colorAttribute);
-  const material = new THREE.LineBasicMaterial({
+/**
+ * Fat-line LineMaterial ships per-mesh uniforms only; the city needs per-ARC
+ * alpha (weight, dimming) and width (fan-in louder), so two instanced
+ * attributes are patched into its shader. The anchors are exact source lines
+ * of three's LineMaterial — a three upgrade that moves them must fail loudly
+ * here, never silently drop the channels.
+ */
+function makeArcMaterial(): LineMaterial {
+  const material = new LineMaterial({
     vertexColors: true,
     transparent: true,
     depthWrite: false,
+    linewidth: ARROW_WIDTH,
+    alphaToCoverage: false,
   });
-  const lines = new THREE.LineSegments(geometry, material);
+  const patch = (source: string, anchor: string, replacement: string): string => {
+    if (!source.includes(anchor)) {
+      throw new Error(`LineMaterial shader changed: cannot find "${anchor}"`);
+    }
+    return source.replace(anchor, replacement);
+  };
+  let vertex = material.vertexShader;
+  vertex = patch(
+    vertex,
+    "attribute vec3 instanceColorEnd;",
+    "attribute vec3 instanceColorEnd;\n" +
+      "attribute float instanceAlpha;\n" +
+      "attribute float instanceWidth;\n" +
+      "varying float vArcAlpha;",
+  );
+  vertex = patch(vertex, "float aspect = ", "vArcAlpha = instanceAlpha;\nfloat aspect = ");
+  vertex = patch(vertex, "offset *= linewidth;", "offset *= linewidth * instanceWidth;");
+  material.vertexShader = vertex;
+  let fragment = material.fragmentShader;
+  fragment = patch(
+    fragment,
+    "uniform float opacity;",
+    "uniform float opacity;\nvarying float vArcAlpha;",
+  );
+  fragment = patch(
+    fragment,
+    "gl_FragColor = vec4( diffuseColor.rgb, alpha );",
+    "gl_FragColor = vec4( diffuseColor.rgb, alpha * vArcAlpha );",
+  );
+  material.fragmentShader = fragment;
+  return material;
+}
+
+/** Shared fat-line builder: one instanced geometry, per-segment color plus the
+ * patched per-segment alpha and width channels, addressed in per-arc ranges. */
+function buildArcLines(sources: readonly ArcSource[]) {
+  // Fat lines are one instance per SEGMENT: start xyz + end xyz.
+  const positions = new Float32Array(sources.length * ARC_SEGMENTS * 6);
+  const colors = new Float32Array(sources.length * ARC_SEGMENTS * 6);
+  const alphas = new Float32Array(sources.length * ARC_SEGMENTS);
+  const widths = new Float32Array(sources.length * ARC_SEGMENTS).fill(1);
+  sources.forEach(({ arc, tint }, arcIndex) => {
+    for (let segment = 0; segment < ARC_SEGMENTS; segment += 1) {
+      const base = (arcIndex * ARC_SEGMENTS + segment) * 6;
+      for (let end = 0; end < 2; end += 1) {
+        const point = arc.points[segment + end] as readonly [number, number, number];
+        positions.set(point, base + end * 3);
+        colors[base + end * 3] = tint.r;
+        colors[base + end * 3 + 1] = tint.g;
+        colors[base + end * 3 + 2] = tint.b;
+      }
+    }
+  });
+  const geometry = new LineSegmentsGeometry();
+  geometry.setPositions(positions);
+  geometry.setColors(colors);
+  // setColors wrapped `colors` in the interleaved buffer the shader reads;
+  // keep the buffer at hand — setTint writes into `colors` THROUGH it.
+  const colorBuffer = (geometry.getAttribute("instanceColorStart") as THREE.InterleavedBufferAttribute)
+    .data;
+  const alphaAttribute = new THREE.InstancedBufferAttribute(alphas, 1);
+  const widthAttribute = new THREE.InstancedBufferAttribute(widths, 1);
+  geometry.setAttribute("instanceAlpha", alphaAttribute);
+  geometry.setAttribute("instanceWidth", widthAttribute);
+  const material = makeArcMaterial();
+  const lines = new LineSegments2(geometry, material);
   return {
     lines,
     geometry,
     material,
     setAlpha(arcIndex: number, alpha: number): void {
-      const base = arcIndex * VERTICES_PER_ARC;
-      for (let vertex = 0; vertex < VERTICES_PER_ARC; vertex += 1) {
-        colors[(base + vertex) * 4 + 3] = alpha;
-      }
+      alphas.fill(alpha, arcIndex * ARC_SEGMENTS, (arcIndex + 1) * ARC_SEGMENTS);
     },
     setTint(arcIndex: number, tint: THREE.Color): void {
-      const base = arcIndex * VERTICES_PER_ARC;
-      for (let vertex = 0; vertex < VERTICES_PER_ARC; vertex += 1) {
-        colors[(base + vertex) * 4] = tint.r;
-        colors[(base + vertex) * 4 + 1] = tint.g;
-        colors[(base + vertex) * 4 + 2] = tint.b;
+      const base = arcIndex * ARC_SEGMENTS * 6;
+      for (let offset = 0; offset < ARC_SEGMENTS * 6; offset += 3) {
+        colors[base + offset] = tint.r;
+        colors[base + offset + 1] = tint.g;
+        colors[base + offset + 2] = tint.b;
       }
     },
+    setWidth(arcIndex: number, width: number): void {
+      widths.fill(width, arcIndex * ARC_SEGMENTS, (arcIndex + 1) * ARC_SEGMENTS);
+    },
     commit(): void {
-      colorAttribute.needsUpdate = true;
+      colorBuffer.needsUpdate = true;
+      alphaAttribute.needsUpdate = true;
+      widthAttribute.needsUpdate = true;
     },
   };
 }

@@ -48,6 +48,9 @@ body {
   top: 0;
   left: 0;
   right: 0;
+  /* Above the fixed side panels — the colors dropdown must not open UNDER
+     the details panel. */
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 18px;
@@ -89,23 +92,60 @@ body {
   margin: 0;
 }
 
-#header-colors {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+/* The colors dropdown: a header button that unfolds a small panel, so five
+   color wells do not crowd the header line. */
+#colors-menu {
+  position: relative;
 }
 
-#header-colors label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+#colors-menu summary {
+  list-style: none;
+  font: inherit;
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 3px 10px;
   cursor: pointer;
   white-space: nowrap;
+  user-select: none;
+}
+
+#colors-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+#colors-menu summary:hover,
+#colors-menu[open] summary {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+#colors-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  /* The button sits in the header's right cluster; anchor the panel's right
+     edge so it can never overflow the viewport. */
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(28, 34, 43, 0.12);
+  white-space: nowrap;
+  z-index: 1;
+}
+
+#colors-panel label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
 }
 
 /* Small flat swatch wells, header-sized instead of the chunky UA default. */
-#header-colors input[type="color"] {
+#colors-panel input[type="color"] {
   width: 22px;
   height: 16px;
   padding: 0;
@@ -113,6 +153,10 @@ body {
   border-radius: 3px;
   background: none;
   cursor: pointer;
+}
+
+#colors-panel #reset-colors {
+  margin-top: 2px;
 }
 
 #help-link,
