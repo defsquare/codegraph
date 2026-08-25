@@ -111,10 +111,11 @@ describe("codegraph replay", () => {
     const b = city.buildings.find((building) => building.id === id("B"));
     expect(b?.height).toBe(0);
 
-    // Hand-counted series against the union domain [0, 35] -> [1, 40].
-    expect(city.replay.series[id("A")]).toEqual([[0, 23.286], [1, 40], [2, 34.429]]);
-    expect(city.replay.series[id("B")]).toEqual([[0, 12.143], [1, 0]]);
-    expect(city.replay.series[id("C")]).toEqual([[1, 6.571], [2, 9.914]]);
+    // Hand-counted series against the union domain [0, 35] -> [1, 40];
+    // every LOC move is a change, so heat is 1 while alive, 0 at death.
+    expect(city.replay.series[id("A")]).toEqual([[0, 23.286, 1], [1, 40, 1], [2, 34.429, 1]]);
+    expect(city.replay.series[id("B")]).toEqual([[0, 12.143, 1], [1, 0, 0]]);
+    expect(city.replay.series[id("C")]).toEqual([[1, 6.571, 1], [2, 9.914, 1]]);
   });
 
   it("--out writes the artifact and keeps stdout empty", () => {

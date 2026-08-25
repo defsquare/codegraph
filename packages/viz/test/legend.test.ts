@@ -39,4 +39,15 @@ describe("legendModel", () => {
     expect(layout?.label).toBe("layout shelf-rows");
     expect(layout?.detail).toBe("gaps 2/3/6 (street/sidewalk/avenue)");
   });
+
+  it("adds the heat and age entries ONLY for a replay artifact", () => {
+    expect(entries.some((entry) => entry.swatch === "heat")).toBe(false);
+    const replayCity = {
+      ...makeCity(),
+      replay: { clock: "revisions", ticks: [], series: {} },
+    } as unknown as Parameters<typeof legendModel>[0];
+    const withReplay = legendModel(replayCity);
+    expect(withReplay.some((entry) => entry.swatch === "heat")).toBe(true);
+    expect(withReplay.some((entry) => entry.swatch === "age")).toBe(true);
+  });
 });

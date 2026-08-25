@@ -1,4 +1,4 @@
-import type { CityLayout } from "@codegraph/city";
+import type { CityLayout, ReplayCityLayout } from "@codegraph/city";
 import { legendModel, type LegendEntry } from "./legend.js";
 
 /**
@@ -60,5 +60,20 @@ export function helpModel(city: CityLayout | null): HelpModel {
       ],
     },
   ];
+  if (city !== null && (city as Partial<ReplayCityLayout>).replay !== undefined) {
+    sections.push({
+      heading: "Replay",
+      paragraphs: [
+        "The timeline scrubs the mined history: every building rises at its " +
+          "birth and sinks at its death; a vacant plot is an element whose " +
+          "time has not come — or has passed. The layout is frozen over the " +
+          "whole run, so nothing ever moves, only grows.",
+        "'Time colors' paint the time axis: a building that changed at the " +
+          "scrubbed tick glows ember and cools over the following ticks; " +
+          "untouched buildings fade toward gray as they age. Uncheck it to " +
+          "keep the plain palette.",
+      ],
+    });
+  }
   return { sections, legend: city === null ? [] : legendModel(city) };
 }

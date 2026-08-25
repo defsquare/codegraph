@@ -49,6 +49,24 @@ export interface ReplayTick {
   readonly fix?: true;
 }
 
+/**
+ * How fast change heat cools, per tick: the third keyframe element carries
+ * `HEAT_DECAY^(ticks since the building last changed)` and the renderer keeps
+ * decaying between keyframes — one constant, owned here, so the artifact and
+ * the picture agree on what "recent" means. (The viz restates it as a literal
+ * to keep the bundle Node-free; a test pins the two together.)
+ */
+export const REPLAY_HEAT_DECAY = 0.6;
+
+/**
+ * One keyframe: `[tick, height, heat?]`. Height in city units (the renderer
+ * applies zero metric intelligence). Heat ∈ [0, 1]: 1 = the element CHANGED at
+ * this tick, decayed by {@link REPLAY_HEAT_DECAY} per tick since; absent on
+ * artifacts from before the channel — the renderer then treats every visible
+ * keyframe as a change, which is exactly true of the file-level replay.
+ */
+export type ReplayKeyframe = readonly [tick: number, height: number, heat?: number];
+
 export interface CityReplay {
   /**
    * What a tick IS: every commit of a mined history (the file-level replay,
@@ -59,12 +77,11 @@ export interface CityReplay {
   /** Chronological, aligned with the mined history. */
   readonly ticks: readonly ReplayTick[];
   /**
-   * Building id → sparse `[tick, height]` keyframes, height ALREADY in city
-   * units (the renderer applies zero metric intelligence). A height holds
-   * until the next keyframe; before the first the building does not exist
-   * (height 0), and height 0 later means the file is deleted — vacant land.
+   * Building id → sparse keyframes. A keyframe holds until the next one;
+   * before the first the building does not exist (height 0), and height 0
+   * later means the element is deleted — vacant land.
    */
-  readonly series: Readonly<Record<string, readonly (readonly [number, number])[]>>;
+  readonly series: Readonly<Record<string, readonly ReplayKeyframe[]>>;
 }
 
 export interface ReplayCityModel extends CityModel {
@@ -202,10 +219,12 @@ export function buildFileCity(history: FileHistory, options: FileCityOptions = {
     },
   ];
 
-  const series: Record<string, readonly (readonly [number, number])[]> = {};
+  const series: Record<string, readonly ReplayKeyframe[]> = {};
   for (const lineage of lineages) {
+    // Every file keyframe IS a numstat change: heat 1 while the file lives,
+    // 0 at a deletion (there is no building left to glow).
     series[buildingId(lineage.path)] = lineage.keyframes.map(
-      ([tick, linesOfCode]) => [tick, heightOf(linesOfCode)] as const,
+      ([tick, linesOfCode]) => [tick, heightOf(linesOfCode), linesOfCode > 0 ? 1 : 0] as const,
     );
   }
 
@@ -316,8 +335,8 @@ export function buildEntityCity(history: EntityHistory, options: EntityCityOptio
     readonly module: string;
     readonly symbol: string;
     readonly kind: string;
-    /** Presence keyframes plus explicit 0s for gaps and death. */
-    readonly keyframes: readonly (readonly [number, number | null])[];
+    /** Presence keyframes plus explicit 0s for gaps and death; heat carried per keyframe. */
+    readonly keyframes: readonly (readonly [number, number | null, number])[];
     readonly peak: number;
     readonly finalLoc: number;
     readonly born: number;
@@ -328,15 +347,23 @@ export function buildEntityCity(history: EntityHistory, options: EntityCityOptio
   const lives: Life[] = history.entities
     .filter((entity) => entity.disambiguator === "" && entity.symbol !== "" && typeKinds.has(entity.kind))
     .map((entity) => {
-      const keyframes: (readonly [number, number | null])[] = [];
+      const keyframes: (readonly [number, number | null, number])[] = [];
       let previous = -1;
+      let previousLoc: number | null = null;
+      let lastChange = 0;
       for (const [ordinal, loc] of entity.series) {
         // A skipped ordinal after a presence is a death; the next presence a rebirth.
-        if (previous !== -1 && ordinal > previous + 1) keyframes.push([previous + 1, 0]);
-        keyframes.push([ordinal, loc]);
+        const reborn = previous !== -1 && ordinal > previous + 1;
+        if (reborn) keyframes.push([previous + 1, 0, 0]);
+        // Heat: 1 at a change (birth, rebirth, or a different LOC), pre-decayed
+        // for a presence keyframe that did NOT change — sampled revisions see
+        // an entity whether or not the commit touched it, unlike file commits.
+        if (previous === -1 || reborn || loc !== previousLoc) lastChange = ordinal;
+        keyframes.push([ordinal, loc, round(REPLAY_HEAT_DECAY ** (ordinal - lastChange))]);
         previous = ordinal;
+        previousLoc = loc;
       }
-      if (previous !== -1 && previous < latest) keyframes.push([previous + 1, 0]);
+      if (previous !== -1 && previous < latest) keyframes.push([previous + 1, 0, 0]);
 
       const measured = entity.series.map(([, loc]) => loc).filter((loc): loc is number => loc !== null);
       const last = entity.series[entity.series.length - 1];
@@ -418,10 +445,10 @@ export function buildEntityCity(history: EntityHistory, options: EntityCityOptio
       ),
     }));
 
-  const series: Record<string, readonly (readonly [number, number])[]> = {};
+  const series: Record<string, readonly ReplayKeyframe[]> = {};
   for (const life of lives) {
     series[idOf(life.module, life.symbol)] = life.keyframes.map(
-      ([ordinal, loc]) => [ordinal, heightOf(loc)] as const,
+      ([ordinal, loc, heat]) => [ordinal, heightOf(loc), heat] as const,
     );
   }
 

@@ -45,4 +45,19 @@ describe("helpModel", () => {
   it("pins the localStorage key the shell persists 'seen' under", () => {
     expect(HELP_SEEN_KEY).toBe("codegraph.help.seen");
   });
+
+  it("documents the replay and its time colors ONLY for a replay artifact", () => {
+    const staticHeadings = helpModel(makeCity()).sections.map((section) => section.heading);
+    expect(staticHeadings).not.toContain("Replay");
+
+    const replayCity = {
+      ...makeCity(),
+      replay: { clock: "revisions", ticks: [], series: {} },
+    } as unknown as Parameters<typeof helpModel>[0];
+    const help = helpModel(replayCity);
+    expect(help.sections.map((section) => section.heading)).toContain("Replay");
+    const text = help.sections.flatMap((section) => section.paragraphs).join(" ");
+    expect(text).toContain("Time colors");
+    expect(text).toContain("age");
+  });
 });

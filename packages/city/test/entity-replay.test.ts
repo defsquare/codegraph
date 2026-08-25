@@ -39,6 +39,8 @@ const HISTORY: EntityHistory = {
     entity("app.internal", "Helper", "class", [[0, 10], [2, 4]]),
     entity("app", "Legacy", "class", [[0, 10]]),
     entity("app", "Streams", "interface", [[1, 5], [2, 8]]),
+    // Present at every revision but never edited: heat must pre-decay.
+    entity("app", "Stable", "class", [[0, 8], [1, 8], [2, 8]]),
     // Not buildings: a member, and an anonymous type whose key shifts (PLAN §11 pr. 3).
     entity("app", "Gson.fromJson", "method", [[0, 3], [1, 3], [2, 3]]),
     entity("app", "Gson.1", "class", [[1, 6]], "L10C5"),
@@ -53,7 +55,10 @@ describe("buildEntityCity", () => {
   it("is a city artifact: types are buildings, modules are flat districts", () => {
     expect(city.kind).toBe("codegraph.city/1");
     expect(city.buildings.map((building) => building.id).sort()).toEqual(
-      [id("app", "Gson"), id("app", "Legacy"), id("app", "Streams"), id("app.internal", "Helper")].sort(),
+      [
+        id("app", "Gson"), id("app", "Legacy"), id("app", "Stable"),
+        id("app", "Streams"), id("app.internal", "Helper"),
+      ].sort(),
     );
     expect(city.districts.map((district) => district.id).sort()).toEqual(
       [id("app", ""), id("app.internal", "")].sort(),
@@ -70,12 +75,22 @@ describe("buildEntityCity", () => {
 
   it("scales heights against the frozen union domain, gaps as explicit zeros", () => {
     const series = city.replay.series;
-    expect(series[id("app", "Gson")]).toEqual([[0, 20.5], [1, 40], [2, 30.25]]);
-    // Helper: present, ABSENT (explicit 0), reborn.
-    expect(series[id("app.internal", "Helper")]).toEqual([[0, 10.75], [1, 0], [2, 4.9]]);
+    expect(series[id("app", "Gson")]).toEqual([[0, 20.5, 1], [1, 40, 1], [2, 30.25, 1]]);
+    // Helper: present, ABSENT (explicit 0), REBORN — the rebirth is a change.
+    expect(series[id("app.internal", "Helper")]).toEqual([[0, 10.75, 1], [1, 0, 0], [2, 4.9, 1]]);
     // Legacy dies after rev 0 and never returns.
-    expect(series[id("app", "Legacy")]).toEqual([[0, 10.75], [1, 0]]);
-    expect(series[id("app", "Streams")]).toEqual([[1, 5.875], [2, 8.8]]);
+    expect(series[id("app", "Legacy")]).toEqual([[0, 10.75, 1], [1, 0, 0]]);
+    expect(series[id("app", "Streams")]).toEqual([[1, 5.875, 1], [2, 8.8, 1]]);
+  });
+
+  it("heat pre-decays on presence WITHOUT change — sampled revisions are not commits", () => {
+    // Stable exists at every revision but its LOC never moves: heat cools
+    // 1 -> 0.6 -> 0.36 (REPLAY_HEAT_DECAY per revision since the birth change).
+    expect(city.replay.series[id("app", "Stable")]).toEqual([
+      [0, 8.8, 1],
+      [1, 8.8, 0.6],
+      [2, 8.8, 0.36],
+    ]);
   });
 
   it("a dead entity's static height is 0 — vacant land at the latest revision", () => {

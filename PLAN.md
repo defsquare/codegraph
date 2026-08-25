@@ -1321,10 +1321,19 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
       building: loc, peak-loc, revisions, born. Verified on gson's 55
       release keyframes: rev 1/55 is one sparse district of 2008, dead
       types leave vacant plots, JsonReader born at gson-1.6.)
-- [ ] Time-aware channels documented like every other: change heat as
-      color, age as desaturation, ownership as a toggleable color mode;
-      co-change arcs visually distinct from declared edges (they are
-      inferences, and the city never lies).
+- [x] Change heat as color + age as desaturation, documented like every
+      other channel: keyframes carry `heat` (1 = changed at that tick,
+      pre-decayed by `REPLAY_HEAT_DECAY` when a sampled revision saw the
+      entity unchanged); the renderer keeps cooling between keyframes,
+      ages toward gray by timeline fraction lived, and legends both — a
+      'Time colors' toggle (replay artifacts only) restores the plain
+      palette. Verified on gson: 2.14.0's touched core glows ember,
+      one-release-old changes read brick, the untouched old core grays.
+- [ ] Ownership as a toggleable color mode; co-change arcs visually
+      distinct from declared edges (they are inferences, and the city
+      never lies). Both need the history join (`--history`) in
+      `codegraph replay` — the store carries no authors and no
+      co-change.
 - **DoD**: replay on a real corpus reviewed as screenshots at user-facing
   camera angles; no per-frame allocation in the scrub path.
 

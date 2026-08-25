@@ -1,4 +1,4 @@
-import type { CityLayout } from "@codegraph/city";
+import type { CityLayout, ReplayCityLayout } from "@codegraph/city";
 
 /**
  * The on-screen legend, derived from the artifact's own declarations — its
@@ -8,7 +8,7 @@ import type { CityLayout } from "@codegraph/city";
  */
 export interface LegendEntry {
   /** Which swatch to draw beside the label; null = text-only line. */
-  readonly swatch: "building" | "stub" | "fanIn" | "fanOut" | null;
+  readonly swatch: "building" | "stub" | "fanIn" | "fanOut" | "heat" | "age" | null;
   readonly label: string;
   readonly detail: string | undefined;
 }
@@ -58,6 +58,24 @@ export function legendModel(city: CityLayout): readonly LegendEntry[] {
       detail: "the clicked building or district turns violet; each arc's far end tints by direction",
     },
   );
+
+  // The TIME COLORS exist only where a time axis does — a replay artifact.
+  if ((city as Partial<ReplayCityLayout>).replay !== undefined) {
+    entries.push(
+      {
+        swatch: "heat",
+        label: "heat",
+        detail:
+          "changed at the scrubbed tick — ember, cooling over the following ticks " +
+          "('Time colors' toggle)",
+      },
+      {
+        swatch: "age",
+        label: "age",
+        detail: "ticks lived since birth — old code desaturates toward gray, never disappears",
+      },
+    );
+  }
 
   entries.push({
     swatch: null,

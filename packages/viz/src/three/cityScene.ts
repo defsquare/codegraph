@@ -11,6 +11,8 @@ import { districtPlates, groundPlate, type Plate } from "../scene/districts.js";
 import { arcState, highlightMap, type ArrowToggles } from "../scene/focus.js";
 import type { CityPalette } from "../scene/palette.js";
 import {
+  AGE_FADE_GRAY,
+  AGE_FADE_MAX,
   ARC_SEGMENTS,
   ARROW_FAN_IN_WIDTH,
   ARROW_WIDTH,
@@ -20,6 +22,7 @@ import {
   INFERRED_GRAY,
   PLATE_LEVEL_TARGET,
   PLATE_TINT_PER_LEVEL,
+  REPLAY_HEAT_COLOR,
   SELECT_COLOR,
 } from "../theme.js";
 
@@ -61,6 +64,13 @@ export interface CityScene {
    * In-place matrix rewrite; the scrub path allocates nothing.
    */
   setHeights(heights: ArrayLike<number> | null): void;
+  /**
+   * Replay TIME COLORS: per-instance heat (recent change → ember) and age
+   * (fraction of the timeline lived → desaturation), or null/null to restore
+   * the plain palette. The buffers stay caller-owned and are read again on
+   * every repaint (palette change, selection restore); in-place recolor.
+   */
+  setShading(heats: ArrayLike<number> | null, ages: ArrayLike<number> | null): void;
   dispose(): void;
 }
 
@@ -108,14 +118,30 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
   root.add(platesMesh);
   disposables.push(plateMaterial, platesMesh);
 
-  // Buildings: one instanced box, per-instance color = declared vs stub.
+  // Buildings: one instanced box, per-instance color = declared vs stub,
+  // shaded by the replay time colors when a scrub set them.
+  let shadingHeats: ArrayLike<number> | null = null;
+  let shadingAges: ArrayLike<number> | null = null;
+  const heatColor = new THREE.Color(REPLAY_HEAT_COLOR);
+  const fadeColor = new THREE.Color(AGE_FADE_GRAY);
+  /** The color instance `i` wears when NOT highlighted: palette base, aged
+   * toward gray, then heated toward ember — heat wins, and the picture says
+   * "changed here, recently" louder than "old". Writes the shared scratch. */
+  function baseBoxColor(i: number, box: BuildingBox): THREE.Color {
+    color.setHex(box.isStub ? palette.buildingStub : palette.building);
+    if (shadingHeats !== null && shadingAges !== null && !box.isStub) {
+      color.lerp(fadeColor, Math.min(1, shadingAges[i] ?? 0) * AGE_FADE_MAX);
+      color.lerp(heatColor, Math.min(1, shadingHeats[i] ?? 0));
+    }
+    return color;
+  }
   const buildingGeometry = new THREE.BoxGeometry(1, 1, 1);
   const buildingMaterial = new THREE.MeshLambertMaterial();
   const buildingsMesh = new THREE.InstancedMesh(buildingGeometry, buildingMaterial, boxes.length);
   boxes.forEach((box, i) => {
     matrix.makeScale(...box.size).setPosition(...box.center);
     buildingsMesh.setMatrixAt(i, matrix);
-    buildingsMesh.setColorAt(i, color.setHex(box.isStub ? palette.buildingStub : palette.building));
+    buildingsMesh.setColorAt(i, baseBoxColor(i, box));
   });
   root.add(buildingsMesh);
   disposables.push(buildingGeometry, buildingMaterial, buildingsMesh);
@@ -196,12 +222,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     paintArcs(typeArrows, arcs, focusId, toggles);
     for (const i of highlightedBoxes) {
       const box = boxes[i];
-      if (box !== undefined) {
-        buildingsMesh.setColorAt(
-          i,
-          color.setHex(box.isStub ? palette.buildingStub : palette.building),
-        );
-      }
+      if (box !== undefined) buildingsMesh.setColorAt(i, baseBoxColor(i, box));
     }
     highlightedBoxes = [];
     for (const [id, role] of highlightMap(arcs, focusId, toggles)) {
@@ -238,6 +259,20 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     if (platesMesh.instanceColor) platesMesh.instanceColor.needsUpdate = true;
 
     paintArcs(districtArrows, dArcs, districtId, toggles);
+  }
+
+  // Scrub-path recolor: repaint every base, then re-assert the selection's
+  // highlights on top (the trackers must not restore stale colors). In-place,
+  // shared scratch Color — the scrub path allocates nothing.
+  function setShading(heats: ArrayLike<number> | null, ages: ArrayLike<number> | null): void {
+    shadingHeats = heats;
+    shadingAges = ages;
+    boxes.forEach((box, i) => {
+      buildingsMesh.setColorAt(i, baseBoxColor(i, box));
+    });
+    if (buildingsMesh.instanceColor) buildingsMesh.instanceColor.needsUpdate = true;
+    highlightedBoxes = [];
+    if (lastFocus !== null) setFocus(lastFocus.index, lastFocus.toggles);
   }
 
   function setHeights(heights: ArrayLike<number> | null): void {
@@ -284,7 +319,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     fanInColor.setHex(palette.arrowFanIn);
     fanOutColor.setHex(palette.arrowFanOut);
     boxes.forEach((box, i) => {
-      buildingsMesh.setColorAt(i, color.setHex(box.isStub ? palette.buildingStub : palette.building));
+      buildingsMesh.setColorAt(i, baseBoxColor(i, box));
     });
     if (buildingsMesh.instanceColor) buildingsMesh.instanceColor.needsUpdate = true;
     plates.forEach((plate, i) => {
@@ -319,6 +354,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     },
     setExternalsVisible,
     setHeights,
+    setShading,
     dispose: () => disposables.forEach((d) => d.dispose()),
   };
 }

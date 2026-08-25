@@ -25,7 +25,7 @@ import {
 } from "./scene/palette.js";
 import { createCityScene, type CityScene } from "./three/cityScene.js";
 import { BuildingPicker } from "./three/picking.js";
-import { COLORS } from "./theme.js";
+import { AGE_FADE_GRAY, COLORS, REPLAY_HEAT_COLOR } from "./theme.js";
 
 /**
  * The viewer shell: load a city artifact (dev-server `/city.json`, `?src=URL`,
@@ -65,6 +65,8 @@ const toggleBuildings = must<HTMLInputElement>("#toggle-buildings");
 const toggleFanIn = must<HTMLInputElement>("#toggle-fan-in");
 const toggleFanOut = must<HTMLInputElement>("#toggle-fan-out");
 const toggleExternals = must<HTMLInputElement>("#toggle-externals");
+const toggleTimeColors = must<HTMLInputElement>("#toggle-time-colors");
+const timeColorsLabel = must<HTMLElement>("#time-colors-label");
 const resetView = must<HTMLButtonElement>("#reset-view");
 const colorsMenu = must<HTMLDetailsElement>("#colors-menu");
 const colorBuilding = must<HTMLInputElement>("#color-building");
@@ -286,6 +288,8 @@ function frameCity(city: CityLayout): void {
  */
 let timeline: TimelineModel | null = null;
 let heightsBuffer: Float32Array | null = null;
+let heatsBuffer: Float32Array | null = null;
+let agesBuffer: Float32Array | null = null;
 let replayTimer: number | null = null;
 const PLAY_TICK_MS = 140;
 
@@ -300,6 +304,14 @@ function stopPlayback(): void {
 function setTick(tick: number): void {
   if (!cityScene || timeline === null || heightsBuffer === null) return;
   cityScene.setHeights(timeline.heightsAt(tick, heightsBuffer));
+  // Time colors ride the same scrub: heat (recent change → ember) and age
+  // (timeline fraction lived → desaturation), or the plain palette when off.
+  if (toggleTimeColors.checked && heatsBuffer !== null && agesBuffer !== null) {
+    timeline.shadeAt(tick, heatsBuffer, agesBuffer);
+    cityScene.setShading(heatsBuffer, agesBuffer);
+  } else {
+    cityScene.setShading(null, null);
+  }
   timelineLabel.textContent = timeline.label(tick);
   timelineScrub.value = String(tick);
 }
@@ -309,16 +321,24 @@ function setupReplay(city: CityLayout): void {
   const replay = (city as Partial<ReplayCityLayout>).replay;
   if (!cityScene || replay === undefined || replay.ticks.length === 0) {
     timeline = null;
-    heightsBuffer = null;
+    heightsBuffer = heatsBuffer = agesBuffer = null;
     timelineBar.hidden = true;
+    timeColorsLabel.hidden = true;
     return;
   }
   timeline = timelineModel(replay, cityScene.boxes.map((box) => box.id));
   heightsBuffer = new Float32Array(cityScene.boxes.length);
+  heatsBuffer = new Float32Array(cityScene.boxes.length);
+  agesBuffer = new Float32Array(cityScene.boxes.length);
   timelineScrub.max = String(timeline.count - 1);
   timelineBar.hidden = false;
+  timeColorsLabel.hidden = false;
   setTick(timeline.count - 1); // start at "now": the full city
 }
+
+toggleTimeColors.addEventListener("change", () => {
+  if (timeline !== null) setTick(Number(timelineScrub.value));
+});
 
 timelineScrub.addEventListener("input", () => {
   stopPlayback();
@@ -355,6 +375,8 @@ function swatchColor(kind: string): number | undefined {
   if (kind === "stub") return palette.buildingStub;
   if (kind === "fanIn") return palette.arrowFanIn;
   if (kind === "fanOut") return palette.arrowFanOut;
+  if (kind === "heat") return REPLAY_HEAT_COLOR;
+  if (kind === "age") return AGE_FADE_GRAY;
   return undefined;
 }
 

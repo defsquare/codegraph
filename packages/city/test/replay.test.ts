@@ -54,17 +54,18 @@ describe("buildFileCity", () => {
     expect(byId.get("dir:src/deep")?.parent).toBe("dir:src");
   });
 
-  it("scales heights against the FROZEN union domain [0, 40]", () => {
+  it("scales heights against the FROZEN union domain [0, 40], heat 1 at every change", () => {
     const series = city.replay.series;
+    // Every file keyframe is a numstat change -> heat 1; a deletion carries 0.
     expect(series["file:a.txt"]).toEqual([
-      [0, 10.75],
-      [2, 40],
+      [0, 10.75, 1],
+      [2, 40, 1],
     ]);
     expect(series["file:src/b.txt"]).toEqual([
-      [0, 20.5],
-      [1, 0],
+      [0, 20.5, 1],
+      [1, 0, 0],
     ]);
-    expect(series["file:src/deep/c.txt"]).toEqual([[1, 5.875]]);
+    expect(series["file:src/deep/c.txt"]).toEqual([[1, 5.875, 1]]);
   });
 
   it("zero is absence, never the channel floor: a deleted file sinks to 0", () => {

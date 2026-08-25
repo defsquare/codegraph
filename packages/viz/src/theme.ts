@@ -55,6 +55,25 @@ export const INFERRED_DESATURATION = 0.65;
 /** The gray provenance desaturation collapses toward — themed once, here. */
 export const INFERRED_GRAY = 0x8a93a0;
 
+/**
+ * REPLAY TIME COLORS (M9c). Heat: a building that changed at the scrubbed tick
+ * wears this ember hue outright, cooling toward its base color as ticks pass —
+ * an ember red no other channel uses at rest (fan-in orange appears only under
+ * a selection). Age: an untouched building desaturates toward AGE_FADE_GRAY,
+ * at most AGE_FADE_MAX over the full timeline — old code pales, it never
+ * disappears.
+ */
+export const REPLAY_HEAT_COLOR = 0xd0452e;
+export const AGE_FADE_GRAY = 0x9aa5ad;
+export const AGE_FADE_MAX = 0.55;
+
+/**
+ * How fast heat cools per tick. RESTATED from `@codegraph/city`'s
+ * REPLAY_HEAT_DECAY as a literal — a runtime import would drag the Node-side
+ * pipeline into the bundle (guard.ts's rule); a test pins the two together.
+ */
+export const REPLAY_HEAT_DECAY = 0.6;
+
 /** District plates rest on the ground plane; buildings stand on the plates. */
 export const PLATE_THICKNESS = 0.35;
 export const GROUND_THICKNESS = 0.7;
