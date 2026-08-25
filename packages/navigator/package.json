@@ -1,0 +1,31 @@
+{
+  "name": "@codegraph/navigator",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Codegraph navigator model: the browsable tree of a model plus per-node dependency detail rows",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@codegraph/analyzer": "workspace:*",
+    "@codegraph/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "fast-check": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
