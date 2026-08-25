@@ -1291,7 +1291,16 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
       still open; a query-time feature, not an ingest-time cost.)
 - **DoD**: property suite (closure, profile validity, determinism) green
   at every keyframe unconditionally; timeline and coupling queries
-  verified on a real corpus history (google/gson).
+  verified on a real corpus history (google/gson). ✅ Verified 2026-08-25:
+  all 55 gson release tags (2008–2025) in one store via two composed
+  `snapshots --tags` runs (`--src src/main/java` for the pre-2.4 layout,
+  `--src gson/src/main/java` after the module move — resume skipping
+  makes the composition free), zero findings at every keyframe;
+  `timeline Gson` spans 55/55 from 1.0, `MappedObjectConstructor` dies
+  after gson-1.7.2 (the 2.0 rewrite), `Excluder` is born at gson-2.1;
+  hidden coupling finds the JsonSerializer/JsonDeserializer and
+  Since/Until twins (no declared path), dead weight finds the stable
+  JsonToken/TypeAdapter interfaces.
 
 ### 11.3 M9c — entity-level city replay
 
@@ -1336,7 +1345,7 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
 | M7 | SQLite store | `codegraph import` → `model.db` cache; DB-backed analyzer facade; repeat runs skip parsing; reports byte-identical to M6 outputs |
 | M8 | 2nd language | clj-kondo adapter; cross-language import-graph query works |
 | M9a | SCM miner + Gource replay | `codegraph scm` → deterministic `history.jsonl`; `history summary/hotspots/authors` reports match hand-counted fixture numbers; file-level city replay with timeline scrubber runs on codegraph's own history |
-| M9b | Temporal store | sampled `import --at` revisions in `model.db`; lifespans + `codegraph timeline`; hidden-coupling/ownership queries verified on gson history; property suite green at every keyframe |
+| M9b | Temporal store | ✅ sampled `import --at` revisions in `model.db` (orchestrated by `codegraph snapshots`); lifespans + `codegraph timeline`; hidden-coupling/ownership queries verified on gson history (55 release keyframes, 2008–2025); property suite green at every keyframe |
 | M9c | Entity-level city replay | frozen union layout; temporal `city.json` with per-building series; scrubbed replay reviewed as screenshots at user-facing angles, allocation-free scrub path |
 
 ## 13. Decisions made in this plan (deltas vs. the design doc)
