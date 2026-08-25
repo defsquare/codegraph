@@ -230,6 +230,46 @@ export function logicalCoupling(history: History, options: CouplingOptions = {})
   return { rows, skippedChangesets: skipped };
 }
 
+export interface FileOwner {
+  /** `Name <email>`, exactly as the history's author table carries it. */
+  readonly name: string;
+  /** The owner's added lines over ALL added lines on the lineage (0..1]. */
+  readonly share: number;
+}
+
+/**
+ * Dominant author per lineage — the SAME rule `authorStats`' `owns` and the
+ * bus factor use: most lines added, ties to the lexicographically first
+ * author. A lineage nobody added lines to has no owner and is absent.
+ */
+export function fileOwners(history: History): ReadonlyMap<string, FileOwner> {
+  const addedBy = history.paths.map(() => new Map<number, number>());
+  for (const change of history.changes) {
+    const commit = history.commits[change.commit];
+    const perAuthor = addedBy[change.path];
+    if (commit === undefined || perAuthor === undefined) continue;
+    perAuthor.set(commit.author, (perAuthor.get(commit.author) ?? 0) + change.added);
+  }
+
+  const owners = new Map<string, FileOwner>();
+  addedBy.forEach((perAuthor, path) => {
+    let owner: number | undefined;
+    let best = -1;
+    let total = 0;
+    for (const [author, added] of perAuthor) {
+      total += added;
+      if (added > best || (added === best && owner !== undefined && author < owner)) {
+        owner = author;
+        best = added;
+      }
+    }
+    const name = owner === undefined ? undefined : history.authors[owner];
+    if (name === undefined || total <= 0 || best <= 0) return;
+    owners.set(history.paths[path] as string, { name, share: best / total });
+  });
+  return owners;
+}
+
 export interface AuthorRow {
   readonly author: string;
   readonly commits: number;

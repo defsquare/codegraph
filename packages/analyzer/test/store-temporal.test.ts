@@ -244,6 +244,7 @@ describe("entity history — the replay city's input", () => {
     expect(bySymbol.get("C")?.series).toEqual([[1, 5], [2, 8]]);
     expect(bySymbol.get("A")?.kind).toBe("class");
     expect(bySymbol.get("A")?.module).toBe("app");
+    expect(bySymbol.get("A")?.file).toBe("app/A.java");
     // The module rides along (kind "package"); consumers filter by kind.
     expect(bySymbol.get("")?.kind).toBe("package");
   });

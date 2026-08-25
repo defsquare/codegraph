@@ -16,8 +16,16 @@
         <label><input type="checkbox" id="toggle-fan-in" checked /> Show fan-in</label>
         <label><input type="checkbox" id="toggle-fan-out" checked /> Show fan-out</label>
         <label><input type="checkbox" id="toggle-externals" checked /> Show externals</label>
-        <label id="time-colors-label" hidden
-          ><input type="checkbox" id="toggle-time-colors" checked /> Time colors</label
+        <label id="cochange-label" hidden
+          ><input type="checkbox" id="toggle-cochange" checked /> Show co-change</label
+        >
+        <label id="color-mode-label" hidden
+          >Colors
+          <select id="color-mode">
+            <option value="time">Time</option>
+            <option value="owner" id="color-mode-owner">Owner</option>
+            <option value="plain">Plain</option>
+          </select></label
         >
       </nav>
       <details id="colors-menu">

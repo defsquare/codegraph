@@ -31,6 +31,8 @@ export interface BuildingBox {
   /** Verbatim from the artifact; empty (never absent) on older artifacts. */
   readonly attributes: readonly BuildingAttribute[];
   readonly operations: readonly BuildingOperation[];
+  /** Dominant author of the element's file, when a history was joined. */
+  readonly owner: { readonly name: string; readonly share: number } | undefined;
 }
 
 /**
@@ -59,6 +61,7 @@ export function buildingBoxes(city: CityLayout): readonly BuildingBox[] {
       identity: building.identity,
       attributes: building.attributes ?? [],
       operations: building.operations ?? [],
+      owner: building.owner,
     };
   });
 }

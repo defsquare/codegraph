@@ -74,6 +74,16 @@ export const AGE_FADE_MAX = 0.55;
  */
 export const REPLAY_HEAT_DECAY = 0.6;
 
+/**
+ * CO-CHANGE ARCS (M9c): logical coupling is an INFERENCE from history, never
+ * a dependency — dashed (a different KIND of line, not just a hue) in a
+ * magenta no dependency channel uses, visible only for the selected building.
+ */
+export const CO_CHANGE_COLOR = 0xc2379b;
+export const CO_CHANGE_DASH = 1.2;
+export const CO_CHANGE_GAP = 0.8;
+export const CO_CHANGE_ALPHA = 0.9;
+
 /** District plates rest on the ground plane; buildings stand on the plates. */
 export const PLATE_THICKNESS = 0.35;
 export const GROUND_THICKNESS = 0.7;

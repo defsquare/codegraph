@@ -4,6 +4,7 @@ import type { CityLayout, ReplayCityLayout } from "@codegraph/city";
 import { CityLoadError, parseCityLayout } from "./guard.js";
 import { progressFraction, progressLabel } from "./progress.js";
 import { timelineModel, type TimelineModel } from "./scene/timeline.js";
+import { ownerColoring } from "./scene/owners.js";
 import {
   buildingDetails,
   districtDetails,
@@ -25,7 +26,7 @@ import {
 } from "./scene/palette.js";
 import { createCityScene, type CityScene } from "./three/cityScene.js";
 import { BuildingPicker } from "./three/picking.js";
-import { AGE_FADE_GRAY, COLORS, REPLAY_HEAT_COLOR } from "./theme.js";
+import { AGE_FADE_GRAY, CO_CHANGE_COLOR, COLORS, REPLAY_HEAT_COLOR } from "./theme.js";
 
 /**
  * The viewer shell: load a city artifact (dev-server `/city.json`, `?src=URL`,
@@ -65,8 +66,11 @@ const toggleBuildings = must<HTMLInputElement>("#toggle-buildings");
 const toggleFanIn = must<HTMLInputElement>("#toggle-fan-in");
 const toggleFanOut = must<HTMLInputElement>("#toggle-fan-out");
 const toggleExternals = must<HTMLInputElement>("#toggle-externals");
-const toggleTimeColors = must<HTMLInputElement>("#toggle-time-colors");
-const timeColorsLabel = must<HTMLElement>("#time-colors-label");
+const toggleCoChange = must<HTMLInputElement>("#toggle-cochange");
+const coChangeLabel = must<HTMLElement>("#cochange-label");
+const colorMode = must<HTMLSelectElement>("#color-mode");
+const colorModeLabel = must<HTMLElement>("#color-mode-label");
+const colorModeOwner = must<HTMLOptionElement>("#color-mode-owner");
 const resetView = must<HTMLButtonElement>("#reset-view");
 const colorsMenu = must<HTMLDetailsElement>("#colors-menu");
 const colorBuilding = must<HTMLInputElement>("#color-building");
@@ -290,6 +294,8 @@ let timeline: TimelineModel | null = null;
 let heightsBuffer: Float32Array | null = null;
 let heatsBuffer: Float32Array | null = null;
 let agesBuffer: Float32Array | null = null;
+/** Owner-mode hues, computed once per loaded city; null entries = no owner. */
+let ownerColors: readonly (number | null)[] | null = null;
 let replayTimer: number | null = null;
 const PLAY_TICK_MS = 140;
 
@@ -304,16 +310,28 @@ function stopPlayback(): void {
 function setTick(tick: number): void {
   if (!cityScene || timeline === null || heightsBuffer === null) return;
   cityScene.setHeights(timeline.heightsAt(tick, heightsBuffer));
-  // Time colors ride the same scrub: heat (recent change → ember) and age
-  // (timeline fraction lived → desaturation), or the plain palette when off.
-  if (toggleTimeColors.checked && heatsBuffer !== null && agesBuffer !== null) {
+  // In Time mode the colors ride the same scrub: heat (recent change → ember)
+  // and age (timeline fraction lived → desaturation). Owner and Plain colors
+  // are tick-independent — applyColorMode set them, nothing to do here.
+  if (colorMode.value === "time" && heatsBuffer !== null && agesBuffer !== null) {
     timeline.shadeAt(tick, heatsBuffer, agesBuffer);
     cityScene.setShading(heatsBuffer, agesBuffer);
-  } else {
-    cityScene.setShading(null, null);
   }
   timelineLabel.textContent = timeline.label(tick);
   timelineScrub.value = String(tick);
+}
+
+/** One sink for the 'Colors' selector: exactly one mode owns the base color. */
+function applyColorMode(): void {
+  if (!cityScene || timeline === null) return;
+  if (colorMode.value === "owner") {
+    cityScene.setShading(null, null);
+    cityScene.setOwnerColors(ownerColors);
+  } else {
+    cityScene.setOwnerColors(null);
+    if (colorMode.value === "time") setTick(Number(timelineScrub.value));
+    else cityScene.setShading(null, null);
+  }
 }
 
 function setupReplay(city: CityLayout): void {
@@ -322,8 +340,10 @@ function setupReplay(city: CityLayout): void {
   if (!cityScene || replay === undefined || replay.ticks.length === 0) {
     timeline = null;
     heightsBuffer = heatsBuffer = agesBuffer = null;
+    ownerColors = null;
     timelineBar.hidden = true;
-    timeColorsLabel.hidden = true;
+    colorModeLabel.hidden = true;
+    coChangeLabel.hidden = true;
     return;
   }
   timeline = timelineModel(replay, cityScene.boxes.map((box) => box.id));
@@ -332,12 +352,22 @@ function setupReplay(city: CityLayout): void {
   agesBuffer = new Float32Array(cityScene.boxes.length);
   timelineScrub.max = String(timeline.count - 1);
   timelineBar.hidden = false;
-  timeColorsLabel.hidden = false;
+  colorModeLabel.hidden = false;
+  // Owner mode exists only when a history was joined; a disabled option says
+  // why the mode is not on offer, where hiding it would just puzzle.
+  const owners = ownerColoring(cityScene.boxes);
+  ownerColors = owners.owners.length === 0 ? null : owners.colors;
+  colorModeOwner.disabled = ownerColors === null;
+  if (colorMode.value === "owner" && ownerColors === null) colorMode.value = "time";
+  coChangeLabel.hidden = cityScene.coChange.length === 0;
+  cityScene.setCoChangeVisible(toggleCoChange.checked);
   setTick(timeline.count - 1); // start at "now": the full city
+  applyColorMode();
 }
 
-toggleTimeColors.addEventListener("change", () => {
-  if (timeline !== null) setTick(Number(timelineScrub.value));
+colorMode.addEventListener("change", applyColorMode);
+toggleCoChange.addEventListener("change", () => {
+  cityScene?.setCoChangeVisible(toggleCoChange.checked);
 });
 
 timelineScrub.addEventListener("input", () => {
@@ -377,6 +407,7 @@ function swatchColor(kind: string): number | undefined {
   if (kind === "fanOut") return palette.arrowFanOut;
   if (kind === "heat") return REPLAY_HEAT_COLOR;
   if (kind === "age") return AGE_FADE_GRAY;
+  if (kind === "coChange") return CO_CHANGE_COLOR;
   return undefined;
 }
 

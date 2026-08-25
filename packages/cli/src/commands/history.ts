@@ -15,6 +15,7 @@ import {
   HistoryError,
   authorStats,
   decodeHistoryText,
+  fileOwners,
   hotspots,
   logicalCoupling,
   summarize,
@@ -85,7 +86,16 @@ export function historyCommand(
   }
 
   if (options.serve || options.city !== undefined) {
-    const artifact = cityToJsonString(layoutFileCity(buildFileCity(history)));
+    // The history is all there is here, so the time channels come for free:
+    // per-lineage owners and the default-threshold co-change arcs.
+    const artifact = cityToJsonString(
+      layoutFileCity(
+        buildFileCity(history, {
+          owners: fileOwners(history),
+          coChange: logicalCoupling(history).rows,
+        }),
+      ),
+    );
     if (options.city !== undefined) {
       io.writeFile(options.city, artifact);
       errLine(

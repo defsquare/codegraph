@@ -125,6 +125,22 @@ describe("buildFileCity", () => {
     expect(byId.get("dir:x/y")?.parent).toBe("dir:.");
   });
 
+  it("carries owners and co-change when the caller joined a history", () => {
+    const joined = buildFileCity(HISTORY, {
+      owners: new Map([["a.txt", { name: "alice <a@x>", share: 1 }]]),
+      coChange: [{ a: "a.txt", b: "src/b.txt", support: 3, confidence: 0.75 }],
+    });
+    const a = joined.buildings.find((building) => building.id === "file:a.txt");
+    expect(a?.owner).toEqual({ name: "alice <a@x>", share: 1 });
+    expect(joined.buildings.find((b) => b.id === "file:src/b.txt")?.owner).toBeUndefined();
+    expect(joined.replay.coChange).toEqual([
+      { a: "file:a.txt", b: "file:src/b.txt", support: 3, confidence: 0.75 },
+    ]);
+    // Without a join the keys are ABSENT — the city never invents history.
+    expect(city.replay.coChange).toBeUndefined();
+    expect(city.buildings.every((building) => building.owner === undefined)).toBe(true);
+  });
+
   it("is deterministic: two builds serialize identically", () => {
     expect(JSON.stringify(buildFileCity(HISTORY))).toBe(JSON.stringify(buildFileCity(HISTORY)));
   });

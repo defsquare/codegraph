@@ -1329,13 +1329,27 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
       'Time colors' toggle (replay artifacts only) restores the plain
       palette. Verified on gson: 2.14.0's touched core glows ember,
       one-release-old changes read brick, the untouched old core grays.
-- [ ] Ownership as a toggleable color mode; co-change arcs visually
+- [x] Ownership as a toggleable color mode; co-change arcs visually
       distinct from declared edges (they are inferences, and the city
-      never lies). Both need the history join (`--history`) in
-      `codegraph replay` — the store carries no authors and no
-      co-change.
+      never lies). Fed by the history join: `codegraph replay --history
+      F` (and `history --serve` for the file city) runs scm's
+      `fileOwners` + `logicalCoupling` and the analyzer's SUFFIX join —
+      buildings gain `owner {name, share}`, the replay block gains
+      `coChange` building pairs. Viz: a 'Colors' selector (Time / Owner
+      / Plain — Owner offered only when a history was joined; unowned
+      buildings go neutral, never a claimed hue), owner in the details
+      panel, and co-change as DASHED magenta arcs shown for the
+      selected building — a different KIND of line from dependency
+      arrows, legend and help stating the inference.
 - **DoD**: replay on a real corpus reviewed as screenshots at user-facing
-  camera angles; no per-frame allocation in the scrub path.
+  camera angles; no per-frame allocation in the scrub path. ✅ Verified
+  2026-08-25 on gson (55 release keyframes + 2,088-commit history, 170
+  of 197 store files joined): sparse 2008 city grows to 2026; time
+  colors read ember/brick/gray at 2.14.0 and 2.9.1; owner mode maps
+  the original-author core against the modern maintainers; TypeAdapters
+  shows owner (29% of added lines) and its dashed co-change fan. Scrub
+  path allocates nothing: caller-owned Float32Array buffers, in-place
+  instance matrix/color rewrites, event-driven repaints only.
 
 ### 11.4 Deferred, explicitly
 
@@ -1363,7 +1377,7 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
 | M8 | 2nd language | clj-kondo adapter; cross-language import-graph query works |
 | M9a | SCM miner + Gource replay | `codegraph scm` → deterministic `history.jsonl`; `history summary/hotspots/authors` reports match hand-counted fixture numbers; file-level city replay with timeline scrubber runs on codegraph's own history |
 | M9b | Temporal store | ✅ sampled `import --at` revisions in `model.db` (orchestrated by `codegraph snapshots`); lifespans + `codegraph timeline`; hidden-coupling/ownership queries verified on gson history (55 release keyframes, 2008–2025); property suite green at every keyframe |
-| M9c | Entity-level city replay | frozen union layout; temporal `city.json` with per-building series; scrubbed replay reviewed as screenshots at user-facing angles, allocation-free scrub path |
+| M9c | Entity-level city replay | ✅ frozen union layout; temporal `city.json` with per-building series (`codegraph replay`); time colors (heat + age), owner color mode and dashed co-change arcs via the `--history` join; scrubbed replay reviewed as screenshots on gson at user-facing angles, allocation-free scrub path |
 
 ## 13. Decisions made in this plan (deltas vs. the design doc)
 

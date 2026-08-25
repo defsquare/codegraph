@@ -68,10 +68,17 @@ export function helpModel(city: CityLayout | null): HelpModel {
           "birth and sinks at its death; a vacant plot is an element whose " +
           "time has not come — or has passed. The layout is frozen over the " +
           "whole run, so nothing ever moves, only grows.",
-        "'Time colors' paint the time axis: a building that changed at the " +
-          "scrubbed tick glows ember and cools over the following ticks; " +
-          "untouched buildings fade toward gray as they age. Uncheck it to " +
-          "keep the plain palette.",
+        "'Colors' picks what the buildings say. Time: a building that " +
+          "changed at the scrubbed tick glows ember and cools over the " +
+          "following ticks, while untouched buildings fade toward gray as " +
+          "they age. Owner: each building wears its file's dominant author's " +
+          "hue (mined from history; offered only when a history was joined). " +
+          "Plain: the palette alone.",
+        "Dashed arcs on a selected building are its CO-CHANGE partners — " +
+          "elements that change together in the mined history (logical " +
+          "coupling). They are inferences, never dependencies, and they are " +
+          "drawn as a different kind of line so the picture cannot confuse " +
+          "the two.",
       ],
     });
   }

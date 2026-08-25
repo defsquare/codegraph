@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HISTORY_SCHEMA_VERSION, type History } from "../src/history.js";
-import { authorStats, hotspots, logicalCoupling, summarize } from "../src/reports.js";
+import { authorStats, fileOwners, hotspots, logicalCoupling, summarize } from "../src/reports.js";
 
 /**
  * Every expectation below is HAND-COUNTED from the fixture (the M9a DoD).
@@ -123,6 +123,27 @@ describe("hotspots", () => {
 
   it("counts c.ts by hand: one fix out of two revisions", () => {
     expect(rows[1]).toMatchObject({ path: "c.ts", revisions: 2, churn: 9, fixes: 1, bugDensity: 0.5 });
+  });
+});
+
+describe("fileOwners", () => {
+  it("names the dominant author per lineage with the hand-counted share", () => {
+    const owners = fileOwners(HISTORY);
+    // a.ts: alice +10, bob +2 -> alice owns 10/12.
+    expect(owners.get("a.ts")).toEqual({ name: "alice <a@x>", share: 10 / 12 });
+    // b.ts: alice alone (+5, +1).
+    expect(owners.get("b.ts")).toEqual({ name: "alice <a@x>", share: 1 });
+    // c.ts: alice +7, bob +1 -> alice owns 7/8.
+    expect(owners.get("c.ts")).toEqual({ name: "alice <a@x>", share: 7 / 8 });
+  });
+
+  it("gives no owner to a lineage nobody added lines to", () => {
+    const deletions: History = {
+      ...HISTORY,
+      paths: ["gone.ts"],
+      changes: [{ commit: 0, path: 0, added: 0, deleted: 5 }],
+    };
+    expect(fileOwners(deletions).size).toBe(0);
   });
 });
 

@@ -1,7 +1,21 @@
 import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
 import { basename } from "node:path";
-import { listRevisions, openStore, readEntityHistory, storePathFor } from "@codegraph/analyzer";
-import { buildEntityCity, cityToJsonString, layoutReplayCity } from "@codegraph/city";
+import {
+  joinOnPaths,
+  listRevisions,
+  openStore,
+  readEntityHistory,
+  storePathFor,
+} from "@codegraph/analyzer";
+import {
+  buildEntityCity,
+  cityToJsonString,
+  layoutReplayCity,
+  type CoChangedFiles,
+  type OwnerRef,
+} from "@codegraph/city";
+import { HistoryError, decodeHistoryText, fileOwners, logicalCoupling } from "@codegraph/scm";
 import { defaultModelPath, type ReplayOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, type IoSink } from "../io.js";
@@ -69,7 +83,11 @@ export function replayCommand(
   }
 
   const name = options.name ?? basename(storePath).replace(/\.db$/, "");
-  const city = buildEntityCity(history, { name });
+  const joined = options.history === undefined ? undefined : joinHistory(options.history, history, io);
+  const city = buildEntityCity(history, {
+    name,
+    ...(joined === undefined ? {} : { owners: joined.owners, coChange: joined.coChange }),
+  });
   const artifact = cityToJsonString(layoutReplayCity(city));
 
   errLine(
@@ -98,6 +116,69 @@ export function replayCommand(
     deps.startServer({ artifact, assets, port: options.port, host: options.host, io });
   }
   return EXIT.OK;
+}
+
+/**
+ * The history join (`--history`): scm derives per-lineage owners and the
+ * co-change pairs, the analyzer's SUFFIX join maps lineage paths onto the
+ * store's anchor files (model roots sit below repo roots), and the builders
+ * receive both in MODEL-file terms. Ambiguous suffixes join nothing and are
+ * counted — never guessed.
+ */
+function joinHistory(
+  path: string,
+  history: ReturnType<typeof readEntityHistory>,
+  io: IoSink,
+): { owners: ReadonlyMap<string, OwnerRef>; coChange: readonly CoChangedFiles[] } {
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (error) {
+    throw new UsageError(
+      `cannot read ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      "Mine it first: codegraph scm <repo> --out " + path,
+      { cause: error },
+    );
+  }
+  let mined;
+  try {
+    mined = decodeHistoryText(text);
+  } catch (error) {
+    if (!(error instanceof HistoryError)) throw error;
+    throw new UsageError(`${path} is not a history.jsonl: ${error.message}`, undefined, {
+      cause: error,
+    });
+  }
+
+  const modelFiles = new Set<string>();
+  for (const entity of history.entities) {
+    if (entity.file !== null) modelFiles.add(entity.file);
+  }
+  const join = joinOnPaths(modelFiles, mined.paths);
+
+  const owners = new Map<string, OwnerRef>();
+  for (const [historyPath, owner] of fileOwners(mined)) {
+    const modelFile = join.modelOf.get(historyPath);
+    if (modelFile !== undefined) owners.set(modelFile, owner);
+  }
+
+  const coChange: CoChangedFiles[] = [];
+  for (const row of logicalCoupling(mined).rows) {
+    const a = join.modelOf.get(row.a);
+    const b = join.modelOf.get(row.b);
+    if (a === undefined || b === undefined) continue;
+    coChange.push({ a, b, support: row.support, confidence: row.confidence });
+  }
+
+  errLine(
+    io,
+    `joined ${path}: ${join.modelOf.size} of ${modelFiles.size} store files matched, ` +
+      `${owners.size} owned, ${plural(coChange.length, "co-change pair")}` +
+      (join.ambiguous.length === 0
+        ? "."
+        : `; ${plural(join.ambiguous.length, "ambiguous path")} joined nothing.`),
+  );
+  return { owners, coChange };
 }
 
 function plural(count: number, noun: string, plural_ = `${noun}s`): string {

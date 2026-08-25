@@ -6,6 +6,7 @@ import type { CityLayout } from "@codegraph/city";
 import { arrowArcs, type ArrowArc } from "../scene/arrows.js";
 import { buildingBoxes, type BuildingBox } from "../scene/buildings.js";
 import { landscapeCenter } from "../scene/center.js";
+import { coChangeArcModels, type CoChangeArcModel } from "../scene/coChange.js";
 import { districtArcs, type DistrictArc } from "../scene/districtArrows.js";
 import { districtPlates, groundPlate, type Plate } from "../scene/districts.js";
 import { arcState, highlightMap, type ArrowToggles } from "../scene/focus.js";
@@ -16,6 +17,10 @@ import {
   ARC_SEGMENTS,
   ARROW_FAN_IN_WIDTH,
   ARROW_WIDTH,
+  CO_CHANGE_ALPHA,
+  CO_CHANGE_COLOR,
+  CO_CHANGE_DASH,
+  CO_CHANGE_GAP,
   COLORS,
   HIGHLIGHT_TINT,
   INFERRED_DESATURATION,
@@ -42,6 +47,8 @@ export interface CityScene {
   readonly plates: readonly Plate[];
   readonly arcs: readonly ArrowArc[];
   readonly districtArcs: readonly DistrictArc[];
+  /** Co-change arcs from the replay artifact; empty when none were joined. */
+  readonly coChange: readonly CoChangeArcModel[];
   /**
    * Select a building by instance index (null = none): exactly its fan-in/out
    * type arrows show, per the toggles' decision table (scene/focus.ts).
@@ -71,6 +78,14 @@ export interface CityScene {
    * every repaint (palette change, selection restore); in-place recolor.
    */
   setShading(heats: ArrayLike<number> | null, ages: ArrayLike<number> | null): void;
+  /**
+   * OWNER color mode: per-instance hex colors (null = no owner, painted
+   * neutral), or null to leave the mode. While set it takes the base-color
+   * slot; the time shading is ignored — one color mode at a time.
+   */
+  setOwnerColors(colors: readonly (number | null)[] | null): void;
+  /** Gate the co-change arcs: when true, the selected building shows its own. */
+  setCoChangeVisible(visible: boolean): void;
   dispose(): void;
 }
 
@@ -122,12 +137,18 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
   // shaded by the replay time colors when a scrub set them.
   let shadingHeats: ArrayLike<number> | null = null;
   let shadingAges: ArrayLike<number> | null = null;
+  let ownerColors: readonly (number | null)[] | null = null;
   const heatColor = new THREE.Color(REPLAY_HEAT_COLOR);
   const fadeColor = new THREE.Color(AGE_FADE_GRAY);
-  /** The color instance `i` wears when NOT highlighted: palette base, aged
-   * toward gray, then heated toward ember — heat wins, and the picture says
-   * "changed here, recently" louder than "old". Writes the shared scratch. */
+  /** The color instance `i` wears when NOT highlighted. Owner mode (when set)
+   * takes the slot outright — ownerless buildings go neutral, never a hue
+   * claiming an author. Otherwise: palette base, aged toward gray, then
+   * heated toward ember — heat wins, "changed recently" reads louder than
+   * "old". Writes the shared scratch. */
   function baseBoxColor(i: number, box: BuildingBox): THREE.Color {
+    if (ownerColors !== null && !box.isStub) {
+      return color.setHex(ownerColors[i] ?? AGE_FADE_GRAY);
+    }
     color.setHex(box.isStub ? palette.buildingStub : palette.building);
     if (shadingHeats !== null && shadingAges !== null && !box.isStub) {
       color.lerp(fadeColor, Math.min(1, shadingAges[i] ?? 0) * AGE_FADE_MAX);
@@ -159,6 +180,27 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
   // Arcs rest at alpha 0 — the decision table (applyToggles -> setFocus)
   // decides everything that shows; nothing is drawn unasked.
   typeArrows.commit();
+
+  // Co-change arcs: THIN AND DASHED against the fat solid dependency arrows —
+  // an inference is a different KIND of line, not a hue variation — resting
+  // hidden, shown only for the selected building.
+  const coChange = coChangeArcModels(city, boxes);
+  const coChangeLines = buildDashedArcLines(
+    coChange.map((arc) => ({ arc, tint: new THREE.Color(CO_CHANGE_COLOR) })),
+  );
+  coChangeLines.lines.raycast = () => undefined;
+  root.add(coChangeLines.lines);
+  disposables.push(coChangeLines.geometry, coChangeLines.material);
+  coChangeLines.commit();
+  let coChangeVisible = true;
+  function paintCoChange(selectedId: string | null): void {
+    coChange.forEach((arc, i) => {
+      const shown =
+        coChangeVisible && selectedId !== null && (arc.a === selectedId || arc.b === selectedId);
+      coChangeLines.setAlpha(i, shown ? CO_CHANGE_ALPHA : 0);
+    });
+    coChangeLines.commit();
+  }
 
   // District arrows: same construction, but RGB is rewritten per selection
   // (fan-in vs fan-out is a property of the SELECTED district, not of the
@@ -220,6 +262,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     lastFocus = { index, toggles };
     const focusId = index === null ? null : boxes[index]?.id ?? null;
     paintArcs(typeArrows, arcs, focusId, toggles);
+    paintCoChange(focusId);
     for (const i of highlightedBoxes) {
       const box = boxes[i];
       if (box !== undefined) buildingsMesh.setColorAt(i, baseBoxColor(i, box));
@@ -261,18 +304,37 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     paintArcs(districtArrows, dArcs, districtId, toggles);
   }
 
-  // Scrub-path recolor: repaint every base, then re-assert the selection's
-  // highlights on top (the trackers must not restore stale colors). In-place,
-  // shared scratch Color — the scrub path allocates nothing.
-  function setShading(heats: ArrayLike<number> | null, ages: ArrayLike<number> | null): void {
-    shadingHeats = heats;
-    shadingAges = ages;
+  // Recolor path shared by the scrub, the owner mode and the palette: repaint
+  // every base, then re-assert the selection's highlights on top (the
+  // trackers must not restore stale colors). In-place, shared scratch Color —
+  // the scrub path allocates nothing.
+  function repaintBases(): void {
     boxes.forEach((box, i) => {
       buildingsMesh.setColorAt(i, baseBoxColor(i, box));
     });
     if (buildingsMesh.instanceColor) buildingsMesh.instanceColor.needsUpdate = true;
     highlightedBoxes = [];
     if (lastFocus !== null) setFocus(lastFocus.index, lastFocus.toggles);
+  }
+
+  function setShading(heats: ArrayLike<number> | null, ages: ArrayLike<number> | null): void {
+    shadingHeats = heats;
+    shadingAges = ages;
+    repaintBases();
+  }
+
+  function setOwnerColors(colors: readonly (number | null)[] | null): void {
+    ownerColors = colors;
+    repaintBases();
+  }
+
+  function setCoChangeVisible(visible: boolean): void {
+    coChangeVisible = visible;
+    paintCoChange(
+      lastFocus === null || lastFocus.index === null
+        ? null
+        : boxes[lastFocus.index]?.id ?? null,
+    );
   }
 
   function setHeights(heights: ArrayLike<number> | null): void {
@@ -342,6 +404,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     plates,
     arcs,
     districtArcs: dArcs,
+    coChange,
     setFocus,
     setDistrictFocus,
     setPalette,
@@ -355,6 +418,8 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     setExternalsVisible,
     setHeights,
     setShading,
+    setOwnerColors,
+    setCoChangeVisible,
     dispose: () => disposables.forEach((d) => d.dispose()),
   };
 }
@@ -467,6 +532,74 @@ function buildArcLines(sources: readonly ArcSource[]) {
       colorBuffer.needsUpdate = true;
       alphaAttribute.needsUpdate = true;
       widthAttribute.needsUpdate = true;
+    },
+  };
+}
+
+// Thin-line pairs per arc segment — the dashed builder's vertex layout.
+const VERTICES_PER_ARC = ARC_SEGMENTS * 2;
+
+function segmentLength(
+  a: readonly [number, number, number],
+  b: readonly [number, number, number],
+): number {
+  return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+}
+
+/**
+ * The CO-CHANGE layer's builder: plain THIN LineSegments with a
+ * LineDashedMaterial — deliberately not the fat-line path, so a mined
+ * inference is a visibly different KIND of line from a dependency arrow.
+ * RGBA vertex colors carry per-arc alpha; the dashes need per-vertex line
+ * distances, computed here.
+ */
+function buildDashedArcLines(sources: readonly ArcSource[]) {
+  const positions = new Float32Array(sources.length * VERTICES_PER_ARC * 3);
+  const colors = new Float32Array(sources.length * VERTICES_PER_ARC * 4);
+  const distances = new Float32Array(sources.length * VERTICES_PER_ARC);
+  sources.forEach(({ arc, tint }, arcIndex) => {
+    let travelled = 0;
+    for (let segment = 0; segment < ARC_SEGMENTS; segment += 1) {
+      const a = arc.points[segment] as readonly [number, number, number];
+      const b = arc.points[segment + 1] as readonly [number, number, number];
+      for (let end = 0; end < 2; end += 1) {
+        const vertex = arcIndex * VERTICES_PER_ARC + segment * 2 + end;
+        const point = arc.points[segment + end] as readonly [number, number, number];
+        positions.set(point, vertex * 3);
+        colors[vertex * 4] = tint.r;
+        colors[vertex * 4 + 1] = tint.g;
+        colors[vertex * 4 + 2] = tint.b;
+        colors[vertex * 4 + 3] = 0;
+        distances[vertex] = end === 0 ? travelled : travelled + segmentLength(a, b);
+      }
+      travelled += segmentLength(a, b);
+    }
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const colorAttribute = new THREE.BufferAttribute(colors, 4);
+  geometry.setAttribute("color", colorAttribute);
+  geometry.setAttribute("lineDistance", new THREE.BufferAttribute(distances, 1));
+  const material = new THREE.LineDashedMaterial({
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    dashSize: CO_CHANGE_DASH,
+    gapSize: CO_CHANGE_GAP,
+  });
+  const lines = new THREE.LineSegments(geometry, material);
+  return {
+    lines,
+    geometry,
+    material,
+    setAlpha(arcIndex: number, alpha: number): void {
+      const base = arcIndex * VERTICES_PER_ARC;
+      for (let vertex = 0; vertex < VERTICES_PER_ARC; vertex += 1) {
+        colors[(base + vertex) * 4 + 3] = alpha;
+      }
+    },
+    commit(): void {
+      colorAttribute.needsUpdate = true;
     },
   };
 }

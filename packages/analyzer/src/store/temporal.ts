@@ -307,6 +307,9 @@ export interface EntityHistoryEntry {
   readonly disambiguator: string;
   /** The kind at the entity's LAST corpus revision. */
   readonly kind: string;
+  /** The anchor file at that same revision; null when unanchored. The path
+   * joins (ownership, co-change) key on this. */
+  readonly file: string | null;
   /**
    * `[revision ordinal, loc]` per revision that DECLARES the key (stub
    * versions are not part of an entity's life — the replay city is the
@@ -340,12 +343,13 @@ export function readEntityHistory(db: SqliteDatabase): EntityHistoryData {
     symbol: string;
     disambiguator: string;
     kind: string;
+    file: string | null;
     kindOrdinal: number;
     series: [number, number | null][];
   }>();
   for (const row of db
     .prepare(
-      `SELECT v.key_id, v.revision_id, v.kind, v.loc,
+      `SELECT v.key_id, v.revision_id, v.kind, v.loc, v.file,
               k.module, k.symbol, k.disambiguator
        FROM entity_version v
        JOIN entity_key k ON k.id = v.key_id
@@ -363,16 +367,18 @@ export function readEntityHistory(db: SqliteDatabase): EntityHistoryData {
         symbol: row.symbol as string,
         disambiguator: row.disambiguator as string,
         kind: row.kind as string,
+        file: null,
         kindOrdinal: -1,
         series: [],
       };
       entries.set(keyId, entry);
     }
     entry.series.push([ordinal, row.loc as number | null]);
-    // "Latest kind" is by CHRONOLOGICAL ordinal, which can differ from the
-    // row order (revision ids) when imports arrived out of commit order.
+    // "Latest" kind and file are by CHRONOLOGICAL ordinal, which can differ
+    // from the row order (revision ids) when imports arrived out of order.
     if (ordinal >= entry.kindOrdinal) {
       entry.kind = row.kind as string;
+      entry.file = row.file as string | null;
       entry.kindOrdinal = ordinal;
     }
   }

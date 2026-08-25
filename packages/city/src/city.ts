@@ -165,6 +165,13 @@ export interface Building {
   readonly attributes: readonly BuildingAttribute[];
   /** Sorted by signature; empty for stubs and memberless types, never absent. */
   readonly operations: readonly BuildingOperation[];
+  /**
+   * Dominant author of the element's file, from a MINED history (replay
+   * cities only, and only when one was joined): most lines added, `share` of
+   * all added lines. An inference from history — present means stated, and
+   * the renderer may color by it only as a labeled mode.
+   */
+  readonly owner?: { readonly name: string; readonly share: number };
 }
 
 export interface District {

@@ -163,4 +163,15 @@ describe("buildingDetails", () => {
     // With no identity, the meta line falls back to the district id.
     expect(details.meta).toBe("class — java:com.acme.order");
   });
+
+  it("labels the history join's owner as a row, share included", () => {
+    const service = boxes.find((box) => box.id === "java:com.acme.order/OrderService");
+    expect(service).toBeDefined();
+    if (service === undefined) return;
+    const owned = { ...service, owner: { name: "alice <a@x>", share: 0.845 } };
+    const details = buildingDetails(owned);
+    expect(details.rows).toContainEqual({ label: "owner", value: "alice (85% of added lines)" });
+    // Without a join, no owner row is invented.
+    expect(buildingDetails(service).rows.some((row) => row.label === "owner")).toBe(false);
+  });
 });

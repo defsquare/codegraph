@@ -24,7 +24,8 @@ const entity = (
   kind: string,
   series: (readonly [number, number | null])[],
   disambiguator = "",
-): EntityHistory["entities"][number] => ({ module, symbol, disambiguator, kind, series });
+  file: string | null = null,
+): EntityHistory["entities"][number] => ({ module, symbol, disambiguator, kind, file, series });
 
 const HISTORY: EntityHistory = {
   lang: "java",
@@ -140,6 +141,36 @@ describe("buildEntityCity", () => {
       { name: "x" },
     );
     expect(exotic.buildings).toHaveLength(1);
+  });
+
+  it("owners and co-change arrive by MODEL file, fan out to every type in the unit", () => {
+    const joined = buildEntityCity(
+      {
+        lang: "java",
+        revisions: [{ sha: sha(0), time: 1000 }],
+        entities: [
+          entity("app", "A", "class", [[0, 10]], "", "app/A.java"),
+          entity("app", "B", "class", [[0, 10]], "", "app/B.java"),
+          // A second top-level type in B's compilation unit.
+          entity("app", "B2", "class", [[0, 4]], "", "app/B.java"),
+        ],
+      },
+      {
+        name: "joined",
+        owners: new Map([["app/A.java", { name: "alice <a@x>", share: 0.8 }]]),
+        coChange: [{ a: "app/A.java", b: "app/B.java", support: 5, confidence: 0.7 }],
+      },
+    );
+    const a = joined.buildings.find((building) => building.id === id("app", "A"));
+    expect(a?.owner).toEqual({ name: "alice <a@x>", share: 0.8 });
+    expect(joined.buildings.find((b) => b.id === id("app", "B"))?.owner).toBeUndefined();
+    // One file pair, two buildings on the B side: two arcs, sorted.
+    expect(joined.replay.coChange).toEqual([
+      { a: id("app", "A"), b: id("app", "B"), support: 5, confidence: 0.7 },
+      { a: id("app", "A"), b: id("app", "B2"), support: 5, confidence: 0.7 },
+    ]);
+    // Without a join the key is ABSENT — the city never invents history.
+    expect(city.replay.coChange).toBeUndefined();
   });
 
   it("is deterministic and survives an empty store", () => {

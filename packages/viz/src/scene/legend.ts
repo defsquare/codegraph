@@ -8,7 +8,7 @@ import type { CityLayout, ReplayCityLayout } from "@codegraph/city";
  */
 export interface LegendEntry {
   /** Which swatch to draw beside the label; null = text-only line. */
-  readonly swatch: "building" | "stub" | "fanIn" | "fanOut" | "heat" | "age" | null;
+  readonly swatch: "building" | "stub" | "fanIn" | "fanOut" | "heat" | "age" | "coChange" | null;
   readonly label: string;
   readonly detail: string | undefined;
 }
@@ -60,14 +60,15 @@ export function legendModel(city: CityLayout): readonly LegendEntry[] {
   );
 
   // The TIME COLORS exist only where a time axis does — a replay artifact.
-  if ((city as Partial<ReplayCityLayout>).replay !== undefined) {
+  const replay = (city as Partial<ReplayCityLayout>).replay;
+  if (replay !== undefined) {
     entries.push(
       {
         swatch: "heat",
         label: "heat",
         detail:
           "changed at the scrubbed tick — ember, cooling over the following ticks " +
-          "('Time colors' toggle)",
+          "('Colors: Time')",
       },
       {
         swatch: "age",
@@ -75,6 +76,24 @@ export function legendModel(city: CityLayout): readonly LegendEntry[] {
         detail: "ticks lived since birth — old code desaturates toward gray, never disappears",
       },
     );
+    if (city.buildings.some((building) => building.owner !== undefined)) {
+      entries.push({
+        swatch: null,
+        label: "owner",
+        detail:
+          "'Colors: Owner' paints each building by its file's dominant author " +
+          "(mined from history); neutral gray = no owner recorded",
+      });
+    }
+    if (replay.coChange !== undefined && replay.coChange.length > 0) {
+      entries.push({
+        swatch: "coChange",
+        label: "co-change",
+        detail:
+          "dashed — changes together in history (logical coupling): an inference, " +
+          "never a dependency; shows for the selected building",
+      });
+    }
   }
 
   entries.push({

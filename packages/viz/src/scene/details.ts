@@ -112,11 +112,23 @@ export function buildingDetails(box: BuildingBox): BuildingDetails {
     meta:
       `${box.kind}${box.isStub ? " (stub)" : ""} — ` +
       `${box.identity?.module ?? box.district}`,
-    rows: Object.entries(box.metrics).map(([metric, value]) =>
-      value === null
-        ? { label: metric, value: "unmeasured", className: "unmeasured" }
-        : { label: metric, value: String(value) },
-    ),
+    rows: [
+      ...Object.entries(box.metrics).map(([metric, value]) =>
+        value === null
+          ? { label: metric, value: "unmeasured", className: "unmeasured" }
+          : { label: metric, value: String(value) },
+      ),
+      // The history join's inference, labeled as such: dominant author of the
+      // element's file, with the share of all added lines that makes it so.
+      ...(box.owner === undefined
+        ? []
+        : [
+            {
+              label: "owner",
+              value: `${box.owner.name.split(" <")[0] ?? box.owner.name} (${Math.round(box.owner.share * 100)}% of added lines)`,
+            },
+          ]),
+    ],
     attributes: box.attributes,
     operations: box.operations,
   };

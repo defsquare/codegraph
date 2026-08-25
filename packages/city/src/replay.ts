@@ -82,6 +82,22 @@ export interface CityReplay {
    * later means the element is deleted — vacant land.
    */
   readonly series: Readonly<Record<string, readonly ReplayKeyframe[]>>;
+  /**
+   * Logical-coupling arcs between BUILDINGS (unordered, `a` < `b`), mined
+   * from history — an INFERENCE, never a dependency: the renderer must draw
+   * them visually distinct from declared arrows. Absent when no history was
+   * joined; the city never draws a relationship the model does not contain.
+   */
+  readonly coChange?: readonly CoChangeArc[];
+}
+
+export interface CoChangeArc {
+  readonly a: string;
+  readonly b: string;
+  /** Commits (or revisions) that touched both. */
+  readonly support: number;
+  /** support over the rarer side's revisions (0..1). */
+  readonly confidence: number;
 }
 
 export interface ReplayCityModel extends CityModel {
@@ -91,9 +107,27 @@ export interface ReplayCityLayout extends CityLayout {
   readonly replay: CityReplay;
 }
 
+/** How a joined history reaches a builder: derived by the CALLER (the CLI
+ * runs scm's `fileOwners`/`logicalCoupling` and, for the entity city, the
+ * analyzer's suffix join) — the city package computes no history facts. */
+export interface OwnerRef {
+  readonly name: string;
+  readonly share: number;
+}
+export interface CoChangedFiles {
+  readonly a: string;
+  readonly b: string;
+  readonly support: number;
+  readonly confidence: number;
+}
+
 export interface FileCityOptions {
   /** Display name; defaults to the history's repo name. */
   readonly name?: string;
+  /** Lineage path → dominant author (scm's fileOwners rule). */
+  readonly owners?: ReadonlyMap<string, OwnerRef>;
+  /** Co-changed lineage-path pairs (scm's logicalCoupling rows). */
+  readonly coChange?: readonly CoChangedFiles[];
 }
 
 /** `layoutCity`, keeping the replay block in the static type as well as the JSON. */
@@ -175,6 +209,7 @@ export function buildFileCity(history: FileHistory, options: FileCityOptions = {
         ? FOOTPRINT_RANGE.min
         : round(scaleValue(lineage.peak, footprintDomain, FOOTPRINT_RANGE, "sqrt"));
     const final = lineage.keyframes[lineage.keyframes.length - 1]?.[1] ?? 0;
+    const owner = options.owners?.get(lineage.path);
     return {
       id: buildingId(lineage.path),
       name: basenameOf(lineage.path),
@@ -191,6 +226,7 @@ export function buildFileCity(history: FileHistory, options: FileCityOptions = {
       },
       attributes: [],
       operations: [],
+      ...(owner === undefined ? {} : { owner }),
     };
   });
 
@@ -228,6 +264,9 @@ export function buildFileCity(history: FileHistory, options: FileCityOptions = {
     );
   }
 
+  // Lineage paths ARE building identities here: the pair maps 1:1.
+  const coChange = coChangeArcsOf(options.coChange, (path) => [buildingId(path)]);
+
   return {
     kind: CITY_ARTEFACT_KIND,
     generatedBy: CITY_GENERATOR,
@@ -262,8 +301,40 @@ export function buildFileCity(history: FileHistory, options: FileCityOptions = {
         ...(commit.isFix ? { fix: true as const } : {}),
       })),
       series,
+      ...(coChange === undefined ? {} : { coChange }),
     },
   };
+}
+
+/**
+ * File pairs → building arcs: unordered, deduplicated (the strongest pair
+ * wins when two file pairs land on one building pair), sorted. A file that
+ * raises several buildings (two top-level types in one compilation unit)
+ * connects each of them — choosing one silently would be a lie.
+ */
+function coChangeArcsOf(
+  pairs: readonly CoChangedFiles[] | undefined,
+  buildingsOf: (file: string) => readonly string[],
+): readonly CoChangeArc[] | undefined {
+  if (pairs === undefined || pairs.length === 0) return undefined;
+  const byKey = new Map<string, CoChangeArc>();
+  for (const pair of pairs) {
+    for (const a of buildingsOf(pair.a)) {
+      for (const b of buildingsOf(pair.b)) {
+        if (a === b) continue;
+        const [x, y] = a < b ? [a, b] : [b, a];
+        const key = JSON.stringify([x, y]);
+        const found = byKey.get(key);
+        if (found === undefined || pair.support > found.support) {
+          byKey.set(key, { a: x, b: y, support: pair.support, confidence: pair.confidence });
+        }
+      }
+    }
+  }
+  const arcs = [...byKey.values()].sort(
+    (p, q) => (p.a < q.a ? -1 : p.a > q.a ? 1 : p.b < q.b ? -1 : p.b > q.b ? 1 : 0),
+  );
+  return arcs.length === 0 ? undefined : arcs;
 }
 
 // ───────────────────────────────────────── the entity-level replay (M9c)
@@ -284,6 +355,8 @@ export interface EntityHistory {
     readonly disambiguator: string;
     /** The kind at the entity's last corpus revision. */
     readonly kind: string;
+    /** The anchor file at that revision (model-relative); the joins key on it. */
+    readonly file?: string | null;
     readonly series: readonly (readonly [number, number | null])[];
   }[];
 }
@@ -291,6 +364,10 @@ export interface EntityHistory {
 export interface EntityCityOptions {
   /** Display name for the corpus (typically the store's basename). */
   readonly name: string;
+  /** MODEL file → dominant author; the CLI joins history paths beforehand. */
+  readonly owners?: ReadonlyMap<string, OwnerRef>;
+  /** Co-changed MODEL-file pairs; the CLI joins history paths beforehand. */
+  readonly coChange?: readonly CoChangedFiles[];
 }
 
 /**
@@ -335,6 +412,7 @@ export function buildEntityCity(history: EntityHistory, options: EntityCityOptio
     readonly module: string;
     readonly symbol: string;
     readonly kind: string;
+    readonly file: string | null;
     /** Presence keyframes plus explicit 0s for gaps and death; heat carried per keyframe. */
     readonly keyframes: readonly (readonly [number, number | null, number])[];
     readonly peak: number;
@@ -371,6 +449,7 @@ export function buildEntityCity(history: EntityHistory, options: EntityCityOptio
         module: entity.module,
         symbol: entity.symbol,
         kind: entity.kind,
+        file: entity.file ?? null,
         keyframes,
         peak: measured.length === 0 ? 0 : Math.max(...measured),
         finalLoc: last?.[0] === latest ? (last[1] ?? 0) : 0,
@@ -404,6 +483,7 @@ export function buildEntityCity(history: EntityHistory, options: EntityCityOptio
       footprintDomain === undefined || life.peak <= 0
         ? FOOTPRINT_RANGE.min
         : round(scaleValue(life.peak, footprintDomain, FOOTPRINT_RANGE, "sqrt"));
+    const owner = life.file === null ? undefined : options.owners?.get(life.file);
     return {
       id: idOf(life.module, life.symbol),
       name: life.symbol,
@@ -420,6 +500,7 @@ export function buildEntityCity(history: EntityHistory, options: EntityCityOptio
       },
       attributes: [],
       operations: [],
+      ...(owner === undefined ? {} : { owner }),
     };
   });
 
@@ -451,6 +532,18 @@ export function buildEntityCity(history: EntityHistory, options: EntityCityOptio
       ([ordinal, loc, heat]) => [ordinal, heightOf(loc), heat] as const,
     );
   }
+
+  // A model file can raise several buildings (a second top-level type in one
+  // compilation unit); each of them takes part in the file's co-changes.
+  const buildingsByFile = new Map<string, string[]>();
+  for (const life of lives) {
+    if (life.file === null) continue;
+    const bucket = buildingsByFile.get(life.file);
+    const buildingIdent = idOf(life.module, life.symbol);
+    if (bucket === undefined) buildingsByFile.set(life.file, [buildingIdent]);
+    else bucket.push(buildingIdent);
+  }
+  const coChange = coChangeArcsOf(options.coChange, (file) => buildingsByFile.get(file) ?? []);
 
   return {
     kind: CITY_ARTEFACT_KIND,
@@ -506,6 +599,7 @@ export function buildEntityCity(history: EntityHistory, options: EntityCityOptio
         author: "",
       })),
       series,
+      ...(coChange === undefined ? {} : { coChange }),
     },
   };
 }

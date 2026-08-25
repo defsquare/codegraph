@@ -57,7 +57,9 @@ describe("helpModel", () => {
     const help = helpModel(replayCity);
     expect(help.sections.map((section) => section.heading)).toContain("Replay");
     const text = help.sections.flatMap((section) => section.paragraphs).join(" ");
-    expect(text).toContain("Time colors");
+    expect(text).toContain("'Colors'");
     expect(text).toContain("age");
+    expect(text.toLowerCase()).toContain("co-change");
+    expect(text.toLowerCase()).toContain("inference");
   });
 });

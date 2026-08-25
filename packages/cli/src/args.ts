@@ -594,6 +594,15 @@ export const REPLAY_SPEC: CommandSpec = {
       placeholder: "STR",
     },
     {
+      name: "history",
+      type: "string",
+      describe:
+        "A history.jsonl (codegraph scm) to join by path suffix: buildings gain " +
+        "their file's dominant author, and co-change arcs (logical coupling, " +
+        "default thresholds) join the replay.",
+      placeholder: "FILE",
+    },
+    {
       name: "out",
       type: "string",
       describe: "Write the laid-out replay city artifact here instead of stdout.",
@@ -782,6 +791,8 @@ export interface ReplayOptions {
   readonly store: string | undefined;
   /** `--name STR`: corpus display name; undefined derives it from the store path. */
   readonly name: string | undefined;
+  /** `--history FILE`: join a mined history — owners and co-change arcs. */
+  readonly history: string | undefined;
   /** `--out FILE`; undefined means stdout (unless --serve). */
   readonly out: string | undefined;
   readonly serve: boolean;
@@ -1275,6 +1286,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         options: {
           store: stringOf(values, "store"),
           name: stringOf(values, "name"),
+          history: stringOf(values, "history"),
           out: stringOf(values, "out"),
           serve: flagOf(values, "serve"),
           port: portOf(values),

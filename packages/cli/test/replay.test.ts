@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { encodeModelToString, renderId, type Entity, type Model } from "@codegraph/core";
 import type { ReplayCityLayout } from "@codegraph/city";
+import { HISTORY_SCHEMA_VERSION, encodeHistoryToString, type History } from "@codegraph/scm";
 
 import type { ReplayOptions } from "../src/args.js";
 import { replayCommand, type ServeDeps } from "../src/commands/replay.js";
@@ -137,7 +138,7 @@ describe("codegraph replay", () => {
       startServer: (serverOptions) => served.push(serverOptions.artifact),
     };
     const options: ReplayOptions = {
-      store: storePath, name: undefined, out: undefined,
+      store: storePath, name: undefined, history: undefined, out: undefined,
       serve: true, port: 0, host: "127.0.0.1",
     };
     const io = captureIo();
@@ -145,6 +146,49 @@ describe("codegraph replay", () => {
     expect(io.stdout()).toBe("");
     expect(served).toHaveLength(1);
     expect((JSON.parse(served[0] ?? "") as ReplayCityLayout).replay.clock).toBe("revisions");
+  });
+
+  it("--history joins owners and co-change arcs by path suffix", () => {
+    // Repo paths sit ABOVE the model's anchor paths: the suffix join maps
+    // repo/app/A.java -> app/A.java. Three commits touch A and C together
+    // (support 3, confidence 1 at the default thresholds); alice owns all.
+    const commit = (n: number) => ({
+      hash: String(n).repeat(40), author: 0, time: 1000 * (n + 1), isFix: false, isRevert: false,
+    });
+    const mined: History = {
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      scm: "git",
+      miner: "test",
+      repo: "demo",
+      authors: ["alice <a@x>"],
+      paths: ["repo/app/A.java", "repo/app/C.java"],
+      commits: [commit(0), commit(1), commit(2)],
+      changes: [0, 1, 2].flatMap((c) => [
+        { commit: c, path: 0, added: 5, deleted: 0 },
+        { commit: c, path: 1, added: 2, deleted: 0 },
+      ]),
+    };
+    const historyPath = join(scratch, "mined-history.jsonl");
+    writeFileSync(historyPath, encodeHistoryToString(mined), "utf8");
+
+    const { io, code } = invoke(["replay", "--store", storePath, "--history", historyPath]);
+    expect(code).toBe(EXIT.OK);
+    expect(io.stderr()).toContain("joined");
+    const city = JSON.parse(io.stdout()) as ReplayCityLayout;
+    const a = city.buildings.find((building) => building.id === id("A"));
+    expect(a?.owner).toEqual({ name: "alice <a@x>", share: 1 });
+    expect(city.buildings.find((building) => building.id === id("B"))?.owner).toBeUndefined();
+    expect(city.replay.coChange).toEqual([
+      { a: id("A"), b: id("C"), support: 3, confidence: 1 },
+    ]);
+  });
+
+  it("refuses an unreadable --history", () => {
+    const { code, io } = invoke([
+      "replay", "--store", storePath, "--history", join(scratch, "no-history.jsonl"),
+    ]);
+    expect(code).toBe(EXIT.USAGE);
+    expect(io.stderr()).toContain("codegraph scm");
   });
 
   it("refuses a missing store, naming how to build one", () => {
