@@ -108,6 +108,12 @@ codegraph timeline java:com.acme/Basket [--store FILE] [--json]
 codegraph scm      [repo] [--since DATE] [--out FILE] [--json]
                    # mine git history -> <repo>-history.jsonl (deterministic)
 
+codegraph snapshots [repo] --jar FILE (--every N | --tags)
+                   [--store FILE] [--src DIR] [--json]
+                   # extract the repo at sampled revisions (each in a
+                   # throwaway git worktree) into the temporal store;
+                   # resumable — revisions already held are skipped
+
 codegraph history  [history.jsonl] [--top N] [--json]
                    [--report summary|hotspots|authors|coupling|hidden|deadweight]
                    [--min-support N] [--min-confidence PCT] [--model FILE]

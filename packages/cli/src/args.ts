@@ -25,6 +25,7 @@ export const COMMAND_NAMES = [
   "export",
   "city",
   "scm",
+  "snapshots",
   "history",
   "timeline",
   "profiles",
@@ -432,6 +433,60 @@ export const SCM_SPEC: CommandSpec = {
   ],
 };
 
+/**
+ * `codegraph snapshots` — the M9b orchestration: sample K revisions, extract
+ * each in a throwaway `git worktree` (the main checkout is never mutated), and
+ * append every one to the temporal store `import --at` writes. Resumable on
+ * purpose: a revision the store already holds is skipped, so an interrupted
+ * run — each frame costs a full extraction — continues where it stopped.
+ */
+export const SNAPSHOTS_SPEC: CommandSpec = {
+  name: "snapshots",
+  summary: "Extract a repo at sampled revisions into a temporal store (model.db).",
+  positional: {
+    name: "repo",
+    describe: "Path to the repository to snapshot.",
+    variadic: false,
+    required: false,
+    defaultPath: () => ".",
+  },
+  options: [
+    {
+      name: "jar",
+      type: "string",
+      describe: "The codegraph-java extractor jar, run with `java -jar` at every revision.",
+      placeholder: "FILE",
+      required: true,
+    },
+    {
+      name: "every",
+      type: "string",
+      describe:
+        "Snapshot every Nth first-parent commit, oldest first; the tip is always included.",
+      placeholder: "N",
+      integer: true,
+    },
+    {
+      name: "tags",
+      type: "boolean",
+      describe: "Snapshot the commits the repo's tags point at instead (releases as keyframes).",
+    },
+    {
+      name: "store",
+      type: "string",
+      describe: "The temporal store to append to; defaults to <repo>-model.db.",
+      placeholder: "FILE",
+    },
+    {
+      name: "src",
+      type: "string",
+      describe: "Directory to extract, relative to the repo root (default: the whole repo).",
+      placeholder: "DIR",
+    },
+    JSON_OPTION,
+  ],
+};
+
 export const HISTORY_SPEC: CommandSpec = {
   name: "history",
   summary: "Report churn, hotspots and authorship over a mined history.jsonl.",
@@ -534,6 +589,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   EXPORT_SPEC,
   CITY_SPEC,
   SCM_SPEC,
+  SNAPSHOTS_SPEC,
   HISTORY_SPEC,
   TIMELINE_SPEC,
   PROFILES_SPEC,
@@ -629,6 +685,22 @@ export interface ScmOptions {
   readonly json: boolean;
 }
 
+export interface SnapshotsOptions {
+  /** The repository to snapshot; `.` when nothing was typed. */
+  readonly repo: string;
+  /** `--jar FILE`: the extractor jar run at every selected revision. */
+  readonly jar: string;
+  /** `--every N`: stride over first-parent commits; exclusive with `tags`. */
+  readonly every: number | undefined;
+  /** `--tags`: the tagged commits are the keyframes; exclusive with `every`. */
+  readonly tags: boolean;
+  /** `--store FILE`; undefined means `<repo-basename>-model.db`. */
+  readonly store: string | undefined;
+  /** `--src DIR`, relative to the repo root; undefined extracts the whole repo. */
+  readonly src: string | undefined;
+  readonly json: boolean;
+}
+
 export interface HistoryOptions {
   /** The history.jsonl to report over. */
   readonly history: string;
@@ -668,6 +740,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "export"; readonly options: ExportOptions }
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
   | { readonly kind: "run"; readonly command: "scm"; readonly options: ScmOptions }
+  | { readonly kind: "run"; readonly command: "snapshots"; readonly options: SnapshotsOptions }
   | { readonly kind: "run"; readonly command: "history"; readonly options: HistoryOptions }
   | { readonly kind: "run"; readonly command: "timeline"; readonly options: TimelineOptions }
   | { readonly kind: "run"; readonly command: "profiles"; readonly options: ProfilesOptions };
@@ -1071,6 +1144,33 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           json: flagOf(values, "json"),
         },
       };
+    case "snapshots": {
+      const every = integerOf(values, "every");
+      const tags = flagOf(values, "tags");
+      // Exactly one selector: the keyframes are either a stride or the tags —
+      // ambiguity here would silently choose which revisions cost extractions.
+      if ((every !== undefined) === tags) {
+        throw new UsageError(
+          every === undefined
+            ? "snapshots needs a revision selector"
+            : "--every and --tags are two different revision selectors",
+          "Pick exactly one: --every N (stride over first-parent commits) or --tags.",
+        );
+      }
+      return {
+        kind: "run",
+        command: "snapshots",
+        options: {
+          repo: models[0] as string,
+          jar: stringOf(values, "jar") as string,
+          every,
+          tags,
+          store: stringOf(values, "store"),
+          src: stringOf(values, "src"),
+          json: flagOf(values, "json"),
+        },
+      };
+    }
     case "history":
       return {
         kind: "run",

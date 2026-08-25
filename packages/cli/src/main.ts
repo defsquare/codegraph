@@ -5,6 +5,7 @@ import { exportCommand } from "./commands/export.js";
 import { historyCommand } from "./commands/history.js";
 import { importCommand } from "./commands/import.js";
 import { scmCommand } from "./commands/scm.js";
+import { snapshotsCommand } from "./commands/snapshots.js";
 import { timelineCommand } from "./commands/timeline.js";
 import { profilesCommand } from "./commands/profiles.js";
 import { validateCommand } from "./commands/validate.js";
@@ -71,6 +72,8 @@ function dispatch(invocation: Invocation, io: IoSink): ExitCode {
           return cityCommand(invocation.options, io);
         case "scm":
           return scmCommand(invocation.options, io);
+        case "snapshots":
+          return snapshotsCommand(invocation.options, io);
         case "history":
           return historyCommand(invocation.options, io);
         case "timeline":

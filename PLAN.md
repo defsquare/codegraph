@@ -1256,9 +1256,15 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
 
 ### 11.2 M9b — temporal store + entity timelines
 
-- [ ] Sampled snapshots: extract at K chosen revisions (tags/releases, or
+- [x] Sampled snapshots: extract at K chosen revisions (tags/releases, or
       every N commits — 50–200 frames suffice for replay) via
       `git worktree add`, never mutating the main checkout.
+      (`codegraph snapshots [repo] --jar F (--every N | --tags) [--store S]
+      [--src DIR]`: throwaway worktree per frame, `java -jar` extraction,
+      `import --at` append, per-frame diagnose. RESUMABLE — revisions the
+      store holds are skipped, so an interrupted run continues and a moved
+      source root is handled by composing runs with different `--src`; a
+      frame that fails to extract is reported and isolated, never fatal.)
 - [x] `codegraph import --at <sha> [--time <t>]` extends `model.db` (M7)
       with `revision`, `entity_key` (interned natural keys), and
       `entity_version` / `edge_version` tables (names as TEXT — dictionary
