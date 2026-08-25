@@ -39,8 +39,18 @@ export type ReportName = (typeof REPORTS)[number];
 export const FORMATS = ["dot", "json", "csv", "plantuml"] as const;
 export type FormatName = (typeof FORMATS)[number];
 
-/** `history --report` values. */
-export const HISTORY_REPORTS = ["summary", "hotspots", "authors"] as const;
+/**
+ * `history --report` values. The last two are the CROSS-GRAPH reports (M9b):
+ * they join the mined history with a model, so they read `--model` too.
+ */
+export const HISTORY_REPORTS = [
+  "summary",
+  "hotspots",
+  "authors",
+  "coupling",
+  "hidden",
+  "deadweight",
+] as const;
 export type HistoryReportName = (typeof HISTORY_REPORTS)[number];
 export const DEFAULT_HISTORY_REPORT: HistoryReportName = "summary";
 
@@ -449,6 +459,30 @@ export const HISTORY_SPEC: CommandSpec = {
       integer: true,
     },
     {
+      name: "model",
+      type: "string",
+      describe:
+        "Model for the cross-graph reports (hidden, deadweight); " +
+        "defaults to this directory's default model.",
+      placeholder: "FILE",
+    },
+    {
+      name: "min-support",
+      type: "string",
+      describe: "Coupling: pairs must co-change in at least N commits.",
+      placeholder: "N",
+      integer: true,
+      defaultValue: "3",
+    },
+    {
+      name: "min-confidence",
+      type: "string",
+      describe: "Coupling: support over the rarer file's revisions, as a percent.",
+      placeholder: "PCT",
+      integer: true,
+      defaultValue: "50",
+    },
+    {
       name: "serve",
       type: "boolean",
       describe:
@@ -601,6 +635,11 @@ export interface HistoryOptions {
   readonly report: HistoryReportName;
   /** `--top N`; undefined lets each report pick its own default. */
   readonly top: number | undefined;
+  /** `--model FILE` for the cross-graph reports; undefined means the default model. */
+  readonly model: string | undefined;
+  /** Coupling thresholds; the specs' defaults unless overridden. */
+  readonly minSupport: number;
+  readonly minConfidence: number;
   /** `--serve`: host the visualizer with the file-level replay loaded. */
   readonly serve: boolean;
   readonly port: number;
@@ -1040,6 +1079,9 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           history: models[0] as string,
           report: (stringOf(values, "report") ?? DEFAULT_HISTORY_REPORT) as HistoryReportName,
           top: integerOf(values, "top"),
+          model: stringOf(values, "model"),
+          minSupport: integerOf(values, "min-support") ?? 3,
+          minConfidence: (integerOf(values, "min-confidence") ?? 50) / 100,
           serve: flagOf(values, "serve"),
           port: portOf(values),
           host: stringOf(values, "host") ?? "0.0.0.0",

@@ -1268,12 +1268,17 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
       (`appeared`, `disappeared`) are derived per key at query time —
       inverse indexes over the time axis, never serialized (invariant 4
       applied to time).
-- [ ] Cross-graph queries — the ones only a tool holding BOTH graphs can
-      ask: **hidden coupling** (co-change pairs with no path in the
-      declared graph) and **dead weight** (declared dependencies that
-      never co-change). Plus hotspots (revisions × LOC), logical coupling
-      with support/confidence thresholds, ownership/knowledge map, truck
-      factor, code age.
+- [x] Cross-graph queries — the ones only a tool holding BOTH graphs can
+      ask: **hidden coupling** (co-change pairs with no path — transitive,
+      either direction — in the declared graph) and **dead weight**
+      (declared file dependencies that never co-change), via
+      `codegraph history --report hidden|deadweight --model M`; logical
+      coupling with support/confidence thresholds and a changeset-size
+      cap (`--report coupling`, `--min-support`, `--min-confidence`).
+      The join is by path SUFFIX (model roots sit below repo roots);
+      ambiguous suffixes join nothing and are counted. Ownership map and
+      truck factor shipped file-level in M9a (`--report authors`);
+      code age and revisions×LOC enrichment remain open.
 - [x] `codegraph timeline <id>`: first/last revision containing the key,
       LOC series between them, still-present flag. (Exact birth commit
       via targeted bisect — extract one file at ~log₂ N revisions — is

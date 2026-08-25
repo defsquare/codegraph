@@ -32,12 +32,17 @@ export {
 } from "./jsonl.js";
 export { GIT_PRETTY, GitLogParseError, gitLogArgs, parseGitLog, type MineMeta } from "./gitlog.js";
 export {
+  COUPLING_DEFAULTS,
   MOMENTUM_WINDOW_DAYS,
   authorStats,
   hotspots,
+  logicalCoupling,
   summarize,
   type AuthorRow,
   type AuthorsReport,
+  type CoChangeReport,
+  type CoChangeRow,
+  type CouplingOptions,
   type HistorySummary,
   type HotspotRow,
 } from "./reports.js";

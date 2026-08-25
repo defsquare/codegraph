@@ -129,6 +129,107 @@ export function hotspots(history: History): HotspotRow[] {
     );
 }
 
+export interface CouplingOptions {
+  /** Pairs must co-change in at least this many commits. */
+  readonly minSupport?: number;
+  /** support / min(revisionsA, revisionsB) must reach this (0..1). */
+  readonly minConfidence?: number;
+  /**
+   * Commits touching more than this many lineages are skipped: a sweeping
+   * rename or a format-everything commit couples nothing meaningfully, and
+   * one 300-file commit would mint 44 850 pairs.
+   */
+  readonly maxChangesetSize?: number;
+}
+
+export const COUPLING_DEFAULTS = {
+  minSupport: 3,
+  minConfidence: 0.5,
+  maxChangesetSize: 30,
+} as const;
+
+export interface CoChangeRow {
+  /** Lineage paths, `a` < `b` — the pair is unordered. */
+  readonly a: string;
+  readonly b: string;
+  /** Commits that touched both. */
+  readonly support: number;
+  /** support / min(revisions of a, revisions of b). */
+  readonly confidence: number;
+  readonly revisionsA: number;
+  readonly revisionsB: number;
+}
+
+export interface CoChangeReport {
+  /** Ranked by support, then confidence, then (a, b). */
+  readonly rows: readonly CoChangeRow[];
+  /** Commits dropped by `maxChangesetSize` — stated, never silent. */
+  readonly skippedChangesets: number;
+}
+
+/**
+ * Logical coupling (Tornhill): files that change together, whatever the
+ * declared graph says. Pure history — the cross-graph joins (hidden coupling,
+ * dead weight) feed on these rows downstream.
+ */
+export function logicalCoupling(history: History, options: CouplingOptions = {}): CoChangeReport {
+  const minSupport = options.minSupport ?? COUPLING_DEFAULTS.minSupport;
+  const minConfidence = options.minConfidence ?? COUPLING_DEFAULTS.minConfidence;
+  const maxChangesetSize = options.maxChangesetSize ?? COUPLING_DEFAULTS.maxChangesetSize;
+
+  // Changes arrive sorted by (commit, path) — the decoder's contract — so a
+  // commit's changeset is one contiguous run.
+  const revisions = history.paths.map(() => 0);
+  const changesets: number[][] = history.commits.map(() => []);
+  for (const change of history.changes) {
+    revisions[change.path] = (revisions[change.path] ?? 0) + 1;
+    changesets[change.commit]?.push(change.path);
+  }
+
+  const support = new Map<number, number>();
+  let skipped = 0;
+  const width = history.paths.length;
+  for (const changeset of changesets) {
+    if (changeset.length > maxChangesetSize) {
+      skipped += 1;
+      continue;
+    }
+    for (let i = 0; i < changeset.length; i += 1) {
+      for (let j = i + 1; j < changeset.length; j += 1) {
+        const key = (changeset[i] as number) * width + (changeset[j] as number);
+        support.set(key, (support.get(key) ?? 0) + 1);
+      }
+    }
+  }
+
+  const rows: CoChangeRow[] = [];
+  for (const [key, count] of support) {
+    if (count < minSupport) continue;
+    const a = Math.floor(key / width);
+    const b = key % width;
+    const revisionsA = revisions[a] ?? 0;
+    const revisionsB = revisions[b] ?? 0;
+    const confidence = count / Math.max(1, Math.min(revisionsA, revisionsB));
+    if (confidence < minConfidence) continue;
+    rows.push({
+      a: history.paths[a] as string,
+      b: history.paths[b] as string,
+      support: count,
+      confidence,
+      revisionsA,
+      revisionsB,
+    });
+  }
+  rows.sort(
+    (x, y) =>
+      y.support - x.support ||
+      y.confidence - x.confidence ||
+      (x.a < y.a ? -1 : x.a > y.a ? 1 : 0) ||
+      (x.b < y.b ? -1 : x.b > y.b ? 1 : 0),
+  );
+  return { rows, skippedChangesets: skipped };
+}
+
 export interface AuthorRow {
   readonly author: string;
   readonly commits: number;

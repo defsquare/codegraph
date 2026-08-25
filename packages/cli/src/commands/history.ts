@@ -1,25 +1,42 @@
 import { readFileSync } from "node:fs";
 import { Buffer } from "node:buffer";
+import {
+  buildGraph,
+  deadWeight,
+  fileDependencies,
+  hiddenCoupling,
+  joinOnPaths,
+  type DeadWeightReport,
+  type FileJoin,
+  type HiddenCouplingReport,
+} from "@codegraph/analyzer";
 import { buildFileCity, cityToJsonString, layoutFileCity } from "@codegraph/city";
 import {
   HistoryError,
   authorStats,
   decodeHistoryText,
   hotspots,
+  logicalCoupling,
   summarize,
+  type CoChangeReport,
   type History,
 } from "@codegraph/scm";
-import type { HistoryOptions } from "../args.js";
+import { defaultModelPath, type HistoryOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, outLines, type IoSink } from "../io.js";
+import { loadModelFiles } from "../load.js";
 import { startCityServer, vizAssetsDir, type CityServerOptions } from "../serve.js";
 
 /**
  * `codegraph history [history.jsonl] [--report summary|hotspots|authors]
  * [--top N] [--serve] [--city FILE] [--json]`.
  *
- * File-level only, no model join (PLAN §11.1) — every number here comes from
- * `git log` alone; joining evolution onto the code graph is M9b's work.
+ * The file-level reports (summary, hotspots, authors, coupling) come from
+ * `git log` alone. `hidden` and `deadweight` are the CROSS-GRAPH reports
+ * (M9b): they additionally load `--model` and join on paths — co-change the
+ * declared graph cannot explain, and declared dependencies history never
+ * exercised. The join itself lives in the analyzer; this command only feeds
+ * both sides in.
  *
  * `--serve` hosts the FILE-LEVEL REPLAY: the history becomes a laid-out city
  * artifact (buildings = file lineages, districts = directories) with a
@@ -109,6 +126,100 @@ export function historyCommand(
       );
       return EXIT.OK;
     }
+    case "coupling": {
+      const report = logicalCoupling(history, {
+        minSupport: options.minSupport,
+        minConfidence: options.minConfidence,
+      });
+      reportSkipped(report, io);
+      const top = options.top ?? 20;
+      outLines(
+        io,
+        options.json
+          ? [jsonOf("coupling", { total: report.rows.length, rows: report.rows.slice(0, top) })]
+          : couplingText(history, report, top, options),
+      );
+      return EXIT.OK;
+    }
+    case "hidden": {
+      const { deps, join } = crossGraph(history, options, io);
+      const coupled = logicalCoupling(history, {
+        minSupport: options.minSupport,
+        minConfidence: options.minConfidence,
+      });
+      reportSkipped(coupled, io);
+      const report = hiddenCoupling(coupled.rows, deps, join);
+      if (report.outsideModel > 0) {
+        errLine(io, `note: ${report.outsideModel} co-changed pairs lie outside the model (docs, config…).`);
+      }
+      const top = options.top ?? 20;
+      outLines(
+        io,
+        options.json
+          ? [jsonOf("hidden", { total: report.rows.length, rows: report.rows.slice(0, top) })]
+          : hiddenText(history, report, top),
+      );
+      return EXIT.OK;
+    }
+    case "deadweight": {
+      const { deps, join } = crossGraph(history, options, io);
+      // Unthresholded on purpose: ONE co-change already refutes "dead".
+      const coupled = logicalCoupling(history, { minSupport: 1, minConfidence: 0 });
+      const revisions = new Map(hotspots(history).map((row) => [row.path, row.revisions]));
+      const report = deadWeight(deps, join, coupled.rows, revisions);
+      if (report.outsideHistory > 0) {
+        errLine(io, `note: ${report.outsideHistory} declared file pairs have no history to judge them.`);
+      }
+      const top = options.top ?? 20;
+      outLines(
+        io,
+        options.json
+          ? [jsonOf("deadweight", { total: report.rows.length, rows: report.rows.slice(0, top) })]
+          : deadWeightText(history, report, top),
+      );
+      return EXIT.OK;
+    }
+  }
+}
+
+/** Load the model side and join it, once, for either cross-graph report. */
+function crossGraph(
+  history: History,
+  options: HistoryOptions,
+  io: IoSink,
+): { deps: ReturnType<typeof fileDependencies>; join: FileJoin } {
+  const modelPath = options.model ?? defaultModelPath();
+  let loaded: ReturnType<typeof loadModelFiles>;
+  try {
+    loaded = loadModelFiles([modelPath]);
+  } catch (error) {
+    throw new UsageError(
+      `the ${options.report} report joins history with a model, and ${modelPath} cannot be loaded`,
+      "Extract one first (java -jar codegraph-java.jar) or name it with --model FILE.",
+      { cause: error },
+    );
+  }
+  if (!loaded.clean) {
+    errLine(io, `warning: ${modelPath} has findings; the join was computed anyway.`);
+  }
+  const deps = fileDependencies(buildGraph(loaded.union));
+  const join = joinOnPaths(deps.files, history.paths);
+  if (join.ambiguous.length > 0) {
+    errLine(
+      io,
+      `note: ${join.ambiguous.length} paths joined ambiguously and were left out of the join.`,
+    );
+  }
+  return { deps, join };
+}
+
+function reportSkipped(report: CoChangeReport, io: IoSink): void {
+  if (report.skippedChangesets > 0) {
+    errLine(
+      io,
+      `note: ${report.skippedChangesets} sweeping commits skipped for coupling ` +
+        `(changesets over 30 files couple nothing meaningfully).`,
+    );
   }
 }
 
@@ -205,5 +316,83 @@ function authorsText(
     ),
   );
   lines.push(`bus factor: ${busFactor} (fewest owners covering >50% of files)`);
+  return lines;
+}
+
+function couplingText(
+  history: History,
+  report: CoChangeReport,
+  top: number,
+  options: HistoryOptions,
+): readonly string[] {
+  const shown = report.rows.slice(0, top);
+  const lines = [
+    `logical coupling of ${history.repo} ` +
+      `(top ${shown.length} of ${report.rows.length} pairs; ` +
+      `support >= ${options.minSupport}, confidence >= ${percent(options.minConfidence)}):`,
+  ];
+  lines.push(
+    ...table(
+      ["SUPPORT", "CONF", "REV-A", "REV-B", "PAIR"],
+      shown.map((row) => [
+        String(row.support),
+        percent(row.confidence),
+        String(row.revisionsA),
+        String(row.revisionsB),
+        `${row.a} + ${row.b}`,
+      ]),
+    ),
+  );
+  return lines;
+}
+
+function hiddenText(
+  history: History,
+  report: HiddenCouplingReport,
+  top: number,
+): readonly string[] {
+  const shown = report.rows.slice(0, top);
+  const lines = [
+    `hidden coupling of ${history.repo} ` +
+      `(top ${shown.length} of ${report.rows.length} co-changed pairs with NO path in the declared graph):`,
+  ];
+  if (report.rows.length === 0) {
+    lines.push("  none — every co-changed pair is explained by a declared dependency path.");
+    return lines;
+  }
+  lines.push(
+    ...table(
+      ["SUPPORT", "CONF", "PAIR"],
+      shown.map((row) => [String(row.support), percent(row.confidence), `${row.a} + ${row.b}`]),
+    ),
+  );
+  return lines;
+}
+
+function deadWeightText(
+  history: History,
+  report: DeadWeightReport,
+  top: number,
+): readonly string[] {
+  const shown = report.rows.slice(0, top);
+  const lines = [
+    `dead weight of ${history.repo} ` +
+      `(top ${shown.length} of ${report.rows.length} declared file dependencies that never co-change):`,
+  ];
+  if (report.rows.length === 0) {
+    lines.push("  none — every declared file dependency has co-changed at least once.");
+    return lines;
+  }
+  lines.push(
+    ...table(
+      ["EDGES", "REV-FROM", "REV-TO", "DEPENDENCY"],
+      shown.map((row) => [
+        String(row.edges),
+        String(row.revisionsFrom),
+        String(row.revisionsTo),
+        `${row.from} -> ${row.to}`,
+      ]),
+    ),
+  );
   return lines;
 }

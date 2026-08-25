@@ -108,8 +108,12 @@ codegraph timeline java:com.acme/Basket [--store FILE] [--json]
 codegraph scm      [repo] [--since DATE] [--out FILE] [--json]
                    # mine git history -> <repo>-history.jsonl (deterministic)
 
-codegraph history  [history.jsonl] [--report summary|hotspots|authors]
-                   [--top N] [--json]
+codegraph history  [history.jsonl] [--top N] [--json]
+                   [--report summary|hotspots|authors|coupling|hidden|deadweight]
+                   [--min-support N] [--min-confidence PCT] [--model FILE]
+                   # hidden/deadweight join history with a MODEL: co-change
+                   # the declared graph cannot explain, and declared
+                   # dependencies history never exercised
                    [--serve [--port N] [--host ADDR]] [--city FILE]
                    # --serve: the file-level city REPLAY — buildings are
                    # files, a timeline scrubs the commits (Gource-style)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HISTORY_SCHEMA_VERSION, type History } from "../src/history.js";
-import { authorStats, hotspots, summarize } from "../src/reports.js";
+import { authorStats, hotspots, logicalCoupling, summarize } from "../src/reports.js";
 
 /**
  * Every expectation below is HAND-COUNTED from the fixture (the M9a DoD).
@@ -179,5 +179,74 @@ describe("authors", () => {
       ],
     };
     expect(authorStats(split).busFactor).toBe(2);
+  });
+});
+
+describe("logical coupling", () => {
+  /**
+   * Hand-counted: a+b co-change in c0, c1, c2; c joins once (c1); c+d once
+   * (c3); c4 touches everything and is skipped at maxChangesetSize 3.
+   * Revisions count EVERY commit, skipped ones included — they are facts.
+   */
+  const COUPLED: History = {
+    ...HISTORY,
+    paths: ["a.ts", "b.ts", "c.ts", "d.ts"],
+    commits: [0, 1, 2, 3, 4].map((n) => ({
+      hash: hash(n),
+      author: 0,
+      time: 1000 + n,
+      isFix: false,
+      isRevert: false,
+    })),
+    changes: [
+      { commit: 0, path: 0, added: 1, deleted: 0 },
+      { commit: 0, path: 1, added: 1, deleted: 0 },
+      { commit: 1, path: 0, added: 1, deleted: 0 },
+      { commit: 1, path: 1, added: 1, deleted: 0 },
+      { commit: 1, path: 2, added: 1, deleted: 0 },
+      { commit: 2, path: 0, added: 1, deleted: 0 },
+      { commit: 2, path: 1, added: 1, deleted: 0 },
+      { commit: 3, path: 2, added: 1, deleted: 0 },
+      { commit: 3, path: 3, added: 1, deleted: 0 },
+      { commit: 4, path: 0, added: 1, deleted: 0 },
+      { commit: 4, path: 1, added: 1, deleted: 0 },
+      { commit: 4, path: 2, added: 1, deleted: 0 },
+      { commit: 4, path: 3, added: 1, deleted: 0 },
+    ],
+  };
+
+  it("counts support and confidence by hand: a+b in 3 of 4 revisions", () => {
+    const report = logicalCoupling(COUPLED, {
+      minSupport: 2,
+      minConfidence: 0,
+      maxChangesetSize: 3,
+    });
+    expect(report.rows).toEqual([
+      { a: "a.ts", b: "b.ts", support: 3, confidence: 3 / 4, revisionsA: 4, revisionsB: 4 },
+    ]);
+  });
+
+  it("skips sweeping commits, and says how many", () => {
+    const capped = logicalCoupling(COUPLED, { minSupport: 1, minConfidence: 0, maxChangesetSize: 3 });
+    expect(capped.skippedChangesets).toBe(1);
+    const open = logicalCoupling(COUPLED, { minSupport: 1, minConfidence: 0, maxChangesetSize: 30 });
+    expect(open.skippedChangesets).toBe(0);
+    // The sweeping commit counted: every pair gains one co-change.
+    expect(open.rows.find((row) => row.a === "a.ts" && row.b === "b.ts")?.support).toBe(4);
+    expect(open.rows.find((row) => row.a === "c.ts" && row.b === "d.ts")?.support).toBe(2);
+  });
+
+  it("applies both thresholds", () => {
+    expect(
+      logicalCoupling(COUPLED, { minSupport: 2, minConfidence: 0.8, maxChangesetSize: 3 }).rows,
+    ).toEqual([]); // 0.75 < 0.8
+    expect(
+      logicalCoupling(COUPLED, { minSupport: 4, minConfidence: 0, maxChangesetSize: 3 }).rows,
+    ).toEqual([]); // support 3 < 4
+  });
+
+  it("handles an empty history", () => {
+    const empty: History = { ...HISTORY, paths: [], commits: [], changes: [] };
+    expect(logicalCoupling(empty).rows).toEqual([]);
   });
 });

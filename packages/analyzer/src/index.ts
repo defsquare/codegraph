@@ -74,3 +74,8 @@ export * from "./store/ids.js";
 export * from "./store/diagnose.js";
 export * from "./store/cache.js";
 export * from "./store/temporal.js";
+
+// The cross-graph queries (M9b): the declared graph joined with mined
+// evolution data, on paths. The history side arrives as data, never as a
+// package dependency — the CLI is the join point.
+export * from "./evolution.js";
