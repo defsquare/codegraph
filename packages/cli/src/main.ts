@@ -3,6 +3,7 @@ import { analyzeCommand } from "./commands/analyze.js";
 import { cityCommand } from "./commands/city.js";
 import { exportCommand } from "./commands/export.js";
 import { importCommand } from "./commands/import.js";
+import { navigatorCommand } from "./commands/navigator.js";
 import { profilesCommand } from "./commands/profiles.js";
 import { validateCommand } from "./commands/validate.js";
 import { EXIT, isUsageError, type ExitCode } from "./exit.js";
@@ -66,6 +67,8 @@ function dispatch(invocation: Invocation, io: IoSink): ExitCode {
           return exportCommand(invocation.options, io);
         case "city":
           return cityCommand(invocation.options, io);
+        case "navigator":
+          return navigatorCommand(invocation.options, io);
         case "profiles":
           return profilesCommand(invocation.options, io);
       }

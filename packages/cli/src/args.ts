@@ -18,7 +18,15 @@ export { UsageError } from "./exit.js";
  * an option means adding one entry to one array.
  */
 
-export const COMMAND_NAMES = ["validate", "analyze", "import", "export", "city", "profiles"] as const;
+export const COMMAND_NAMES = [
+  "validate",
+  "analyze",
+  "import",
+  "export",
+  "city",
+  "navigator",
+  "profiles",
+] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 /** `analyze --report` values. */
@@ -294,6 +302,50 @@ export const CITY_SPEC: CommandSpec = {
 };
 
 /**
+ * `codegraph navigator`: the browsable model — a tree panel plus a fan-in /
+ * fan-out dependency view per node. Same shape as `city`: the transform lives
+ * in `@codegraph/navigator`, the frontend is `@codegraph/navigator-ui`'s
+ * prebuilt bundle, and this command only resolves flags and moves bytes.
+ */
+export const NAVIGATOR_SPEC: CommandSpec = {
+  name: "navigator",
+  summary: "Explore the model: a searchable tree with per-node dependency detail.",
+  positional: MODELS_POSITIONAL_DEFAULTED,
+  options: [
+    {
+      name: "name",
+      type: "string",
+      describe:
+        "Display name for the corpus in the navigator header; " +
+        "defaults to the basename of each model's root.",
+      placeholder: "STR",
+    },
+    {
+      name: "serve",
+      type: "boolean",
+      describe:
+        "Serve the navigator on localhost with this model loaded (stdout stays empty; " +
+        "Ctrl-C stops it). Needs the built navigator-ui app (pnpm -r build).",
+    },
+    {
+      name: "port",
+      type: "string",
+      describe: "Port for --serve; 0 picks a free one.",
+      placeholder: "N",
+      defaultValue: "4178",
+    },
+    ...VIEW_OPTIONS,
+    NO_CACHE_OPTION,
+    {
+      name: "out",
+      type: "string",
+      describe: "Write the artifact to this file instead of stdout.",
+      placeholder: "FILE",
+    },
+  ],
+};
+
+/**
  * A store holds ONE model. Surrogates are file-scoped and are not identity
  * (MM-1), so unioning several models into one database would mean renumbering
  * them — and a renumbered corpus is a repointed one. Several paths are still
@@ -339,6 +391,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   IMPORT_SPEC,
   EXPORT_SPEC,
   CITY_SPEC,
+  NAVIGATOR_SPEC,
   PROFILES_SPEC,
 ];
 
@@ -402,6 +455,17 @@ export interface CityOptions extends ModelInputOptions, ViewOptions {
   readonly out: string | undefined;
 }
 
+export interface NavigatorOptions extends ModelInputOptions, ViewOptions, CacheOptions {
+  /** `--name STR`: corpus display name; undefined derives it from the roots. */
+  readonly name: string | undefined;
+  /** `--serve`: host the navigator on localhost with this model loaded. */
+  readonly serve: boolean;
+  /** `--port N` for `--serve`; 0 = an ephemeral port. */
+  readonly port: number;
+  /** `--out FILE`; undefined means stdout. */
+  readonly out: string | undefined;
+}
+
 export interface ImportOptions extends ModelInputOptions {
   /** `--out FILE`; undefined means `storePathFor` each model. */
   readonly out: string | undefined;
@@ -426,6 +490,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "import"; readonly options: ImportOptions }
   | { readonly kind: "run"; readonly command: "export"; readonly options: ExportOptions }
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
+  | { readonly kind: "run"; readonly command: "navigator"; readonly options: NavigatorOptions }
   | { readonly kind: "run"; readonly command: "profiles"; readonly options: ProfilesOptions };
 
 const HELP_FLAGS = new Set(["--help", "-h"]);
@@ -594,10 +659,15 @@ function levelOf(values: ParsedValues): FoldLevel {
   return value === undefined ? DEFAULT_LEVEL : (value as FoldLevel);
 }
 
-/** `--port N`: a TCP port; 0 is allowed on purpose (the OS picks a free one). */
-function portOf(values: ParsedValues): number {
-  const raw = stringOf(values, "port");
-  if (raw === undefined) return 4177;
+/**
+ * `--port N`: a TCP port; 0 is allowed on purpose (the OS picks a free one).
+ * The fallback comes from the SPEC's own default, so the value the help text
+ * promises and the value the parser uses cannot drift apart.
+ */
+function portOf(values: ParsedValues, spec: CommandSpec): number {
+  const raw =
+    stringOf(values, "port") ?? spec.options.find((option) => option.name === "port")?.defaultValue;
+  if (raw === undefined) return 0;
   const port = Number(raw);
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     throw new UsageError(
@@ -789,8 +859,22 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           name: stringOf(values, "name"),
           layout: flagOf(values, "layout"),
           serve: flagOf(values, "serve"),
-          port: portOf(values),
+          port: portOf(values, spec),
           ...viewOf(values),
+          out: stringOf(values, "out"),
+        },
+      };
+    case "navigator":
+      return {
+        kind: "run",
+        command: "navigator",
+        options: {
+          models,
+          name: stringOf(values, "name"),
+          serve: flagOf(values, "serve"),
+          port: portOf(values, spec),
+          ...viewOf(values),
+          noCache: flagOf(values, "no-cache"),
           out: stringOf(values, "out"),
         },
       };
