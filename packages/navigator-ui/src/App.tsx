@@ -1,0 +1,181 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ModelIndexes } from "./model/indexes.js";
+import { expandedToReveal } from "./model/flatten.js";
+import { ArtifactUnavailableError, loadFromFile, loadFromUrl, type LoadProgress } from "./load.js";
+import { TreePanel } from "./components/TreePanel.js";
+import { DepsView } from "./components/DepsView.js";
+import { ProgressOverlay } from "./components/ProgressOverlay.js";
+import { Loader } from "./components/Loader.js";
+
+/**
+ * Load ceremony, same order as the city viewer: `?src=URL` (loud) → the
+ * sibling `/navigator.json` (quiet when absent — the CLI's `--serve` route or
+ * the dev middleware) → drag & drop / file picker. The artifact is the ONLY
+ * input; the guard refuses everything else with the command that produces one.
+ */
+type Phase =
+  | { readonly kind: "idle" }
+  | { readonly kind: "loading"; readonly progress: LoadProgress | undefined }
+  | { readonly kind: "ready"; readonly ix: ModelIndexes }
+  | { readonly kind: "error"; readonly message: string };
+
+/** The progress overlay appears only when initialization outlasts this. */
+export const SLOW_LOAD_MS = 2000;
+
+export function App() {
+  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [slow, setSlow] = useState(false);
+  const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
+  const [selection, setSelection] = useState<number | undefined>(undefined);
+  const [query, setQuery] = useState("");
+  const [hideExternals, setHideExternals] = useState(false);
+  const [scrollTo, setScrollTo] = useState<number | undefined>(undefined);
+  const loadToken = useRef(0);
+
+  const begin = useCallback(
+    async (task: (onProgress: (p: LoadProgress) => void) => Promise<ModelIndexes>, quiet: boolean) => {
+      const token = ++loadToken.current;
+      const alive = () => loadToken.current === token;
+      setPhase({ kind: "loading", progress: undefined });
+      try {
+        const ix = await task((progress) => {
+          if (alive()) setPhase({ kind: "loading", progress });
+        });
+        if (!alive()) return;
+        setExpanded(new Set(ix.model.roots));
+        setSelection(undefined);
+        setQuery("");
+        setPhase({ kind: "ready", ix });
+      } catch (error) {
+        if (!alive()) return;
+        // Probing the sibling route when nothing is served is not a failure;
+        // an artifact that IS there and is wrong always says so.
+        if (quiet && error instanceof ArtifactUnavailableError) {
+          setPhase({ kind: "idle" });
+          return;
+        }
+        setPhase({
+          kind: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [],
+  );
+
+  // The 2-second rule: time the WHOLE initialization, show the bar only when
+  // it is exceeded — a fast load never flashes an overlay.
+  useEffect(() => {
+    if (phase.kind !== "loading") {
+      setSlow(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlow(true), SLOW_LOAD_MS);
+    return () => clearTimeout(timer);
+  }, [phase.kind]);
+
+  useEffect(() => {
+    const src = new URLSearchParams(window.location.search).get("src");
+    void begin((on) => loadFromUrl(src ?? "navigator.json", on), src === null);
+  }, [begin]);
+
+  useEffect(() => {
+    const over = (event: DragEvent) => event.preventDefault();
+    const drop = (event: DragEvent) => {
+      event.preventDefault();
+      const file = event.dataTransfer?.files[0];
+      if (file !== undefined) void begin((on) => loadFromFile(file, on), false);
+    };
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", drop);
+    };
+  }, [begin]);
+
+  const pickFile = useCallback(
+    (file: File) => void begin((on) => loadFromFile(file, on), false),
+    [begin],
+  );
+
+  const ix = phase.kind === "ready" ? phase.ix : undefined;
+
+  /** Select a node from anywhere: reveal it in the tree and scroll to it. */
+  const reveal = useCallback(
+    (node: number) => {
+      if (ix === undefined) return;
+      setSelection(node);
+      setExpanded((current) => expandedToReveal(ix.model, current, node));
+      setQuery("");
+      setScrollTo(node);
+    },
+    [ix],
+  );
+
+  const toggle = useCallback((node: number) => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(node)) next.delete(node);
+      else next.add(node);
+      return next;
+    });
+  }, []);
+
+  const stats = useMemo(
+    () =>
+      ix === undefined
+        ? undefined
+        : { nodes: ix.model.nodes.length, deps: ix.model.deps.length },
+    [ix],
+  );
+
+  if (phase.kind === "loading" && !slow) {
+    return <div className="app app-blank" />;
+  }
+  if (phase.kind === "loading") {
+    return <ProgressOverlay progress={phase.progress} />;
+  }
+  if (phase.kind === "idle" || phase.kind === "error") {
+    return <Loader error={phase.kind === "error" ? phase.message : undefined} onFile={pickFile} />;
+  }
+  if (ix === undefined) return null;
+
+  return (
+    <div className="app">
+      <header className="app-header">
+        <h1>{ix.model.corpus.name}</h1>
+        <span className="view-badge" title="The view this artifact was built under">
+          view {ix.model.view.name}
+        </span>
+        <span className="header-stats">
+          {stats?.nodes.toLocaleString()} nodes · {stats?.deps.toLocaleString()} dependency rows
+        </span>
+        <label className="header-toggle">
+          <input
+            type="checkbox"
+            checked={!hideExternals}
+            onChange={(event) => setHideExternals(!event.target.checked)}
+          />
+          Show externals
+        </label>
+      </header>
+      <div className="app-body">
+        <TreePanel
+          ix={ix}
+          expanded={expanded}
+          selection={selection}
+          query={query}
+          hideExternals={hideExternals}
+          scrollTo={scrollTo}
+          onScrolled={() => setScrollTo(undefined)}
+          onQuery={setQuery}
+          onToggle={toggle}
+          onSelect={setSelection}
+          onReveal={reveal}
+        />
+        <DepsView ix={ix} selection={selection} onNavigate={reveal} />
+      </div>
+    </div>
+  );
+}
