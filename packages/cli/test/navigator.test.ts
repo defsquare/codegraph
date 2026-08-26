@@ -26,6 +26,7 @@ function options(overrides: Partial<NavigatorOptions> = {}): NavigatorOptions {
     noCache: true,
     serve: false,
     port: 4178,
+    host: "0.0.0.0",
     out: undefined,
     ...overrides,
   };
@@ -122,6 +123,7 @@ describe("navigator --serve", () => {
     artifactRoute: string;
     assets: string;
     port: number;
+    host: string | undefined;
     label: string;
   }
 
@@ -137,6 +139,7 @@ describe("navigator --serve", () => {
           artifactRoute: serverOptions.artifactRoute,
           assets: serverOptions.assets,
           port: serverOptions.port,
+          host: serverOptions.host,
           label: serverOptions.label,
         });
         return undefined;
@@ -165,6 +168,11 @@ describe("navigator --serve", () => {
 
   it("passes the requested port through", () => {
     expect(serveTo({ port: 0 }).started[0]?.port).toBe(0);
+  });
+
+  it("passes the bind address through, defaulting to every interface", () => {
+    expect(serveTo().started[0]?.host).toBe("0.0.0.0");
+    expect(serveTo({ host: "127.0.0.1" }).started[0]?.host).toBe("127.0.0.1");
   });
 
   it("fails BEFORE loading models when the frontend is not built", () => {
@@ -206,5 +214,21 @@ describe("navigator: through the real dispatcher", () => {
     expect(code).toBe(EXIT.USAGE);
     expect(io.stdout()).toBe("");
     expect(io.stderr()).toContain("--port");
+  });
+
+  it("defaults --host to every interface, and says so in the help", () => {
+    const io = captureIo();
+    expect(run(["navigator", "--help"], io)).toBe(EXIT.OK);
+    expect(io.stdout()).toContain("--host ADDR");
+    expect(io.stdout()).toContain("default: 0.0.0.0");
+    expect(io.stdout()).toContain("reachable from other machines");
+  });
+
+  it("rejects a blank --host rather than silently binding everything", () => {
+    const io = captureIo();
+    const code = run(["navigator", FIXTURE, "--host", "   "], io);
+    expect(code).toBe(EXIT.USAGE);
+    expect(io.stdout()).toBe("");
+    expect(io.stderr()).toContain("--host needs an address");
   });
 });

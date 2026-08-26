@@ -324,8 +324,9 @@ export const NAVIGATOR_SPEC: CommandSpec = {
       name: "serve",
       type: "boolean",
       describe:
-        "Serve the navigator on localhost with this model loaded (stdout stays empty; " +
-        "Ctrl-C stops it). Needs the built navigator-ui app (pnpm -r build).",
+        "Serve the navigator with this model loaded, on every interface unless --host says " +
+        "otherwise (stdout stays empty; Ctrl-C stops it). Needs the built navigator-ui app " +
+        "(pnpm -r build).",
     },
     {
       name: "port",
@@ -333,6 +334,15 @@ export const NAVIGATOR_SPEC: CommandSpec = {
       describe: "Port for --serve; 0 picks a free one.",
       placeholder: "N",
       defaultValue: "4178",
+    },
+    {
+      name: "host",
+      type: "string",
+      describe:
+        "Address --serve binds. 0.0.0.0 is every interface, so the page is reachable " +
+        "from other machines; 127.0.0.1 keeps it to this one.",
+      placeholder: "ADDR",
+      defaultValue: "0.0.0.0",
     },
     ...VIEW_OPTIONS,
     NO_CACHE_OPTION,
@@ -462,6 +472,8 @@ export interface NavigatorOptions extends ModelInputOptions, ViewOptions, CacheO
   readonly serve: boolean;
   /** `--port N` for `--serve`; 0 = an ephemeral port. */
   readonly port: number;
+  /** `--host ADDR` for `--serve`; `0.0.0.0` (every interface) by default. */
+  readonly host: string;
   /** `--out FILE`; undefined means stdout. */
   readonly out: string | undefined;
 }
@@ -678,6 +690,27 @@ function portOf(values: ParsedValues, spec: CommandSpec): number {
   return port;
 }
 
+/**
+ * `--host ADDR`: the interface to bind. Not a closed set — any address this
+ * machine holds is legitimate, and only the OS knows which — so the value is
+ * carried through and a bad one surfaces as the bind failure that names it
+ * (serve.ts). Blank is rejected here, because `--host ""` silently means
+ * "every interface" to `listen`, which is the opposite of what typing an
+ * empty address suggests.
+ */
+function hostOf(values: ParsedValues, spec: CommandSpec): string {
+  const raw =
+    stringOf(values, "host") ?? spec.options.find((option) => option.name === "host")?.defaultValue;
+  const host = (raw ?? "").trim();
+  if (host.length === 0) {
+    throw new UsageError(
+      "--host needs an address",
+      "0.0.0.0 binds every interface; 127.0.0.1 binds this machine only.",
+    );
+  }
+  return host;
+}
+
 /** `--carry a,b` → ["a","b"]; blanks dropped so `a,,b` is not a metric named "". */
 function metricList(value: string | undefined): readonly string[] {
   if (value === undefined) return [];
@@ -873,6 +906,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           name: stringOf(values, "name"),
           serve: flagOf(values, "serve"),
           port: portOf(values, spec),
+          host: hostOf(values, spec),
           ...viewOf(values),
           noCache: flagOf(values, "no-cache"),
           out: stringOf(values, "out"),

@@ -26,7 +26,27 @@ role, owner, member attribution and coupling number in the UI was computed
 once, on the Node side, by the analyzer's own primitives.
 
 The CLI serves the artifact at `/navigator.json` beside the frontend's static
-bundle (`packages/cli/src/serve.ts`, `startArtifactServer`), localhost only.
+bundle (`packages/cli/src/serve.ts`, `startArtifactServer`).
+
+**Which interface it binds** is `--host`, and the navigator defaults to
+`0.0.0.0` — every interface — so the page opens from another machine without
+extra ceremony. `city` still binds loopback; the two commands make the choice
+differently and `startArtifactServer` takes it as a parameter rather than
+assuming.
+
+A wildcard bind hands the whole model to anyone who can reach this machine, so
+the server states the reach it actually has:
+
+```
+model navigator at http://localhost:4178/ (every interface — reachable from other machines) — Ctrl-C to stop.
+model navigator at http://localhost:4178/ — Ctrl-C to stop.      # --host 127.0.0.1
+```
+
+It never prints `http://0.0.0.0:4178/`: that is a bind address, not one a
+browser should be handed. A bad `--host` fails as `EADDRNOTAVAIL`, whose bare
+message sends the reader looking at the port, so the failure names the address
+and the flag instead. A blank `--host` is a usage error rather than a silent
+wildcard, which is what `listen` would otherwise make of it.
 
 ## NV-2 · The artifact is index-addressed
 

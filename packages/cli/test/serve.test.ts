@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { captureIo, type CapturedIo } from "../src/io.js";
-import { startCityServer } from "../src/serve.js";
+import { startArtifactServer, startCityServer } from "../src/serve.js";
 
 /**
  * The real server, on a real ephemeral port, against a FAKE assets directory —
@@ -73,5 +73,85 @@ describe("startCityServer", () => {
     const { base, io } = await started();
     expect(io.stderr()).toContain(`city visualizer at http://localhost:${base.split(":")[2]}/`);
     expect(io.stderr()).toContain("Ctrl-C to stop");
+  });
+
+  it("binds loopback when no host is given — the city's unchanged behaviour", async () => {
+    const { io } = await started();
+    expect(io.stderr()).not.toContain("reachable from other machines");
+  });
+});
+
+/**
+ * WHICH INTERFACE, and saying so. `navigator --serve` binds every interface by
+ * default, which hands the whole model to anyone who can reach this machine.
+ * That is the caller's decision to make and the server's duty to state, so the
+ * announcement is asserted as carefully as the port is.
+ */
+describe("startArtifactServer: the bind address", () => {
+  async function bind(host: string | undefined): Promise<{ io: CapturedIo; server: Server }> {
+    const io = captureIo();
+    const server = startArtifactServer({
+      artifact: ARTIFACT,
+      artifactRoute: "/navigator.json",
+      label: "model navigator",
+      assets: fakeAssets(),
+      port: 0,
+      ...(host === undefined ? {} : { host }),
+      io,
+    });
+    servers.push(server);
+    await new Promise((resolve) => server.once("listening", resolve));
+    return { io, server };
+  }
+
+  function addressOf(server: Server): { address: string; port: number } {
+    const address = server.address();
+    if (typeof address !== "object" || address === null) throw new Error("not listening");
+    return { address: address.address, port: address.port };
+  }
+
+  it("binds every interface for 0.0.0.0, and says the page is reachable elsewhere", async () => {
+    const { io, server } = await bind("0.0.0.0");
+    expect(addressOf(server).address).toBe("0.0.0.0");
+    expect(io.stderr()).toContain("every interface");
+    expect(io.stderr()).toContain("reachable from other machines");
+    // Never printed as a URL: http://0.0.0.0/ is not an address to open.
+    expect(io.stderr()).not.toContain("http://0.0.0.0");
+    expect(io.stderr()).toContain(`http://localhost:${addressOf(server).port}/`);
+  });
+
+  it("binds loopback for 127.0.0.1, and claims no wider reach", async () => {
+    const { io, server } = await bind("127.0.0.1");
+    expect(addressOf(server).address).toBe("127.0.0.1");
+    expect(io.stderr()).not.toContain("reachable from other machines");
+  });
+
+  it("actually answers on a non-loopback interface when bound to 0.0.0.0", async () => {
+    const { server } = await bind("0.0.0.0");
+    const { port } = addressOf(server);
+    // 127.0.0.1 is covered by a wildcard bind; that it answers there proves
+    // the bind took effect without assuming this machine's other addresses.
+    const response = await fetch(`http://127.0.0.1:${port}/navigator.json`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe(ARTIFACT);
+  });
+
+  it("reports an unbindable address in terms of --host, not of the port", async () => {
+    const io = captureIo();
+    // 203.0.113.1 is TEST-NET-3 (RFC 5737): never an address of this machine.
+    const server = startArtifactServer({
+      artifact: ARTIFACT,
+      artifactRoute: "/navigator.json",
+      label: "model navigator",
+      assets: fakeAssets(),
+      port: 0,
+      host: "203.0.113.1",
+      io,
+    });
+    servers.push(server);
+    await new Promise((resolve) => server.once("error", resolve));
+    expect(io.stderr()).toContain("cannot bind 203.0.113.1");
+    expect(io.stderr()).toContain("--host");
+    expect(io.stderr()).not.toContain("--port");
   });
 });

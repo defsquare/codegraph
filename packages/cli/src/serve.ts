@@ -7,8 +7,8 @@ import { UsageError } from "./exit.js";
 import { errLine, type IoSink } from "./io.js";
 
 /**
- * `codegraph city --serve` / `codegraph navigator --serve`: a frontend on
- * localhost, with THIS artifact loaded.
+ * `codegraph city --serve` / `codegraph navigator --serve`: a frontend with
+ * THIS artifact loaded.
  *
  * The CLI stays inside its architectural box — it moves bytes. Each frontend
  * is a PREBUILT static bundle (Three.js and React never enter the CLI's import
@@ -16,9 +16,36 @@ import { errLine, type IoSink } from "./io.js";
  * is handed to the page at its one JSON route, exactly the file `--out` would
  * have written. Nothing is computed here.
  *
- * Localhost only: the server binds 127.0.0.1 — a code model can be sensitive,
- * and serving it on all interfaces is a decision the user has not made.
+ * WHICH INTERFACE IT BINDS is the caller's decision, and the two commands make
+ * it differently: `city` binds loopback, `navigator` defaults to every
+ * interface (`--host`). A code model can be sensitive, so whenever the bind
+ * address is not loopback the announcement SAYS the page is reachable from
+ * other machines — an exposure nobody should discover by accident.
  */
+
+/** The default when a caller does not choose: this machine only. */
+export const LOOPBACK_HOST = "127.0.0.1";
+
+/** Bind addresses that mean "every interface on this machine". */
+const WILDCARD_HOSTS: ReadonlySet<string> = new Set(["0.0.0.0", "::", "[::]"]);
+
+function isLoopback(host: string): boolean {
+  return host === LOOPBACK_HOST || host === "localhost" || host === "::1" || host === "[::1]";
+}
+
+/**
+ * How to reach the page, and whether anyone else can. A wildcard bind has no
+ * single URL, so the line names the loopback one that certainly works and
+ * states the reach separately rather than printing `http://0.0.0.0:4178/`,
+ * which is not an address a browser should be given.
+ */
+function reachLine(host: string, port: number): string {
+  if (WILDCARD_HOSTS.has(host)) {
+    return `http://localhost:${port}/ (every interface — reachable from other machines)`;
+  }
+  if (isLoopback(host)) return `http://localhost:${port}/`;
+  return `http://${host}:${port}/ (reachable from other machines)`;
+}
 
 /** Where a frontend package's built bundle lives; a usage-shaped error names the fix. */
 function assetsDirFor(packageName: string, distPath: string): string {
@@ -73,6 +100,8 @@ export interface ArtifactServerOptions {
   readonly assets: string;
   /** 0 = ephemeral; the actual port is announced on stderr once listening. */
   readonly port: number;
+  /** Bind address; defaults to loopback. `0.0.0.0` = every interface. */
+  readonly host?: string;
   readonly io: IoSink;
 }
 
@@ -89,6 +118,31 @@ export function startCityServer(options: CityServerOptions): Server {
  * process alive, so `--serve` behaves like any dev server. Bind failures (port
  * taken) surface on stderr, not as a crash.
  */
+/**
+ * A bind that failed, in the terms of the flag that caused it. A wrong
+ * `--host` fails as EADDRNOTAVAIL — "address not available" alone sends the
+ * reader looking at the port, so it names the address and the flag instead.
+ */
+function bindFailure(
+  error: NodeJS.ErrnoException,
+  host: string,
+  options: ArtifactServerOptions,
+): string {
+  if (error.code === "EADDRINUSE") {
+    return `codegraph: port ${options.port} is already in use — pick another with --port (0 = any free port).`;
+  }
+  if (error.code === "EADDRNOTAVAIL" || error.code === "EINVAL") {
+    return (
+      `codegraph: cannot bind ${host} — no interface on this machine has that address. ` +
+      `Use --host 0.0.0.0 for every interface, or 127.0.0.1 for this machine only.`
+    );
+  }
+  if (error.code === "EACCES") {
+    return `codegraph: not allowed to bind ${host}:${options.port} — ports below 1024 usually need root.`;
+  }
+  return `codegraph: the ${options.label} server failed: ${error.message}`;
+}
+
 export function startArtifactServer(options: ArtifactServerOptions): Server {
   const { artifact, assets, io } = options;
   const root = resolve(assets);
@@ -134,20 +188,17 @@ export function startArtifactServer(options: ArtifactServerOptions): Server {
     response.end(method === "HEAD" ? undefined : body);
   });
 
+  const host = options.host ?? LOOPBACK_HOST;
+
   server.on("error", (error: NodeJS.ErrnoException) => {
-    errLine(
-      io,
-      error.code === "EADDRINUSE"
-        ? `codegraph: port ${options.port} is already in use — pick another with --port (0 = any free port).`
-        : `codegraph: the ${options.label} server failed: ${error.message}`,
-    );
+    errLine(io, bindFailure(error, host, options));
     server.close();
   });
 
-  server.listen(options.port, "127.0.0.1", () => {
+  server.listen(options.port, host, () => {
     const address = server.address();
     const port = typeof address === "object" && address !== null ? address.port : options.port;
-    errLine(io, `${options.label} at http://localhost:${port}/ — Ctrl-C to stop.`);
+    errLine(io, `${options.label} at ${reachLine(host, port)} — Ctrl-C to stop.`);
   });
 
   return server;

@@ -24,6 +24,11 @@ import { resolveView } from "../view.js";
  * STREAM PURITY (decision 3): with no `--out`, stdout carries the artifact and
  * nothing else. Warnings, the cache note and the `--out` confirmation are
  * stderr. `--serve` keeps stdout empty — the server is the destination.
+ *
+ * `--serve` binds every interface by default (`--host`), unlike `city`, so the
+ * navigator is reachable from another machine without extra ceremony. The
+ * server announces that reach on stderr; the artifact it hands out is the
+ * whole model, so the address is worth reading.
  */
 
 /** The server seam, injectable so tests need no sockets and no built frontend. */
@@ -73,6 +78,7 @@ export function navigatorCommand(
         label: "model navigator",
         assets,
         port: options.port,
+        host: options.host,
         io,
       });
     }

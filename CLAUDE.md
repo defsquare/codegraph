@@ -92,8 +92,9 @@ java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 #   export JAVA_HOME="$HOME/.sdkman/candidates/java/25.0.4-tem"
 
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
-./bin/codegraph city model.jsonl --serve           # 3D city at http://localhost:4177
+./bin/codegraph city model.jsonl --serve           # 3D city at http://localhost:4177 (loopback)
 ./bin/codegraph navigator model.jsonl --serve      # navigator at http://localhost:4178
+#   navigator binds EVERY interface by default; --host 127.0.0.1 keeps it local
 ```
 
 ## Metamodel invariants (violating these is a bug, not a style choice)
