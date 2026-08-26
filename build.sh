@@ -102,10 +102,11 @@ report() {
   fi
 }
 if wants_ts; then
-  for pkg in core analyzer city cli; do report "$ROOT/packages/$pkg/dist/index.js"; done
-  # viz ships a Vite app, not a module: its entry point is the HTML the CLI
-  # serves. Its absence is what breaks `codegraph city --serve`, so name it.
+  for pkg in core analyzer city navigator cli; do report "$ROOT/packages/$pkg/dist/index.js"; done
+  # viz and navigator-ui ship Vite apps, not modules: their entry point is the
+  # HTML the CLI serves. Their absence is what breaks `--serve`, so name them.
   report "$ROOT/packages/viz/dist/index.html"
+  report "$ROOT/packages/navigator-ui/dist/index.html"
 fi
 if wants_java; then report "$JAVA_DIR/target/codegraph-java.jar"; fi
 [ "$missing" -eq 0 ] || die "$missing expected artifact(s) missing — the build did not produce a usable tree"
