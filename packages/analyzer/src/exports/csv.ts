@@ -138,12 +138,17 @@ export function cyclesToCsv(report: CycleReport, options?: CsvOptions): string {
   const level = report.level;
   const view = report.view.name;
   const rows: (readonly Field[])[] = [];
+  // The feedback EDGES themselves are not rows here — this table is one row
+  // per member, and the cut lives in the JSON/text forms. The two scores are
+  // repeated per member like the rest of the component columns.
   report.components.forEach((component, index) => {
     for (const member of component.members) {
       rows.push([
         `scc:${index}`,
         component.size,
         component.weight,
+        component.feedbackWeight,
+        component.tangleMetric,
         member,
         component.internalEdgeCount,
         level,
@@ -152,10 +157,21 @@ export function cyclesToCsv(report: CycleReport, options?: CsvOptions): string {
     }
   });
   for (const id of report.selfLoops) {
-    rows.push(["selfLoop", 1, undefined, id, undefined, level, view]);
+    // Empty, not 0: a self-loop is never in a feedback set or scored.
+    rows.push(["selfLoop", 1, undefined, undefined, undefined, id, undefined, level, view]);
   }
   return render(
-    ["component", "size", "weight", "member", "internalEdgeCount", "level", "view"],
+    [
+      "component",
+      "size",
+      "weight",
+      "feedbackWeight",
+      "tangleMetric",
+      "member",
+      "internalEdgeCount",
+      "level",
+      "view",
+    ],
     rows,
     options,
   );

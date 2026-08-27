@@ -488,6 +488,75 @@ describe("strongly connected components partition the folded graph", () => {
     expect(new Set(report.selfLoops)).toEqual(
       new Set(folded.edges.filter((e) => e.selfLoop).map((e) => e.from)),
     );
+
+    // The tangle contract, per component: the feedback set is drawn from the
+    // component's own non-self edges BY REFERENCE, cutting it leaves the
+    // component acyclic, and it is minimal — re-adding any one member closes a
+    // cycle again. Checkable even though the set itself is a heuristic.
+    let feedbackWeight = 0;
+    let cyclicWeight = 0;
+    let feedbackEdgeCount = 0;
+    for (const component of report.components) {
+      const kept = component.edges.filter(
+        (e) => !e.selfLoop && !component.feedbackEdges.includes(e),
+      );
+      for (const cut of component.feedbackEdges) {
+        expect(component.edges.includes(cut)).toBe(true);
+        expect(cut.selfLoop).toBe(false);
+        // Minimal: without this cut the loop would close again.
+        expect(reaches(cut.to, cut.from, kept)).toBe(true);
+      }
+      // Acyclic after the cut: no kept edge can be part of a loop any more.
+      for (const e of kept) expect(reaches(e.to, e.from, kept)).toBe(false);
+      expect(component.feedbackWeight).toBe(
+        component.feedbackEdges.reduce((sum, e) => sum + e.count, 0),
+      );
+      const componentCyclic = component.edges.reduce(
+        (sum, e) => (e.selfLoop ? sum : sum + e.count),
+        0,
+      );
+      expect(component.tangleMetric).toBeGreaterThanOrEqual(0);
+      expect(component.tangleMetric).toBeLessThanOrEqual(1);
+      // A size >= 2 SCC always has non-self internal edges, so a reported
+      // component is never scored as tangle-free.
+      if (component.size > 1) expect(component.tangleMetric).toBeGreaterThan(0);
+      feedbackWeight += component.feedbackWeight;
+      cyclicWeight += componentCyclic;
+      feedbackEdgeCount += component.feedbackEdges.length;
+    }
+    expect(report.tangle).toEqual({
+      feedbackEdgeCount,
+      feedbackWeight,
+      cyclicWeight,
+      metric: cyclicWeight === 0 ? 0 : feedbackWeight / cyclicWeight,
+    });
+  };
+
+  /** Iterative reachability over an edge list — the property suite's oracle. */
+  const reaches = (
+    from: EntityId,
+    to: EntityId,
+    edges: readonly { readonly from: EntityId; readonly to: EntityId }[],
+  ): boolean => {
+    const out = new Map<EntityId, EntityId[]>();
+    for (const e of edges) {
+      const list = out.get(e.from);
+      if (list === undefined) out.set(e.from, [e.to]);
+      else list.push(e.to);
+    }
+    const seen = new Set<EntityId>([from]);
+    const stack: EntityId[] = [from];
+    for (;;) {
+      const node = stack.pop();
+      if (node === undefined) return false;
+      if (node === to) return true;
+      for (const next of out.get(node) ?? []) {
+        if (!seen.has(next)) {
+          seen.add(next);
+          stack.push(next);
+        }
+      }
+    }
   };
 
   it("partitions every generated graph", () => {

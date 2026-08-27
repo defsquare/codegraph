@@ -114,8 +114,22 @@ export function scc(
   internalEdgeCount: number,
   weight: number,
   edges: readonly CycleEdge[] = [],
+  feedbackEdges: readonly CycleEdge[] = [],
 ): StronglyConnectedComponent {
-  return { members, size: members.length, internalEdgeCount, weight, edges };
+  // Derived the way cycles() derives them, from hand-built inputs: the metric
+  // divides non-self weight only, and an absent denominator yields 0, not NaN.
+  const feedbackWeight = feedbackEdges.reduce((sum, edge) => sum + edge.count, 0);
+  const cyclicWeight = edges.reduce((sum, edge) => (edge.selfLoop ? sum : sum + edge.count), 0);
+  return {
+    members,
+    size: members.length,
+    internalEdgeCount,
+    weight,
+    edges,
+    feedbackEdges,
+    feedbackWeight,
+    tangleMetric: cyclicWeight === 0 ? 0 : feedbackWeight / cyclicWeight,
+  };
 }
 
 /** A CycleEdge as `cycles()` builds them: sets already flattened to sorted arrays. */
@@ -143,5 +157,24 @@ export function cycleReport(
   level: FoldLevel = "type",
   view: ViewDescriptor = VIEW,
 ): CycleReport {
-  return { level, view, components, selfLoops };
+  let feedbackEdgeCount = 0;
+  let feedbackWeight = 0;
+  let cyclicWeight = 0;
+  for (const component of components) {
+    feedbackEdgeCount += component.feedbackEdges.length;
+    feedbackWeight += component.feedbackWeight;
+    for (const edge of component.edges) if (!edge.selfLoop) cyclicWeight += edge.count;
+  }
+  return {
+    level,
+    view,
+    components,
+    selfLoops,
+    tangle: {
+      feedbackEdgeCount,
+      feedbackWeight,
+      cyclicWeight,
+      metric: cyclicWeight === 0 ? 0 : feedbackWeight / cyclicWeight,
+    },
+  };
 }

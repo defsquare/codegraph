@@ -123,6 +123,47 @@ describe("cycles over the committed Java snapshot", () => {
     expect(moneyPriceable?.weight).toBe(8);
   });
 
+  it("recommends the minimum feedback set and scores each tangle", () => {
+    // Hand-derived from the dumped fixture components (self-loops excluded on
+    // BOTH sides of the metric — they are intra-member cohesion, not links in
+    // the loop): Basket->Cursor carries 2, Cursor->Basket 1, so the cut is the
+    // lighter Cursor->Basket and the tangle is 1 of 3 cyclic references.
+    // Money<->Priceable is an even 2-cycle: the tie-break cuts the edge into
+    // the smaller id, 1 of 2 references.
+    const report = cycles(foldGraph(graph, { level: "type" }));
+    const basketCursor = report.components[0];
+    expect(basketCursor?.feedbackEdges.map((e) => [e.from, e.to, e.count])).toEqual([
+      [CURSOR, BASKET, 1],
+    ]);
+    expect(basketCursor?.feedbackWeight).toBe(1);
+    expect(basketCursor?.tangleMetric).toBe(1 / 3);
+
+    const moneyPriceable = report.components[1];
+    expect(moneyPriceable?.feedbackEdges.map((e) => [e.from, e.to, e.count])).toEqual([
+      [PRICEABLE, MONEY, 1],
+    ]);
+    expect(moneyPriceable?.feedbackWeight).toBe(1);
+    expect(moneyPriceable?.tangleMetric).toBe(1 / 2);
+
+    // The union over both components; weight 8 (incl. self-loops) is untouched.
+    expect(report.tangle).toEqual({
+      feedbackEdgeCount: 2,
+      feedbackWeight: 2,
+      cyclicWeight: 5,
+      metric: 2 / 5,
+    });
+  });
+
+  it("hands feedback edges back by reference, so membership is a Set lookup", () => {
+    const report = cycles(foldGraph(graph, { level: "type" }));
+    for (const component of report.components) {
+      for (const cut of component.feedbackEdges) {
+        expect(component.edges.includes(cut)).toBe(true);
+        expect(cut.selfLoop).toBe(false);
+      }
+    }
+  });
+
   it("states the level and the view it was computed under", () => {
     const view = composeViews(internalOnly, declaredOnly);
     const report = cycles(foldGraph(graph, { level: "type", view }));
@@ -147,6 +188,9 @@ describe("cycles over the committed Java snapshot", () => {
     const round = JSON.parse(JSON.stringify(once)) as typeof once;
     expect(round.components[0]?.edges[1]?.kinds).toEqual(["invocation", "reference"]);
     expect(round.components[0]?.edges[1]?.provenances).toEqual(["declared"]);
+    // The tangle detail is data, not object identity — it must survive too.
+    expect(round.components[0]?.feedbackEdges).toEqual(once.components[0]?.feedbackEdges);
+    expect(round.tangle).toEqual(once.tangle);
   });
 
   it("exposes self-loop detail the id list omits", () => {
@@ -284,6 +328,12 @@ describe("cycles over hand-built graphs with a known SCC structure", () => {
     ]);
     // A floor of 1: a component of size 0 does not exist.
     expect(cycles(folded, { minSize: 0 }).components).toHaveLength(3);
+    // A trivial component has nothing to cut, and its metric is 0 — never NaN
+    // (the coupling I=0 rule: an absent denominator is not an error state).
+    const trivial = cycles(folded, { minSize: 1 }).components.find((c) => c.size === 1);
+    expect(trivial?.feedbackEdges).toEqual([]);
+    expect(trivial?.feedbackWeight).toBe(0);
+    expect(trivial?.tangleMetric).toBe(0);
     // A threshold that failed to parse falls back to the default, rather than
     // silently reporting every node as a cycle.
     expect(cycles(folded, { minSize: Number.NaN }).components.map((c) => c.size)).toEqual([3]);

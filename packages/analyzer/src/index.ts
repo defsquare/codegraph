@@ -52,6 +52,7 @@ export * from "./queries.js";
 // it was computed under; a coupling number without its view is not a fact.
 export * from "./metrics/coupling.js";
 export * from "./metrics/cycles.js";
+export * from "./metrics/tangle.js";
 
 // Stage 7: renderings. Derived and dynamic-candidate relations stay visually
 // distinguishable from declared facts, and stubs from corpus entities.

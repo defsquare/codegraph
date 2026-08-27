@@ -6,6 +6,7 @@ import {
   ADVERSARIAL_IDS,
   couplingRow,
   couplingTable,
+  cycleEdge,
   cycleReport,
   foldedEdge,
   foldedNode,
@@ -223,8 +224,16 @@ describe("couplingToCsv", () => {
 });
 
 describe("cyclesToCsv", () => {
+  // scc:0 carries a hand-built cut: B->A (4 of the 11 cyclic references).
+  const abEdges = [
+    cycleEdge("java:a/A", "java:b/B", { count: 7 }),
+    cycleEdge("java:b/B", "java:a/A", { count: 4 }),
+  ];
   const report = cycleReport(
-    [scc(["java:a/A", "java:b/B"], 3, 11), scc(["java:c/C", "java:d/D", "java:e/E"], 4, 4)],
+    [
+      scc(["java:a/A", "java:b/B"], 3, 11, abEdges, [abEdges[1]!]),
+      scc(["java:c/C", "java:d/D", "java:e/E"], 4, 4),
+    ],
     ["java:f/F", ADVERSARIAL_IDS.quote],
     "module",
   );
@@ -235,28 +244,41 @@ describe("cyclesToCsv", () => {
       "component",
       "size",
       "weight",
+      "feedbackWeight",
+      "tangleMetric",
       "member",
       "internalEdgeCount",
       "level",
       "view",
     ]);
     expect(rows).toHaveLength(1 + 2 + 3 + 2);
-    expect(rows[1]).toEqual(["scc:0", "2", "11", "java:a/A", "3", "module", "all"]);
-    expect(rows[3]).toEqual(["scc:1", "3", "4", "java:c/C", "4", "module", "all"]);
+    expect(rows[1]).toEqual([
+      "scc:0",
+      "2",
+      "11",
+      "4",
+      String(4 / 11),
+      "java:a/A",
+      "3",
+      "module",
+      "all",
+    ]);
+    expect(rows[3]).toEqual(["scc:1", "3", "4", "0", "0", "java:c/C", "4", "module", "all"]);
   });
 
   it("reports self-loops rather than dropping them, with unknown fields empty", () => {
     const rows = parseCsv(cyclesToCsv(report)).slice(1);
     const loops = rows.filter((row) => row[0] === "selfLoop");
     expect(loops).toHaveLength(2);
-    expect(loops[0]).toEqual(["selfLoop", "1", "", "java:f/F", "", "module", "all"]);
-    // An empty field, not a fabricated 0: the report does not carry the weight.
-    expect(loops[1]?.[3]).toBe(ADVERSARIAL_IDS.quote);
+    expect(loops[0]).toEqual(["selfLoop", "1", "", "", "", "java:f/F", "", "module", "all"]);
+    // An empty field, not a fabricated 0: the report does not carry the weight,
+    // and a self-loop can never be in a feedback set or scored as a tangle.
+    expect(loops[1]?.[5]).toBe(ADVERSARIAL_IDS.quote);
   });
 
   it("renders an empty report as a bare header", () => {
     expect(cyclesToCsv(cycleReport([], []))).toBe(
-      "component,size,weight,member,internalEdgeCount,level,view\n",
+      "component,size,weight,feedbackWeight,tangleMetric,member,internalEdgeCount,level,view\n",
     );
     expect(cyclesToCsv(cycleReport([], []), { header: false })).toBe("");
   });

@@ -37,7 +37,15 @@ const PUBLIC_API = {
     "dependentsOf",
     "neighboursOf",
   ],
-  metrics: ["coupling", "couplingRow", "topByFanIn", "topByFanOut", "cycles", "selfLoopEdges"],
+  metrics: [
+    "coupling",
+    "couplingRow",
+    "topByFanIn",
+    "topByFanOut",
+    "cycles",
+    "selfLoopEdges",
+    "feedbackArcSet",
+  ],
   exports: [
     "toDot",
     "escapeDot",

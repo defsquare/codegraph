@@ -1,6 +1,6 @@
 import type { FoldedGraph, FoldLevel } from "../fold.js";
 import type { CouplingTable } from "../metrics/coupling.js";
-import type { CycleReport } from "../metrics/cycles.js";
+import type { CycleEdge, CycleReport } from "../metrics/cycles.js";
 import { sortIds } from "../order.js";
 import type { ViewDescriptor } from "../views.js";
 
@@ -127,6 +127,21 @@ export function couplingToJson(table: CouplingTable): CouplingTable {
 
 /** A detached, JSON-safe copy of the cycle report. */
 export function cyclesToJson(report: CycleReport): CycleReport {
+  // The per-edge detail is what makes a reported cycle actionable AND
+  // auditable (count = cost of cutting, provenances = fact vs inference).
+  // Copying members/size/weight alone would export a cycle stripped of the
+  // evidence decision 7 requires, so each CycleEdge is detached in full —
+  // feedback edges included: in the export they are copies, not references
+  // into `edges`, so the artifact stays auditable on its own.
+  const detach = (edge: CycleEdge): CycleEdge => ({
+    from: edge.from,
+    to: edge.to,
+    count: edge.count,
+    kinds: [...edge.kinds],
+    provenances: [...edge.provenances],
+    allDeclared: edge.allDeclared,
+    selfLoop: edge.selfLoop,
+  });
   return {
     level: report.level,
     view: { name: report.view.name, filters: [...report.view.filters] },
@@ -135,21 +150,13 @@ export function cyclesToJson(report: CycleReport): CycleReport {
       size: component.size,
       internalEdgeCount: component.internalEdgeCount,
       weight: component.weight,
-      // The per-edge detail is what makes a reported cycle actionable AND
-      // auditable (count = cost of cutting, provenances = fact vs inference).
-      // Copying members/size/weight alone would export a cycle stripped of the
-      // evidence decision 7 requires, so each CycleEdge is detached in full.
-      edges: component.edges.map((edge) => ({
-        from: edge.from,
-        to: edge.to,
-        count: edge.count,
-        kinds: [...edge.kinds],
-        provenances: [...edge.provenances],
-        allDeclared: edge.allDeclared,
-        selfLoop: edge.selfLoop,
-      })),
+      edges: component.edges.map(detach),
+      feedbackEdges: component.feedbackEdges.map(detach),
+      feedbackWeight: component.feedbackWeight,
+      tangleMetric: component.tangleMetric,
     })),
     selfLoops: [...report.selfLoops],
+    tangle: { ...report.tangle },
   };
 }
 

@@ -213,6 +213,29 @@ describe("couplingToJson and cyclesToJson", () => {
     expect(round[1]).toMatchObject({ allDeclared: false, provenances: ["derived"] });
     expect(round[2]).toMatchObject({ selfLoop: true, count: 6 });
   });
+
+  it("carries the feedback set and the tangle metric, detached", () => {
+    // The cut is the report's actionable recommendation — an export that
+    // dropped it would publish a tangle score with no way to audit it.
+    const heavy = cycleEdge("java:a/A", "java:b/B", { count: 4 });
+    const cut = cycleEdge("java:b/B", "java:a/A", { count: 1 });
+    const withCut = cycleReport([scc(["java:a/A", "java:b/B"], 2, 5, [heavy, cut], [cut])]);
+
+    const json = cyclesToJson(withCut);
+    const component = json.components[0]!;
+    expect(component.feedbackEdges).toEqual([cut]);
+    expect(component.feedbackEdges).not.toBe(withCut.components[0]!.feedbackEdges);
+    expect(component.feedbackEdges[0]).not.toBe(cut);
+    expect(component.feedbackWeight).toBe(1);
+    expect(component.tangleMetric).toBe(1 / 5);
+    expect(json.tangle).toEqual({
+      feedbackEdgeCount: 1,
+      feedbackWeight: 1,
+      cyclicWeight: 5,
+      metric: 1 / 5,
+    });
+    expect(json.tangle).not.toBe(withCut.tangle);
+  });
 });
 
 describe("toJsonString", () => {

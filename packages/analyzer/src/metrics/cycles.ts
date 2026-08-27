@@ -2,6 +2,7 @@ import type { EdgeKind, EntityId, Provenance } from "@codegraph/core";
 import type { FoldedEdge, FoldedGraph, FoldLevel } from "../fold.js";
 import { compareIds, sortIds, sortedUnique } from "../order.js";
 import type { ViewDescriptor } from "../views.js";
+import { feedbackArcSet } from "./tangle.js";
 
 /**
  * Stage 6: cycle detection (decision 5, PLAN.md §6.4, METAMODEL.md §9).
@@ -60,6 +61,33 @@ export interface StronglyConnectedComponent {
    * filter on `CycleEdge.selfLoop` when choosing an edge to cut.
    */
   readonly edges: readonly CycleEdge[];
+  /**
+   * The minimum feedback set (Structure101's tangle cut): a minimal subset of
+   * `edges` — the SAME objects, never a self-loop, sorted by (from, to) —
+   * whose removal leaves the component acyclic. Heuristic (see tangle.ts) but
+   * minimal by construction: re-adding any single member restores a cycle.
+   */
+  readonly feedbackEdges: readonly CycleEdge[];
+  /** Sum of `feedbackEdges` counts — the base-edge references the cut severs. */
+  readonly feedbackWeight: number;
+  /**
+   * feedbackWeight / the component's non-self internal weight, in [0, 1] —
+   * Structure101's tangle metric. Self-loops are excluded from BOTH sides:
+   * the metric scores references BETWEEN members, and a folding-induced
+   * self-dependency is cohesion inside one member, never a cuttable link.
+   * 0 — not NaN — when there is no non-self edge (only possible at minSize 1).
+   */
+  readonly tangleMetric: number;
+}
+
+/** The report-wide tangle roll-up: the union of every component's cut. */
+export interface TangleSummary {
+  readonly feedbackEdgeCount: number;
+  readonly feedbackWeight: number;
+  /** Non-self internal weight summed over the reported components. */
+  readonly cyclicWeight: number;
+  /** feedbackWeight / cyclicWeight; 0 — not NaN — on an acyclic graph. */
+  readonly metric: number;
 }
 
 export interface CycleReport {
@@ -69,6 +97,7 @@ export interface CycleReport {
   readonly components: readonly StronglyConnectedComponent[];
   /** Nodes carrying a folding-induced self-loop, sorted. */
   readonly selfLoops: readonly EntityId[];
+  readonly tangle: TangleSummary;
 }
 
 export interface CyclesOptions {
@@ -225,12 +254,21 @@ export function cycles(folded: FoldedGraph, options?: CyclesOptions): CycleRepor
 
   const components: StronglyConnectedComponent[] = memberLists.map((members, position) => {
     const edges = internal[position] ?? [];
+    const feedbackEdges = feedbackArcSet(edges);
+    const feedbackWeight = feedbackEdges.reduce((sum, edge) => sum + edge.count, 0);
+    const cyclicWeight = edges.reduce(
+      (sum, edge) => (edge.selfLoop ? sum : sum + edge.count),
+      0,
+    );
     return {
       members,
       size: members.length,
       internalEdgeCount: edges.length,
       weight: weights[position] ?? 0,
       edges,
+      feedbackEdges,
+      feedbackWeight,
+      tangleMetric: cyclicWeight === 0 ? 0 : feedbackWeight / cyclicWeight,
     };
   });
 
@@ -239,6 +277,24 @@ export function cycles(folded: FoldedGraph, options?: CyclesOptions): CycleRepor
     view: folded.view,
     components,
     selfLoops: sortedUnique(selfLooping),
+    tangle: tangleSummary(components),
+  };
+}
+
+function tangleSummary(components: readonly StronglyConnectedComponent[]): TangleSummary {
+  let feedbackEdgeCount = 0;
+  let feedbackWeight = 0;
+  let cyclicWeight = 0;
+  for (const component of components) {
+    feedbackEdgeCount += component.feedbackEdges.length;
+    feedbackWeight += component.feedbackWeight;
+    for (const edge of component.edges) if (!edge.selfLoop) cyclicWeight += edge.count;
+  }
+  return {
+    feedbackEdgeCount,
+    feedbackWeight,
+    cyclicWeight,
+    metric: cyclicWeight === 0 ? 0 : feedbackWeight / cyclicWeight,
   };
 }
 
