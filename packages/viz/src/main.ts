@@ -26,7 +26,7 @@ import {
 } from "./scene/palette.js";
 import { createCityScene, type CityScene } from "./three/cityScene.js";
 import { BuildingPicker } from "./three/picking.js";
-import { AGE_FADE_GRAY, CO_CHANGE_COLOR, COLORS, REPLAY_HEAT_COLOR } from "./theme.js";
+import { AGE_FADE_GRAY, CO_CHANGE_COLOR, COLORS, REPLAY_HEAT_COLOR, TANGLE_COLOR } from "./theme.js";
 
 /**
  * The viewer shell: load a city artifact (dev-server `/city.json`, `?src=URL`,
@@ -66,6 +66,7 @@ const toggleBuildings = must<HTMLInputElement>("#toggle-buildings");
 const toggleFanIn = must<HTMLInputElement>("#toggle-fan-in");
 const toggleFanOut = must<HTMLInputElement>("#toggle-fan-out");
 const toggleExternals = must<HTMLInputElement>("#toggle-externals");
+const toggleTangles = must<HTMLInputElement>("#toggle-tangles");
 const toggleCoChange = must<HTMLInputElement>("#toggle-cochange");
 const coChangeLabel = must<HTMLElement>("#cochange-label");
 const colorMode = must<HTMLSelectElement>("#color-mode");
@@ -162,6 +163,7 @@ function fanToggles(): ArrowToggles {
     fanIn: toggleFanIn.checked,
     fanOut: toggleFanOut.checked,
     externals: toggleExternals.checked,
+    tangles: toggleTangles.checked,
   };
 }
 
@@ -182,7 +184,7 @@ function applyToggles(): void {
   cityScene.setFocus(buildings ? locked : null, fanToggles());
   cityScene.setDistrictFocus(selectedDistrict, fanToggles());
 }
-for (const toggle of [toggleBuildings, toggleFanIn, toggleFanOut, toggleExternals]) {
+for (const toggle of [toggleBuildings, toggleFanIn, toggleFanOut, toggleExternals, toggleTangles]) {
   toggle.addEventListener("change", applyToggles);
 }
 
@@ -405,6 +407,7 @@ function swatchColor(kind: string): number | undefined {
   if (kind === "stub") return palette.buildingStub;
   if (kind === "fanIn") return palette.arrowFanIn;
   if (kind === "fanOut") return palette.arrowFanOut;
+  if (kind === "tangle") return TANGLE_COLOR;
   if (kind === "heat") return REPLAY_HEAT_COLOR;
   if (kind === "age") return AGE_FADE_GRAY;
   if (kind === "coChange") return CO_CHANGE_COLOR;

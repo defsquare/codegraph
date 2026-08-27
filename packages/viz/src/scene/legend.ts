@@ -8,7 +8,16 @@ import type { CityLayout, ReplayCityLayout } from "@codegraph/city";
  */
 export interface LegendEntry {
   /** Which swatch to draw beside the label; null = text-only line. */
-  readonly swatch: "building" | "stub" | "fanIn" | "fanOut" | "heat" | "age" | "coChange" | null;
+  readonly swatch:
+    | "building"
+    | "stub"
+    | "fanIn"
+    | "fanOut"
+    | "tangle"
+    | "heat"
+    | "age"
+    | "coChange"
+    | null;
   readonly label: string;
   readonly detail: string | undefined;
 }
@@ -58,6 +67,21 @@ export function legendModel(city: CityLayout): readonly LegendEntry[] {
       detail: "the clicked building or district turns violet; each arc's far end tints by direction",
     },
   );
+
+  // The tangle entry exists only when the artifact actually marks a cut —
+  // a legend line for a hue that never appears would be an invented color.
+  const anyFeedback =
+    city.arrows.some((arrow) => arrow.feedback === true) ||
+    (city.districtArrows ?? []).some((arrow) => arrow.feedback === true);
+  if (anyFeedback) {
+    entries.push({
+      swatch: "tangle",
+      label: "tangle",
+      detail:
+        "red — minimum feedback set: cutting these dependencies breaks the cycle; " +
+        "the 'Tangles' toggle shows them at rest",
+    });
+  }
 
   // The TIME COLORS exist only where a time axis does — a replay artifact.
   const replay = (city as Partial<ReplayCityLayout>).replay;

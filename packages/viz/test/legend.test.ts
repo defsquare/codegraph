@@ -40,6 +40,28 @@ describe("legendModel", () => {
     expect(layout?.detail).toBe("gaps 2/3/6 (street/sidewalk/avenue)");
   });
 
+  it("adds the tangle entry ONLY when the artifact marks a feedback set", () => {
+    expect(entries.some((entry) => entry.swatch === "tangle")).toBe(false);
+    const base = makeCity();
+    const tangled = makeCity({
+      arrows: base.arrows.map((arrow, i) => ({ ...arrow, feedback: i === 0 })) as never,
+    });
+    const withTangle = legendModel(tangled);
+    const entry = withTangle.find((candidate) => candidate.swatch === "tangle");
+    expect(entry?.label).toBe("tangle");
+    expect(entry?.detail).toContain("minimum feedback set");
+    // District-level cuts alone also earn the entry.
+    const districtTangled = makeCity({
+      districtArrows: base.districtArrows.map((arrow, i) => ({
+        ...arrow,
+        feedback: i === 0,
+      })) as never,
+    });
+    expect(legendModel(districtTangled).some((candidate) => candidate.swatch === "tangle")).toBe(
+      true,
+    );
+  });
+
   it("adds the heat and age entries ONLY for a replay artifact", () => {
     expect(entries.some((entry) => entry.swatch === "heat")).toBe(false);
     const replayCity = {

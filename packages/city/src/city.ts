@@ -3,11 +3,13 @@ import type { EdgeKind, Entity, EntityId, Provenance } from "@codegraph/core";
 import {
   coupling,
   createFolder,
+  cycles,
   foldGraph,
   identityView,
   sortIds,
   type CodeGraph,
   type CouplingRow,
+  type CycleReport,
   type FoldedEdge,
   type FoldedNode,
   type View,
@@ -210,6 +212,12 @@ export interface Arrow {
   readonly inferred: boolean;
   /** True when the endpoints stand in different districts. */
   readonly crossDistrict: boolean;
+  /**
+   * True when this dependency is in the minimum feedback set of its strongly
+   * connected component at this level — the analyzer's cut recommendation.
+   * The renderer only draws it; it never re-derives graph facts (CLAUDE.md).
+   */
+  readonly feedback: boolean;
 }
 
 export interface CityDiagnostics {
@@ -405,6 +413,7 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
 
   // Arrows: type-level dependencies, roof to roof. A self-dependency is a
   // method calling a sibling of its own class — real, and not an arrow.
+  const typeFeedback = feedbackPairs(cycles(folded));
   const arrows: Arrow[] = [];
   let selfArrows = 0;
   let droppedArrows = 0;
@@ -419,7 +428,7 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
       droppedArrows += 1;
       continue;
     }
-    arrows.push(arrowFor(edge, from, to));
+    arrows.push(arrowFor(edge, from, to, isFeedback(typeFeedback, edge)));
   }
 
   // District arrows: the SAME graph folded at module level, so module facts
@@ -431,6 +440,7 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
     ...(options.edgeKinds === undefined ? {} : { edgeKinds: options.edgeKinds }),
   });
   const districtIds = new Set(districts.map((district) => district.id));
+  const moduleFeedback = feedbackPairs(cycles(moduleFolded));
   const districtArrows: Arrow[] = [];
   let selfDistrictArrows = 0;
   let droppedDistrictArrows = 0;
@@ -452,6 +462,7 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
       provenances,
       inferred: provenances.some((provenance) => provenance !== "declared"),
       crossDistrict: true,
+      feedback: isFeedback(moduleFeedback, edge),
     });
   }
 
@@ -707,7 +718,7 @@ function parentDistrictOf(
   return undefined;
 }
 
-function arrowFor(edge: FoldedEdge, from: Building, to: Building): Arrow {
+function arrowFor(edge: FoldedEdge, from: Building, to: Building, feedback: boolean): Arrow {
   const provenances = [...edge.provenances].sort();
   return {
     from: edge.from,
@@ -717,5 +728,29 @@ function arrowFor(edge: FoldedEdge, from: Building, to: Building): Arrow {
     provenances,
     inferred: provenances.some((provenance) => provenance !== "declared"),
     crossDistrict: from.district !== to.district,
+    feedback,
   };
+}
+
+/**
+ * The union of every component's feedback set, as a nested endpoint map —
+ * never a packed string key, because rendered ids are opaque tokens.
+ */
+function feedbackPairs(report: CycleReport): ReadonlyMap<EntityId, ReadonlySet<EntityId>> {
+  const pairs = new Map<EntityId, Set<EntityId>>();
+  for (const component of report.components) {
+    for (const cut of component.feedbackEdges) {
+      const targets = pairs.get(cut.from);
+      if (targets === undefined) pairs.set(cut.from, new Set([cut.to]));
+      else targets.add(cut.to);
+    }
+  }
+  return pairs;
+}
+
+function isFeedback(
+  pairs: ReadonlyMap<EntityId, ReadonlySet<EntityId>>,
+  edge: FoldedEdge,
+): boolean {
+  return pairs.get(edge.from)?.has(edge.to) ?? false;
 }

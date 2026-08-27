@@ -36,6 +36,18 @@ describe("districtArcs", () => {
     expect(weights.get(2)).toBeCloseTo(Math.log1p(2) / Math.log1p(3));
   });
 
+  it("copies feedback verbatim, defaulting to false for artifacts predating it", () => {
+    expect(arcs.map((arc) => arc.feedback)).toEqual([false, false]);
+    const cut = makeCity({
+      districtArrows: city.districtArrows.map((arrow, i) => ({
+        ...arrow,
+        feedback: i === 1,
+      })) as never,
+    });
+    const cutArcs = districtArcs(cut, districtPlates(cut), buildingBoxes(cut));
+    expect(cutArcs.map((arc) => arc.feedback)).toEqual([false, true]);
+  });
+
   it("flags an arc external when either endpoint is a stub district", () => {
     // The fixture's districts are all corpus-declared: nothing is external.
     expect(arcs.map((arc) => arc.external)).toEqual([false, false]);

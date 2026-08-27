@@ -15,6 +15,9 @@ export interface DistrictArc {
   readonly to: string;
   readonly count: number;
   readonly inferred: boolean;
+  /** In the minimum feedback set — the analyzer's cycle cut. Copied verbatim;
+   * an artifact from before the field reads as false. */
+  readonly feedback: boolean;
   /** True when either endpoint module is a stub; the externals toggle gates these. */
   readonly external: boolean;
   /** Aggregated edge count mapped to [0, 1] on a log scale over this city. */
@@ -51,6 +54,7 @@ export function districtArcs(
         to: arrow.to,
         count: arrow.count,
         inferred: arrow.inferred,
+        feedback: arrow.feedback === true,
         external: from.isStub || to.isStub,
         weight: maxCount <= 1 ? 1 : Math.log1p(arrow.count) / Math.log1p(maxCount),
         points: sampleArc(topCenter(from), topCenter(to), skyline * 1.15 + 2),

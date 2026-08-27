@@ -84,6 +84,17 @@ export const CO_CHANGE_DASH = 1.2;
 export const CO_CHANGE_GAP = 0.8;
 export const CO_CHANGE_ALPHA = 0.9;
 
+/**
+ * TANGLE / MINIMUM FEEDBACK SET: the artifact's `feedback` arrows — the
+ * analyzer's cut recommendation for breaking a dependency cycle — in
+ * Structure101's red. Semantic and never reused: replay heat (0xd0452e) exists
+ * only in the Time color mode, fan hues only under a selection; this red is
+ * the one hue an arc can wear AT REST, behind the 'Tangles' toggle. An
+ * inferred feedback arc still desaturates toward INFERRED_GRAY — provenance
+ * keeps the saturation channel.
+ */
+export const TANGLE_COLOR = 0xb3261e;
+
 /** District plates rest on the ground plane; buildings stand on the plates. */
 export const PLATE_THICKNESS = 0.35;
 export const GROUND_THICKNESS = 0.7;

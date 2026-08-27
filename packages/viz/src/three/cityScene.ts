@@ -29,6 +29,7 @@ import {
   PLATE_TINT_PER_LEVEL,
   REPLAY_HEAT_COLOR,
   SELECT_COLOR,
+  TANGLE_COLOR,
 } from "../theme.js";
 
 /**
@@ -220,6 +221,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
   const fanOutColor = new THREE.Color(palette.arrowFanOut);
   const selectColor = new THREE.Color(SELECT_COLOR);
   const inferredGray = new THREE.Color(INFERRED_GRAY);
+  const tangleColor = new THREE.Color(TANGLE_COLOR);
   function paintArcs(
     layer: ReturnType<typeof buildArcLines>,
     arcList: readonly {
@@ -228,6 +230,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
       weight: number;
       inferred: boolean;
       external: boolean;
+      feedback: boolean;
     }[],
     selected: string | null,
     toggles: ArrowToggles,
@@ -235,7 +238,16 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     arcList.forEach((arc, i) => {
       const state = arcState(arc, selected, toggles);
       if (state.role !== "hidden") {
-        color.copy(state.role === "fanOut" ? fanOutColor : fanInColor);
+        // A feedback arc wears the tangle red whatever the selection — the
+        // offense outranks the direction hue. Provenance keeps the saturation
+        // channel in every role, so a red arc can still read as an inference.
+        color.copy(
+          state.role === "feedback"
+            ? tangleColor
+            : state.role === "fanOut"
+              ? fanOutColor
+              : fanInColor,
+        );
         if (arc.inferred) color.lerp(inferredGray, INFERRED_DESATURATION);
         layer.setTint(i, color);
         layer.setWidth(i, state.role === "fanIn" ? ARROW_FAN_IN_WIDTH : 1);

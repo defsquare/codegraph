@@ -15,6 +15,9 @@ export interface ArrowArc {
   readonly count: number;
   readonly inferred: boolean;
   readonly crossDistrict: boolean;
+  /** In the minimum feedback set — the analyzer's cycle cut. Copied verbatim;
+   * an artifact from before the field reads as false. */
+  readonly feedback: boolean;
   /** True when either endpoint is a stub — a dependency on code the corpus
    * does not declare; the externals toggle gates these. */
   readonly external: boolean;
@@ -45,6 +48,7 @@ export function arrowArcs(city: CityLayout, boxes: readonly BuildingBox[]): read
         count: arrow.count,
         inferred: arrow.inferred,
         crossDistrict: arrow.crossDistrict,
+        feedback: arrow.feedback === true,
         external: from.isStub || to.isStub,
         weight: maxCount <= 1 ? 1 : Math.log1p(arrow.count) / Math.log1p(maxCount),
         points: sampleArc(roofOf(from), roofOf(to)),

@@ -132,6 +132,35 @@ describe("buildCity: the mapping", () => {
     expect(city.districtArrows[0]?.crossDistrict).toBe(true);
   });
 
+  it("marks the minimum feedback set on arrows — the analyzer's cut, not the renderer's guess", () => {
+    // A mutual dependency with unequal weights: A->B carries 2 base edges,
+    // B->A carries 1, so the analyzer's cut is the lighter B->A. The same
+    // holds one level up for the district arrows.
+    const graph = graphOf(
+      [pkg("java:a"), pkg("java:b"), type("java:a/A", "java:a", 10), type("java:b/B", "java:b", 10)],
+      [
+        edge("reference", "java:a/A", "java:b/B"),
+        edge("invocation", "java:a/A", "java:b/B"),
+        edge("reference", "java:b/B", "java:a/A"),
+      ],
+    );
+    const city = buildCity(graph);
+    expect(city.arrows.map((a) => [a.from, a.to, a.feedback])).toEqual([
+      ["java:a/A", "java:b/B", false],
+      ["java:b/B", "java:a/A", true],
+    ]);
+    expect(city.districtArrows.map((a) => [a.from, a.to, a.feedback])).toEqual([
+      ["java:a", "java:b", false],
+      ["java:b", "java:a", true],
+    ]);
+  });
+
+  it("marks no feedback on an acyclic city", () => {
+    const city = buildCity(toyGraph());
+    expect(city.arrows.every((a) => a.feedback === false)).toBe(true);
+    expect(city.districtArrows.every((a) => a.feedback === false)).toBe(true);
+  });
+
   it("drops a type-level self-dependency instead of drawing an arrow to one roof", () => {
     const graph = graphOf(
       [

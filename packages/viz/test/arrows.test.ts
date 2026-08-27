@@ -37,6 +37,16 @@ describe("arrowArcs", () => {
     expect(arcs.map((arc) => arc.crossDistrict)).toEqual([false, true]);
   });
 
+  it("copies feedback verbatim, defaulting to false for artifacts predating it", () => {
+    // The base fixture carries no feedback key at all — an older artifact —
+    // and the renderer must read that as "no cut", never as an error.
+    expect(arcs.map((arc) => arc.feedback)).toEqual([false, false]);
+    const cut = makeCity({
+      arrows: city.arrows.map((arrow, i) => ({ ...arrow, feedback: i === 0 })) as never,
+    });
+    expect(arrowArcs(cut, buildingBoxes(cut)).map((arc) => arc.feedback)).toEqual([true, false]);
+  });
+
   it("flags an arc external when either endpoint is a stub building", () => {
     // OrderController is the fixture's stub; the OrderService -> Order arc
     // stays internal.
