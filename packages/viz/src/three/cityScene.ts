@@ -84,7 +84,12 @@ export interface CityScene {
    * neutral), or null to leave the mode. While set it takes the base-color
    * slot; the time shading is ignored — one color mode at a time.
    */
-  setOwnerColors(colors: readonly (number | null)[] | null): void;
+/**
+   * A per-building CATEGORICAL color override — the slot the Owner and Role
+   * modes share. null clears it; a null entry means "this building has no
+   * category", and is painted neutral rather than given a hue that claims one.
+   */
+  setCategoryColors(colors: readonly (number | null)[] | null): void;
   /** Gate the co-change arcs: when true, the selected building shows its own. */
   setCoChangeVisible(visible: boolean): void;
   dispose(): void;
@@ -138,17 +143,18 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
   // shaded by the replay time colors when a scrub set them.
   let shadingHeats: ArrayLike<number> | null = null;
   let shadingAges: ArrayLike<number> | null = null;
-  let ownerColors: readonly (number | null)[] | null = null;
+  let categoryColors: readonly (number | null)[] | null = null;
   const heatColor = new THREE.Color(REPLAY_HEAT_COLOR);
   const fadeColor = new THREE.Color(AGE_FADE_GRAY);
-  /** The color instance `i` wears when NOT highlighted. Owner mode (when set)
-   * takes the slot outright — ownerless buildings go neutral, never a hue
-   * claiming an author. Otherwise: palette base, aged toward gray, then
+  /** The color instance `i` wears when NOT highlighted. A CATEGORY mode (owner
+   * or role) takes the slot outright — an uncategorized building goes neutral,
+   * never a hue claiming an author or a role it was never assigned.
+   * Otherwise: palette base, aged toward gray, then
    * heated toward ember — heat wins, "changed recently" reads louder than
    * "old". Writes the shared scratch. */
   function baseBoxColor(i: number, box: BuildingBox): THREE.Color {
-    if (ownerColors !== null && !box.isStub) {
-      return color.setHex(ownerColors[i] ?? AGE_FADE_GRAY);
+    if (categoryColors !== null && !box.isStub) {
+      return color.setHex(categoryColors[i] ?? AGE_FADE_GRAY);
     }
     color.setHex(box.isStub ? palette.buildingStub : palette.building);
     if (shadingHeats !== null && shadingAges !== null && !box.isStub) {
@@ -335,8 +341,8 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     repaintBases();
   }
 
-  function setOwnerColors(colors: readonly (number | null)[] | null): void {
-    ownerColors = colors;
+  function setCategoryColors(colors: readonly (number | null)[] | null): void {
+    categoryColors = colors;
     repaintBases();
   }
 
@@ -430,7 +436,7 @@ export function createCityScene(city: CityLayout, initialPalette: CityPalette): 
     setExternalsVisible,
     setHeights,
     setShading,
-    setOwnerColors,
+    setCategoryColors,
     setCoChangeVisible,
     dispose: () => disposables.forEach((d) => d.dispose()),
   };

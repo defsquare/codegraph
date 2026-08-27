@@ -1,4 +1,5 @@
 import type { CityLayout, ReplayCityLayout } from "@codegraph/city";
+import { roleColoring } from "./roles.js";
 
 /**
  * The on-screen legend, derived from the artifact's own declarations — its
@@ -17,9 +18,12 @@ export interface LegendEntry {
     | "heat"
     | "age"
     | "coChange"
+    | "role"
     | null;
   readonly label: string;
   readonly detail: string | undefined;
+  /** For a `role` swatch: the exact color drawn, from the role palette. */
+  readonly color?: number;
 }
 
 export function legendModel(city: CityLayout): readonly LegendEntry[] {
@@ -80,6 +84,28 @@ export function legendModel(city: CityLayout): readonly LegendEntry[] {
       detail:
         "red — minimum feedback set: cutting these dependencies breaks the cycle; " +
         "the 'Tangles' toggle shows them at rest",
+    });
+  }
+
+  // The ROLE channel exists only when a framework profile classified the
+  // corpus. Every role it assigned gets a line: a color whose meaning is not
+  // stated is not a fact.
+  if (city.roles !== undefined) {
+    const coloring = roleColoring([], city.roles.values);
+    entries.push({
+      swatch: null,
+      label: `roles = ${city.roles.framework} (Colors -> Role)`,
+      detail:
+        "an INFERENCE from written annotations — what the framework says a type " +
+        "is for; a building with no role stays neutral",
+    });
+    coloring.roles.forEach((role, index) => {
+      entries.push({
+        swatch: "role",
+        label: role,
+        detail: undefined,
+        color: coloring.swatches[index] as number,
+      });
     });
   }
 

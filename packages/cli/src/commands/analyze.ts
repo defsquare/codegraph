@@ -22,6 +22,7 @@ import {
   type View,
   type ViewDescriptor,
 } from "@codegraph/analyzer";
+import { deriveFrameworkWiring, springProfile, type FrameworkWiring } from "@codegraph/analyzer";
 import type { AnalyzeOptions, ReportName } from "../args.js";
 import { EXIT, type ExitCode } from "../exit.js";
 import { errLine, errLines, outLines, type IoSink } from "../io.js";
@@ -91,7 +92,105 @@ function analyzeSource(source: AnalysisSource, options: AnalyzeOptions, io: IoSi
       return couplingReport(coupling(folded), context, io, exitCode);
     case "cycles":
       return cyclesReport(cycles(folded), context, io, exitCode);
+    case "wiring":
+      return wiringReport(
+        deriveFrameworkWiring(source.graph(), springProfile),
+        context,
+        io,
+        exitCode,
+      );
   }
+}
+
+/* ------------------------------------------------------------------ wiring */
+
+/**
+ * What the CONTAINER does to the corpus (METAMODEL §9.1) — the roles the
+ * framework assigns, and the implementations it could inject at each injection
+ * point. Everything here is an INFERENCE over declared facts, and the report
+ * says so in its header: no line of it is a fact about the code the way a
+ * dependency is.
+ */
+function wiringReport(
+  wiring: FrameworkWiring,
+  context: ReportContext,
+  io: IoSink,
+  exitCode: ExitCode,
+): ExitCode {
+  if (context.json) {
+    const ranking: Ranking = {
+      by: "injection point id",
+      top: null,
+      shown: wiring.injectionPoints.length,
+      total: wiring.injectionPoints.length,
+      indices: [],
+    };
+    emitJson(io, {
+      ...envelope(context, ranking),
+      framework: wiring.framework,
+      roles: wiring.roles,
+      injectionPoints: wiring.injectionPoints,
+      candidateEdges: wiring.edges.map((edge) => ({
+        from: edge.from,
+        to: edge.to,
+        provenance: edge.provenance,
+        candidates: edge.candidates ?? [],
+      })),
+      wiringDiagnostics: wiring.diagnostics,
+    });
+    return exitCode;
+  }
+
+  const lines = [...headerLines(context)];
+  lines.push(
+    `framework: ${wiring.framework} — every line below is DERIVED from annotations,`,
+    "           never a declared fact; candidate targets are `dynamic-candidate`.",
+    "",
+  );
+
+  const stereotypes = new Map<string, string[]>();
+  for (const role of wiring.roles) {
+    if (role.role !== "stereotype" || role.stereotype === undefined) continue;
+    const bucket = stereotypes.get(role.stereotype);
+    if (bucket === undefined) stereotypes.set(role.stereotype, [role.id]);
+    else bucket.push(role.id);
+  }
+  lines.push(`architectural roles (${countOf(stereotypes)} types):`);
+  for (const [stereotype, ids] of [...stereotypes].sort(([a], [b]) => compareIds(a, b))) {
+    lines.push(`  ${stereotype.padEnd(14)} ${ids.length}`);
+    for (const id of sortIds(ids)) lines.push(`    ${id}`);
+  }
+  const entryPoints = wiring.roles.filter((role) => role.role === "entry-point");
+  lines.push("", `entry points: ${entryPoints.length} (called from outside the corpus)`);
+
+  lines.push("", `injection points: ${wiring.injectionPoints.length}`);
+  for (const point of wiring.injectionPoints) {
+    const via = point.via === "annotation" ? "annotated" : "sole ctor";
+    lines.push(`  ${point.id}  [${via}]`);
+    lines.push(`    wants ${point.declaredType ?? "(unresolved)"}`);
+    if (point.candidates.length === 0) {
+      lines.push(`    ~> none — ${point.note ?? "no corpus implementation"}`);
+    } else {
+      for (const candidate of point.candidates) lines.push(`    ~> ${candidate}`);
+      if (point.note !== undefined) lines.push(`       (${point.note})`);
+    }
+  }
+
+  lines.push(
+    "",
+    `derived ${wiring.edges.length} candidate edge(s); ` +
+      `${wiring.diagnostics.unimplemented} injection point(s) have no corpus implementation, ` +
+      `${wiring.diagnostics.narrowed} narrowed by @Primary/@Qualifier, ` +
+      `${wiring.diagnostics.unresolvedTypes} with an unresolved type.`,
+  );
+  outLines(io, lines);
+  return exitCode;
+}
+
+function countOf(groups: ReadonlyMap<string, readonly string[]>): number {
+  let total = 0;
+  for (const ids of groups.values()) total += ids.length;
+  return total;
 }
 
 /* ------------------------------------------------------------------ context */
@@ -134,6 +233,9 @@ function foldFor(
 }
 
 function layerOf(report: ReportName, level: FoldLevel): string {
+  // The wiring report reads the BASE graph, not a fold: annotations sit on
+  // members, and folding them away is exactly what would lose them.
+  if (report === "wiring") return "annotation uses over the base graph (not folded)";
   if (report !== "deps") return `every edge kind folded to ${level} level`;
   return level === "module"
     ? "import edges only, module -> module (the cross-language layer)"

@@ -5,6 +5,7 @@ import { CityLoadError, parseCityLayout } from "./guard.js";
 import { progressFraction, progressLabel } from "./progress.js";
 import { timelineModel, type TimelineModel } from "./scene/timeline.js";
 import { ownerColoring } from "./scene/owners.js";
+import { roleColoring } from "./scene/roles.js";
 import {
   buildingDetails,
   districtDetails,
@@ -73,6 +74,8 @@ const coChangeLabel = must<HTMLElement>("#cochange-label");
 const colorMode = must<HTMLSelectElement>("#color-mode");
 const colorModeLabel = must<HTMLElement>("#color-mode-label");
 const colorModeOwner = must<HTMLOptionElement>("#color-mode-owner");
+const colorModeRole = must<HTMLOptionElement>("#color-mode-role");
+const colorModeTime = must<HTMLOptionElement>("#color-mode-time");
 const resetView = must<HTMLButtonElement>("#reset-view");
 const colorsMenu = must<HTMLDetailsElement>("#colors-menu");
 const colorBuilding = must<HTMLInputElement>("#color-building");
@@ -258,6 +261,7 @@ function showCity(city: CityLayout): void {
   currentCity = city;
   scene.add(cityScene.root);
   frameCity(city);
+  setupRoles(city);
   setupReplay(city);
   // `corpus` arrived with this feature; older artifacts fall back to the view.
   const corpus = (city as { corpus?: { name?: string } }).corpus;
@@ -299,6 +303,8 @@ let heatsBuffer: Float32Array | null = null;
 let agesBuffer: Float32Array | null = null;
 /** Owner-mode hues, computed once per loaded city; null entries = no owner. */
 let ownerColors: readonly (number | null)[] | null = null;
+/** Role-mode hues, computed once per loaded city; null entries = no role. */
+let roleColors: readonly (number | null)[] | null = null;
 let replayTimer: number | null = null;
 const PLAY_TICK_MS = 140;
 
@@ -348,15 +354,32 @@ function retargetSourceLink(): void {
 
 /** One sink for the 'Colors' selector: exactly one mode owns the base color. */
 function applyColorMode(): void {
-  if (!cityScene || timeline === null) return;
-  if (colorMode.value === "owner") {
+  if (!cityScene) return;
+  if (colorMode.value === "owner" || colorMode.value === "role") {
     cityScene.setShading(null, null);
-    cityScene.setOwnerColors(ownerColors);
-  } else {
-    cityScene.setOwnerColors(null);
-    if (colorMode.value === "time") setTick(Number(timelineScrub.value));
-    else cityScene.setShading(null, null);
+    cityScene.setCategoryColors(colorMode.value === "owner" ? ownerColors : roleColors);
+    return;
   }
+  cityScene.setCategoryColors(null);
+  // Time is a REPLAY mode: without a timeline there is nothing to scrub, and
+  // the mode is not on offer.
+  if (colorMode.value === "time" && timeline !== null) setTick(Number(timelineScrub.value));
+  else cityScene.setShading(null, null);
+}
+
+/**
+ * The Role channel (M10d): offered whenever the artifact declares roles, which
+ * a STATIC city does too — so the Colors selector is no longer replay-only.
+ */
+function setupRoles(city: CityLayout): void {
+  if (!cityScene) return;
+  const declared = (city as { roles?: { framework: string; values: readonly string[] } }).roles;
+  const coloring = roleColoring(cityScene.boxes, declared?.values ?? []);
+  const any = coloring.colors.some((color) => color !== null);
+  roleColors = any ? coloring.colors : null;
+  colorModeRole.disabled = roleColors === null;
+  if (roleColors !== null) colorModeLabel.hidden = false;
+  if (colorMode.value === "role" && roleColors === null) colorMode.value = "plain";
 }
 
 function setupReplay(city: CityLayout): void {
@@ -368,8 +391,13 @@ function setupReplay(city: CityLayout): void {
     heightsBuffer = heatsBuffer = agesBuffer = null;
     ownerColors = null;
     timelineBar.hidden = true;
-    colorModeLabel.hidden = true;
+    // A static city still offers Role when the artifact declares one; only the
+    // TIME modes need a timeline.
+    colorModeTime.disabled = true;
+    colorModeLabel.hidden = roleColors === null;
+    if (colorMode.value === "time") colorMode.value = roleColors === null ? "plain" : "role";
     coChangeLabel.hidden = true;
+    applyColorMode();
     return;
   }
   timeline = timelineModel(replay, cityScene.boxes.map((box) => box.id));
@@ -379,6 +407,7 @@ function setupReplay(city: CityLayout): void {
   agesBuffer = new Float32Array(cityScene.boxes.length);
   timelineScrub.max = String(timeline.count - 1);
   timelineBar.hidden = false;
+  colorModeTime.disabled = false;
   colorModeLabel.hidden = false;
   // Owner mode exists only when a history was joined; a disabled option says
   // why the mode is not on offer, where hiding it would just puzzle.
@@ -451,10 +480,18 @@ function legendLine(entry: {
   swatch: string | null;
   label: string;
   detail: string | undefined;
+  color?: number;
 }): HTMLElement {
   const line = document.createElement("div");
   line.className = "entry";
-  if (entry.swatch !== null) line.append(swatchOf(entry.swatch));
+  // A role swatch carries its own color: the palette is per-artifact (the roles
+  // a framework assigned), not one of the renderer's fixed semantic colors.
+  if (entry.swatch === "role" && entry.color !== undefined) {
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.background = hexToCss(entry.color);
+    line.append(swatch);
+  } else if (entry.swatch !== null) line.append(swatchOf(entry.swatch));
   const text = document.createElement("span");
   const label = document.createElement("strong");
   label.textContent = entry.label;

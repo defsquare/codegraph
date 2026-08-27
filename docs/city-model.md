@@ -95,6 +95,15 @@ Two later additions to the shape (details in CM-8's nesting note):
 - **`District.parent`** — the nearest ancestor module that is itself a district,
   when the model declares module containment. Absent for roots and for models
   without containment.
+- **`Building.role` and `CityModel.roles`** (M10d) — the ARCHITECTURAL ROLE a
+  framework profile assigns a type (`service`, `repository`, `controller`,
+  `configuration`, `component`, METAMODEL §9.1), plus the legend block naming
+  which framework spoke and which roles it used. Opt-in (`--framework spring`):
+  without it the city says nothing about roles, which is the honest default for
+  a corpus using no framework the profile describes. The classification is an
+  INFERENCE over written annotations and the renderer says so in the legend; a
+  building with no role stays neutral rather than being colored "plain", which
+  would claim the framework had ruled on it.
 - **`BuildingAttribute.value`** (M10c) — the declared constant the model
   states (`TWithValue`, METAMODEL §1.6), rendered as one line of text: an id
   inside a value is shown as the referenced entity's NAME, exactly as a

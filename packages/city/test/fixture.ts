@@ -142,5 +142,13 @@ export function edge(
   to: string,
   provenance: Edge["provenance"] = "declared",
 ): Edge {
-  return { edge: kind, from, to, provenance, anchor: ANCHOR } as Edge;
+  // An annotationUse always carries its (possibly empty) argument list (§1.6).
+  return {
+    edge: kind,
+    from,
+    to,
+    provenance,
+    anchor: ANCHOR,
+    ...(kind === "annotationUse" ? { arguments: [] } : {}),
+  } as Edge;
 }

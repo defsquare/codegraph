@@ -48,7 +48,14 @@ describe("the option specs are data", () => {
           const hasShape = option.choices !== undefined || option.placeholder !== undefined;
           expect(hasShape, `${spec.name} --${option.name} needs choices or a placeholder`).toBe(true);
         }
-        if (option.choices !== undefined) expect(option.choices.length).toBeGreaterThan(1);
+        // A choice list must be non-empty and free of duplicates. NOT "more
+        // than one": `--framework` lists a REGISTRY (one profile ships today,
+        // more later), and an optional flag with a single legal value is a
+        // real flag — omitting it means something different from passing it.
+        if (option.choices !== undefined) {
+          expect(option.choices.length, `${spec.name} --${option.name}`).toBeGreaterThan(0);
+          expect(new Set(option.choices).size).toBe(option.choices.length);
+        }
         if (option.defaultValue !== undefined && option.choices !== undefined) {
           expect(option.choices).toContain(option.defaultValue);
         }
@@ -81,7 +88,7 @@ describe("the option specs are data", () => {
 
   it("summarises a command's options for an error message", () => {
     const summary = optionSummary(ANALYZE_SPEC);
-    expect(summary).toContain("--report <deps|cycles|coupling>");
+    expect(summary).toContain("--report <deps|cycles|coupling|wiring>");
     expect(summary).toContain("--top N");
   });
 });
@@ -207,7 +214,7 @@ describe("analyze", () => {
   });
 
   it("offers the default as an optional flag, and says so in the help", () => {
-    expect(usageLine(ANALYZE_SPEC)).toContain("[--report <deps|cycles|coupling>]");
+    expect(usageLine(ANALYZE_SPEC)).toContain("[--report <deps|cycles|coupling|wiring>]");
     expect(renderHelp(ANALYZE_SPEC)).toContain(`default: ${DEFAULT_REPORT}`);
   });
 
@@ -293,7 +300,7 @@ describe("parseArgs errors are re-said in codegraph's terms", () => {
     const error = usageErrorFor(["analyze", "a.json", "--repot", "deps"]);
     expect(error.message).toBe("unknown option '--repot' for 'codegraph analyze'");
     expect(error.message).not.toContain("place it at the end");
-    expect(error.hint ?? "").toContain("--report <deps|cycles|coupling>");
+    expect(error.hint ?? "").toContain("--report <deps|cycles|coupling|wiring>");
   });
 
   it("says which option is missing its value", () => {

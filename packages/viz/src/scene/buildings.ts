@@ -36,6 +36,8 @@ export interface BuildingBox {
   readonly owner: { readonly name: string; readonly share: number } | undefined;
   /** Where it is written; absent when the model anchors it nowhere (stubs). */
   readonly source: BuildingSource | undefined;
+  /** The architectural role a framework profile assigned it, if any (M10d). */
+  readonly role: string | undefined;
 }
 
 /**
@@ -66,6 +68,7 @@ export function buildingBoxes(city: CityLayout): readonly BuildingBox[] {
       operations: building.operations ?? [],
       owner: building.owner,
       source: building.source,
+      role: building.role,
     };
   });
 }

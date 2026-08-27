@@ -26,6 +26,7 @@ function options(overrides: Partial<CityOptions> = {}): CityOptions {
     footprintScale: "sqrt",
     carry: [],
     name: undefined,
+    framework: undefined,
     internalOnly: false,
     declaredOnly: false,
     layout: false,

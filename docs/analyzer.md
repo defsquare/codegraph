@@ -350,6 +350,9 @@ containingType(graph, id) · containingModule(graph, id)
 // stage 5
 importGraph(graph, view) · typeDependencyGraph(graph, view) · neighboursOf(graph, id)
 dependenciesOf(folded, id) · dependentsOf(folded, id)
+// framework semantics (METAMODEL §9.1) — inference over declared facts
+springProfile · FRAMEWORK_PROFILES · validateFrameworkProfile(profile)
+deriveFrameworkWiring(graph, profile)
 // stage 6
 coupling(folded, options) · cycles(folded, options) · topByFanIn/topByFanOut(table, n)
 feedbackArcSet(edges)
@@ -361,6 +364,30 @@ cyclesToCsv · foldedGraphToJson · couplingToJson · cyclesToJson · toJsonStri
 Consumers: `@codegraph/cli` (every command), `@codegraph/city` (`buildGraph` →
 `foldGraph` → `coupling`), and the property suite, which runs the invariants
 against every extractor output.
+
+## AN-12b Framework semantics — inference, kept apart
+
+`deriveFrameworkWiring` answers a question the structural graph cannot: what the
+CONTAINER does. It reads two things the model already carries — `annotationUse`
+edges with their arguments (§1.6) and the `interfaceImplementation` inverse
+index — through a declarative table (`FrameworkProfile`), and returns roles,
+injection points and candidate edges.
+
+Three properties keep it from contaminating the facts:
+
+- **It returns, it does not attach.** Nothing is written back into the graph or
+  the model; a caller that wants the wiring adds the edges to its own view. The
+  `declared` view of a corpus is byte-identical whether or not the pass ran, and
+  that is a test, not a claim.
+- **Every derived edge is `dynamic-candidate`** — §1.3's definition verbatim:
+  dispatch that is not statically resolvable, targets that are guesses.
+- **Matching reads name + module, never a parsed id**, and tolerates the
+  annotation being a stub — which is the normal case, since a corpus whose
+  framework jars are absent declares none of those types.
+
+The table is DATA: a framework nobody implemented is describable (and
+validatable) without a line of code, which is §5's rule for languages applied one
+level up.
 
 ## AN-13 Open questions
 

@@ -1,7 +1,7 @@
 import { accessSync, constants } from "node:fs";
 import { basename, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { FOLD_LEVELS, type FoldLevel } from "@codegraph/analyzer";
+import { FOLD_LEVELS, FRAMEWORK_PROFILES, type FoldLevel } from "@codegraph/analyzer";
 import { METRIC_PREFIXES, SCALES, metricNames } from "@codegraph/city";
 import { UsageError } from "./exit.js";
 
@@ -35,7 +35,7 @@ export const COMMAND_NAMES = [
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 /** `analyze --report` values. */
-export const REPORTS = ["deps", "cycles", "coupling"] as const;
+export const REPORTS = ["deps", "cycles", "coupling", "wiring"] as const;
 export type ReportName = (typeof REPORTS)[number];
 
 /** `export --format` values. */
@@ -191,7 +191,7 @@ export const VALIDATE_SPEC: CommandSpec = {
 
 export const ANALYZE_SPEC: CommandSpec = {
   name: "analyze",
-  summary: "Report dependencies, cycles or coupling over the loaded models.",
+  summary: "Report dependencies, cycles, coupling or framework wiring over the loaded models.",
   positional: MODELS_POSITIONAL_DEFAULTED,
   options: [
     {
@@ -298,6 +298,16 @@ export const CITY_SPEC: CommandSpec = {
         "Display name for the corpus in the visualizer header; " +
         "defaults to the basename of each model's root.",
       placeholder: "STR",
+    },
+    {
+      name: "framework",
+      type: "string",
+      describe:
+        "Classify types by a framework's own vocabulary (service, repository, " +
+        "controller…) and offer it as a color channel. An inference from " +
+        "written annotations; absent means the city says nothing about roles.",
+      choices: Object.keys(FRAMEWORK_PROFILES),
+      placeholder: "NAME",
     },
     {
       name: "layout",
@@ -766,6 +776,8 @@ export interface CityOptions extends ModelInputOptions, ViewOptions {
   readonly carry: readonly string[];
   /** `--name STR`: corpus display name; undefined derives it from the roots. */
   readonly name: string | undefined;
+  /** `--framework NAME`: classify types by that framework; undefined = no roles. */
+  readonly framework: string | undefined;
   /** `--layout`: add placement (positions, bounds) to the artifact. */
   readonly layout: boolean;
   /** `--serve`: host the visualizer with this city loaded. */
@@ -1301,6 +1313,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           footprintScale: stringOf(values, "footprint-scale") ?? "sqrt",
           carry: metricList(stringOf(values, "carry")),
           name: stringOf(values, "name"),
+          framework: stringOf(values, "framework"),
           layout: flagOf(values, "layout"),
           serve: flagOf(values, "serve"),
           port: portOf(values, spec),

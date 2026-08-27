@@ -343,6 +343,44 @@ describe("analyze --report cycles", () => {
 
 /* ---------------------------------------------------------------------- json */
 
+/**
+ * M10d: the framework report. The java fixture uses no framework this profile
+ * describes, so the honest output is an EMPTY classification — which is worth
+ * pinning: a report that invents roles for a corpus without them is the one
+ * failure mode that would matter.
+ */
+describe("analyze --report wiring", () => {
+  it("says what it is: an inference over annotations, not a fold", () => {
+    const { lines, stdout } = analyze({ report: "wiring" });
+    expect(stdout).toContain("framework: spring");
+    expect(stdout).toContain("DERIVED from annotations");
+    expect(lines.some((line) => line.startsWith("layer:") && line.includes("not folded"))).toBe(true);
+  });
+
+  it("classifies nothing in a corpus that uses no framework it knows", () => {
+    const { stdout, code } = analyze({ report: "wiring" });
+    expect(code).toBe(EXIT.OK);
+    expect(stdout).toContain("architectural roles (0 types)");
+    expect(stdout).toContain("injection points: 0");
+    expect(stdout).toContain("derived 0 candidate edge(s)");
+  });
+
+  it("carries the same content in --json, under the analyze envelope", () => {
+    const payload = jsonOf({ report: "wiring" });
+    expect(payload["kind"]).toBe("codegraph.analyze/1");
+    expect(payload["report"]).toBe("wiring");
+    expect(payload["framework"]).toBe("spring");
+    expect(payload["roles"]).toEqual([]);
+    expect(payload["injectionPoints"]).toEqual([]);
+    expect(payload["candidateEdges"]).toEqual([]);
+    expect(payload["wiringDiagnostics"]).toEqual({
+      unresolvedTypes: 0,
+      unimplemented: 0,
+      narrowed: 0,
+    });
+  });
+});
+
 describe("--json carries the same information as the text form (decision 8)", () => {
   it("puts one machine-readable object on stdout and nothing else", () => {
     const result = analyze({ report: "deps", level: "module", json: true });

@@ -44,7 +44,7 @@ describe("requested help goes to stdout and exits 0", () => {
   });
 
   it("documents the flags each command actually accepts", () => {
-    expect(runCli(["analyze", "--help"]).stdout).toContain("--report <deps|cycles|coupling>");
+    expect(runCli(["analyze", "--help"]).stdout).toContain("--report <deps|cycles|coupling|wiring>");
     expect(runCli(["export", "--help"]).stdout).toContain("--format <dot|json|csv|plantuml>");
     expect(runCli(["export", "--help"]).stdout).toContain("--out FILE");
     expect(runCli(["validate", "--help"]).stdout).toContain("--json");

@@ -1533,27 +1533,46 @@ Four principles, locked up front:
 
 ### 12.4 M10d — framework semantics (Spring first)
 
-- [ ] Framework profile as data in the analyzer (METAMODEL §9.1): annotation
+- [x] Framework profile as data in the analyzer (METAMODEL §9.1): annotation
       identity → role (`stereotype`, `injection-point`, `entry-point`,
-      `qualifier`) for the Spring/Jakarta vocabulary; specifiable without being
-      implemented — the profile robustness test, again.
-- [ ] Analyzer DI pass: for each injection point (field / constructor param
-      whose `declaredType` is an interface, on a stereotyped class), derive
-      in-memory `dynamic-candidate` edges from the consumer to every corpus
-      implementation of that interface — candidates straight from the existing
-      `interfaceImplementation` inverse index; `@Primary` narrows on presence,
-      `@Qualifier` on its `annotationUse` argument value (M10c) — exact
-      strings, not guesswork. Injection points and roles are selected on
-      `annotationUse` edges directly; matching reads the referenced annotation
-      entity's `name` + parent chain, never a parsed id, and tolerates stub
-      targets (the petclinic case: all Spring types are stubs).
-- [ ] Stereotype classification surfaced as a report and as a semantic city
-      color channel ("architectural role"), legended like every channel —
-      derivable from `annotationUse` edges (M10c), no further model change.
-- **DoD**: on spring-petclinic, every `@Autowired` interface injection lists
-  exactly its corpus implementations as candidates (hand-verified); the
-  facts-only (`declared`) view is byte-identical before and after the pass —
-  inference added nothing to the facts.
+      `qualifier`, and `primary` — the one role this list did not name, since
+      `@Primary` narrows by PRESENCE on the producer rather than qualifying the
+      injection point; adding it was a row, not code, which is the property the
+      table exists to have). Specifiable without being implemented — the
+      profile robustness test, again: a Micronaut table validates with nothing
+      behind it.
+- [x] Analyzer DI pass: for each injection point (field / constructor param on
+      a stereotyped class), derive in-memory `dynamic-candidate` edges from the
+      consumer to every corpus implementation of the declared interface —
+      candidates straight from the existing `interfaceImplementation` inverse
+      index; `@Primary` narrows on presence, `@Qualifier` on its
+      `annotationUse` argument value (M10c) against the bean's names (its
+      stereotype's string argument, or Spring's decapitalized default) — exact
+      strings, not guesswork. Narrowing is never silent: the point says what it
+      narrowed FROM. Injection points and roles are selected on `annotationUse`
+      edges directly; matching reads the referenced annotation entity's `name`
+      + its module, never a parsed id, and tolerates stub targets (the
+      petclinic case: every Spring type is a stub). `implicitSoleConstructorInjection`
+      is profile DATA, so Spring 4.3+ constructor injection with no annotation
+      at all is described by a field rather than by a branch.
+- [x] Stereotype classification surfaced as a report (`analyze --report
+      wiring`, text and `--json` under the same envelope) and as a semantic
+      city color channel (`codegraph city --framework spring` → `Building.role`
+      plus a `roles` legend block; viz gains a `Role` color mode, legended like
+      every channel) — derivable from `annotationUse` edges (M10c), no further
+      model change.
+- **DoD** ✅ hand-verified on spring-petclinic at `a6e81a5` (the last revision
+  with `@Autowired`): all 6 `@Autowired` sites found — 9 injection points, of
+  which the 5 injecting `ClinicService` list exactly `ClinicServiceImpl`, the
+  corpus's one implementation (`grep -rl "implements ClinicService"` returns
+  exactly that file), and the 4 injecting Spring Data repository interfaces
+  list NOTHING, with the reason stated: the container implements them at
+  runtime, so the empty set is a fact about the corpus. The facts-only view is
+  byte-identical before and after the pass — `analyze --report deps --level
+  type --declared-only --json` is the same 107 359 bytes either side, 286
+  edges, provenance `declared` only. Also run on petclinic HEAD (`818c413`),
+  which has no `@Autowired` at all: 6 implicit sole-constructor injection
+  points found by the profile's own rule.
 
 ## 13. Milestones
 
@@ -1575,7 +1594,8 @@ Four principles, locked up front:
 | M10a | Source links | ✅ header `repository` facts (remote, commit, repo-relative root, provider?) in core + `schemas/` as patterns; extractor passthrough flags; CLI-derived normalization carried per snapshot frame; store/city/viz carry them and the details panel links at the scrubbed sha — verified on gson (`JsonReader.java#L211-L2005` at `b3f4ca2`, replay retargeting to `ed2b25d`, fixture city linkless) |
 | M10b | Measures | ✅ `TMetrics` (open keys, finite values) in core, `schemas/` and the store (`entity_metric` rows, DB_VERSION 3); Java extractor emits `sloc` (lexer-based) + `cyclomatic` with a lambda's branches charged to the lambda; fixture CC values hand-counted, `sloc ≤ span` a property; `--height sum:cyclomatic --footprint loc` reviewed as screenshots on commons-lang (`JavaVersion.get` hand-count 33 = emitted 33) |
 | M10c | Literal values | ✅ `Literal` + `TWithValue` + `annotationUse` in core, `schemas/` (a named `$defs/Literal`) and the store (JSON columns, DB_VERSION 4); Java extractor carries annotation arguments, constant initializers and element defaults, `unevaluated` where it cannot fold; closure reaches inside values by ENCODING; fixture asserts the four `Audited`/`MAX_LINES` cases; gson and commons-lang diagnose clean |
-| M10d | Framework semantics | data-driven Spring framework profile; derived DI `dynamic-candidate` wiring (qualifier narrowing on M10c argument values) hand-verified on spring-petclinic; `declared` view unchanged by the pass |
+| M10d | Framework semantics | ✅ data-driven Spring/Jakarta framework profile (5 roles, matching on name + module, stub-tolerant); derived DI `dynamic-candidate` wiring with @Primary/@Qualifier narrowing that states what it narrowed from; `analyze --report wiring` + `city --framework` role channel with its legend; hand-verified on spring-petclinic (`a6e81a5`: 5 injections → the one corpus impl, 4 → honest empty; HEAD: 6 implicit constructor injections), `declared` view byte-identical before and after |
+
 ## 14. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |

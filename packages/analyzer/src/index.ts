@@ -48,6 +48,12 @@ export * from "./fold.js";
 // plus the neighbourhood of one entity (METAMODEL.md §9).
 export * from "./queries.js";
 
+// Framework semantics (METAMODEL §9.1): what the container does to the corpus.
+// Data tables plus one derivation; every edge it yields is `dynamic-candidate`
+// and in memory only — the facts are untouched.
+export * from "./framework/profile.js";
+export * from "./framework/wiring.js";
+
 // Stage 6: metrics over a folded graph. Each result repeats the level and view
 // it was computed under; a coupling number without its view is not a fact.
 export * from "./metrics/coupling.js";

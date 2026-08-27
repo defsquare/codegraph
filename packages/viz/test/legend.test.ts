@@ -73,3 +73,40 @@ describe("legendModel", () => {
     expect(withReplay.some((entry) => entry.swatch === "age")).toBe(true);
   });
 });
+
+/**
+ * M10d: the role channel is LEGENDED like every other channel — a color whose
+ * meaning is not stated is not a fact. The entries come from the artifact's own
+ * `roles` declaration, so the key cannot list a role the classification never
+ * assigned, nor omit one it did.
+ */
+describe("legendModel: the role channel", () => {
+  function withRoles() {
+    const city = makeCity() as unknown as Record<string, unknown>;
+    return {
+      ...city,
+      roles: { framework: "spring", values: ["controller", "repository", "service"] },
+    } as unknown as Parameters<typeof legendModel>[0];
+  }
+
+  it("names the framework that spoke, and calls the channel an inference", () => {
+    const entries = legendModel(withRoles());
+    const header = entries.find((entry) => entry.label.startsWith("roles ="));
+    expect(header?.label).toBe("roles = spring (Colors -> Role)");
+    expect(header?.detail).toContain("INFERENCE from written annotations");
+  });
+
+  it("gives every declared role its own swatch, with the color the renderer draws", () => {
+    const entries = legendModel(withRoles());
+    const roles = entries.filter((entry) => entry.swatch === "role");
+    expect(roles.map((entry) => entry.label)).toEqual(["controller", "repository", "service"]);
+    expect(new Set(roles.map((entry) => entry.color)).size).toBe(3);
+    for (const entry of roles) expect(typeof entry.color).toBe("number");
+  });
+
+  it("says nothing about roles for an artifact that declares none", () => {
+    const entries = legendModel(makeCity());
+    expect(entries.some((entry) => entry.swatch === "role")).toBe(false);
+    expect(entries.some((entry) => entry.label.startsWith("roles ="))).toBe(false);
+  });
+});

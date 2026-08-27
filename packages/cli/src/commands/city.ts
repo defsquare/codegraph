@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { buildGraph } from "@codegraph/analyzer";
+import { buildGraph, FRAMEWORK_PROFILES } from "@codegraph/analyzer";
 import {
   buildCity,
   cityToJsonString,
@@ -90,9 +90,12 @@ export function cityCommand(
 
 function build(graph: ReturnType<typeof buildGraph>, options: CityOptions): CityModel {
   try {
+    const framework =
+      options.framework === undefined ? undefined : FRAMEWORK_PROFILES[options.framework];
     return buildCity(graph, {
       view: resolveView(options),
       ...(options.name === undefined ? {} : { name: options.name }),
+      ...(framework === undefined ? {} : { framework }),
       height: { metric: options.height, scale: options.heightScale },
       footprint: { metric: options.footprint, scale: options.footprintScale },
       carry: options.carry,
@@ -131,6 +134,15 @@ function warnings(loaded: LoadedModels, city: CityModel): readonly string[] {
     lines.push(
       `warning: the models are not clean; the city was built anyway.`,
       `Run 'codegraph validate ${loaded.paths.join(" ")}' for the detail.`,
+    );
+  }
+
+  if (city.roles !== undefined) {
+    const classified = city.buildings.filter((building) => building.role !== undefined).length;
+    lines.push(
+      `note: ${city.roles.framework} classified ${plural(classified, "building")} into ` +
+        `${city.roles.values.join(", ") || "no role"} — an inference from written annotations, ` +
+        `not a fact about the code.`,
     );
   }
 

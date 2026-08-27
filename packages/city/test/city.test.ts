@@ -1,6 +1,7 @@
 import { renderId, type Entity } from "@codegraph/core";
 import { internalOnly } from "@codegraph/analyzer";
 import { describe, expect, it } from "vitest";
+import { springProfile } from "@codegraph/analyzer";
 import { buildCity, CITY_ARTEFACT_KIND } from "../src/city.js";
 import { edge, field, graphOf, graphOfModels, javaGraph, method, param, pkg, stubType, type } from "./fixture.js";
 
@@ -480,6 +481,52 @@ describe("buildCity: declared values on attributes", () => {
     // No value declared: the key is absent, not an empty string.
     expect(byName.has("java:a/T.mutable")).toBe(true);
     expect(byName.get("java:a/T.mutable")).toBeUndefined();
+  });
+});
+
+/**
+ * M10d: the city offers the framework's own vocabulary as a channel. It
+ * derives none of it — the analyzer does — and says nothing at all unless the
+ * caller asks for a framework.
+ */
+describe("buildCity: architectural roles", () => {
+  const ANN = "org.springframework.stereotype";
+
+  /**
+   * Names matter here: matching is (simple name, declaring module), so the
+   * fixture states them the way an extractor does rather than reusing ids.
+   */
+  function springish() {
+    return graphOf(
+      [
+        { ...pkg("java:a"), name: "a" } as Entity,
+        { ...pkg(`java:${ANN}`, true), name: ANN } as Entity,
+        type(`java:${ANN}/Service`, `java:${ANN}`, 2, { kind: "annotation", isStub: true, name: "Service" }),
+        type("java:a/OrderService", "java:a", 30, { name: "OrderService" }),
+        type("java:a/Helper", "java:a", 10, { name: "Helper" }),
+      ],
+      [edge("annotationUse", "java:a/OrderService", `java:${ANN}/Service`)],
+    );
+  }
+
+  it("labels a building with the role its annotation assigns, and only that one", () => {
+    const city = buildCity(springish(), { framework: springProfile });
+    const byId = new Map(city.buildings.map((building) => [building.id, building.role]));
+    expect(byId.get("java:a/OrderService")).toBe("service");
+    // No annotation: no role. Never guessed from the name, which ends in
+    // "Service" too — the point of matching on the written annotation.
+    expect(byId.get("java:a/Helper")).toBeUndefined();
+  });
+
+  it("declares the channel's legend: which framework spoke, and the roles it used", () => {
+    const city = buildCity(springish(), { framework: springProfile });
+    expect(city.roles).toEqual({ framework: "spring", values: ["service"] });
+  });
+
+  it("says nothing about roles unless a framework was asked for", () => {
+    const city = buildCity(springish());
+    expect(city.roles).toBeUndefined();
+    expect(city.buildings.every((building) => building.role === undefined)).toBe(true);
   });
 });
 

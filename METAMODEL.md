@@ -542,7 +542,8 @@ part of the conceptual vocabulary even though no encoding stores them:
 
 Mirror of §5's rule at the framework level: what an annotation *means*
 (`@Autowired` marks an injection point, `@Service` a stereotype, `@Qualifier`
-narrows candidates) is a declarative table — annotation identity → role —
+narrows candidates, `@Primary` wins a tie) is a declarative table — annotation
+identity (simple name + declaring module) → role —
 specifiable without being implemented, extensible to another framework (CDI,
 Micronaut) without code. It lives in the analyzer: the extractor stays
 framework-blind (it already emits the facts — a `reference` edge per written
@@ -552,6 +553,14 @@ never a parsed id — and must tolerate the target being a stub, which is the
 normal case for a corpus whose framework jars are absent. Injection points and
 roles are selected on `annotationUse` edges, and qualifier narrowing reads
 their `arguments` (§1.6) — exact values, not guesswork.
+
+A framework RULE that is not an annotation is data too: Spring 4.3+ treats the
+sole constructor of a bean as an injection point with nothing written on it, so
+the profile carries that as a flag rather than the analyzer as a branch. And a
+meta-annotated stereotype is deliberately NOT followed: resolving `@MyService`
+to the `@Service` it carries needs the annotation type's own declaration, which
+is exactly what a stub does not have — so such a type is unclassified, honestly,
+rather than classified by a guess.
 
 ---
 

@@ -4,6 +4,7 @@ import {
   coupling,
   createFolder,
   cycles,
+  deriveFrameworkWiring,
   foldGraph,
   identityView,
   sortIds,
@@ -12,6 +13,7 @@ import {
   type CycleReport,
   type FoldedEdge,
   type FoldedNode,
+  type FrameworkProfile,
   type View,
   type ViewDescriptor,
 } from "@codegraph/analyzer";
@@ -175,6 +177,14 @@ export interface Building {
   readonly identity?: IdentityComponents;
   /** The anchor, for source links; absent when the model anchors nothing (stubs). */
   readonly source?: BuildingSource;
+  /**
+   * The ARCHITECTURAL ROLE a framework profile assigns this type — `service`,
+   * `repository`, `controller`, `configuration`, `component` (METAMODEL §9.1).
+   * An inference from written annotations, present only when the caller asked
+   * for a framework; absent means "this framework says nothing about it",
+   * never "plain".
+   */
+  readonly role?: string;
   /** Along the height axis. */
   readonly height: number;
   /** Base rectangle; square today, a layout concern the day it is not. */
@@ -298,6 +308,14 @@ export interface CityModel {
    * `crossDistrict` is trivially true here.
    */
   readonly districtArrows: readonly Arrow[];
+  /**
+   * The role channel's legend, when a framework profile was given: which
+   * framework spoke, and the distinct roles it assigned, sorted. A renderer
+   * colors by `Building.role` and prints this as the key — the same rule as
+   * `bindings`, one level up: a color whose meaning is not stated is not a
+   * fact.
+   */
+  readonly roles?: { readonly framework: string; readonly values: readonly string[] };
   readonly diagnostics: CityDiagnostics;
 }
 
@@ -313,6 +331,12 @@ export interface CityOptions {
   readonly carry?: readonly (string | MetricSource)[];
   /** Restrict the arrows to these base edge kinds; defaults to all of them. */
   readonly edgeKinds?: readonly EdgeKind[];
+  /**
+   * Classify types by a framework's own vocabulary (METAMODEL §9.1). Opt-in:
+   * without it the city says nothing about roles, which is the honest default
+   * for a corpus that uses no framework this profile describes.
+   */
+  readonly framework?: FrameworkProfile;
 }
 
 interface ChannelDefault {
@@ -367,6 +391,16 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
   }
 
   const membersByType = groupMembers(graph, folder);
+
+  // Framework roles (M10d): an inference over `annotationUse` facts, computed
+  // once and attached to the buildings it classifies. The city derives none of
+  // it — `deriveFrameworkWiring` does, in the analyzer, where inference lives.
+  const roleOf = new Map<EntityId, string>();
+  if (options.framework !== undefined) {
+    for (const assignment of deriveFrameworkWiring(graph, options.framework).roles) {
+      if (assignment.stereotype !== undefined) roleOf.set(assignment.id, assignment.stereotype);
+    }
+  }
 
   // Step 1 — place the buildings. A type whose module the model does not give
   // is EXCLUDED rather than dropped into a synthetic district: inventing a
@@ -431,6 +465,7 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
       district: building.district,
       ...(identity === undefined ? {} : { identity }),
       ...(source === undefined ? {} : { source }),
+      ...(roleOf.has(building.node.id) ? { role: roleOf.get(building.node.id) as string } : {}),
       height: dimension("height"),
       footprint: { width: side, depth: side },
       metrics,
@@ -517,6 +552,14 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
     buildings,
     arrows,
     districtArrows,
+    ...(options.framework === undefined
+      ? {}
+      : {
+          roles: {
+            framework: options.framework.framework,
+            values: [...new Set(buildings.flatMap((b) => (b.role === undefined ? [] : [b.role])))].sort(),
+          },
+        }),
     diagnostics: {
       unplacedBuildings: sortIds(unplaced),
       droppedArrows,
