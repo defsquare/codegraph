@@ -1,4 +1,5 @@
 import type { NavigatorModel } from "@codegraph/navigator";
+import { foldPackages, type PackageFold } from "./fold.js";
 
 /**
  * The renderer's lookup maps over the artifact's flat arrays — derived in the
@@ -12,6 +13,8 @@ import type { NavigatorModel } from "@codegraph/navigator";
  */
 export interface ModelIndexes {
   readonly model: NavigatorModel;
+  /** The package-prefix fold of the root modules — display grouping only. */
+  readonly fold: PackageFold;
   /** Dep-row indexes by owning source node (types and modules). */
   readonly depsByFrom: ReadonlyMap<number, readonly number[]>;
   /** Dep-row indexes by owning target node. */
@@ -46,7 +49,15 @@ export function buildIndexes(model: NavigatorModel): ModelIndexes {
       ? node.name.toLowerCase()
       : `${node.name} ${node.signature}`.toLowerCase(),
   );
-  return { model, depsByFrom, depsByTo, depsByMember, depsByToMember, searchKeys };
+  return {
+    model,
+    fold: foldPackages(model),
+    depsByFrom,
+    depsByTo,
+    depsByMember,
+    depsByToMember,
+    searchKeys,
+  };
 }
 
 /** Ancestor chain of a node, root first — the breadcrumb, and the reveal path. */

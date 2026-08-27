@@ -67,8 +67,38 @@ interface RowData {
 const Row = memo(function Row({ index, style, data }: ListChildComponentProps<RowData>) {
   const row = data.rows[index];
   if (row === undefined) return null;
+  // A synthetic package group: a folded prefix, not an entity — it expands,
+  // it is never selected, and its mark is deliberately not a category glyph.
+  const group = data.ix.fold.groups[row.node - data.ix.model.nodes.length];
+  if (group !== undefined) {
+    const isOpen = data.expanded.has(row.node);
+    return (
+      <div style={style} className="tree-row group-row" onClick={() => data.onToggle(row.node)}>
+        <span className="tree-indent" style={{ width: row.depth * 14 }} />
+        <button
+          type="button"
+          className="twisty"
+          aria-label={isOpen ? "Collapse" : "Expand"}
+          aria-expanded={isOpen}
+          onClick={(event) => {
+            event.stopPropagation();
+            data.onToggle(row.node);
+          }}
+        >
+          {isOpen ? "▾" : "▸"}
+        </button>
+        <span className="glyph glyph-group" title="package prefix">
+          ◇
+        </span>
+        <span className="tree-name group-name" title={group.label}>
+          {group.label}
+        </span>
+      </div>
+    );
+  }
   const node = data.ix.model.nodes[row.node];
   if (node === undefined) return null;
+  const foldLabel = data.ix.fold.labels.get(row.node);
   const isSelected = data.selection === row.node;
   const isOpen = data.expanded.has(row.node);
   return (
@@ -98,7 +128,7 @@ const Row = memo(function Row({ index, style, data }: ListChildComponentProps<Ro
         {GLYPH[node.category]}
       </span>
       <span className="tree-name" title={node.signature ?? node.name}>
-        {node.category === "operation" ? (node.signature ?? node.name) : node.name}
+        {node.category === "operation" ? (node.signature ?? node.name) : (foldLabel ?? node.name)}
       </span>
     </div>
   );
@@ -142,7 +172,7 @@ export function TreePanel(props: TreePanelProps) {
   const listRef = useRef<FixedSizeList>(null);
 
   const rows = useMemo(
-    () => visibleRows(ix.model, expanded, { hideExternals }),
+    () => visibleRows(ix.model, ix.fold, expanded, { hideExternals }),
     [ix, expanded, hideExternals],
   );
   const search = useMemo(() => searchNodes(ix.searchKeys, query), [ix, query]);

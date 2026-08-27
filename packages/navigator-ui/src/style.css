@@ -254,6 +254,15 @@ button.twisty:hover {
 .glyph-attribute {
   color: #6d7783;
 }
+/* A folded package prefix is not an entity — its mark is hollow, its label
+   dimmed, so a group row never reads as a module. */
+.glyph-group {
+  color: #5c6673;
+  font-weight: 400;
+}
+.group-name {
+  color: var(--paper-dim);
+}
 
 .tree-name {
   overflow: hidden;

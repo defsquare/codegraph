@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { buildIndexes, ancestorsOf } from "../src/model/indexes.js";
 import { expandedToReveal, visibleRows } from "../src/model/flatten.js";
+import { foldPackages } from "../src/model/fold.js";
 import { searchNodes } from "../src/model/search.js";
 import { depsForSelection } from "../src/model/grouping.js";
 import { artifact } from "./fixture.js";
 
 const model = artifact();
 const ix = buildIndexes(model);
+const fold = ix.fold;
 
 describe("indexes", () => {
   it("buckets every dep row by owner and by carrying member", () => {
@@ -30,11 +32,11 @@ describe("indexes", () => {
 
 describe("the visible-row flattening", () => {
   it("shows only roots when nothing is expanded", () => {
-    expect(visibleRows(model, new Set()).map((row) => row.node)).toEqual([0]);
+    expect(visibleRows(model, fold, new Set()).map((row) => row.node)).toEqual([0]);
   });
 
   it("expands in preorder, with depth and expandability per row", () => {
-    const rows = visibleRows(model, new Set([0, 1]));
+    const rows = visibleRows(model, fold, new Set([0, 1]));
     expect(rows.map((row) => row.node)).toEqual([0, 1, 2, 3, 4]);
     expect(rows.map((row) => row.depth)).toEqual([0, 1, 2, 2, 1]);
     expect(rows.map((row) => row.expandable)).toEqual([true, true, false, false, true]);
@@ -46,14 +48,17 @@ describe("the visible-row flattening", () => {
       nodes: [...model.nodes, { ...model.nodes[4]!, name: "S", isStub: true, children: [] }],
       roots: [0, 6],
     };
-    expect(visibleRows(withStub, new Set([0])).some((row) => row.node === 6)).toBe(true);
+    const stubFold = foldPackages(withStub);
+    expect(visibleRows(withStub, stubFold, new Set([0])).some((row) => row.node === 6)).toBe(true);
     expect(
-      visibleRows(withStub, new Set([0]), { hideExternals: true }).some((row) => row.node === 6),
+      visibleRows(withStub, stubFold, new Set([0]), { hideExternals: true }).some(
+        (row) => row.node === 6,
+      ),
     ).toBe(false);
   });
 
   it("reveals a node by expanding exactly its ancestors", () => {
-    expect([...expandedToReveal(model, new Set(), 2)].sort()).toEqual([0, 1]);
+    expect([...expandedToReveal(model, fold, new Set(), 2)].sort()).toEqual([0, 1]);
   });
 });
 

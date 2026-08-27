@@ -42,7 +42,7 @@ export function App() {
           if (alive()) setPhase({ kind: "loading", progress });
         });
         if (!alive()) return;
-        setExpanded(new Set(ix.model.roots));
+        setExpanded(new Set(ix.fold.roots));
         setSelection(undefined);
         setQuery("");
         setPhase({ kind: "ready", ix });
@@ -106,7 +106,7 @@ export function App() {
     (node: number) => {
       if (ix === undefined) return;
       setSelection(node);
-      setExpanded((current) => expandedToReveal(ix.model, current, node));
+      setExpanded((current) => expandedToReveal(ix.model, ix.fold, current, node));
       setQuery("");
       setScrollTo(node);
     },
