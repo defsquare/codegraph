@@ -264,15 +264,35 @@ describe("analyze --report cycles", () => {
   it("finds the fixture's two type-level cycles with members and edges", () => {
     const result = analyze({ report: "cycles", level: "type" });
     expect(result.stdout).toContain("cycles: 2 strongly connected components");
-    expect(result.stdout).toContain("cycle 1 — 2 nodes, 3 edges, weight 8");
+    // Tangle percentages hand-derived from the fixture: Money<->Priceable cuts
+    // 1 of 2 cyclic references, Basket<->Cursor 1 of 3 (self-loops excluded).
+    expect(result.stdout).toContain("cycle 1 — 2 nodes, 3 edges, weight 8, tangle 50.0%");
     expect(result.stdout).toContain("java:com.acme.order/Money");
     expect(result.stdout).toContain("java:com.acme.order/Priceable");
-    expect(result.stdout).toContain("cycle 2 — 2 nodes, 4 edges, weight 7");
+    expect(result.stdout).toContain("cycle 2 — 2 nodes, 4 edges, weight 7, tangle 33.3%");
     expect(result.stdout).toContain("java:com.acme.order/Basket.Cursor");
     // The edge to attack is named with its cost and its provenance.
     expect(result.stdout).toContain(
       "java:com.acme.order/Money     -> java:com.acme.order/Priceable  weight=1  kinds=interfaceImplementation  provenance=declared",
     );
+  });
+
+  it("marks the minimum feedback set and scores the tangle overall", () => {
+    const result = analyze({ report: "cycles", level: "type" });
+    // 2 feedback references of 5 cyclic references across both components.
+    expect(result.stdout).toContain(
+      "tangle: 40.0% overall — feedback weight 2 of 5 cyclic references (minimum feedback set)",
+    );
+    expect(result.stdout).toContain(
+      "legend: '[feedback]' — minimum feedback set: cutting these edges leaves the graph acyclic",
+    );
+    // The recommended cut of cycle 1, marked on the edge line itself.
+    expect(result.stdout).toContain(
+      "java:com.acme.order/Priceable -> java:com.acme.order/Money      weight=1  kinds=reference  provenance=declared  [feedback]",
+    );
+    const marked = result.stdout.split("\n").filter((line) => line.includes("[feedback]"));
+    // One legend line + exactly one cut per fixture component.
+    expect(marked).toHaveLength(3);
   });
 
   /** A cycle is a finding of the MODEL (3), never a crash of the tool (1). */
@@ -383,10 +403,30 @@ describe("--json carries the same information as the text form (decision 8)", ()
     const payload = jsonOf({ report: "cycles", level: "type" });
     expect(payload["componentCount"]).toBe(2);
     expect(payload["selfLoopCount"]).toBe(11);
-    const components = payload["components"] as { members: string[]; weight: number }[];
+    const components = payload["components"] as {
+      members: string[];
+      weight: number;
+      feedbackEdges: { from: string; to: string; count: number }[];
+      tangleMetric: number;
+    }[];
     expect(components.length).toBe(2);
     expect(components[0]?.members).toEqual(["java:com.acme.order/Money", "java:com.acme.order/Priceable"]);
     expect(components[0]?.weight).toBe(8);
+    // The cut and the score travel with the component…
+    expect(components[0]?.feedbackEdges.map((e) => [e.from, e.to, e.count])).toEqual([
+      ["java:com.acme.order/Priceable", "java:com.acme.order/Money", 1],
+    ]);
+    expect(components[0]?.tangleMetric).toBe(1 / 2);
+    // …and the roll-up comes from the FULL report, not the --top selection.
+    expect(payload["tangle"]).toEqual({
+      feedbackEdgeCount: 2,
+      feedbackWeight: 2,
+      cyclicWeight: 5,
+      metric: 2 / 5,
+    });
+    expect(jsonOf({ report: "cycles", level: "type", top: 1 })["tangle"]).toEqual(
+      payload["tangle"],
+    );
   });
 
   it("reports the fold diagnostics the stderr note states", () => {

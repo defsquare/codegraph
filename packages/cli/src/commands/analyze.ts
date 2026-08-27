@@ -292,6 +292,14 @@ function pushAll(target: string[], lines: readonly string[]): void {
 const PROVENANCE_LEGEND =
   "legend: '->' a declared fact · '~>' carries a derived or dynamic-candidate inference";
 
+const FEEDBACK_LEGEND =
+  "legend: '[feedback]' — minimum feedback set: cutting these edges leaves the graph acyclic";
+
+/** Tangle metrics read as percentages (Structure101's convention), one decimal. */
+function percent(metric: number): string {
+  return `${(metric * 100).toFixed(1)}%`;
+}
+
 function allDeclared(provenances: Iterable<string>): boolean {
   const sorted = sortIds([...provenances]);
   return sorted.length === 1 && sorted[0] === "declared";
@@ -311,13 +319,15 @@ function edgeLine(
   selfLoop: boolean,
   fromWidth: number,
   toWidth: number,
+  feedback = false,
 ): string {
   const arrow = allDeclared(provenances) ? "->" : "~>";
   const self = selfLoop ? "  (self)" : "";
+  const cut = feedback ? "  [feedback]" : "";
   return (
     `  ${padRight(from, fromWidth)} ${arrow} ${padRight(to, toWidth)}` +
     `  weight=${count}  kinds=${sortIds([...kinds]).join(",")}` +
-    `  provenance=${provenanceOf(provenances)}${self}`
+    `  provenance=${provenanceOf(provenances)}${self}${cut}`
   );
 }
 
@@ -329,13 +339,29 @@ function foldedEdgeLines(edges: readonly FoldedEdge[]): readonly string[] {
   );
 }
 
-function cycleEdgeLines(edges: readonly CycleEdge[], indent: string): readonly string[] {
+function cycleEdgeLines(
+  edges: readonly CycleEdge[],
+  indent: string,
+  // Membership by REFERENCE: feedbackArcSet returns the same objects that sit
+  // in `component.edges`, so a Set of them needs no key encoding.
+  feedback: ReadonlySet<CycleEdge>,
+): readonly string[] {
   const fromWidth = maxLength(edges.map((edge) => edge.from));
   const toWidth = maxLength(edges.map((edge) => edge.to));
   return edges.map(
     (edge) =>
       indent +
-      edgeLine(edge.from, edge.to, edge.count, edge.kinds, edge.provenances, edge.selfLoop, fromWidth, toWidth),
+      edgeLine(
+        edge.from,
+        edge.to,
+        edge.count,
+        edge.kinds,
+        edge.provenances,
+        edge.selfLoop,
+        fromWidth,
+        toWidth,
+        feedback.has(edge),
+      ),
   );
 }
 
@@ -620,6 +646,9 @@ function cyclesReport(
       ...envelope(context, ranking),
       componentCount: report.components.length,
       selfLoopCount: report.selfLoops.length,
+      // The roll-up is from the FULL report: a --top-limited artifact must
+      // still state the whole tangle, or a capped view would understate it.
+      tangle: json.tangle,
       components: pick(json.components, ranking),
       selfLoops: [...selfLoops],
     });
@@ -628,6 +657,12 @@ function cyclesReport(
 
   const lines = [...headerLines(context)];
   lines.push(`cycles: ${rankingLine(ranking, "strongly connected components")}`);
+  if (found) {
+    lines.push(
+      `tangle: ${percent(report.tangle.metric)} overall — feedback weight ${report.tangle.feedbackWeight}` +
+        ` of ${report.tangle.cyclicWeight} cyclic references (minimum feedback set)`,
+    );
+  }
   lines.push(`self-dependencies after folding: ${report.selfLoops.length}`);
   lines.push("");
 
@@ -638,15 +673,17 @@ function cyclesReport(
     lines.push("");
   } else {
     lines.push(`  ${PROVENANCE_LEGEND}`);
+    lines.push(`  ${FEEDBACK_LEGEND}`);
     lines.push("");
     shown.forEach((component, position) => {
       lines.push(
-        `cycle ${position + 1} — ${component.size} nodes, ${component.internalEdgeCount} edges, weight ${component.weight}`,
+        `cycle ${position + 1} — ${component.size} nodes, ${component.internalEdgeCount} edges,` +
+          ` weight ${component.weight}, tangle ${percent(component.tangleMetric)}`,
       );
       lines.push("  members:");
       for (const member of component.members) lines.push(`    ${member}`);
       lines.push("  edges:");
-      pushAll(lines, cycleEdgeLines(component.edges, "  "));
+      pushAll(lines, cycleEdgeLines(component.edges, "  ", new Set(component.feedbackEdges)));
       lines.push("");
     });
     if (ranking.shown !== ranking.total) {
