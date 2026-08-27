@@ -1,0 +1,715 @@
+/*
+ * THE NAVIGATOR'S LOOK, and why.
+ *
+ * Every string this app shows is a source-code token, so the tree and the
+ * dependency rows are set in MONO: package prefixes align, and a long
+ * signature stays readable at a glance. The chrome around them is a humanist
+ * sans, so labels never compete with identifiers.
+ *
+ * COLOR IS SEMANTIC — the same rule the city renders under. Exactly four
+ * meanings carry a hue:
+ *   incoming (fan-in)   cyan     what depends on the selection
+ *   outgoing (fan-out)  amber    what the selection depends on
+ *   inference           violet   provenance !== "declared" (invariant 2)
+ *   selection           paper    the one row you are on
+ * Everything else is ink, rule and paper. A stub (external) entity is drawn
+ * MUTED rather than in a colour of its own: it is a degraded fact, not a
+ * fifth category.
+ */
+
+:root {
+  --ink: #12161c;
+  --ink-raised: #171c24;
+  --ink-sunken: #0d1116;
+  --rule: #262e39;
+  --rule-soft: #1d242d;
+  --paper: #dfe5ec;
+  --paper-dim: #97a3b2;
+  --paper-faint: #66727f;
+
+  --in: #4cc4d6;
+  --out: #e0a34a;
+  --inference: #a98cf0;
+
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --row: 26px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--in);
+  outline-offset: 1px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+code {
+  font-family: var(--mono);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.app-blank {
+  background: var(--ink);
+}
+
+/* ---------------------------------------------------------------- header -- */
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--ink-raised);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.view-badge {
+  font-size: 11px;
+  color: var(--paper-dim);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 1px 6px;
+}
+
+.header-stats {
+  color: var(--paper-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.header-toggle {
+  margin-left: auto;
+  color: var(--paper-dim);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------ tree panel -- */
+
+.tree-panel {
+  width: 340px;
+  min-width: 220px;
+  max-width: 50vw;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--rule);
+  background: var(--ink-sunken);
+  resize: horizontal;
+  overflow: hidden;
+}
+
+.search-box {
+  padding: 8px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.search-box input {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 5px 8px;
+}
+
+.search-box input::placeholder {
+  color: var(--paper-faint);
+}
+
+.search-note {
+  margin: 0;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--paper-faint);
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.tree-list {
+  flex: 1;
+  min-height: 0;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: var(--row);
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.tree-row:hover {
+  background: #1a212a;
+}
+
+.tree-row.selected {
+  background: #223040;
+  box-shadow: inset 2px 0 0 var(--paper);
+}
+
+.tree-row.stub .tree-name,
+.tree-row.stub .glyph {
+  color: var(--paper-faint);
+  font-style: italic;
+}
+
+.tree-indent {
+  flex: none;
+  display: inline-block;
+}
+
+.twisty {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  color: var(--paper-dim);
+  font-size: 11px;
+  line-height: 1;
+}
+
+button.twisty:hover {
+  color: var(--paper);
+}
+
+.twisty-leaf {
+  display: inline-block;
+}
+
+.glyph {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--paper-faint);
+}
+
+/* The category mark is a letterform, not a colour: hue is reserved for
+   direction and provenance, so a glyph never competes with a fan badge. */
+.glyph-module {
+  color: #7f8b99;
+}
+.glyph-type {
+  color: var(--paper);
+}
+.glyph-operation {
+  color: #9fb0c2;
+}
+.glyph-attribute {
+  color: #6d7783;
+}
+/* A folded package prefix is not an entity — its mark is hollow, its label
+   dimmed, so a group row never reads as a module. */
+.glyph-group {
+  color: #5c6673;
+  font-weight: 400;
+}
+.group-name {
+  color: var(--paper-dim);
+}
+
+.tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.match-row {
+  align-items: flex-start;
+  padding: 4px 8px 4px 6px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.match-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.match-path {
+  font-family: var(--sans);
+  font-size: 10px;
+  color: var(--paper-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------ deps view -- */
+
+/*
+ * A Java signature can run past 200 characters. Nothing in this pane may
+ * widen it: the view never scrolls sideways, long identifiers wrap, and the
+ * secondary metadata truncates with the full text on hover.
+ */
+.deps-view {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 20px 40px;
+}
+
+.deps-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--paper-faint);
+  max-width: none;
+}
+
+.deps-empty p {
+  max-width: 42ch;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.deps-head {
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.deps-path {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--paper-faint);
+}
+
+.deps-head h2 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+.kind-badge,
+.stub-badge {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--paper-faint);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 1px 5px;
+}
+
+.stub-badge {
+  color: var(--ink);
+  background: var(--paper-faint);
+  border-color: var(--paper-faint);
+}
+
+.deps-facts {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--paper-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.deps-facts strong {
+  font-size: 13px;
+  color: var(--paper);
+}
+
+.facts-note {
+  color: var(--paper-faint);
+}
+
+.pane-tabs {
+  display: flex;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.pane-tabs button {
+  font-size: 11px;
+  color: var(--paper-dim);
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+.pane-tabs button.active {
+  color: var(--ink);
+  background: var(--paper);
+  border-color: var(--paper);
+}
+
+.fan-panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1100px) {
+  .fan-panes {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fan-pane {
+  min-width: 0;
+}
+
+/* The directional rail: a pane's whole stack of sections hangs off one
+   coloured edge, so which way a dependency points is legible before a single
+   word is read. */
+.fan-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 8px;
+}
+
+.fan-title.fan-in {
+  color: var(--in);
+  border-left: 2px solid var(--in);
+}
+
+.fan-title.fan-out {
+  color: var(--out);
+  border-left: 2px solid var(--out);
+}
+
+.fan-total {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.fan-none {
+  margin: 0 0 12px 10px;
+  font-size: 11px;
+  color: var(--paper-faint);
+}
+
+.dep-section {
+  margin-bottom: 4px;
+}
+
+.dep-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 2px;
+  text-align: left;
+}
+
+.dep-section-head:hover {
+  background: var(--ink-raised);
+}
+
+.dep-role {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--paper);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dep-count {
+  font-size: 10px;
+  color: var(--paper-faint);
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 0 6px;
+}
+
+.dep-rows {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0 0 0 20px;
+  border-left: 1px solid var(--rule-soft);
+  margin-left: 12px;
+}
+
+.dep-row {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.dep-row:last-child {
+  border-bottom: none;
+}
+
+.counterpart {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: left;
+}
+
+.counterpart-name {
+  flex: none;
+}
+
+.counterpart-name {
+  color: var(--paper);
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 2px;
+}
+
+.counterpart:hover .counterpart-name {
+  text-decoration-color: var(--in);
+}
+
+.counterpart-name.stub {
+  color: var(--paper-faint);
+  font-style: italic;
+}
+
+.counterpart-member {
+  min-width: 0;
+  color: var(--paper-dim);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dep-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 2px;
+  max-width: 100%;
+  font-size: 10px;
+  color: var(--paper-faint);
+}
+
+.dep-meta .via,
+.dep-meta .detail {
+  color: var(--paper-dim);
+}
+
+/* The carrying member can be a full constructor signature; one line of it is
+   the useful part, and the title attribute holds the rest. */
+.dep-meta .via {
+  max-width: 46ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dep-meta .anchor {
+  font-family: var(--mono);
+}
+
+/* An inference must never read as a fact. */
+.provenance {
+  color: var(--inference);
+  border: 1px solid var(--inference);
+  border-radius: 2px;
+  padding: 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dep-path {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--paper-faint);
+}
+
+.member-pane {
+  max-width: 900px;
+}
+
+/* --------------------------------------------------- loader and progress -- */
+
+.app-loader,
+.app-progress {
+  align-items: center;
+  justify-content: center;
+}
+
+.loader-card,
+.progress-card {
+  width: min(560px, 90vw);
+  padding: 28px 32px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--ink-raised);
+}
+
+.loader-card h1,
+.progress-card h1 {
+  margin: 0 0 14px;
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.loader-lead {
+  margin: 0 0 14px;
+  color: var(--paper-dim);
+}
+
+.loader-error {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  color: var(--paper);
+  background: #2a1d22;
+  border-left: 2px solid #d0685f;
+  border-radius: 2px;
+  line-height: 1.5;
+}
+
+.loader-command {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 18px;
+  font-size: 11px;
+  color: var(--paper-faint);
+}
+
+.loader-command code {
+  color: var(--paper-dim);
+  background: var(--ink-sunken);
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+  padding: 6px 8px;
+}
+
+.loader-or {
+  color: var(--paper-faint);
+}
+
+.progress-phase {
+  margin: 0 0 10px;
+  color: var(--paper-dim);
+}
+
+.progress-track {
+  height: 4px;
+  background: var(--ink-sunken);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--in);
+  transition: width 120ms linear;
+}
+
+.progress-track.indeterminate .progress-fill {
+  width: 35%;
+  animation: slide 1.1s ease-in-out infinite;
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+.progress-detail {
+  margin: 8px 0 0;
+  min-height: 1em;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--paper-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-track.indeterminate .progress-fill {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+  .progress-fill {
+    transition: none;
+  }
+}

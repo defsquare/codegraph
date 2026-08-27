@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { existsSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { createRequire } from "node:module";
@@ -6,27 +7,54 @@ import { UsageError } from "./exit.js";
 import { errLine, type IoSink } from "./io.js";
 
 /**
- * `codegraph city --serve`: the visualizer on localhost, with THIS city loaded.
+ * `codegraph city --serve` / `codegraph navigator --serve`: a frontend with
+ * THIS artifact loaded.
  *
- * The CLI stays inside its architectural box — it moves bytes. The visualizer
- * is `@codegraph/viz`'s PREBUILT static bundle (Three.js never enters the
- * CLI's import graph; the dependency is assets-only, resolved at runtime), and
- * the artifact is handed to the page as `/city.json`, exactly the file
- * `--layout --out city.json` would have written. Nothing is computed here.
+ * The CLI stays inside its architectural box — it moves bytes. Each frontend
+ * is a PREBUILT static bundle (Three.js and React never enter the CLI's import
+ * graph; the dependency is assets-only, resolved at runtime), and the artifact
+ * is handed to the page at its one JSON route, exactly the file `--out` would
+ * have written. Nothing is computed here.
  *
- * Binds all interfaces (0.0.0.0) by default so the city is reachable from
- * other machines on the network; `--host 127.0.0.1` narrows it back to this
- * machine when the model is sensitive.
+ * WHICH INTERFACE IT BINDS is the caller's decision, and the two commands make
+ * it differently: `city` binds loopback, `navigator` defaults to every
+ * interface (`--host`). A code model can be sensitive, so whenever the bind
+ * address is not loopback the announcement SAYS the page is reachable from
+ * other machines — an exposure nobody should discover by accident.
  */
 
-/** Where the built visualizer lives; a usage-shaped error names the fix. */
-export function vizAssetsDir(): string {
+/** The default when a caller does not choose: this machine only. */
+export const LOOPBACK_HOST = "127.0.0.1";
+
+/** Bind addresses that mean "every interface on this machine". */
+const WILDCARD_HOSTS: ReadonlySet<string> = new Set(["0.0.0.0", "::", "[::]"]);
+
+function isLoopback(host: string): boolean {
+  return host === LOOPBACK_HOST || host === "localhost" || host === "::1" || host === "[::1]";
+}
+
+/**
+ * How to reach the page, and whether anyone else can. A wildcard bind has no
+ * single URL, so the line names the loopback one that certainly works and
+ * states the reach separately rather than printing `http://0.0.0.0:4178/`,
+ * which is not an address a browser should be given.
+ */
+function reachLine(host: string, port: number): string {
+  if (WILDCARD_HOSTS.has(host)) {
+    return `http://localhost:${port}/ (every interface — reachable from other machines)`;
+  }
+  if (isLoopback(host)) return `http://localhost:${port}/`;
+  return `http://${host}:${port}/ (reachable from other machines)`;
+}
+
+/** Where a frontend package's built bundle lives; a usage-shaped error names the fix. */
+function assetsDirFor(packageName: string, distPath: string): string {
   let packagePath: string;
   try {
-    packagePath = createRequire(import.meta.url).resolve("@codegraph/viz/package.json");
+    packagePath = createRequire(import.meta.url).resolve(`${packageName}/package.json`);
   } catch (error) {
     throw new UsageError(
-      "the visualizer package (@codegraph/viz) cannot be resolved",
+      `the frontend package (${packageName}) cannot be resolved`,
       "Run 'pnpm install' at the workspace root, then 'pnpm -r build'.",
       { cause: error },
     );
@@ -34,11 +62,19 @@ export function vizAssetsDir(): string {
   const assets = join(dirname(packagePath), "dist");
   if (!existsSync(join(assets, "index.html"))) {
     throw new UsageError(
-      "the visualizer is not built (no packages/viz/dist/index.html)",
-      "Run 'pnpm --filter @codegraph/viz build' (or 'pnpm -r build') and retry.",
+      `the frontend is not built (no ${distPath}/index.html)`,
+      `Run 'pnpm --filter ${packageName} build' (or 'pnpm -r build') and retry.`,
     );
   }
   return assets;
+}
+
+export function vizAssetsDir(): string {
+  return assetsDirFor("@codegraph/viz", "packages/viz/dist");
+}
+
+export function navigatorAssetsDir(): string {
+  return assetsDirFor("@codegraph/navigator-ui", "packages/navigator-ui/dist");
 }
 
 const MIME: Readonly<Record<string, string>> = {
@@ -53,25 +89,61 @@ const MIME: Readonly<Record<string, string>> = {
   ".woff2": "font/woff2",
 };
 
-export interface CityServerOptions {
-  /** The serialized laid-out city — served verbatim as /city.json. */
+export interface ArtifactServerOptions {
+  /** The serialized artifact — served verbatim at `artifactRoute`. */
   readonly artifact: string;
-  /** The visualizer's static bundle (vizAssetsDir()). */
+  /** The absolute route the frontend fetches, e.g. `/city.json`. */
+  readonly artifactRoute: string;
+  /** What the stderr announcement calls the page, e.g. `city visualizer`. */
+  readonly label: string;
+  /** The frontend's static bundle (vizAssetsDir() / navigatorAssetsDir()). */
   readonly assets: string;
   /** 0 = ephemeral; the actual port is announced on stderr once listening. */
   readonly port: number;
-  /** Interface to bind; "0.0.0.0" (or "::") serves every interface. */
-  readonly host: string;
+  /** Bind address; defaults to loopback. `0.0.0.0` = every interface. */
+  readonly host?: string;
   readonly io: IoSink;
+}
+
+/** The city's server options, kept as the narrower historical shape. */
+export type CityServerOptions = Omit<ArtifactServerOptions, "artifactRoute" | "label">;
+
+export function startCityServer(options: CityServerOptions): Server {
+  return startArtifactServer({ ...options, artifactRoute: "/city.json", label: "city visualizer" });
 }
 
 /**
  * Start the server and return it (the caller — or Ctrl-C — closes it). The
  * command returns its exit code immediately; the live server is what keeps the
- * process alive, so `codegraph city m.jsonl --serve` behaves like any dev
- * server. Bind failures (port taken) surface on stderr, not as a crash.
+ * process alive, so `--serve` behaves like any dev server. Bind failures (port
+ * taken) surface on stderr, not as a crash.
  */
-export function startCityServer(options: CityServerOptions): Server {
+/**
+ * A bind that failed, in the terms of the flag that caused it. A wrong
+ * `--host` fails as EADDRNOTAVAIL — "address not available" alone sends the
+ * reader looking at the port, so it names the address and the flag instead.
+ */
+function bindFailure(
+  error: NodeJS.ErrnoException,
+  host: string,
+  options: ArtifactServerOptions,
+): string {
+  if (error.code === "EADDRINUSE") {
+    return `codegraph: port ${options.port} is already in use — pick another with --port (0 = any free port).`;
+  }
+  if (error.code === "EADDRNOTAVAIL" || error.code === "EINVAL") {
+    return (
+      `codegraph: cannot bind ${host} — no interface on this machine has that address. ` +
+      `Use --host 0.0.0.0 for every interface, or 127.0.0.1 for this machine only.`
+    );
+  }
+  if (error.code === "EACCES") {
+    return `codegraph: not allowed to bind ${host}:${options.port} — ports below 1024 usually need root.`;
+  }
+  return `codegraph: the ${options.label} server failed: ${error.message}`;
+}
+
+export function startArtifactServer(options: ArtifactServerOptions): Server {
   const { artifact, assets, io } = options;
   const root = resolve(assets);
 
@@ -83,13 +155,13 @@ export function startCityServer(options: CityServerOptions): Server {
     }
     const pathname = decodeURIComponent((request.url ?? "/").split("?")[0] ?? "/");
 
-    if (pathname === "/city.json") {
+    if (pathname === options.artifactRoute) {
       response.writeHead(200, {
         "content-type": "application/json",
+        // The exact byte size, so the page's loading pipeline can show a
+        // DETERMINATE progress bar while it streams the artifact in.
+        "content-length": Buffer.byteLength(artifact, "utf8"),
         "cache-control": "no-store",
-        // The byte size up front (avoids chunked transfer), so the
-        // visualizer's loading bar has a denominator.
-        "content-length": Buffer.byteLength(artifact),
       });
       response.end(method === "HEAD" ? undefined : artifact);
       return;
@@ -116,25 +188,17 @@ export function startCityServer(options: CityServerOptions): Server {
     response.end(method === "HEAD" ? undefined : body);
   });
 
+  const host = options.host ?? LOOPBACK_HOST;
+
   server.on("error", (error: NodeJS.ErrnoException) => {
-    errLine(
-      io,
-      error.code === "EADDRINUSE"
-        ? `codegraph: port ${options.port} is already in use — pick another with --port (0 = any free port).`
-        : `codegraph: the visualizer server failed: ${error.message}`,
-    );
+    errLine(io, bindFailure(error, host, options));
     server.close();
   });
 
-  server.listen(options.port, options.host, () => {
+  server.listen(options.port, host, () => {
     const address = server.address();
     const port = typeof address === "object" && address !== null ? address.port : options.port;
-    // A wildcard address is not browsable; announce a URL that is, and say
-    // what was actually bound so the exposure is visible.
-    const wildcard = options.host === "0.0.0.0" || options.host === "::";
-    const shown = wildcard ? "localhost" : options.host;
-    const bound = wildcard ? ` (bound to ${options.host}, all interfaces)` : "";
-    errLine(io, `city visualizer at http://${shown}:${port}/${bound} — Ctrl-C to stop.`);
+    errLine(io, `${options.label} at ${reachLine(host, port)} — Ctrl-C to stop.`);
   });
 
   return server;

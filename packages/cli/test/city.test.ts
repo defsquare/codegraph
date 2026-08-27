@@ -269,7 +269,7 @@ describe("city --serve", () => {
     artifact: string;
     assets: string;
     port: number;
-    host: string;
+    host: string | undefined;
   }
 
   /** The seam: no sockets, no built viz — just what the command handed over. */

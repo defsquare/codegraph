@@ -28,18 +28,33 @@ packages/city/       @codegraph/city — the city MODEL: modules → districts,
                      types → buildings (dimensions from configurable metrics),
                      dependencies → roof-to-roof arrows. No placement, no
                      rendering. Pure computation.
+packages/navigator/  @codegraph/navigator — the navigator MODEL: the browsable
+                     tree (modules → types → operations/attributes) plus one
+                     classified dependency row per base edge, carrying member,
+                     provenance and anchor included. Pure computation.
 packages/cli/        @codegraph/cli — `codegraph` command.
 packages/viz/        @codegraph/viz — Three.js code city: renders a laid-out
                      city.json artifact (its ONLY input; guard-enforced). The
                      ONLY package that may import three. Vite app, no library.
+packages/navigator-ui/ @codegraph/navigator-ui — React model navigator: a
+                     virtualized tree with search beside a fan-in/fan-out
+                     dependency view. Renders a navigator.json artifact (its
+                     ONLY input; guard-enforced). The ONLY package that may
+                     import react. Vite app, no library.
 fixtures/            Reference corpora + expected model.jsonl snapshots.
 ```
 
 ### Hard boundaries (convenience does not override architecture)
 
-- **`core`, `analyzer` and `city` never import Three.js** — they must run in
-  Node with no DOM. `viz` reads the city model; it never mutates the model and never
+- **`core`, `analyzer`, `city` and `navigator` never import Three.js or React**
+  — they must run in Node with no DOM. `viz` reads the city model and
+  `navigator-ui` the navigator model; neither mutates its model and neither
   re-derives graph facts the analyzer already computes.
+- **A frontend imports its model package for TYPES ONLY.** A value import
+  drags the whole Node pipeline (→ analyzer → core, zod, `node:sqlite`) into
+  the browser bundle and breaks the build. Constants a frontend needs — the
+  artifact `kind`, the dependency-role vocabulary — are restated as literals
+  and pinned equal to the package's own by a test.
 - **Extractors contain no metamodel intelligence.** They emit JSON conforming
   to `schemas/` — the per-record schemas AND the container contract — and
   nothing else. All trait/profile/validation
@@ -78,6 +93,8 @@ java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
 ./bin/codegraph city model.jsonl --serve           # 3D city at http://localhost:4177
+./bin/codegraph navigator model.jsonl --serve      # navigator at http://localhost:4178
+#   both bind EVERY interface by default; --host 127.0.0.1 keeps them local
 ```
 
 ## Metamodel invariants (violating these is a bug, not a style choice)

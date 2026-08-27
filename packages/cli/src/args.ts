@@ -24,6 +24,7 @@ export const COMMAND_NAMES = [
   "import",
   "export",
   "city",
+  "navigator",
   "scm",
   "snapshots",
   "history",
@@ -326,6 +327,60 @@ export const CITY_SPEC: CommandSpec = {
       defaultValue: "0.0.0.0",
     },
     ...VIEW_OPTIONS,
+    {
+      name: "out",
+      type: "string",
+      describe: "Write the artifact to this file instead of stdout.",
+      placeholder: "FILE",
+    },
+  ],
+};
+
+/**
+ * `codegraph navigator`: the browsable model — a tree panel plus a fan-in /
+ * fan-out dependency view per node. Same shape as `city`: the transform lives
+ * in `@codegraph/navigator`, the frontend is `@codegraph/navigator-ui`'s
+ * prebuilt bundle, and this command only resolves flags and moves bytes.
+ */
+export const NAVIGATOR_SPEC: CommandSpec = {
+  name: "navigator",
+  summary: "Explore the model: a searchable tree with per-node dependency detail.",
+  positional: MODELS_POSITIONAL_DEFAULTED,
+  options: [
+    {
+      name: "name",
+      type: "string",
+      describe:
+        "Display name for the corpus in the navigator header; " +
+        "defaults to the basename of each model's root.",
+      placeholder: "STR",
+    },
+    {
+      name: "serve",
+      type: "boolean",
+      describe:
+        "Serve the navigator with this model loaded, on every interface unless --host says " +
+        "otherwise (stdout stays empty; Ctrl-C stops it). Needs the built navigator-ui app " +
+        "(pnpm -r build).",
+    },
+    {
+      name: "port",
+      type: "string",
+      describe: "Port for --serve; 0 picks a free one.",
+      placeholder: "N",
+      defaultValue: "4178",
+    },
+    {
+      name: "host",
+      type: "string",
+      describe:
+        "Address --serve binds. 0.0.0.0 is every interface, so the page is reachable " +
+        "from other machines; 127.0.0.1 keeps it to this one.",
+      placeholder: "ADDR",
+      defaultValue: "0.0.0.0",
+    },
+    ...VIEW_OPTIONS,
+    NO_CACHE_OPTION,
     {
       name: "out",
       type: "string",
@@ -652,6 +707,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   IMPORT_SPEC,
   EXPORT_SPEC,
   CITY_SPEC,
+  NAVIGATOR_SPEC,
   SCM_SPEC,
   SNAPSHOTS_SPEC,
   HISTORY_SPEC,
@@ -717,6 +773,19 @@ export interface CityOptions extends ModelInputOptions, ViewOptions {
   /** `--port N` for `--serve`; 0 = an ephemeral port. */
   readonly port: number;
   /** `--host ADDR` for `--serve`; all interfaces unless the user narrows it. */
+  readonly host: string;
+  /** `--out FILE`; undefined means stdout. */
+  readonly out: string | undefined;
+}
+
+export interface NavigatorOptions extends ModelInputOptions, ViewOptions, CacheOptions {
+  /** `--name STR`: corpus display name; undefined derives it from the roots. */
+  readonly name: string | undefined;
+  /** `--serve`: host the navigator on localhost with this model loaded. */
+  readonly serve: boolean;
+  /** `--port N` for `--serve`; 0 = an ephemeral port. */
+  readonly port: number;
+  /** `--host ADDR` for `--serve`; `0.0.0.0` (every interface) by default. */
   readonly host: string;
   /** `--out FILE`; undefined means stdout. */
   readonly out: string | undefined;
@@ -818,6 +887,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "import"; readonly options: ImportOptions }
   | { readonly kind: "run"; readonly command: "export"; readonly options: ExportOptions }
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
+  | { readonly kind: "run"; readonly command: "navigator"; readonly options: NavigatorOptions }
   | { readonly kind: "run"; readonly command: "scm"; readonly options: ScmOptions }
   | { readonly kind: "run"; readonly command: "snapshots"; readonly options: SnapshotsOptions }
   | { readonly kind: "run"; readonly command: "history"; readonly options: HistoryOptions }
@@ -993,10 +1063,15 @@ function levelOf(values: ParsedValues): FoldLevel {
   return value === undefined ? DEFAULT_LEVEL : (value as FoldLevel);
 }
 
-/** `--port N`: a TCP port; 0 is allowed on purpose (the OS picks a free one). */
-function portOf(values: ParsedValues): number {
-  const raw = stringOf(values, "port");
-  if (raw === undefined) return 4177;
+/**
+ * `--port N`: a TCP port; 0 is allowed on purpose (the OS picks a free one).
+ * The fallback comes from the SPEC's own default, so the value the help text
+ * promises and the value the parser uses cannot drift apart.
+ */
+function portOf(values: ParsedValues, spec: CommandSpec): number {
+  const raw =
+    stringOf(values, "port") ?? spec.options.find((option) => option.name === "port")?.defaultValue;
+  if (raw === undefined) return 0;
   const port = Number(raw);
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     throw new UsageError(
@@ -1005,6 +1080,27 @@ function portOf(values: ParsedValues): number {
     );
   }
   return port;
+}
+
+/**
+ * `--host ADDR`: the interface to bind. Not a closed set — any address this
+ * machine holds is legitimate, and only the OS knows which — so the value is
+ * carried through and a bad one surfaces as the bind failure that names it
+ * (serve.ts). Blank is rejected here, because `--host ""` silently means
+ * "every interface" to `listen`, which is the opposite of what typing an
+ * empty address suggests.
+ */
+function hostOf(values: ParsedValues, spec: CommandSpec): string {
+  const raw =
+    stringOf(values, "host") ?? spec.options.find((option) => option.name === "host")?.defaultValue;
+  const host = (raw ?? "").trim();
+  if (host.length === 0) {
+    throw new UsageError(
+      "--host needs an address",
+      "0.0.0.0 binds every interface; 127.0.0.1 binds this machine only.",
+    );
+  }
+  return host;
 }
 
 /** `--carry a,b` → ["a","b"]; blanks dropped so `a,,b` is not a metric named "". */
@@ -1207,9 +1303,24 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           name: stringOf(values, "name"),
           layout: flagOf(values, "layout"),
           serve: flagOf(values, "serve"),
-          port: portOf(values),
-          host: stringOf(values, "host") ?? "0.0.0.0",
+          port: portOf(values, spec),
+          host: hostOf(values, spec),
           ...viewOf(values),
+          out: stringOf(values, "out"),
+        },
+      };
+    case "navigator":
+      return {
+        kind: "run",
+        command: "navigator",
+        options: {
+          models,
+          name: stringOf(values, "name"),
+          serve: flagOf(values, "serve"),
+          port: portOf(values, spec),
+          host: hostOf(values, spec),
+          ...viewOf(values),
+          noCache: flagOf(values, "no-cache"),
           out: stringOf(values, "out"),
         },
       };
@@ -1263,8 +1374,8 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           minSupport: integerOf(values, "min-support") ?? 3,
           minConfidence: (integerOf(values, "min-confidence") ?? 50) / 100,
           serve: flagOf(values, "serve"),
-          port: portOf(values),
-          host: stringOf(values, "host") ?? "0.0.0.0",
+          port: portOf(values, spec),
+          host: hostOf(values, spec),
           city: stringOf(values, "city"),
           json: flagOf(values, "json"),
         },
@@ -1289,8 +1400,8 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           history: stringOf(values, "history"),
           out: stringOf(values, "out"),
           serve: flagOf(values, "serve"),
-          port: portOf(values),
-          host: stringOf(values, "host") ?? "0.0.0.0",
+          port: portOf(values, spec),
+          host: hostOf(values, spec),
         },
       };
     case "profiles":

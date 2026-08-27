@@ -13,6 +13,7 @@ export default defineConfig({
       "@codegraph/core": fileURLToPath(new URL("../core/src/index.ts", import.meta.url)),
       "@codegraph/analyzer": fileURLToPath(new URL("../analyzer/src/index.ts", import.meta.url)),
       "@codegraph/city": fileURLToPath(new URL("../city/src/index.ts", import.meta.url)),
+      "@codegraph/navigator": fileURLToPath(new URL("../navigator/src/index.ts", import.meta.url)),
       "@codegraph/scm": fileURLToPath(new URL("../scm/src/index.ts", import.meta.url)),
     },
   },
