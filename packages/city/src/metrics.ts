@@ -17,20 +17,19 @@ import type { CodeGraph, CouplingRow, FoldedNode } from "@codegraph/analyzer";
  * floors those buildings at the channel's minimum, so a reader can tell
  * "smallest" from "unmeasured".
  *
- * CYCLOMATIC COMPLEXITY, AND ANYTHING ELSE AN EXTRACTOR MEASURES. No extractor
- * emits complexity today, and this package will not invent it by re-parsing
- * source it cannot see. The hook is the metamodel's own: an entity is a LOOSE
- * object (METAMODEL.md §2), so an extractor may carry `cyclomatic: 12` on a
- * method and it survives loading untouched. Two open-ended sources read those
- * keys:
+ * CYCLOMATIC COMPLEXITY, AND ANYTHING ELSE AN EXTRACTOR MEASURES. This package
+ * will not invent a measure by re-parsing source it cannot see — only the
+ * extractor measures (METAMODEL §3.8), and since M10b the Java one emits `sloc`
+ * and `cyclomatic` in the `TMetrics` map. Two open-ended sources read that map
+ * by key:
  *
  *   `attribute:cyclomatic`  the building's OWN numeric key
  *   `sum:cyclomatic`        the same key summed over everything that folded
  *                           into the building — the form complexity wants,
  *                           since complexity is measured per method
  *
- * So `--height sum:cyclomatic` works the day an extractor emits the key, with
- * no change here, and reports "unmeasured" honestly until then.
+ * So `--height sum:cyclomatic` works for any extractor that emits the key, and
+ * reports "unmeasured" honestly for one that does not.
  */
 
 /** Everything a source may read about one building. Nothing here is mutable. */
@@ -67,9 +66,22 @@ function anchorLines(entity: Entity | undefined): number | undefined {
   return end - start + 1;
 }
 
-/** A loose numeric key, or `undefined` — a non-number is not a measurement. */
+/**
+ * A measure, by name. `TMetrics`' map (METAMODEL §3.8) is the contractual home
+ * and wins; a TOP-LEVEL key of the same name is still read, because an entity
+ * is loose and a pre-`TMetrics` extractor (or a hand-built model) may carry one
+ * — legal, but uncontractual and comparable across nothing.
+ *
+ * A non-number is not a measurement, and `undefined` is not zero.
+ */
 function numericKey(entity: Entity | undefined, key: string): number | undefined {
-  const value = (entity as Record<string, unknown> | undefined)?.[key];
+  const record = entity as Record<string, unknown> | undefined;
+  const metrics = record?.["metrics"];
+  const measured =
+    typeof metrics === "object" && metrics !== null
+      ? (metrics as Record<string, unknown>)[key]
+      : undefined;
+  const value = measured ?? record?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 

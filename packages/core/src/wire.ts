@@ -70,6 +70,9 @@ export const WIRE_TRAITS = {
 
   TStructural: z.object({}),
   TWithAccesses: z.object({}),
+
+  // Measures ride verbatim: no ids, no paths, nothing to intern (§3.8).
+  TMetrics: z.object({ metrics: z.record(z.string().min(1), z.number()) }),
 } satisfies Record<TraitName, z.ZodObject>;
 
 /** The vocabularies a model declares, by the indices its records use (MM-3). */
@@ -133,6 +136,7 @@ export const EntityRec = z.looseObject({
   signature: z.string().optional(),
   parameters: z.array(Ref).optional(),
   localVariables: z.array(Ref).optional(),
+  metrics: z.record(z.string().min(1), z.number()).optional(),
   space: z.array(Space).optional(),
 });
 export type EntityRec = z.infer<typeof EntityRec>;

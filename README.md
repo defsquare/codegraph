@@ -214,8 +214,9 @@ implies
 `--layout`, and needs the built visualizer — `pnpm -r build` covers it. In the
 city: **modules are districts** (nested when the model declares package
 containment), **types are buildings** whose height and footprint follow
-configurable metrics (`--height loc --footprint members` are the defaults —
-`--height sum:cyclomatic` works the day an extractor emits it), and **type
+configurable metrics (`--height loc --footprint members` are the defaults;
+`--height sum:cyclomatic --footprint loc` builds the complexity city from the
+measures the extractor emitted), and **type
 dependencies are roof-to-roof arcs** — green when every base edge is declared,
 red when any is inferred. Hover a building for its raw metrics; click a
 district for its module-level **fan-in/fan-out** arcs (amber in, blue out, each

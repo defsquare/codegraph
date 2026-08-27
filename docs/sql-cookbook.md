@@ -196,6 +196,41 @@ SELECT n.kind, count(*) AS n
 Swap `TInvocable` for `TWithParameters`, `TAttachedTo`, `TStructural` — see
 `METAMODEL.md` for what each one means.
 
+## Measures
+
+`entity_metric` holds what the EXTRACTOR measured (`METAMODEL.md` §3.8) — one
+row per (entity, measure), which is why the aggregate a measure exists for is a
+`GROUP BY` and not a JSON scan. The most complex invocables in the corpus:
+
+```sql
+SELECT n.id, n.kind, max(CASE WHEN em.key = 'cyclomatic' THEN em.value END) AS cc,
+       max(CASE WHEN em.key = 'sloc' THEN em.value END) AS sloc
+  FROM entity_metric em
+  JOIN node n ON n.ref = em.entity_id
+ GROUP BY em.entity_id
+ HAVING cc IS NOT NULL
+ ORDER BY cc DESC, n.id
+ LIMIT 20;
+```
+
+Complexity per module — the form a per-method measure wants, since complexity is
+measured on invocables and read at the level above:
+
+```sql
+SELECT m.id AS module, sum(em.value) AS cyclomatic, count(*) AS invocables
+  FROM entity_metric em
+  JOIN node n ON n.ref = em.entity_id
+  JOIN node m ON m.ref = n.module_ref
+ WHERE em.key = 'cyclomatic'
+ GROUP BY n.module_ref
+ ORDER BY cyclomatic DESC, module;
+```
+
+**Absent is not zero.** An entity with no row for a key was NOT measured — a
+stub, or a kind the extractor does not measure. `sum()` over a missing key
+returns NULL, and turning that into a 0 would state a fact about code nobody
+read. Count what you measured next to what you summed, as above.
+
 ## Modules
 
 What is in each module:

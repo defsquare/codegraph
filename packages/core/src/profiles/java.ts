@@ -32,7 +32,7 @@ export const javaProfile: Profile = {
         "TChildOf",
         "TSourceAnchor",
       ],
-      optional: ["TComment"],
+      optional: ["TComment", "TMetrics"],
     },
 
     // `interface X extends Y, Z` is an inheritance edge between types; an
@@ -46,7 +46,7 @@ export const javaProfile: Profile = {
         "TChildOf",
         "TSourceAnchor",
       ],
-      optional: ["TComment"],
+      optional: ["TComment", "TMetrics"],
     },
 
     enum: {
@@ -58,7 +58,7 @@ export const javaProfile: Profile = {
         "TChildOf",
         "TSourceAnchor",
       ],
-      optional: ["TComment"],
+      optional: ["TComment", "TMetrics"],
     },
 
     record: {
@@ -70,12 +70,12 @@ export const javaProfile: Profile = {
         "TChildOf",
         "TSourceAnchor",
       ],
-      optional: ["TComment"],
+      optional: ["TComment", "TMetrics"],
     },
 
     annotation: {
       required: ["TNamed", "TType", "TWithChildren", "TChildOf", "TSourceAnchor"],
-      optional: ["TComment"],
+      optional: ["TComment", "TMetrics"],
     },
 
     // TWithChildren: a method lexically contains its parameters and locals, and
@@ -95,7 +95,7 @@ export const javaProfile: Profile = {
         "TChildOf",
         "TSourceAnchor",
       ],
-      optional: ["TComment"],
+      optional: ["TComment", "TMetrics"],
     },
 
     // No TNamed (a constructor has no own name) and no TTypedEntity (it has no
@@ -113,7 +113,7 @@ export const javaProfile: Profile = {
         "TChildOf",
         "TSourceAnchor",
       ] satisfies readonly TraitName[],
-      optional: ["TComment"] satisfies readonly TraitName[],
+      optional: ["TComment", "TMetrics"] satisfies readonly TraitName[],
     },
 
     // Lambdas and anonymous classes: invocable but nameless; the id's
@@ -129,7 +129,7 @@ export const javaProfile: Profile = {
         "TChildOf",
         "TSourceAnchor",
       ],
-      optional: ["TTypedEntity"],
+      optional: ["TTypedEntity", "TMetrics"],
     },
 
     attribute: {
@@ -158,6 +158,7 @@ export const javaProfile: Profile = {
   ],
 
   notes: [
+    "Measures (TMetrics, METAMODEL.md §3.8): `sloc` on every type and invocable — lines of its own span that are neither blank nor comment-only, counted by a scanner that knows string and text-block literals, so a `\"/*\"` in the source does not swallow the rest of the file. `cyclomatic` on invocables only: 1 + if / for / foreach / while / do / non-default case label / catch / ternary / short-circuit && and || / switch pattern guard. Purely syntactic, hence immune to the noClasspath resolution ceiling. A nested lambda or anonymous class does NOT contribute to its enclosing method: it is its own invocable and carries its own count. A type's complexity is therefore not stored — it is the sum over its members, which the consumer computes.",
     "Spoon in noClasspath mode invents plausible fully-qualified names for unresolved types. Corpus membership is therefore decided by a whitelist of ids actually declared by the corpus (built in a first pass); anything else is emitted as an isStub entity. Never decide membership by package or name prefix — invented FQNs look exactly like real ones and a prefix filter would launder them into facts.",
     "Reflection is invisible: Class.forName, Method.invoke, proxies, Spring XML/annotation wiring, ServiceLoader/META-INF/services, and JNDI lookups produce no edge. The import/invocation graph of a reflection-heavy corpus is a lower bound.",
     "Lombok-generated members (getters, setters, @Builder, @Data constructors) are emitted with provenance \"generated\" when the expansion is visible to Spoon, and are missing entirely when it is not.",

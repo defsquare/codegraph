@@ -122,6 +122,9 @@ public final class EntityExtractor {
   private final CorpusWhitelist whitelist;
   private final Anchors anchors;
 
+  /** Measures the source itself (§3.8) — the one thing no consumer can redo. */
+  private final Measures measures = new Measures();
+
   public EntityExtractor(CorpusWhitelist whitelist, Anchors anchors) {
     this.whitelist = whitelist;
     this.anchors = anchors;
@@ -295,6 +298,7 @@ public final class EntityExtractor {
                 .type(false)
                 .childOf(parent)
                 .anchoredAt(anchor.get())
+                .measured(measures.of(type, anchor.get()))
                 .markers(typeMarkers(kind));
         comments(builder, type);
         add(new Draft(id, parent, true, builder));
@@ -304,6 +308,8 @@ public final class EntityExtractor {
 
     /** An anonymous class is `lambda`-kind: invocable, nameless, keyed by (file, line). */
     private void anonymousClass(CtClass<?> type, String id, String parent, SourceAnchor anchor) {
+      // An anonymous class is a CONTAINER, not an executable: its methods are
+      // entities of their own and carry their own complexity. Only sloc here.
       Entity.Builder builder =
           Entity.builder(id, LAMBDA)
               .invocable(anonymousSignature(type))
@@ -311,7 +317,8 @@ public final class EntityExtractor {
               .withLocalVariables(List.of())
               .markers(TraitName.TWithInvocations, TraitName.TWithAccesses)
               .childOf(parent)
-              .anchoredAt(anchor);
+              .anchoredAt(anchor)
+              .measured(measures.of(type, anchor));
       // A container like any type: its own methods and fields claim it as parent.
       add(new Draft(id, parent, true, builder));
     }
@@ -348,7 +355,8 @@ public final class EntityExtractor {
               .markers(TraitName.TWithInvocations, TraitName.TWithAccesses)
               .typed(declaredTypeIdOf(method.getType()))
               .childOf(ownerId)
-              .anchoredAt(anchor.get());
+              .anchoredAt(anchor.get())
+              .measured(measures.of(method, anchor.get()));
       comments(builder, method);
       add(new Draft(id, ownerId, true, builder));
     }
@@ -368,7 +376,8 @@ public final class EntityExtractor {
               .withLocalVariables(locals(constructor, id))
               .markers(TraitName.TWithInvocations, TraitName.TWithAccesses)
               .childOf(ownerId)
-              .anchoredAt(anchor.get());
+              .anchoredAt(anchor.get())
+              .measured(measures.of(constructor, anchor.get()));
       comments(builder, constructor);
       add(new Draft(id, ownerId, true, builder));
     }
@@ -387,7 +396,8 @@ public final class EntityExtractor {
               .withLocalVariables(locals(lambda, id))
               .markers(TraitName.TWithInvocations, TraitName.TWithAccesses)
               .childOf(parent)
-              .anchoredAt(anchor.get());
+              .anchoredAt(anchor.get())
+              .measured(measures.of(lambda, anchor.get()));
       add(new Draft(id, parent, true, builder));
     }
 

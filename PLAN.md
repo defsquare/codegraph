@@ -1441,28 +1441,44 @@ Four principles, locked up front:
 
 ### 12.2 M10b — measures (`TMetrics`)
 
-- [ ] Core: `TMetrics` trait contributing `metrics: Record<string, number>`
-      (finite values validated; keys deliberately open — METAMODEL §3.8),
-      optional on the Java profile's measurable kinds (types + invocables);
-      header trait dictionary grows; `gen:schemas` committed.
-- [ ] Java extractor emits `sloc` per type and invocable (span lines minus
+- [x] Core: `TMetrics` trait contributing `metrics: Record<string, number>`
+      (finite values validated — Zod v4's `z.number()` rejects NaN/Infinity by
+      construction; keys deliberately open — METAMODEL §3.8), optional on the
+      Java profile's measurable kinds (types + invocables); header trait
+      dictionary grows; `gen:schemas` committed. The encoder writes the map
+      KEY-SORTED: canonical order (MM-5) reaches inside the record, or two runs
+      that measured the same thing would differ in bytes.
+- [x] Java extractor emits `sloc` per type and invocable (span lines minus
       blank and comment-only lines) and `cyclomatic` per invocable:
       1 + count of `CtIf`, `CtFor`/`CtForEach`/`CtWhile`/`CtDo`, non-default
       `CtCase` (one per case expression), `CtCatch`, `CtConditional`,
       `CtBinaryOperator` AND/OR, switch-pattern guards. A lambda's branches
       count toward the lambda — it is its own invocable. Purely syntactic:
-      immune to the noClasspath resolution ceiling.
-- [ ] City: `numericKey` reads the `metrics` map (top-level loose keys stay
-      legal but uncontractual), so `--height sum:cyclomatic` and
-      `attribute:sloc` work exactly as `metrics.ts` promised the day the key
-      exists.
-- [ ] Fixture: hand-counted `cyclomatic` values asserted on the fixture
-      corpus (branchy method, `&&`-chain, switch, lambda-in-method);
-      property: every emitted measure is a finite non-negative number.
-- **DoD**: `--height sum:cyclomatic --footprint loc` on commons-lang
-  reviewed as a screenshot at user-facing angles; unmeasured buildings are
-  floored and counted in diagnostics (existing behavior), never zeroed;
-  `sloc ≤` span length holds as a property.
+      immune to the noClasspath resolution ceiling. `sloc` runs a small LEXER,
+      not a regex: a `"/*"` inside a string literal would otherwise open a
+      block comment that never closes and silently blank the rest of the file.
+- [x] Store: measures are ROWS (`entity_metric`), not a JSON blob — the cache
+      exists to be queried and a measure is what one aggregates; presence
+      follows the trait set like every other trait key, so `metrics: {}`
+      survives. `DB_VERSION` 2 → 3.
+- [x] City: `numericKey` reads the `metrics` map (top-level loose keys stay
+      legal but uncontractual, and the map wins), so `--height sum:cyclomatic`
+      and `attribute:sloc` work exactly as `metrics.ts` promised.
+- [x] Fixture: hand-counted `cyclomatic` values asserted on the fixture
+      corpus (`Reporting.max` 4 = for + if + `||`, `join` 2, `first` 2 ternary,
+      `today` 1); the constructs the corpus does not contain — switch labels,
+      pattern guards, multi-catch, lambda-in-method — are hand-counted over
+      sources written for them in the extractor's `MeasuresTest`. Properties:
+      every measure finite and non-negative, `sloc ≤ span`, a stub carries none.
+- **DoD** ✅ verified on apache/commons-lang at `e073d5d` (15 381 entities,
+  5 200 measured, 9 790 total cyclomatic over 4 809 invocables):
+  `--height sum:cyclomatic --footprint loc` reviewed as screenshots at
+  user-facing angles — ArrayUtils (1 099) and StringUtils (904) tower over a
+  mid-rise of StrBuilder/Conversion/TypeUtils; the 246 unmeasured buildings
+  (239 of them stubs) sit at the channel minimum 1, counted in diagnostics and
+  in the legend, never at zero. `sloc ≤ span` held on all 5 200; a hand-count
+  of `JavaVersion.get` (1 + 28 case labels + 4 ifs) matched the emitted 33
+  exactly.
 
 ### 12.3 M10c — literal values (the value door)
 
@@ -1541,7 +1557,7 @@ Four principles, locked up front:
 | M9c | Entity-level city replay | ✅ frozen union layout; temporal `city.json` with per-building series (`codegraph replay`); time colors (heat + age), owner color mode and dashed co-change arcs via the `--history` join; scrubbed replay reviewed as screenshots on gson at user-facing angles, allocation-free scrub path |
 | NV | Navigator frontend | ✅ `codegraph navigator --serve`: `@codegraph/navigator` builds an index-addressed browsable artifact (tree + one classified dependency row per base edge, reference sub-roles recovered from the source entity); `@codegraph/navigator-ui` renders it — virtualized tree with search, fan-in/fan-out sectioned by role with member, provenance and anchor. Design record: `docs/navigator.md`. Verified on fineract (102 972 nodes / 668 286 rows, 100 MB artifact loading in 1.3 s, 45 rows mounted after scrolling) |
 | M10a | Source links | ✅ header `repository` facts (remote, commit, repo-relative root, provider?) in core + `schemas/` as patterns; extractor passthrough flags; CLI-derived normalization carried per snapshot frame; store/city/viz carry them and the details panel links at the scrubbed sha — verified on gson (`JsonReader.java#L211-L2005` at `b3f4ca2`, replay retargeting to `ed2b25d`, fixture city linkless) |
-| M10b | Measures | `TMetrics` trait; Java extractor emits `sloc` + `cyclomatic`; `--height sum:cyclomatic` reviewed as screenshot on commons-lang; fixture CC values hand-counted |
+| M10b | Measures | ✅ `TMetrics` (open keys, finite values) in core, `schemas/` and the store (`entity_metric` rows, DB_VERSION 3); Java extractor emits `sloc` (lexer-based) + `cyclomatic` with a lambda's branches charged to the lambda; fixture CC values hand-counted, `sloc ≤ span` a property; `--height sum:cyclomatic --footprint loc` reviewed as screenshots on commons-lang (`JavaVersion.get` hand-count 33 = emitted 33) |
 | M10c | Literal values | `Literal` + `TWithValue` + `annotationUse` in core and schemas; Java extractor carries annotation arguments, constant initializers and element defaults; value-closure property green; fixture asserts the `Audited` cases |
 | M10d | Framework semantics | data-driven Spring framework profile; derived DI `dynamic-candidate` wiring (qualifier narrowing on M10c argument values) hand-verified on spring-petclinic; `declared` view unchanged by the pass |
 ## 14. Decisions made in this plan (deltas vs. the design doc)
@@ -1573,6 +1589,7 @@ Four principles, locked up front:
 | Snapshot strategy (Phase 8) | sampled keyframes via `git worktree`; per-commit incremental extraction deferred | full extraction × thousands of commits is prohibitive, 50–200 frames give the replay effect; noClasspath makes non-compiling historic commits extractable |
 | Repository provenance (Phase 9) | facts in the header — `remote` (normalized https), `commit` (sha), repo-relative `root`; host URL templates derived by consumers, `provider` only when the hostname lies | a serialized URL freezes one host's scheme into the interchange; a sha is a permalink where a branch moves; anchors are relative to the analyzed root, which sits below the repo root (gson) — without the prefix no anchor projects back |
 | Measures (Phase 9) | `TMetrics` open numeric map; canonical key names documented (METAMODEL §3.8), values validated finite, keys deliberately NOT a closed MM-3 vocabulary | measures are the extractor-innovation surface — a closed set gates every new measure on a core release; loose top-level keys stay legal (container contract) but uncontractual, and only a trait makes `sloc`/`cyclomatic` comparable across extractors |
+| Measure storage (M10b) | `entity_metric(entity_id, key, value)` rows in `model.db`, not a JSON column; the wire writes the map key-sorted, so reading back `ORDER BY key` restores it | the store exists to be QUERIED and a measure is precisely what one aggregates ("cyclomatic by package"); a blob would make the one thing measures are for a full-table JSON scan |
 | DI wiring (Phase 9) | derived by the analyzer from declared facts + a framework data table; `dynamic-candidate` provenance, in-memory only, matched by entity name — never id parsing | the extractor stays framework-blind; the candidate set needs whole-corpus implementor knowledge only the analyzer holds; Spring dispatch is §1.3's `dynamic-candidate` definition verbatim |
 | Literal values (Phase 9) | tagged-union `Literal`: numbers as canonical decimal text, enum values as type id + simple name, unfoldable constant expressions kept as `unevaluated` source text; ids inside values obey closure | a JSON number loses a Java `long`; a fabricated enum-member stub is the one thing §6 forbids; dropping an unfoldable expression erases a written fact — degraded honesty over silent loss, the stub discipline applied to values |
 | Annotation usage (Phase 9) | dedicated `annotationUse` edge kind carrying `arguments`, replacing the plain `reference` — in-place clean break, fixtures regenerated | overloading `reference` would make `arguments` meaningful on one disguised subset of a kind; consumers cannot select annotation usages today without guessing from the target's kind, which a stub target cannot answer |

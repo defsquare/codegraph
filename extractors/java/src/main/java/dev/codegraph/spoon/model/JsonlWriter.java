@@ -270,6 +270,15 @@ public final class JsonlWriter {
             }
             generator.writeEndArray();
           }
+          // Measures (§3.8): plain numbers, already key-sorted by the builder.
+          if (entity.metrics() != null) {
+            generator.writeObjectFieldStart("metrics");
+            for (java.util.Map.Entry<String, Number> measure : entity.metrics().entrySet()) {
+              generator.writeFieldName(measure.getKey());
+              writeNumber(generator, measure.getValue());
+            }
+            generator.writeEndObject();
+          }
           if (entity.anchor() != null) {
             anchor(generator, entity.anchor(), files);
           }
@@ -360,6 +369,25 @@ public final class JsonlWriter {
     generator.writeNumber(anchor.startLine());
     generator.writeNumber(anchor.endLine());
     generator.writeEndArray();
+  }
+
+  /**
+   * A measure, in the narrowest JSON form that keeps its value: an integral
+   * measure writes as {@code 7}, not {@code 7.0}. The wire is diffed by humans,
+   * and a trailing {@code .0} on every count is noise that also makes the file
+   * differ from what another extractor would write for the same number.
+   */
+  private static void writeNumber(JsonGenerator generator, Number value) throws IOException {
+    if (value instanceof Integer || value instanceof Long || value instanceof Short) {
+      generator.writeNumber(value.longValue());
+      return;
+    }
+    double number = value.doubleValue();
+    if (number == Math.rint(number) && !Double.isInfinite(number)) {
+      generator.writeNumber((long) number);
+    } else {
+      generator.writeNumber(number);
+    }
   }
 
   private static void refs(

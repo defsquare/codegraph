@@ -60,7 +60,8 @@
               "TWithLocalVariables",
               "TWithInvocations",
               "TStructural",
-              "TWithAccesses"
+              "TWithAccesses",
+              "TMetrics"
             ],
             "type": "string"
           },

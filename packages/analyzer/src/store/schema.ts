@@ -98,7 +98,7 @@ export const STORE_OPEN_OPTIONS: SqliteOpenOptions = { enableForeignKeyConstrain
  * (A store that holds revisions is the one exception: the cache refuses to
  * touch it, because K snapshots cost K extractions — see `cache.ts`.)
  */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 /**
  * `meta` keys the importer writes. Values are TEXT; anything structured is
@@ -162,6 +162,7 @@ export const ENTITY_KEY_STORAGE = {
   signature: { table: "entity", columns: ["signature"] },
   parameters: { table: "entity_parameter", columns: ["parameter_id"] },
   localVariables: { table: "entity_local_variable", columns: ["variable_id"] },
+  metrics: { table: "entity_metric", columns: ["key", "value"] },
 } as const satisfies KeyStorage;
 
 /** The same, for edge records. */
@@ -269,6 +270,17 @@ CREATE TABLE entity_local_variable (
   PRIMARY KEY (entity_id, ord)
 ) WITHOUT ROWID;
 
+-- Measures (TMetrics, METAMODEL §3.8). Rows rather than a JSON blob: the store
+-- exists to be queried, and a measure is what one aggregates ("cyclomatic by
+-- package"). The key is (entity, measure) — a map has no ordinal; the wire's
+-- key order is canonical (sorted), so reading back sorted restores it.
+CREATE TABLE entity_metric (
+  entity_id INTEGER NOT NULL REFERENCES entity,
+  key       TEXT    NOT NULL,
+  value     REAL    NOT NULL,
+  PRIMARY KEY (entity_id, key)
+) WITHOUT ROWID;
+
 -- ── Edges. Outgoing facts only (invariant 4) ─────────────────────────────────
 CREATE TABLE edge (
   id             INTEGER PRIMARY KEY,
@@ -371,6 +383,8 @@ CREATE INDEX trait_set_member_by_trait ON trait_set_member(trait_id);
 CREATE INDEX entity_parameter_target   ON entity_parameter(parameter_id);
 CREATE INDEX entity_local_target       ON entity_local_variable(variable_id);
 CREATE INDEX edge_candidate_target     ON edge_candidate(candidate_id);
+-- One measure across the corpus ("every cyclomatic") is the aggregate query.
+CREATE INDEX entity_metric_key         ON entity_metric(key);
 
 -- Timeline lookups walk one key across every revision.
 CREATE INDEX entity_version_key ON entity_version(key_id, revision_id);

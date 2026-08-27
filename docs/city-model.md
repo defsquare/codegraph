@@ -167,19 +167,22 @@ substitute zero — a stub type has no anchor, so it has no line count, and a
 zero there would be a measurement nobody took. CM-6 covers what happens next.
 
 **The open forms are the extensibility, and they are how cyclomatic complexity
-arrives.** An entity is a *loose* object (METAMODEL.md §2), so an extractor may
-attach any extra numeric key and it survives loading untouched:
+arrives.** A measure lives in the entity's `TMetrics` map (METAMODEL.md §3.8),
+whose keys are deliberately open, and either form reads it by name:
 
 | Form | Reads |
 |---|---|
-| `attribute:<key>` | the type's own numeric key |
-| `sum:<key>` | that key summed over everything that folded into the building |
+| `attribute:<key>` | the type's own measure |
+| `sum:<key>` | that measure summed over everything that folded into the building |
 
-`sum:` is the form complexity wants, because complexity is measured per method
-and a building is a type. No extractor emits `cyclomatic` today, and this
-package will **not** invent it by re-parsing source it cannot see; the day the
-Java extractor emits it, `--height sum:cyclomatic` is a working height with no
-change here. Until then it reports "unmeasured", which is the truth.
+`sum:` is the form complexity wants, because complexity is measured per
+invocable and a building is a type. Since M10b the Java extractor emits `sloc`
+and `cyclomatic`, so `--height sum:cyclomatic --footprint loc` is a working
+city; for an extractor that emits neither it reports "unmeasured", which is the
+truth. This package will **not** invent a measure by re-parsing source it
+cannot see — only the extractor measures. (A top-level numeric key of the same
+name is still read, since an entity is a *loose* object, but it is
+uncontractual: the map wins.)
 
 `sum:` returns `undefined` — not `0` — when *no* member carries the key:
 "nothing measured this" and "everything measured zero" are different
@@ -371,9 +374,10 @@ it with Three.js. It does not re-derive graph facts, and respects
 2. **Colour binding.** Most likely `kind` (categorical) with provenance or
    staleness as a second channel. Needs the same "state the metric" discipline
    `bindings` already gives dimensions.
-3. **Complexity from the extractor.** Emitting `cyclomatic` per method in the
-   Java extractor makes `sum:cyclomatic` a first-class height; nothing in this
-   package changes.
+3. ~~**Complexity from the extractor.**~~ Done (M10b): the Java extractor emits
+   `cyclomatic` per invocable and `sloc` per type and invocable in the
+   `TMetrics` map, and `sum:cyclomatic` became a first-class height with a
+   one-function change here — reading the map instead of only a loose key.
 4. **Scale beyond fineract.** 3 537 buildings render comfortably; a corpus ten
    times bigger will want the renderer to instance meshes (already a CLAUDE.md
    rule) and may want the city model itself to support a level-of-detail view —

@@ -3,8 +3,11 @@ package dev.codegraph.spoon.model;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * A node: an id, a profile-defined kind, and a sum of traits (METAMODEL.md §2).
@@ -45,6 +48,7 @@ import java.util.List;
   "localVariables",
   "definedIn",
   "comments",
+  "metrics",
   "anchor"
 })
 public record Entity(
@@ -61,6 +65,7 @@ public record Entity(
     List<String> localVariables,
     List<String> definedIn,
     List<String> comments,
+    Map<String, Number> metrics,
     SourceAnchor anchor) {
 
   public static Builder builder(String id, String kind) {
@@ -86,6 +91,7 @@ public record Entity(
     private List<String> localVariables;
     private List<String> definedIn;
     private List<String> comments;
+    private Map<String, Number> metrics;
     private SourceAnchor anchor;
 
     private Builder(String id, String kind) {
@@ -188,6 +194,22 @@ public record Entity(
     }
 
     /**
+     * TMetrics → {@code metrics} (METAMODEL.md §3.8). An EMPTY map is not
+     * emitted at all: absence means "not measured", and declaring the trait to
+     * say nothing would be a claim with no content. Keys are written sorted —
+     * canonical order reaches inside the record, or two runs that measured the
+     * same thing would produce different bytes.
+     */
+    public Builder measured(Map<String, ? extends Number> metrics) {
+      if (metrics == null || metrics.isEmpty()) {
+        return this;
+      }
+      this.metrics = Collections.unmodifiableMap(new TreeMap<String, Number>(metrics));
+      traits.add(TraitName.TMetrics);
+      return this;
+    }
+
+    /**
      * Adds a marker trait — one that contributes no key because its data lives
      * in {@code edges[]}. Key-contributing traits are rejected here on purpose:
      * they may only be added by the method that also supplies the key.
@@ -227,6 +249,7 @@ public record Entity(
           localVariables,
           definedIn,
           comments,
+          metrics,
           anchor);
     }
 

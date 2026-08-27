@@ -115,6 +115,45 @@ describe("round trip on the real fixture corpus", () => {
   });
 });
 
+/**
+ * Measures (M10b, METAMODEL §3.8). The map is data — no ids, no paths — so the
+ * only wire questions are the two that make a file diffable: does it come back
+ * exactly, and is its ORDER canonical whatever order the extractor measured in.
+ */
+describe("a measure map on the wire", () => {
+  function measured(metrics: Record<string, number>): Model {
+    const model = loadFixture();
+    const [first, ...rest] = model.entities;
+    const entity = {
+      ...(first as object),
+      traits: [...(first as { traits: string[] }).traits, "TMetrics"],
+      metrics,
+    } as unknown as (typeof model.entities)[number];
+    return { ...model, entities: [entity, ...rest] };
+  }
+
+  it("round-trips verbatim, empty map included", () => {
+    for (const metrics of [{ sloc: 42, cyclomatic: 7 }, { "acme:halstead": 3.5 }, {}]) {
+      const back = decodeModel(encodeModelToString(measured(metrics)).split("\n"));
+      const entity = back.entities.find((candidate) => candidate.traits.includes("TMetrics"));
+      expect((entity as unknown as { metrics: unknown }).metrics).toEqual(metrics);
+    }
+  });
+
+  it("writes its keys sorted, so two runs that measured the same thing agree", () => {
+    const forwards = encodeModelToString(measured({ cyclomatic: 7, sloc: 42 }));
+    const backwards = encodeModelToString(measured({ sloc: 42, cyclomatic: 7 }));
+    expect(forwards).toBe(backwards);
+    expect(forwards).toContain('"metrics":{"cyclomatic":7,"sloc":42}');
+  });
+
+  it("refuses a value that is not a measurement", () => {
+    for (const bad of [{ sloc: "42" }, { sloc: null }] as unknown as Record<string, number>[]) {
+      expect(() => decodeModel(encodeModelToString(measured(bad)).split("\n"))).toThrow();
+    }
+  });
+});
+
 describe("repository provenance rides in the header (M10a)", () => {
   const repository = {
     remote: "https://github.com/google/gson",

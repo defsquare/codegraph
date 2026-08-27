@@ -53,6 +53,7 @@ interface CityJson {
   buildings: {
     id: string;
     district: string;
+    isStub: boolean;
     height: number;
     footprint: { width: number; depth: number };
     metrics: Record<string, number | null>;
@@ -141,17 +142,33 @@ describe("city: the flags reach the transform", () => {
     expect((error as UsageError).message).toContain("loc");
   });
 
-  it("accepts an extractor-supplied key today, and reports it unmeasured", () => {
-    // Nothing in the Java fixture carries `cyclomatic`; the honest answer is
-    // "unmeasured on every building", not a city of zero-height boxes.
+  it("builds a city from the extractor's own measures (M10b)", () => {
     const { io, code } = cityTo({ height: "sum:cyclomatic" });
     expect(code).toBe(EXIT.OK);
     const city = parseCity(io.stdout());
     const height = city.bindings.find((binding) => binding.channel === "height");
     expect(height?.metric).toBe("sum:cyclomatic");
+    // Every corpus type is measured; a STUB never was — nothing read its source,
+    // so it is floored and counted, never drawn as a zero-complexity building.
+    const measured = city.buildings.filter((b) => b.metrics["sum:cyclomatic"] !== null);
+    expect(measured.length).toBeGreaterThan(0);
+    expect(measured.every((building) => !building.isStub)).toBe(true);
+    expect(height?.unmeasured).toBe(city.buildings.length - measured.length);
+    for (const building of city.buildings) {
+      if (building.isStub) expect(building.metrics["sum:cyclomatic"]).toBeNull();
+    }
+  });
+
+  it("reports a metric no extractor emits as unmeasured, not as zero", () => {
+    // The honest answer for a key nothing carries is "unmeasured on every
+    // building", not a city of zero-height boxes.
+    const { io, code } = cityTo({ height: "sum:halstead" });
+    expect(code).toBe(EXIT.OK);
+    const city = parseCity(io.stdout());
+    const height = city.bindings.find((binding) => binding.channel === "height");
     expect(height?.unmeasured).toBe(city.buildings.length);
     expect(io.stderr()).toContain("unmeasured");
-    for (const building of city.buildings) expect(building.metrics["sum:cyclomatic"]).toBeNull();
+    for (const building of city.buildings) expect(building.metrics["sum:halstead"]).toBeNull();
   });
 });
 

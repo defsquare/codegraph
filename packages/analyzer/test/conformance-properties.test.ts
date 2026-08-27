@@ -143,6 +143,10 @@ function traitKeys(trait: TraitName, ctx: TraitContext): Record<string, unknown>
       return { parameters: [] };
     case "TWithLocalVariables":
       return { localVariables: [] };
+    // Measures (§3.8): open keys, finite values. Generated deterministically
+    // from the index so a corpus stays reproducible.
+    case "TMetrics":
+      return { metrics: { sloc: ctx.index + 1, cyclomatic: 1 } };
     // Marker traits contribute no keys: what they declare lives in `edges[]`.
     case "TWithInheritances":
     case "TWithImplements":

@@ -1,4 +1,4 @@
-{"t":"header","schemaVersion":"1.0.0","lang":"java","extractor":{"name":"codegraph-spoon","version":"0.2.0","noClasspath":true},"root":"fixtures/java/src","dict":{"kinds":["annotation","attribute","class","constructor","enum","interface","lambda","localVariable","method","package","parameter","record"],"traits":["TChildOf","TComment","TInvocable","TModule","TNamed","TSourceAnchor","TStructural","TType","TTypedEntity","TWithAccesses","TWithChildren","TWithImplements","TWithInheritances","TWithInvocations","TWithLocalVariables","TWithParameters"],"edges":["access","import","inheritance","interfaceImplementation","invocation","reference"],"provenance":["declared","derived"]}}
+{"t":"header","schemaVersion":"1.0.0","lang":"java","extractor":{"name":"codegraph-spoon","version":"0.2.0","noClasspath":true},"root":"fixtures/java/src","dict":{"kinds":["annotation","attribute","class","constructor","enum","interface","lambda","localVariable","method","package","parameter","record"],"traits":["TChildOf","TComment","TInvocable","TMetrics","TModule","TNamed","TSourceAnchor","TStructural","TType","TTypedEntity","TWithAccesses","TWithChildren","TWithImplements","TWithInheritances","TWithInvocations","TWithLocalVariables","TWithParameters"],"edges":["access","import","inheritance","interfaceImplementation","invocation","reference"],"provenance":["declared","derived"]}}
 {"t":"f","i":0,"path":"com/acme/order/AbstractOrder.java"}
 {"t":"f","i":1,"path":"com/acme/order/Audited.java"}
 {"t":"f","i":2,"path":"com/acme/order/Basket.java"}
@@ -13,173 +13,173 @@
 {"t":"f","i":11,"path":"com/acme/order/Reporting.java"}
 {"t":"f","i":12,"path":"com/acme/order/adapter/LedgerAdapter.java"}
 {"t":"f","i":13,"path":"com/acme/order/legacy/List.java"}
-{"t":"e","i":0,"k":9,"tr":[4,10,3],"m":0,"s":"com.acme.order","name":"com.acme.order","isStub":false,"definedIn":[0,1,2,3,4,5,6,7,8,9,10,11]}
-{"t":"e","i":1,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":0,"s":"AbstractOrder","name":"AbstractOrder","isStub":false,"parent":0,"comments":["Shared state for every kind of order."],"anchor":[0,4,23]}
-{"t":"e","i":2,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"AbstractOrder.<init>(java.lang.String)","signature":"<init>(java.lang.String)","parent":1,"parameters":[3],"localVariables":[],"anchor":[0,10,13]}
-{"t":"e","i":3,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"AbstractOrder.<init>(java.lang.String)","d":"param:reference","name":"reference","declaredType":152,"parent":2,"anchor":[0,10,10]}
-{"t":"e","i":4,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"AbstractOrder.price()","name":"price","signature":"price()","declaredType":57,"parent":1,"parameters":[],"localVariables":[],"anchor":[0,20,22]}
-{"t":"e","i":5,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"AbstractOrder.reference","name":"reference","declaredType":152,"parent":1,"anchor":[0,8,8]}
-{"t":"e","i":6,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"AbstractOrder.reference()","name":"reference","signature":"reference()","declaredType":152,"parent":1,"parameters":[],"localVariables":[],"anchor":[0,15,17]}
-{"t":"e","i":7,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"AbstractOrder.total","name":"total","declaredType":57,"parent":1,"anchor":[0,6,6]}
-{"t":"e","i":8,"k":0,"tr":[4,5,1,10,0,7],"m":0,"s":"Audited","name":"Audited","isStub":false,"parent":0,"comments":["Marks a method whose calls must reach the audit log."],"anchor":[1,8,11]}
-{"t":"e","i":9,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Audited.value()","name":"value","signature":"value()","declaredType":152,"parent":8,"parameters":[],"localVariables":[],"anchor":[1,10,10]}
-{"t":"e","i":10,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":0,"s":"Basket","name":"Basket","isStub":false,"parent":0,"comments":["A basket being filled. Declares no constructor of its own."],"anchor":[2,7,57]}
-{"t":"e","i":11,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Basket.<init>()","signature":"<init>()","parent":10,"parameters":[],"localVariables":[],"anchor":[2,7,57]}
-{"t":"e","i":12,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":0,"s":"Basket.Cursor","name":"Cursor","isStub":false,"parent":10,"comments":["Non-static inner: reads the enclosing Basket's fields."],"anchor":[2,49,56]}
-{"t":"e","i":13,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Basket.Cursor.<init>()","signature":"<init>()","parent":12,"parameters":[],"localVariables":[],"anchor":[2,49,56]}
-{"t":"e","i":14,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Basket.Cursor.index","name":"index","parent":12,"anchor":[2,51,51]}
-{"t":"e","i":15,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Basket.Cursor.next()","name":"next","signature":"next()","declaredType":16,"parent":12,"parameters":[],"localVariables":[],"anchor":[2,53,55]}
-{"t":"e","i":16,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":0,"s":"Basket.Line","name":"Line","isStub":false,"parent":10,"comments":["Static nested: no enclosing Basket instance."],"anchor":[2,27,46]}
-{"t":"e","i":17,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Basket.Line.<init>(long)","signature":"<init>(long)","parent":16,"parameters":[18],"localVariables":[],"anchor":[2,31,33]}
-{"t":"e","i":18,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Basket.Line.<init>(long)","d":"param:amount","name":"amount","parent":17,"anchor":[2,31,31]}
-{"t":"e","i":19,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":0,"s":"Basket.Line.Discount","name":"Discount","isStub":false,"parent":16,"comments":["Nested inside a nested type."],"anchor":[2,40,45]}
-{"t":"e","i":20,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Basket.Line.Discount.<init>()","signature":"<init>()","parent":19,"parameters":[],"localVariables":[],"anchor":[2,40,45]}
-{"t":"e","i":21,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Basket.Line.Discount.applyTo(long)","name":"applyTo","signature":"applyTo(long)","parent":19,"parameters":[22],"localVariables":[],"anchor":[2,42,44]}
-{"t":"e","i":22,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Basket.Line.Discount.applyTo(long)","d":"param:amount","name":"amount","parent":21,"anchor":[2,42,42]}
-{"t":"e","i":23,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Basket.Line.amount","name":"amount","parent":16,"anchor":[2,29,29]}
-{"t":"e","i":24,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Basket.Line.amount()","name":"amount","signature":"amount()","parent":16,"parameters":[],"localVariables":[],"anchor":[2,35,37]}
-{"t":"e","i":25,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Basket.add(com.acme.order.Basket.Line)","name":"add","signature":"add(com.acme.order.Basket.Line)","parent":10,"parameters":[26],"localVariables":[],"anchor":[2,13,16]}
-{"t":"e","i":26,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Basket.add(com.acme.order.Basket.Line)","d":"param:line","name":"line","declaredType":16,"parent":25,"anchor":[2,13,13]}
-{"t":"e","i":27,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Basket.cursor()","name":"cursor","signature":"cursor()","declaredType":12,"parent":10,"parameters":[],"localVariables":[],"anchor":[2,22,24]}
-{"t":"e","i":28,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Basket.lines","name":"lines","declaredType":163,"parent":10,"anchor":[2,11,11]}
-{"t":"e","i":29,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Basket.total","name":"total","parent":10,"anchor":[2,9,9]}
-{"t":"e","i":30,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Basket.total()","name":"total","signature":"total()","parent":10,"parameters":[],"localVariables":[],"anchor":[2,18,20]}
-{"t":"e","i":31,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":0,"s":"Batch","name":"Batch","isStub":false,"parent":0,"comments":["Array members and an anonymous class that uses its own members.\n\n<p>Both were blind spots found by auditing a real corpus (commons-lang), not by\nthis corpus: arrays were present but nothing ever read `array.length`, and an\nanonymous class was present but nothing inside it touched its own fields.\n\n<p>`counts.length` and `int[]::new` declare their member on the ARRAY type. An\narray is not an entity, and its component type does not own those members —\nattributing them to the component invented a stub class named `int` and an\naccess on `com.acme.order.Money` that the source never writes.\n\n<p>The anonymous `Priceable` is identified by `#file:line`; Spoon names it\n`Batch$1`, so any edge that names it from a type REFERENCE must be translated\nback, or one declared class ends up with two ids and the second is laundered\ninto a stub carrying the corpus's own package."],"anchor":[3,20,62]}
-{"t":"e","i":32,"k":6,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32","signature":"com.acme.order.Priceable()","parent":45,"parameters":[],"localVariables":[],"anchor":[3,48,60]}
-{"t":"e","i":33,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32.<init>()","signature":"<init>()","parent":32,"parameters":[],"localVariables":[],"anchor":[3,48,60]}
-{"t":"e","i":34,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32.price()","name":"price","signature":"price()","declaredType":57,"parent":32,"parameters":[],"localVariables":[],"anchor":[3,53,55]}
-{"t":"e","i":35,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32.running","name":"running","declaredType":57,"parent":32,"anchor":[3,50,50]}
-{"t":"e","i":36,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32.scaled(com.acme.order.Money)","name":"scaled","signature":"scaled(com.acme.order.Money)","declaredType":57,"parent":32,"parameters":[37],"localVariables":[],"anchor":[3,57,59]}
-{"t":"e","i":37,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32.scaled(com.acme.order.Money)#param:base","name":"base","declaredType":57,"parent":36,"anchor":[3,57,57]}
-{"t":"e","i":38,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Batch.<init>(int[],com.acme.order.Money[])","signature":"<init>(int[],com.acme.order.Money[])","parent":31,"parameters":[39,40],"localVariables":[],"anchor":[3,26,29]}
-{"t":"e","i":39,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Batch.<init>(int[],com.acme.order.Money[])","d":"param:counts","name":"counts","parent":38,"anchor":[3,26,26]}
-{"t":"e","i":40,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Batch.<init>(int[],com.acme.order.Money[])","d":"param:prices","name":"prices","declaredType":57,"parent":38,"anchor":[3,26,26]}
-{"t":"e","i":41,"k":8,"tr":[4,5,1,10,0,8,2,15,14,13,9],"m":0,"s":"Batch.allocator()","name":"allocator","signature":"allocator()","declaredType":166,"parent":31,"parameters":[],"localVariables":[],"comments":["`int[]::new` — a constructor declared on the array type."],"anchor":[3,42,44]}
-{"t":"e","i":42,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Batch.counts","name":"counts","parent":31,"anchor":[3,22,22]}
-{"t":"e","i":43,"k":8,"tr":[4,5,1,10,0,8,2,15,14,13,9],"m":0,"s":"Batch.priced()","name":"priced","signature":"priced()","parent":31,"parameters":[],"localVariables":[],"comments":["`prices.length` — a field of `Money[]`, not of `Money`."],"anchor":[3,37,39]}
-{"t":"e","i":44,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Batch.prices","name":"prices","declaredType":57,"parent":31,"anchor":[3,24,24]}
-{"t":"e","i":45,"k":8,"tr":[4,5,1,10,0,8,2,15,14,13,9],"m":0,"s":"Batch.running()","name":"running","signature":"running()","declaredType":110,"parent":31,"parameters":[],"localVariables":[],"comments":["An anonymous class that reads its own field and calls its own method."],"anchor":[3,47,61]}
-{"t":"e","i":46,"k":8,"tr":[4,5,1,10,0,8,2,15,14,13,9],"m":0,"s":"Batch.size()","name":"size","signature":"size()","parent":31,"parameters":[],"localVariables":[],"comments":["`counts.length` — a field of `int[]`, not of `int`."],"anchor":[3,32,34]}
-{"t":"e","i":47,"k":4,"tr":[4,5,1,10,0,7,11],"m":0,"s":"Channel","name":"Channel","isStub":false,"parent":0,"comments":["Where an order came from."],"anchor":[4,4,13]}
-{"t":"e","i":48,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Channel.<init>()","signature":"<init>()","parent":47,"parameters":[],"localVariables":[],"anchor":[4,4,13]}
-{"t":"e","i":49,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Channel.PHONE","name":"PHONE","declaredType":47,"parent":47,"anchor":[4,6,6]}
-{"t":"e","i":50,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Channel.STORE","name":"STORE","declaredType":47,"parent":47,"anchor":[4,7,7]}
-{"t":"e","i":51,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Channel.WEB","name":"WEB","declaredType":47,"parent":47,"anchor":[4,5,5]}
-{"t":"e","i":52,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Channel.price()","name":"price","signature":"price()","declaredType":57,"parent":47,"parameters":[],"localVariables":[],"anchor":[4,10,12]}
-{"t":"e","i":53,"k":5,"tr":[4,5,1,10,0,7,12],"m":0,"s":"Discountable","name":"Discountable","isStub":false,"parent":0,"comments":["An order that can be marked down. Extends another corpus interface."],"anchor":[5,4,7]}
-{"t":"e","i":54,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Discountable.discount(int)","name":"discount","signature":"discount(int)","declaredType":57,"parent":53,"parameters":[55],"localVariables":[],"anchor":[5,6,6]}
-{"t":"e","i":55,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Discountable.discount(int)","d":"param:percent","name":"percent","parent":54,"anchor":[5,6,6]}
-{"t":"e","i":56,"k":2,"tr":[4,7],"m":0,"s":"Invoice","name":"Invoice","isStub":true}
-{"t":"e","i":57,"k":11,"tr":[4,5,1,10,0,7,11],"m":0,"s":"Money","name":"Money","isStub":false,"parent":0,"comments":["Minor units only; this fixture has no currencies."],"anchor":[6,4,18]}
-{"t":"e","i":58,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Money.<init>(long)","signature":"<init>(long)","parent":57,"parameters":[59],"localVariables":[],"anchor":[6,4,18]}
-{"t":"e","i":59,"k":10,"tr":[4,0,8,6],"m":0,"s":"Money.<init>(long)","d":"param:cents","name":"cents","parent":58}
-{"t":"e","i":60,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Money.cents","name":"cents","parent":57,"anchor":[6,4,18]}
-{"t":"e","i":61,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Money.cents()","name":"cents","signature":"cents()","parent":57,"parameters":[],"localVariables":[],"anchor":[6,4,18]}
-{"t":"e","i":62,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Money.price()","name":"price","signature":"price()","declaredType":57,"parent":57,"parameters":[],"localVariables":[],"anchor":[6,15,17]}
-{"t":"e","i":63,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Money.times(int)","name":"times","signature":"times(int)","declaredType":57,"parent":57,"parameters":[64],"localVariables":[],"anchor":[6,10,12]}
-{"t":"e","i":64,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Money.times(int)","d":"param:factor","name":"factor","parent":63,"anchor":[6,10,10]}
-{"t":"e","i":65,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Money.zero()","name":"zero","signature":"zero()","declaredType":57,"parent":57,"parameters":[],"localVariables":[],"anchor":[6,6,8]}
-{"t":"e","i":66,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":0,"s":"Notifications","name":"Notifications","isStub":false,"parent":0,"comments":["Delivery hooks. Nothing invocable in here has a name of its own."],"anchor":[7,6,39]}
-{"t":"e","i":67,"k":6,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:11:22","signature":"()","parent":76,"parameters":[],"localVariables":[],"anchor":[7,11,11]}
-{"t":"e","i":68,"k":6,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:11:65","signature":"()","parent":76,"parameters":[],"localVariables":[],"anchor":[7,11,11]}
-{"t":"e","i":69,"k":6,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:15:16","signature":"()","parent":78,"parameters":[],"localVariables":[],"anchor":[7,15,18]}
-{"t":"e","i":70,"k":6,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:22:32","signature":"com.acme.order.Priceable()","parent":81,"parameters":[],"localVariables":[],"anchor":[7,22,29]}
-{"t":"e","i":71,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:22:32.<init>()","signature":"<init>()","parent":70,"parameters":[],"localVariables":[],"anchor":[7,22,29]}
-{"t":"e","i":72,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:22:32.price()","name":"price","signature":"price()","declaredType":57,"parent":70,"parameters":[],"localVariables":[],"anchor":[7,25,28]}
-{"t":"e","i":73,"k":6,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:8:47","signature":"(com.acme.order.Order)","parent":66,"parameters":[74],"localVariables":[],"anchor":[7,8,8]}
-{"t":"e","i":74,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:8:47#param:order","name":"order","declaredType":88,"parent":73,"anchor":[7,8,8]}
-{"t":"e","i":75,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Notifications.<init>()","signature":"<init>()","parent":66,"parameters":[],"localVariables":[],"anchor":[7,6,39]}
-{"t":"e","i":76,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Notifications.both(com.acme.order.Order)","name":"both","signature":"both(com.acme.order.Order)","declaredType":151,"parent":66,"parameters":[77],"localVariables":[],"anchor":[7,10,12]}
-{"t":"e","i":77,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Notifications.both(com.acme.order.Order)","d":"param:order","name":"order","declaredType":88,"parent":76,"anchor":[7,10,10]}
-{"t":"e","i":78,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Notifications.chain(java.lang.Runnable,java.lang.Runnable)","name":"chain","signature":"chain(java.lang.Runnable,java.lang.Runnable)","declaredType":151,"parent":66,"parameters":[79,80],"localVariables":[],"anchor":[7,14,19]}
-{"t":"e","i":79,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Notifications.chain(java.lang.Runnable,java.lang.Runnable)","d":"param:first","name":"first","declaredType":151,"parent":78,"anchor":[7,14,14]}
-{"t":"e","i":80,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Notifications.chain(java.lang.Runnable,java.lang.Runnable)","d":"param:second","name":"second","declaredType":151,"parent":78,"anchor":[7,14,14]}
-{"t":"e","i":81,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Notifications.freeOf(com.acme.order.Order)","name":"freeOf","signature":"freeOf(com.acme.order.Order)","declaredType":110,"parent":66,"parameters":[82],"localVariables":[],"anchor":[7,21,30]}
-{"t":"e","i":82,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Notifications.freeOf(com.acme.order.Order)","d":"param:order","name":"order","declaredType":88,"parent":81,"anchor":[7,21,21]}
-{"t":"e","i":83,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Notifications.log(java.lang.String)","name":"log","signature":"log(java.lang.String)","parent":66,"parameters":[84],"localVariables":[],"anchor":[7,36,38]}
-{"t":"e","i":84,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Notifications.log(java.lang.String)","d":"param:message","name":"message","declaredType":152,"parent":83,"anchor":[7,36,36]}
-{"t":"e","i":85,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Notifications.notifyShipped(com.acme.order.Order)","name":"notifyShipped","signature":"notifyShipped(com.acme.order.Order)","parent":66,"parameters":[86],"localVariables":[],"anchor":[7,32,34]}
-{"t":"e","i":86,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Notifications.notifyShipped(com.acme.order.Order)","d":"param:order","name":"order","declaredType":88,"parent":85,"anchor":[7,32,32]}
-{"t":"e","i":87,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Notifications.onShipped","name":"onShipped","declaredType":165,"parent":66,"anchor":[7,8,8]}
-{"t":"e","i":88,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":0,"s":"Order","name":"Order","isStub":false,"parent":0,"comments":["A customer order. The one-argument constructor delegates to the other."],"anchor":[8,4,26]}
-{"t":"e","i":89,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Order.<init>(java.lang.String)","signature":"<init>(java.lang.String)","parent":88,"parameters":[90],"localVariables":[],"anchor":[8,8,10]}
-{"t":"e","i":90,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Order.<init>(java.lang.String)","d":"param:reference","name":"reference","declaredType":152,"parent":89,"anchor":[8,8,8]}
-{"t":"e","i":91,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Order.<init>(java.lang.String,com.acme.order.Channel)","signature":"<init>(java.lang.String,com.acme.order.Channel)","parent":88,"parameters":[93,92],"localVariables":[],"anchor":[8,12,15]}
-{"t":"e","i":92,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Order.<init>(java.lang.String,com.acme.order.Channel)","d":"param:channel","name":"channel","declaredType":47,"parent":91,"anchor":[8,12,12]}
-{"t":"e","i":93,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Order.<init>(java.lang.String,com.acme.order.Channel)","d":"param:reference","name":"reference","declaredType":152,"parent":91,"anchor":[8,12,12]}
-{"t":"e","i":94,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"Order.channel","name":"channel","declaredType":47,"parent":88,"anchor":[8,6,6]}
-{"t":"e","i":95,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Order.channel()","name":"channel","signature":"channel()","declaredType":47,"parent":88,"parameters":[],"localVariables":[],"anchor":[8,17,19]}
-{"t":"e","i":96,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Order.discount(int)","name":"discount","signature":"discount(int)","declaredType":57,"parent":88,"parameters":[97],"localVariables":[],"anchor":[8,22,25]}
-{"t":"e","i":97,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Order.discount(int)","d":"param:percent","name":"percent","parent":96,"anchor":[8,22,22]}
-{"t":"e","i":98,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":0,"s":"OrderService","name":"OrderService","isStub":false,"parent":0,"comments":["Billing and archival. Both {@code archive} overloads take a parameter whose\nsimple name is {@code List}; only their packages differ."],"anchor":[9,9,32]}
-{"t":"e","i":99,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"OrderService.<init>(com.megacorp.ledger.LedgerClient)","signature":"<init>(com.megacorp.ledger.LedgerClient)","parent":98,"parameters":[100],"localVariables":[],"anchor":[9,13,15]}
-{"t":"e","i":100,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"OrderService.<init>(com.megacorp.ledger.LedgerClient)","d":"param:ledger","name":"ledger","declaredType":144,"parent":99,"anchor":[9,13,13]}
-{"t":"e","i":101,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"OrderService.archive(com.acme.order.legacy.List)","name":"archive","signature":"archive(com.acme.order.legacy.List)","parent":98,"parameters":[102],"localVariables":[],"anchor":[9,29,31]}
-{"t":"e","i":102,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"OrderService.archive(com.acme.order.legacy.List)","d":"param:orders","name":"orders","declaredType":135,"parent":101,"anchor":[9,29,29]}
-{"t":"e","i":103,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"OrderService.archive(java.util.List)","name":"archive","signature":"archive(java.util.List)","parent":98,"parameters":[105],"localVariables":[104],"anchor":[9,23,27]}
-{"t":"e","i":104,"k":7,"tr":[4,5,0,8,6],"m":0,"s":"OrderService.archive(java.util.List)","d":"local:order:24","name":"order","declaredType":88,"parent":103,"anchor":[9,24,24]}
-{"t":"e","i":105,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"OrderService.archive(java.util.List)","d":"param:orders","name":"orders","declaredType":163,"parent":103,"anchor":[9,23,23]}
-{"t":"e","i":106,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"OrderService.bill(com.acme.order.Order)","name":"bill","signature":"bill(com.acme.order.Order)","declaredType":56,"parent":98,"parameters":[108],"localVariables":[107],"anchor":[9,17,21]}
-{"t":"e","i":107,"k":7,"tr":[4,5,0,8,6],"m":0,"s":"OrderService.bill(com.acme.order.Order)","d":"local:invoice:18","name":"invoice","declaredType":56,"parent":106,"anchor":[9,18,18]}
-{"t":"e","i":108,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"OrderService.bill(com.acme.order.Order)","d":"param:order","name":"order","declaredType":88,"parent":106,"anchor":[9,17,17]}
-{"t":"e","i":109,"k":1,"tr":[4,5,0,8,6],"m":0,"s":"OrderService.ledger","name":"ledger","declaredType":144,"parent":98,"anchor":[9,11,11]}
-{"t":"e","i":110,"k":5,"tr":[4,5,1,10,0,7,12],"m":0,"s":"Priceable","name":"Priceable","isStub":false,"parent":0,"comments":["Anything the pricing engine can put a number on."],"anchor":[10,4,7]}
-{"t":"e","i":111,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Priceable.price()","name":"price","signature":"price()","declaredType":57,"parent":110,"parameters":[],"localVariables":[],"anchor":[10,6,6]}
-{"t":"e","i":112,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":0,"s":"Reporting","name":"Reporting","isStub":false,"parent":0,"comments":["Monthly reporting helpers."],"anchor":[11,9,41]}
-{"t":"e","i":113,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":0,"s":"Reporting.<init>()","signature":"<init>()","parent":112,"parameters":[],"localVariables":[],"anchor":[11,9,41]}
-{"t":"e","i":114,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Reporting.first(java.util.List)","name":"first","signature":"first(java.util.List)","declaredType":149,"parent":112,"parameters":[115],"localVariables":[],"anchor":[11,34,36]}
-{"t":"e","i":115,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Reporting.first(java.util.List)","d":"param:values","name":"values","declaredType":163,"parent":114,"anchor":[11,34,34]}
-{"t":"e","i":116,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Reporting.join(java.lang.String[])","name":"join","signature":"join(java.lang.String[])","declaredType":152,"parent":112,"parameters":[119],"localVariables":[117,118],"anchor":[11,15,21]}
-{"t":"e","i":117,"k":7,"tr":[4,5,0,8,6],"m":0,"s":"Reporting.join(java.lang.String[])","d":"local:out:16","name":"out","declaredType":153,"parent":116,"anchor":[11,16,16]}
-{"t":"e","i":118,"k":7,"tr":[4,5,0,8,6],"m":0,"s":"Reporting.join(java.lang.String[])","d":"local:part:17","name":"part","declaredType":152,"parent":116,"anchor":[11,17,17]}
-{"t":"e","i":119,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Reporting.join(java.lang.String[])","d":"param:parts","name":"parts","declaredType":152,"parent":116,"anchor":[11,15,15]}
-{"t":"e","i":120,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Reporting.lines(java.lang.String[])","name":"lines","signature":"lines(java.lang.String[])","declaredType":161,"parent":112,"parameters":[121],"localVariables":[],"anchor":[11,11,13]}
-{"t":"e","i":121,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Reporting.lines(java.lang.String[])","d":"param:rows","name":"rows","declaredType":152,"parent":120,"anchor":[11,11,11]}
-{"t":"e","i":122,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Reporting.max(java.util.List)","name":"max","signature":"max(java.util.List)","declaredType":148,"parent":112,"parameters":[125],"localVariables":[123,124],"anchor":[11,24,32]}
-{"t":"e","i":123,"k":7,"tr":[4,5,0,8,6],"m":0,"s":"Reporting.max(java.util.List)","d":"local:best:25","name":"best","declaredType":148,"parent":122,"anchor":[11,25,25]}
-{"t":"e","i":124,"k":7,"tr":[4,5,0,8,6],"m":0,"s":"Reporting.max(java.util.List)","d":"local:value:26","name":"value","declaredType":148,"parent":122,"anchor":[11,26,26]}
-{"t":"e","i":125,"k":10,"tr":[4,5,0,8,6],"m":0,"s":"Reporting.max(java.util.List)","d":"param:values","name":"values","declaredType":163,"parent":122,"anchor":[11,24,24]}
-{"t":"e","i":126,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":0,"s":"Reporting.today()","name":"today","signature":"today()","declaredType":159,"parent":112,"parameters":[],"localVariables":[],"anchor":[11,38,40]}
-{"t":"e","i":127,"k":9,"tr":[4,10,0,3],"m":127,"s":"com.acme.order.adapter","name":"com.acme.order.adapter","isStub":false,"parent":0,"definedIn":[12]}
-{"t":"e","i":128,"k":2,"tr":[4,7],"m":127,"s":"AuditTrail","name":"AuditTrail","isStub":true}
-{"t":"e","i":129,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":127,"s":"LedgerAdapter","name":"LedgerAdapter","isStub":false,"parent":127,"comments":["Posts to the ledger and keeps a local trail."],"anchor":[12,6,15]}
-{"t":"e","i":130,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":127,"s":"LedgerAdapter.<init>()","signature":"<init>()","parent":129,"parameters":[],"localVariables":[],"anchor":[12,6,15]}
-{"t":"e","i":131,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":127,"s":"LedgerAdapter.post(java.lang.Object)","name":"post","signature":"post(java.lang.Object)","parent":129,"parameters":[132],"localVariables":[],"anchor":[12,11,14]}
-{"t":"e","i":132,"k":10,"tr":[4,5,0,8,6],"m":127,"s":"LedgerAdapter.post(java.lang.Object)","d":"param:document","name":"document","declaredType":149,"parent":131,"anchor":[12,11,11]}
-{"t":"e","i":133,"k":1,"tr":[4,5,0,8,6],"m":127,"s":"LedgerAdapter.trail","name":"trail","declaredType":128,"parent":129,"anchor":[12,8,8]}
-{"t":"e","i":134,"k":9,"tr":[4,10,0,3],"m":134,"s":"com.acme.order.legacy","name":"com.acme.order.legacy","isStub":false,"parent":0,"definedIn":[13]}
-{"t":"e","i":135,"k":2,"tr":[4,5,1,10,0,7,12,11],"m":134,"s":"List","name":"List","isStub":false,"parent":134,"comments":["A hand-rolled cons list from before java.util was allowed here."],"anchor":[13,4,22]}
-{"t":"e","i":136,"k":3,"tr":[5,10,0,2,15,14,13,9],"m":134,"s":"List.<init>(java.lang.String,com.acme.order.legacy.List)","signature":"<init>(java.lang.String,com.acme.order.legacy.List)","parent":135,"parameters":[137,138],"localVariables":[],"anchor":[13,10,13]}
-{"t":"e","i":137,"k":10,"tr":[4,5,0,8,6],"m":134,"s":"List.<init>(java.lang.String,com.acme.order.legacy.List)","d":"param:head","name":"head","declaredType":152,"parent":136,"anchor":[13,10,10]}
-{"t":"e","i":138,"k":10,"tr":[4,5,0,8,6],"m":134,"s":"List.<init>(java.lang.String,com.acme.order.legacy.List)","d":"param:tail","name":"tail","declaredType":135,"parent":136,"anchor":[13,10,10]}
-{"t":"e","i":139,"k":1,"tr":[4,5,0,8,6],"m":134,"s":"List.head","name":"head","declaredType":152,"parent":135,"anchor":[13,6,6]}
-{"t":"e","i":140,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":134,"s":"List.head()","name":"head","signature":"head()","declaredType":152,"parent":135,"parameters":[],"localVariables":[],"anchor":[13,15,17]}
-{"t":"e","i":141,"k":8,"tr":[4,5,10,0,8,2,15,14,13,9],"m":134,"s":"List.length()","name":"length","signature":"length()","parent":135,"parameters":[],"localVariables":[],"anchor":[13,19,21]}
-{"t":"e","i":142,"k":1,"tr":[4,5,0,8,6],"m":134,"s":"List.tail","name":"tail","declaredType":135,"parent":135,"anchor":[13,8,8]}
-{"t":"e","i":143,"k":9,"tr":[4,10,3],"m":143,"s":"com.megacorp.ledger","name":"com.megacorp.ledger","isStub":true,"definedIn":[]}
-{"t":"e","i":144,"k":2,"tr":[4,0,7],"m":143,"s":"LedgerClient","name":"LedgerClient","isStub":true,"parent":143}
-{"t":"e","i":145,"k":9,"tr":[4,10,3],"m":145,"s":"java.io","name":"java.io","isStub":true,"definedIn":[]}
-{"t":"e","i":146,"k":2,"tr":[4,0,7],"m":145,"s":"PrintStream","name":"PrintStream","isStub":true,"parent":145}
-{"t":"e","i":147,"k":9,"tr":[4,10,3],"m":147,"s":"java.lang","name":"java.lang","isStub":true,"definedIn":[]}
-{"t":"e","i":148,"k":2,"tr":[4,0,7],"m":147,"s":"Comparable","name":"Comparable","isStub":true,"parent":147}
-{"t":"e","i":149,"k":2,"tr":[4,0,7],"m":147,"s":"Object","name":"Object","isStub":true,"parent":147}
-{"t":"e","i":150,"k":2,"tr":[4,0,7],"m":147,"s":"Override","name":"Override","isStub":true,"parent":147}
-{"t":"e","i":151,"k":2,"tr":[4,0,7],"m":147,"s":"Runnable","name":"Runnable","isStub":true,"parent":147}
-{"t":"e","i":152,"k":2,"tr":[4,0,7],"m":147,"s":"String","name":"String","isStub":true,"parent":147}
-{"t":"e","i":153,"k":2,"tr":[4,0,7],"m":147,"s":"StringBuilder","name":"StringBuilder","isStub":true,"parent":147}
-{"t":"e","i":154,"k":2,"tr":[4,0,7],"m":147,"s":"System","name":"System","isStub":true,"parent":147}
-{"t":"e","i":155,"k":9,"tr":[4,10,3],"m":155,"s":"java.lang.annotation","name":"java.lang.annotation","isStub":true,"definedIn":[]}
-{"t":"e","i":156,"k":2,"tr":[4,0,7],"m":155,"s":"Retention","name":"Retention","isStub":true,"parent":155}
-{"t":"e","i":157,"k":2,"tr":[4,0,7],"m":155,"s":"RetentionPolicy","name":"RetentionPolicy","isStub":true,"parent":155}
-{"t":"e","i":158,"k":9,"tr":[4,10,3],"m":158,"s":"java.time","name":"java.time","isStub":true,"definedIn":[]}
-{"t":"e","i":159,"k":2,"tr":[4,0,7],"m":158,"s":"LocalDate","name":"LocalDate","isStub":true,"parent":158}
-{"t":"e","i":160,"k":9,"tr":[4,10,3],"m":160,"s":"java.util","name":"java.util","isStub":true,"definedIn":[]}
-{"t":"e","i":161,"k":2,"tr":[4,0,7],"m":160,"s":"ArrayList","name":"ArrayList","isStub":true,"parent":160}
-{"t":"e","i":162,"k":2,"tr":[4,0,7],"m":160,"s":"Arrays","name":"Arrays","isStub":true,"parent":160}
-{"t":"e","i":163,"k":2,"tr":[4,0,7],"m":160,"s":"List","name":"List","isStub":true,"parent":160}
-{"t":"e","i":164,"k":9,"tr":[4,10,3],"m":164,"s":"java.util.function","name":"java.util.function","isStub":true,"definedIn":[]}
-{"t":"e","i":165,"k":2,"tr":[4,0,7],"m":164,"s":"Consumer","name":"Consumer","isStub":true,"parent":164}
-{"t":"e","i":166,"k":2,"tr":[4,0,7],"m":164,"s":"IntFunction","name":"IntFunction","isStub":true,"parent":164}
+{"t":"e","i":0,"k":9,"tr":[5,11,4],"m":0,"s":"com.acme.order","name":"com.acme.order","isStub":false,"definedIn":[0,1,2,3,4,5,6,7,8,9,10,11]}
+{"t":"e","i":1,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":0,"s":"AbstractOrder","name":"AbstractOrder","isStub":false,"parent":0,"comments":["Shared state for every kind of order."],"metrics":{"sloc":15},"anchor":[0,4,23]}
+{"t":"e","i":2,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"AbstractOrder.<init>(java.lang.String)","signature":"<init>(java.lang.String)","parent":1,"parameters":[3],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[0,10,13]}
+{"t":"e","i":3,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"AbstractOrder.<init>(java.lang.String)","d":"param:reference","name":"reference","declaredType":152,"parent":2,"anchor":[0,10,10]}
+{"t":"e","i":4,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"AbstractOrder.price()","name":"price","signature":"price()","declaredType":57,"parent":1,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[0,20,22]}
+{"t":"e","i":5,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"AbstractOrder.reference","name":"reference","declaredType":152,"parent":1,"anchor":[0,8,8]}
+{"t":"e","i":6,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"AbstractOrder.reference()","name":"reference","signature":"reference()","declaredType":152,"parent":1,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[0,15,17]}
+{"t":"e","i":7,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"AbstractOrder.total","name":"total","declaredType":57,"parent":1,"anchor":[0,6,6]}
+{"t":"e","i":8,"k":0,"tr":[5,6,1,11,0,8,3],"m":0,"s":"Audited","name":"Audited","isStub":false,"parent":0,"comments":["Marks a method whose calls must reach the audit log."],"metrics":{"sloc":3},"anchor":[1,8,11]}
+{"t":"e","i":9,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Audited.value()","name":"value","signature":"value()","declaredType":152,"parent":8,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"anchor":[1,10,10]}
+{"t":"e","i":10,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":0,"s":"Basket","name":"Basket","isStub":false,"parent":0,"comments":["A basket being filled. Declares no constructor of its own."],"metrics":{"sloc":34},"anchor":[2,7,57]}
+{"t":"e","i":11,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Basket.<init>()","signature":"<init>()","parent":10,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1},"anchor":[2,7,57]}
+{"t":"e","i":12,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":0,"s":"Basket.Cursor","name":"Cursor","isStub":false,"parent":10,"comments":["Non-static inner: reads the enclosing Basket's fields."],"metrics":{"sloc":6},"anchor":[2,49,56]}
+{"t":"e","i":13,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Basket.Cursor.<init>()","signature":"<init>()","parent":12,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1},"anchor":[2,49,56]}
+{"t":"e","i":14,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Basket.Cursor.index","name":"index","parent":12,"anchor":[2,51,51]}
+{"t":"e","i":15,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Basket.Cursor.next()","name":"next","signature":"next()","declaredType":16,"parent":12,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[2,53,55]}
+{"t":"e","i":16,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":0,"s":"Basket.Line","name":"Line","isStub":false,"parent":10,"comments":["Static nested: no enclosing Basket instance."],"metrics":{"sloc":14},"anchor":[2,27,46]}
+{"t":"e","i":17,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Basket.Line.<init>(long)","signature":"<init>(long)","parent":16,"parameters":[18],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[2,31,33]}
+{"t":"e","i":18,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Basket.Line.<init>(long)","d":"param:amount","name":"amount","parent":17,"anchor":[2,31,31]}
+{"t":"e","i":19,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":0,"s":"Basket.Line.Discount","name":"Discount","isStub":false,"parent":16,"comments":["Nested inside a nested type."],"metrics":{"sloc":5},"anchor":[2,40,45]}
+{"t":"e","i":20,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Basket.Line.Discount.<init>()","signature":"<init>()","parent":19,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1},"anchor":[2,40,45]}
+{"t":"e","i":21,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Basket.Line.Discount.applyTo(long)","name":"applyTo","signature":"applyTo(long)","parent":19,"parameters":[22],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[2,42,44]}
+{"t":"e","i":22,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Basket.Line.Discount.applyTo(long)","d":"param:amount","name":"amount","parent":21,"anchor":[2,42,42]}
+{"t":"e","i":23,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Basket.Line.amount","name":"amount","parent":16,"anchor":[2,29,29]}
+{"t":"e","i":24,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Basket.Line.amount()","name":"amount","signature":"amount()","parent":16,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[2,35,37]}
+{"t":"e","i":25,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Basket.add(com.acme.order.Basket.Line)","name":"add","signature":"add(com.acme.order.Basket.Line)","parent":10,"parameters":[26],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[2,13,16]}
+{"t":"e","i":26,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Basket.add(com.acme.order.Basket.Line)","d":"param:line","name":"line","declaredType":16,"parent":25,"anchor":[2,13,13]}
+{"t":"e","i":27,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Basket.cursor()","name":"cursor","signature":"cursor()","declaredType":12,"parent":10,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[2,22,24]}
+{"t":"e","i":28,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Basket.lines","name":"lines","declaredType":163,"parent":10,"anchor":[2,11,11]}
+{"t":"e","i":29,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Basket.total","name":"total","parent":10,"anchor":[2,9,9]}
+{"t":"e","i":30,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Basket.total()","name":"total","signature":"total()","parent":10,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[2,18,20]}
+{"t":"e","i":31,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":0,"s":"Batch","name":"Batch","isStub":false,"parent":0,"comments":["Array members and an anonymous class that uses its own members.\n\n<p>Both were blind spots found by auditing a real corpus (commons-lang), not by\nthis corpus: arrays were present but nothing ever read `array.length`, and an\nanonymous class was present but nothing inside it touched its own fields.\n\n<p>`counts.length` and `int[]::new` declare their member on the ARRAY type. An\narray is not an entity, and its component type does not own those members —\nattributing them to the component invented a stub class named `int` and an\naccess on `com.acme.order.Money` that the source never writes.\n\n<p>The anonymous `Priceable` is identified by `#file:line`; Spoon names it\n`Batch$1`, so any edge that names it from a type REFERENCE must be translated\nback, or one declared class ends up with two ids and the second is laundered\ninto a stub carrying the corpus's own package."],"metrics":{"sloc":29},"anchor":[3,20,62]}
+{"t":"e","i":32,"k":6,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32","signature":"com.acme.order.Priceable()","parent":45,"parameters":[],"localVariables":[],"metrics":{"sloc":10},"anchor":[3,48,60]}
+{"t":"e","i":33,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32.<init>()","signature":"<init>()","parent":32,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1},"anchor":[3,48,60]}
+{"t":"e","i":34,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32.price()","name":"price","signature":"price()","declaredType":57,"parent":32,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[3,53,55]}
+{"t":"e","i":35,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32.running","name":"running","declaredType":57,"parent":32,"anchor":[3,50,50]}
+{"t":"e","i":36,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32.scaled(com.acme.order.Money)","name":"scaled","signature":"scaled(com.acme.order.Money)","declaredType":57,"parent":32,"parameters":[37],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[3,57,59]}
+{"t":"e","i":37,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Batch","d":"com/acme/order/Batch.java:48:32.scaled(com.acme.order.Money)#param:base","name":"base","declaredType":57,"parent":36,"anchor":[3,57,57]}
+{"t":"e","i":38,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Batch.<init>(int[],com.acme.order.Money[])","signature":"<init>(int[],com.acme.order.Money[])","parent":31,"parameters":[39,40],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[3,26,29]}
+{"t":"e","i":39,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Batch.<init>(int[],com.acme.order.Money[])","d":"param:counts","name":"counts","parent":38,"anchor":[3,26,26]}
+{"t":"e","i":40,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Batch.<init>(int[],com.acme.order.Money[])","d":"param:prices","name":"prices","declaredType":57,"parent":38,"anchor":[3,26,26]}
+{"t":"e","i":41,"k":8,"tr":[5,6,1,11,0,9,2,16,15,14,10,3],"m":0,"s":"Batch.allocator()","name":"allocator","signature":"allocator()","declaredType":166,"parent":31,"parameters":[],"localVariables":[],"comments":["`int[]::new` — a constructor declared on the array type."],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[3,42,44]}
+{"t":"e","i":42,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Batch.counts","name":"counts","parent":31,"anchor":[3,22,22]}
+{"t":"e","i":43,"k":8,"tr":[5,6,1,11,0,9,2,16,15,14,10,3],"m":0,"s":"Batch.priced()","name":"priced","signature":"priced()","parent":31,"parameters":[],"localVariables":[],"comments":["`prices.length` — a field of `Money[]`, not of `Money`."],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[3,37,39]}
+{"t":"e","i":44,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Batch.prices","name":"prices","declaredType":57,"parent":31,"anchor":[3,24,24]}
+{"t":"e","i":45,"k":8,"tr":[5,6,1,11,0,9,2,16,15,14,10,3],"m":0,"s":"Batch.running()","name":"running","signature":"running()","declaredType":110,"parent":31,"parameters":[],"localVariables":[],"comments":["An anonymous class that reads its own field and calls its own method."],"metrics":{"cyclomatic":1,"sloc":12},"anchor":[3,47,61]}
+{"t":"e","i":46,"k":8,"tr":[5,6,1,11,0,9,2,16,15,14,10,3],"m":0,"s":"Batch.size()","name":"size","signature":"size()","parent":31,"parameters":[],"localVariables":[],"comments":["`counts.length` — a field of `int[]`, not of `int`."],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[3,32,34]}
+{"t":"e","i":47,"k":4,"tr":[5,6,1,11,0,8,12,3],"m":0,"s":"Channel","name":"Channel","isStub":false,"parent":0,"comments":["Where an order came from."],"metrics":{"sloc":9},"anchor":[4,4,13]}
+{"t":"e","i":48,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Channel.<init>()","signature":"<init>()","parent":47,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1},"anchor":[4,4,13]}
+{"t":"e","i":49,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Channel.PHONE","name":"PHONE","declaredType":47,"parent":47,"anchor":[4,6,6]}
+{"t":"e","i":50,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Channel.STORE","name":"STORE","declaredType":47,"parent":47,"anchor":[4,7,7]}
+{"t":"e","i":51,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Channel.WEB","name":"WEB","declaredType":47,"parent":47,"anchor":[4,5,5]}
+{"t":"e","i":52,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Channel.price()","name":"price","signature":"price()","declaredType":57,"parent":47,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[4,10,12]}
+{"t":"e","i":53,"k":5,"tr":[5,6,1,11,0,8,13,3],"m":0,"s":"Discountable","name":"Discountable","isStub":false,"parent":0,"comments":["An order that can be marked down. Extends another corpus interface."],"metrics":{"sloc":3},"anchor":[5,4,7]}
+{"t":"e","i":54,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Discountable.discount(int)","name":"discount","signature":"discount(int)","declaredType":57,"parent":53,"parameters":[55],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"anchor":[5,6,6]}
+{"t":"e","i":55,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Discountable.discount(int)","d":"param:percent","name":"percent","parent":54,"anchor":[5,6,6]}
+{"t":"e","i":56,"k":2,"tr":[5,8],"m":0,"s":"Invoice","name":"Invoice","isStub":true}
+{"t":"e","i":57,"k":11,"tr":[5,6,1,11,0,8,12,3],"m":0,"s":"Money","name":"Money","isStub":false,"parent":0,"comments":["Minor units only; this fixture has no currencies."],"metrics":{"sloc":12},"anchor":[6,4,18]}
+{"t":"e","i":58,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Money.<init>(long)","signature":"<init>(long)","parent":57,"parameters":[59],"localVariables":[],"metrics":{"cyclomatic":1},"anchor":[6,4,18]}
+{"t":"e","i":59,"k":10,"tr":[5,0,9,7],"m":0,"s":"Money.<init>(long)","d":"param:cents","name":"cents","parent":58}
+{"t":"e","i":60,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Money.cents","name":"cents","parent":57,"anchor":[6,4,18]}
+{"t":"e","i":61,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Money.cents()","name":"cents","signature":"cents()","parent":57,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1},"anchor":[6,4,18]}
+{"t":"e","i":62,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Money.price()","name":"price","signature":"price()","declaredType":57,"parent":57,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[6,15,17]}
+{"t":"e","i":63,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Money.times(int)","name":"times","signature":"times(int)","declaredType":57,"parent":57,"parameters":[64],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[6,10,12]}
+{"t":"e","i":64,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Money.times(int)","d":"param:factor","name":"factor","parent":63,"anchor":[6,10,10]}
+{"t":"e","i":65,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Money.zero()","name":"zero","signature":"zero()","declaredType":57,"parent":57,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[6,6,8]}
+{"t":"e","i":66,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":0,"s":"Notifications","name":"Notifications","isStub":false,"parent":0,"comments":["Delivery hooks. Nothing invocable in here has a name of its own."],"metrics":{"sloc":27},"anchor":[7,6,39]}
+{"t":"e","i":67,"k":6,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:11:22","signature":"()","parent":76,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"anchor":[7,11,11]}
+{"t":"e","i":68,"k":6,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:11:65","signature":"()","parent":76,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"anchor":[7,11,11]}
+{"t":"e","i":69,"k":6,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:15:16","signature":"()","parent":78,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[7,15,18]}
+{"t":"e","i":70,"k":6,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:22:32","signature":"com.acme.order.Priceable()","parent":81,"parameters":[],"localVariables":[],"metrics":{"sloc":7},"anchor":[7,22,29]}
+{"t":"e","i":71,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:22:32.<init>()","signature":"<init>()","parent":70,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1},"anchor":[7,22,29]}
+{"t":"e","i":72,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:22:32.price()","name":"price","signature":"price()","declaredType":57,"parent":70,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[7,25,28]}
+{"t":"e","i":73,"k":6,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:8:47","signature":"(com.acme.order.Order)","parent":66,"parameters":[74],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"anchor":[7,8,8]}
+{"t":"e","i":74,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Notifications","d":"com/acme/order/Notifications.java:8:47#param:order","name":"order","declaredType":88,"parent":73,"anchor":[7,8,8]}
+{"t":"e","i":75,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Notifications.<init>()","signature":"<init>()","parent":66,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1},"anchor":[7,6,39]}
+{"t":"e","i":76,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Notifications.both(com.acme.order.Order)","name":"both","signature":"both(com.acme.order.Order)","declaredType":151,"parent":66,"parameters":[77],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[7,10,12]}
+{"t":"e","i":77,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Notifications.both(com.acme.order.Order)","d":"param:order","name":"order","declaredType":88,"parent":76,"anchor":[7,10,10]}
+{"t":"e","i":78,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Notifications.chain(java.lang.Runnable,java.lang.Runnable)","name":"chain","signature":"chain(java.lang.Runnable,java.lang.Runnable)","declaredType":151,"parent":66,"parameters":[79,80],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":6},"anchor":[7,14,19]}
+{"t":"e","i":79,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Notifications.chain(java.lang.Runnable,java.lang.Runnable)","d":"param:first","name":"first","declaredType":151,"parent":78,"anchor":[7,14,14]}
+{"t":"e","i":80,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Notifications.chain(java.lang.Runnable,java.lang.Runnable)","d":"param:second","name":"second","declaredType":151,"parent":78,"anchor":[7,14,14]}
+{"t":"e","i":81,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Notifications.freeOf(com.acme.order.Order)","name":"freeOf","signature":"freeOf(com.acme.order.Order)","declaredType":110,"parent":66,"parameters":[82],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":9},"anchor":[7,21,30]}
+{"t":"e","i":82,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Notifications.freeOf(com.acme.order.Order)","d":"param:order","name":"order","declaredType":88,"parent":81,"anchor":[7,21,21]}
+{"t":"e","i":83,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Notifications.log(java.lang.String)","name":"log","signature":"log(java.lang.String)","parent":66,"parameters":[84],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[7,36,38]}
+{"t":"e","i":84,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Notifications.log(java.lang.String)","d":"param:message","name":"message","declaredType":152,"parent":83,"anchor":[7,36,36]}
+{"t":"e","i":85,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Notifications.notifyShipped(com.acme.order.Order)","name":"notifyShipped","signature":"notifyShipped(com.acme.order.Order)","parent":66,"parameters":[86],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[7,32,34]}
+{"t":"e","i":86,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Notifications.notifyShipped(com.acme.order.Order)","d":"param:order","name":"order","declaredType":88,"parent":85,"anchor":[7,32,32]}
+{"t":"e","i":87,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Notifications.onShipped","name":"onShipped","declaredType":165,"parent":66,"anchor":[7,8,8]}
+{"t":"e","i":88,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":0,"s":"Order","name":"Order","isStub":false,"parent":0,"comments":["A customer order. The one-argument constructor delegates to the other."],"metrics":{"sloc":17},"anchor":[8,4,26]}
+{"t":"e","i":89,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Order.<init>(java.lang.String)","signature":"<init>(java.lang.String)","parent":88,"parameters":[90],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[8,8,10]}
+{"t":"e","i":90,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Order.<init>(java.lang.String)","d":"param:reference","name":"reference","declaredType":152,"parent":89,"anchor":[8,8,8]}
+{"t":"e","i":91,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Order.<init>(java.lang.String,com.acme.order.Channel)","signature":"<init>(java.lang.String,com.acme.order.Channel)","parent":88,"parameters":[93,92],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[8,12,15]}
+{"t":"e","i":92,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Order.<init>(java.lang.String,com.acme.order.Channel)","d":"param:channel","name":"channel","declaredType":47,"parent":91,"anchor":[8,12,12]}
+{"t":"e","i":93,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Order.<init>(java.lang.String,com.acme.order.Channel)","d":"param:reference","name":"reference","declaredType":152,"parent":91,"anchor":[8,12,12]}
+{"t":"e","i":94,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"Order.channel","name":"channel","declaredType":47,"parent":88,"anchor":[8,6,6]}
+{"t":"e","i":95,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Order.channel()","name":"channel","signature":"channel()","declaredType":47,"parent":88,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[8,17,19]}
+{"t":"e","i":96,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Order.discount(int)","name":"discount","signature":"discount(int)","declaredType":57,"parent":88,"parameters":[97],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[8,22,25]}
+{"t":"e","i":97,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Order.discount(int)","d":"param:percent","name":"percent","parent":96,"anchor":[8,22,22]}
+{"t":"e","i":98,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":0,"s":"OrderService","name":"OrderService","isStub":false,"parent":0,"comments":["Billing and archival. Both {@code archive} overloads take a parameter whose\nsimple name is {@code List}; only their packages differ."],"metrics":{"sloc":19},"anchor":[9,9,32]}
+{"t":"e","i":99,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"OrderService.<init>(com.megacorp.ledger.LedgerClient)","signature":"<init>(com.megacorp.ledger.LedgerClient)","parent":98,"parameters":[100],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[9,13,15]}
+{"t":"e","i":100,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"OrderService.<init>(com.megacorp.ledger.LedgerClient)","d":"param:ledger","name":"ledger","declaredType":144,"parent":99,"anchor":[9,13,13]}
+{"t":"e","i":101,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"OrderService.archive(com.acme.order.legacy.List)","name":"archive","signature":"archive(com.acme.order.legacy.List)","parent":98,"parameters":[102],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[9,29,31]}
+{"t":"e","i":102,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"OrderService.archive(com.acme.order.legacy.List)","d":"param:orders","name":"orders","declaredType":135,"parent":101,"anchor":[9,29,29]}
+{"t":"e","i":103,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"OrderService.archive(java.util.List)","name":"archive","signature":"archive(java.util.List)","parent":98,"parameters":[105],"localVariables":[104],"metrics":{"cyclomatic":2,"sloc":5},"anchor":[9,23,27]}
+{"t":"e","i":104,"k":7,"tr":[5,6,0,9,7],"m":0,"s":"OrderService.archive(java.util.List)","d":"local:order:24","name":"order","declaredType":88,"parent":103,"anchor":[9,24,24]}
+{"t":"e","i":105,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"OrderService.archive(java.util.List)","d":"param:orders","name":"orders","declaredType":163,"parent":103,"anchor":[9,23,23]}
+{"t":"e","i":106,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"OrderService.bill(com.acme.order.Order)","name":"bill","signature":"bill(com.acme.order.Order)","declaredType":56,"parent":98,"parameters":[108],"localVariables":[107],"metrics":{"cyclomatic":1,"sloc":5},"anchor":[9,17,21]}
+{"t":"e","i":107,"k":7,"tr":[5,6,0,9,7],"m":0,"s":"OrderService.bill(com.acme.order.Order)","d":"local:invoice:18","name":"invoice","declaredType":56,"parent":106,"anchor":[9,18,18]}
+{"t":"e","i":108,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"OrderService.bill(com.acme.order.Order)","d":"param:order","name":"order","declaredType":88,"parent":106,"anchor":[9,17,17]}
+{"t":"e","i":109,"k":1,"tr":[5,6,0,9,7],"m":0,"s":"OrderService.ledger","name":"ledger","declaredType":144,"parent":98,"anchor":[9,11,11]}
+{"t":"e","i":110,"k":5,"tr":[5,6,1,11,0,8,13,3],"m":0,"s":"Priceable","name":"Priceable","isStub":false,"parent":0,"comments":["Anything the pricing engine can put a number on."],"metrics":{"sloc":3},"anchor":[10,4,7]}
+{"t":"e","i":111,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Priceable.price()","name":"price","signature":"price()","declaredType":57,"parent":110,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"anchor":[10,6,6]}
+{"t":"e","i":112,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":0,"s":"Reporting","name":"Reporting","isStub":false,"parent":0,"comments":["Monthly reporting helpers."],"metrics":{"sloc":28},"anchor":[11,9,41]}
+{"t":"e","i":113,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":0,"s":"Reporting.<init>()","signature":"<init>()","parent":112,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1},"anchor":[11,9,41]}
+{"t":"e","i":114,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Reporting.first(java.util.List)","name":"first","signature":"first(java.util.List)","declaredType":149,"parent":112,"parameters":[115],"localVariables":[],"metrics":{"cyclomatic":2,"sloc":3},"anchor":[11,34,36]}
+{"t":"e","i":115,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Reporting.first(java.util.List)","d":"param:values","name":"values","declaredType":163,"parent":114,"anchor":[11,34,34]}
+{"t":"e","i":116,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Reporting.join(java.lang.String[])","name":"join","signature":"join(java.lang.String[])","declaredType":152,"parent":112,"parameters":[119],"localVariables":[117,118],"metrics":{"cyclomatic":2,"sloc":7},"anchor":[11,15,21]}
+{"t":"e","i":117,"k":7,"tr":[5,6,0,9,7],"m":0,"s":"Reporting.join(java.lang.String[])","d":"local:out:16","name":"out","declaredType":153,"parent":116,"anchor":[11,16,16]}
+{"t":"e","i":118,"k":7,"tr":[5,6,0,9,7],"m":0,"s":"Reporting.join(java.lang.String[])","d":"local:part:17","name":"part","declaredType":152,"parent":116,"anchor":[11,17,17]}
+{"t":"e","i":119,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Reporting.join(java.lang.String[])","d":"param:parts","name":"parts","declaredType":152,"parent":116,"anchor":[11,15,15]}
+{"t":"e","i":120,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Reporting.lines(java.lang.String[])","name":"lines","signature":"lines(java.lang.String[])","declaredType":161,"parent":112,"parameters":[121],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[11,11,13]}
+{"t":"e","i":121,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Reporting.lines(java.lang.String[])","d":"param:rows","name":"rows","declaredType":152,"parent":120,"anchor":[11,11,11]}
+{"t":"e","i":122,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Reporting.max(java.util.List)","name":"max","signature":"max(java.util.List)","declaredType":148,"parent":112,"parameters":[125],"localVariables":[123,124],"metrics":{"cyclomatic":4,"sloc":9},"anchor":[11,24,32]}
+{"t":"e","i":123,"k":7,"tr":[5,6,0,9,7],"m":0,"s":"Reporting.max(java.util.List)","d":"local:best:25","name":"best","declaredType":148,"parent":122,"anchor":[11,25,25]}
+{"t":"e","i":124,"k":7,"tr":[5,6,0,9,7],"m":0,"s":"Reporting.max(java.util.List)","d":"local:value:26","name":"value","declaredType":148,"parent":122,"anchor":[11,26,26]}
+{"t":"e","i":125,"k":10,"tr":[5,6,0,9,7],"m":0,"s":"Reporting.max(java.util.List)","d":"param:values","name":"values","declaredType":163,"parent":122,"anchor":[11,24,24]}
+{"t":"e","i":126,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":0,"s":"Reporting.today()","name":"today","signature":"today()","declaredType":159,"parent":112,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[11,38,40]}
+{"t":"e","i":127,"k":9,"tr":[5,11,0,4],"m":127,"s":"com.acme.order.adapter","name":"com.acme.order.adapter","isStub":false,"parent":0,"definedIn":[12]}
+{"t":"e","i":128,"k":2,"tr":[5,8],"m":127,"s":"AuditTrail","name":"AuditTrail","isStub":true}
+{"t":"e","i":129,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":127,"s":"LedgerAdapter","name":"LedgerAdapter","isStub":false,"parent":127,"comments":["Posts to the ledger and keeps a local trail."],"metrics":{"sloc":8},"anchor":[12,6,15]}
+{"t":"e","i":130,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":127,"s":"LedgerAdapter.<init>()","signature":"<init>()","parent":129,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1},"anchor":[12,6,15]}
+{"t":"e","i":131,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":127,"s":"LedgerAdapter.post(java.lang.Object)","name":"post","signature":"post(java.lang.Object)","parent":129,"parameters":[132],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[12,11,14]}
+{"t":"e","i":132,"k":10,"tr":[5,6,0,9,7],"m":127,"s":"LedgerAdapter.post(java.lang.Object)","d":"param:document","name":"document","declaredType":149,"parent":131,"anchor":[12,11,11]}
+{"t":"e","i":133,"k":1,"tr":[5,6,0,9,7],"m":127,"s":"LedgerAdapter.trail","name":"trail","declaredType":128,"parent":129,"anchor":[12,8,8]}
+{"t":"e","i":134,"k":9,"tr":[5,11,0,4],"m":134,"s":"com.acme.order.legacy","name":"com.acme.order.legacy","isStub":false,"parent":0,"definedIn":[13]}
+{"t":"e","i":135,"k":2,"tr":[5,6,1,11,0,8,13,12,3],"m":134,"s":"List","name":"List","isStub":false,"parent":134,"comments":["A hand-rolled cons list from before java.util was allowed here."],"metrics":{"sloc":14},"anchor":[13,4,22]}
+{"t":"e","i":136,"k":3,"tr":[6,11,0,2,16,15,14,10,3],"m":134,"s":"List.<init>(java.lang.String,com.acme.order.legacy.List)","signature":"<init>(java.lang.String,com.acme.order.legacy.List)","parent":135,"parameters":[137,138],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[13,10,13]}
+{"t":"e","i":137,"k":10,"tr":[5,6,0,9,7],"m":134,"s":"List.<init>(java.lang.String,com.acme.order.legacy.List)","d":"param:head","name":"head","declaredType":152,"parent":136,"anchor":[13,10,10]}
+{"t":"e","i":138,"k":10,"tr":[5,6,0,9,7],"m":134,"s":"List.<init>(java.lang.String,com.acme.order.legacy.List)","d":"param:tail","name":"tail","declaredType":135,"parent":136,"anchor":[13,10,10]}
+{"t":"e","i":139,"k":1,"tr":[5,6,0,9,7],"m":134,"s":"List.head","name":"head","declaredType":152,"parent":135,"anchor":[13,6,6]}
+{"t":"e","i":140,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":134,"s":"List.head()","name":"head","signature":"head()","declaredType":152,"parent":135,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[13,15,17]}
+{"t":"e","i":141,"k":8,"tr":[5,6,11,0,9,2,16,15,14,10,3],"m":134,"s":"List.length()","name":"length","signature":"length()","parent":135,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":2,"sloc":3},"anchor":[13,19,21]}
+{"t":"e","i":142,"k":1,"tr":[5,6,0,9,7],"m":134,"s":"List.tail","name":"tail","declaredType":135,"parent":135,"anchor":[13,8,8]}
+{"t":"e","i":143,"k":9,"tr":[5,11,4],"m":143,"s":"com.megacorp.ledger","name":"com.megacorp.ledger","isStub":true,"definedIn":[]}
+{"t":"e","i":144,"k":2,"tr":[5,0,8],"m":143,"s":"LedgerClient","name":"LedgerClient","isStub":true,"parent":143}
+{"t":"e","i":145,"k":9,"tr":[5,11,4],"m":145,"s":"java.io","name":"java.io","isStub":true,"definedIn":[]}
+{"t":"e","i":146,"k":2,"tr":[5,0,8],"m":145,"s":"PrintStream","name":"PrintStream","isStub":true,"parent":145}
+{"t":"e","i":147,"k":9,"tr":[5,11,4],"m":147,"s":"java.lang","name":"java.lang","isStub":true,"definedIn":[]}
+{"t":"e","i":148,"k":2,"tr":[5,0,8],"m":147,"s":"Comparable","name":"Comparable","isStub":true,"parent":147}
+{"t":"e","i":149,"k":2,"tr":[5,0,8],"m":147,"s":"Object","name":"Object","isStub":true,"parent":147}
+{"t":"e","i":150,"k":2,"tr":[5,0,8],"m":147,"s":"Override","name":"Override","isStub":true,"parent":147}
+{"t":"e","i":151,"k":2,"tr":[5,0,8],"m":147,"s":"Runnable","name":"Runnable","isStub":true,"parent":147}
+{"t":"e","i":152,"k":2,"tr":[5,0,8],"m":147,"s":"String","name":"String","isStub":true,"parent":147}
+{"t":"e","i":153,"k":2,"tr":[5,0,8],"m":147,"s":"StringBuilder","name":"StringBuilder","isStub":true,"parent":147}
+{"t":"e","i":154,"k":2,"tr":[5,0,8],"m":147,"s":"System","name":"System","isStub":true,"parent":147}
+{"t":"e","i":155,"k":9,"tr":[5,11,4],"m":155,"s":"java.lang.annotation","name":"java.lang.annotation","isStub":true,"definedIn":[]}
+{"t":"e","i":156,"k":2,"tr":[5,0,8],"m":155,"s":"Retention","name":"Retention","isStub":true,"parent":155}
+{"t":"e","i":157,"k":2,"tr":[5,0,8],"m":155,"s":"RetentionPolicy","name":"RetentionPolicy","isStub":true,"parent":155}
+{"t":"e","i":158,"k":9,"tr":[5,11,4],"m":158,"s":"java.time","name":"java.time","isStub":true,"definedIn":[]}
+{"t":"e","i":159,"k":2,"tr":[5,0,8],"m":158,"s":"LocalDate","name":"LocalDate","isStub":true,"parent":158}
+{"t":"e","i":160,"k":9,"tr":[5,11,4],"m":160,"s":"java.util","name":"java.util","isStub":true,"definedIn":[]}
+{"t":"e","i":161,"k":2,"tr":[5,0,8],"m":160,"s":"ArrayList","name":"ArrayList","isStub":true,"parent":160}
+{"t":"e","i":162,"k":2,"tr":[5,0,8],"m":160,"s":"Arrays","name":"Arrays","isStub":true,"parent":160}
+{"t":"e","i":163,"k":2,"tr":[5,0,8],"m":160,"s":"List","name":"List","isStub":true,"parent":160}
+{"t":"e","i":164,"k":9,"tr":[5,11,4],"m":164,"s":"java.util.function","name":"java.util.function","isStub":true,"definedIn":[]}
+{"t":"e","i":165,"k":2,"tr":[5,0,8],"m":164,"s":"Consumer","name":"Consumer","isStub":true,"parent":164}
+{"t":"e","i":166,"k":2,"tr":[5,0,8],"m":164,"s":"IntFunction","name":"IntFunction","isStub":true,"parent":164}
 {"t":"x","k":1,"f":0,"o":143,"p":1,"anchor":[9,3,3]}
 {"t":"x","k":1,"f":0,"o":155,"p":0,"anchor":[1,3,3]}
 {"t":"x","k":1,"f":0,"o":155,"p":0,"anchor":[1,4,4]}

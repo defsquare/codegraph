@@ -239,8 +239,8 @@ describe("buildCity: dimensions state what produced them", () => {
   });
 
   it("reads an extractor-supplied measurement, summed over the type's members", () => {
-    // No extractor emits cyclomatic complexity yet; entities are loose objects,
-    // so the day one does, `sum:cyclomatic` is a height without a code change.
+    // A pre-TMetrics (or hand-built) model may carry the key at top level: legal
+    // because an entity is loose, uncontractual because nothing vouches for it.
     const city = buildCity(toyGraph(), { height: { metric: "sum:cyclomatic" } });
     const metrics = (id: string): number | null | undefined =>
       city.buildings.find((building) => building.id === id)?.metrics["sum:cyclomatic"];
@@ -249,6 +249,36 @@ describe("buildCity: dimensions state what produced them", () => {
     // Nothing under Small carries the key: unmeasured, NOT zero.
     expect(metrics("java:a/Small")).toBeNull();
     expect(city.bindings.find((b) => b.channel === "height")?.unmeasured).toBe(2);
+  });
+
+  /**
+   * M10b: `TMetrics`' map is the contractual home of a measure, so it is what
+   * `attribute:`/`sum:` read — and it WINS over a same-named loose key, which
+   * only a model predating the trait would carry.
+   */
+  it("reads the TMetrics map, in preference to a loose key of the same name", () => {
+    const graph = graphOf([
+      pkg("java:a"),
+      type("java:a/T", "java:a", 30, {
+        traits: ["TNamed", "TChildOf", "TWithChildren", "TType", "TSourceAnchor", "TMetrics"],
+        metrics: { sloc: 21 },
+      }),
+      method("java:a/T.run()", "java:a/T", {
+        traits: ["TNamed", "TChildOf", "TInvocable", "TWithInvocations", "TMetrics"],
+        metrics: { cyclomatic: 4, sloc: 9 },
+        // The pre-trait spelling, deliberately disagreeing: the map is the fact.
+        cyclomatic: 99,
+      }),
+    ]);
+    const city = buildCity(graph, {
+      height: { metric: "attribute:sloc" },
+      carry: ["sum:cyclomatic", "sum:sloc"],
+    });
+    const building = city.buildings.find((candidate) => candidate.id === "java:a/T");
+    expect(building?.metrics["attribute:sloc"]).toBe(21);
+    expect(building?.metrics["sum:cyclomatic"]).toBe(4);
+    // 21 on the type + 9 on its method — the form a per-method measure wants.
+    expect(building?.metrics["sum:sloc"]).toBe(30);
   });
 
   it("floors an unmeasured building and counts it rather than calling it zero", () => {

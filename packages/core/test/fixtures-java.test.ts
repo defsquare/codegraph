@@ -117,6 +117,72 @@ describe("fixtures/java/expected/model.jsonl", () => {
     );
   });
 
+  /**
+   * MEASURES (M10b, METAMODEL §3.8). The numbers below are HAND-COUNTED from
+   * `fixtures/java/src`, which is the point: a measure nobody can check by
+   * reading the source is a number, not a fact.
+   *
+   *   Reporting.max   for-each + `if (best == null || …)`   1 + 1 + 1 + 1 = 4
+   *   Reporting.join  one for-each                          1 + 1         = 2
+   *   Reporting.first one ternary                           1 + 1         = 2
+   *   Reporting.today straight line                         1             = 1
+   *
+   * (Switch labels, catch clauses, pattern guards and lambda attribution are
+   * hand-counted too, over sources written for it, in the extractor's own
+   * `MeasuresTest` — this corpus contains none of those constructs.)
+   */
+  it("carries hand-counted measures on the invocables of Reporting", () => {
+    const model = loadSnapshot();
+    const measure = (symbol: string, key: string): unknown => {
+      const entity = model.entities.find((candidate) => candidate.id === `java:com.acme.order/${symbol}`);
+      expect(entity, symbol).toBeDefined();
+      expect(entity?.traits, symbol).toContain("TMetrics");
+      return ((entity as Record<string, unknown>)["metrics"] as Record<string, number>)[key];
+    };
+    expect(measure("Reporting.max(java.util.List)", "cyclomatic")).toBe(4);
+    expect(measure("Reporting.join(java.lang.String[])", "cyclomatic")).toBe(2);
+    expect(measure("Reporting.first(java.util.List)", "cyclomatic")).toBe(2);
+    expect(measure("Reporting.today()", "cyclomatic")).toBe(1);
+    // `max` spans 9 lines of which every one is code (no blank, no comment).
+    expect(measure("Reporting.max(java.util.List)", "sloc")).toBe(9);
+  });
+
+  /**
+   * The durable properties, over every measure in the corpus rather than over
+   * the four above: a measure is a finite non-negative number, and `sloc` never
+   * exceeds the gross span it was measured in — the derived proxy (the city's
+   * `loc`) is an upper bound on the measured claim, and the two are never
+   * conflated.
+   */
+  it("keeps every measure finite, non-negative, and sloc within its span", () => {
+    const model = loadSnapshot();
+    let measured = 0;
+    for (const entity of model.entities) {
+      const metrics = (entity as Record<string, unknown>)["metrics"] as
+        | Record<string, number>
+        | undefined;
+      if (metrics === undefined) {
+        expect(entity.traits, entity.id).not.toContain("TMetrics");
+        continue;
+      }
+      expect(entity.traits, entity.id).toContain("TMetrics");
+      expect(Object.keys(metrics).length, entity.id).toBeGreaterThan(0);
+      for (const [key, value] of Object.entries(metrics)) {
+        expect(Number.isFinite(value), `${entity.id}.${key}`).toBe(true);
+        expect(value, `${entity.id}.${key}`).toBeGreaterThanOrEqual(0);
+      }
+      const sloc = metrics["sloc"];
+      if (sloc !== undefined) {
+        const anchor = SourceAnchor.parse((entity as Record<string, unknown>)["anchor"]);
+        expect(sloc, entity.id).toBeLessThanOrEqual(anchor.span[1] - anchor.span[0] + 1);
+      }
+      // A stub was never read, so it can carry no measurement (METAMODEL §6).
+      expect(isStubEntity(entity), entity.id).toBe(false);
+      measured += 1;
+    }
+    expect(measured).toBeGreaterThan(50);
+  });
+
   it("anchors every entity that claims TSourceAnchor to a 1-based span in the corpus", () => {
     const model = loadSnapshot();
     for (const entity of model.entities) {

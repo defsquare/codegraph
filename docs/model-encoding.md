@@ -186,6 +186,11 @@ CREATE TABLE entity_defined_in    (entity_id, ord, file_id,      PRIMARY KEY (en
 CREATE TABLE entity_parameter     (entity_id, ord, parameter_id, PRIMARY KEY (entity_id, ord)) WITHOUT ROWID;
 CREATE TABLE entity_local_variable(entity_id, ord, variable_id,  PRIMARY KEY (entity_id, ord)) WITHOUT ROWID;
 
+-- The one MAP-valued key (TMetrics, §3.8): rows, because a measure is what one
+-- aggregates. No `ord` — the wire writes the map key-sorted, so ORDER BY key
+-- restores it.
+CREATE TABLE entity_metric        (entity_id, key, value,        PRIMARY KEY (entity_id, key)) WITHOUT ROWID;
+
 CREATE TABLE edge (
   id INTEGER PRIMARY KEY,                           -- position in the edge section
   kind_id INTEGER NOT NULL REFERENCES edge_kind,

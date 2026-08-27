@@ -207,14 +207,15 @@ class EntityExtractorTest {
   private static final Map<String, Set<TraitName>> OPTIONAL =
       Map.ofEntries(
           Map.entry("package", traits(TraitName.TComment)),
-          Map.entry("class", traits(TraitName.TComment)),
-          Map.entry("interface", traits(TraitName.TComment)),
-          Map.entry("enum", traits(TraitName.TComment)),
-          Map.entry("record", traits(TraitName.TComment)),
-          Map.entry("annotation", traits(TraitName.TComment)),
-          Map.entry("method", traits(TraitName.TComment)),
-          Map.entry("constructor", traits(TraitName.TComment)),
-          Map.entry("lambda", traits(TraitName.TTypedEntity)),
+          // TMetrics (M10b) is optional on every kind the extractor measures.
+          Map.entry("class", traits(TraitName.TComment, TraitName.TMetrics)),
+          Map.entry("interface", traits(TraitName.TComment, TraitName.TMetrics)),
+          Map.entry("enum", traits(TraitName.TComment, TraitName.TMetrics)),
+          Map.entry("record", traits(TraitName.TComment, TraitName.TMetrics)),
+          Map.entry("annotation", traits(TraitName.TComment, TraitName.TMetrics)),
+          Map.entry("method", traits(TraitName.TComment, TraitName.TMetrics)),
+          Map.entry("constructor", traits(TraitName.TComment, TraitName.TMetrics)),
+          Map.entry("lambda", traits(TraitName.TTypedEntity, TraitName.TMetrics)),
           Map.entry("attribute", traits(TraitName.TComment)),
           Map.entry("parameter", traits(TraitName.TSourceAnchor)),
           Map.entry("localVariable", traits(TraitName.TSourceAnchor)));

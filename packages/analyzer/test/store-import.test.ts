@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { JsonlError, readModelFileSync, readModelRecordsSync } from "@codegraph/core";
+import {
+  JsonlError,
+  encodeModelToString,
+  readModelFileSync,
+  readModelRecordsSync,
+  type Model,
+} from "@codegraph/core";
 
 import {
   hydrateModel,
@@ -169,6 +175,88 @@ describe("the keys no fixture exercises", () => {
     try {
       const back = [...readStoreRecords(db)].find((r) => r.t === "e") as Record<string, unknown>;
       expect(back["comments"], "an empty comments array came back absent").toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+/**
+ * Measures (M10b) are the first MAP-valued key an entity can carry. Rows, not
+ * a JSON blob: the store exists to be queried, and "complexity by package" is
+ * exactly the question a measure is for. Presence follows the trait set, like
+ * every other trait-contributed key — `metrics: {}` writes no rows and must
+ * still come back as an empty map, not as an absent key.
+ */
+describe("a measure map through the cache", () => {
+  function modelWith(metrics: Record<string, number>): string {
+    const moduleId = "java:app";
+    const typeId = "java:app/A";
+    const model = {
+      schemaVersion: "1.0.0",
+      lang: "java",
+      extractor: { name: "test", version: "0" },
+      root: "demo",
+      entities: [
+        {
+          id: moduleId,
+          kind: "package",
+          traits: ["TNamed", "TModule", "TWithChildren"],
+          name: "app",
+          definedIn: ["app/A.java"],
+          isStub: false,
+        },
+        {
+          id: typeId,
+          kind: "class",
+          traits: ["TNamed", "TType", "TChildOf", "TSourceAnchor", "TMetrics"],
+          name: "A",
+          isStub: false,
+          parent: moduleId,
+          anchor: { file: "app/A.java", span: [1, 20] },
+          metrics,
+        },
+      ],
+      edges: [],
+    };
+    const path = join(scratch, `metrics-${Object.keys(metrics).length}.jsonl`);
+    writeFileSync(path, encodeModelToString(model as unknown as Model), "utf8");
+    return path;
+  }
+
+  it("hands the map back, key for key, and loses no record on the way", () => {
+    const source = modelWith({ cyclomatic: 7, sloc: 42 });
+    const db = openStore(importInto("metrics", source));
+    try {
+      expect([...readStoreRecords(db)]).toEqual([...readModelRecordsSync(source)]);
+      const type = hydrateModel(db).entities.find((entity) => entity.traits.includes("TMetrics"));
+      expect((type as unknown as { metrics: unknown }).metrics).toEqual({ cyclomatic: 7, sloc: 42 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("tells an empty map from an absent one — the trait set is what vouches", () => {
+    const source = modelWith({});
+    const db = openStore(importInto("metrics-empty", source));
+    try {
+      const measured = [...readStoreRecords(db)].find(
+        (record) => record.t === "e" && (record as { metrics?: unknown }).metrics !== undefined,
+      );
+      expect((measured as { metrics?: unknown } | undefined)?.metrics).toEqual({});
+      expect([...readStoreRecords(db)]).toEqual([...readModelRecordsSync(source)]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("keeps every measure queryable in SQL, which is why they are rows", () => {
+    const db = openStore(importInto("metrics-sql", modelWith({ cyclomatic: 7, sloc: 42 })));
+    try {
+      const row = db
+        .prepare("SELECT sum(value) AS total FROM entity_metric WHERE key = 'cyclomatic'")
+        .get();
+      expect(row?.total).toBe(7);
     } finally {
       db.close();
     }

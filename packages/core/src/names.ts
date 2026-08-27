@@ -29,6 +29,8 @@ export const TRAIT_NAMES = [
   // structure
   "TStructural",
   "TWithAccesses",
+  // measures (METAMODEL.md §3.8)
+  "TMetrics",
 ] as const;
 
 export const TraitName = z.enum(TRAIT_NAMES);

@@ -78,6 +78,16 @@
       "minimum": 0,
       "type": "integer"
     },
+    "metrics": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "propertyNames": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "object"
+    },
     "name": {
       "minLength": 1,
       "type": "string"

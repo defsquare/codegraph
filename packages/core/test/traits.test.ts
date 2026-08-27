@@ -23,6 +23,7 @@ const EXPECTED_KEYS: Record<TraitName, readonly string[]> = {
   TWithInvocations: [],
   TStructural: [],
   TWithAccesses: [],
+  TMetrics: ["metrics"],
 };
 
 describe("TRAITS", () => {
@@ -59,6 +60,24 @@ describe("TRAITS", () => {
       true,
     );
     expect(TRAITS.TTypedEntity.safeParse({ declaredType: 42 }).success).toBe(false);
+  });
+
+  /**
+   * METAMODEL §3.8: an open map of MEASURED finite numbers. The keys stay open
+   * on purpose — a new measure must not wait on a core release — so validation
+   * is about the VALUES, and about the one thing an open map must still refuse:
+   * a value that is not a measurement.
+   */
+  it("takes any measure key, and only finite numbers as values", () => {
+    expect(TRAITS.TMetrics.safeParse({ metrics: { sloc: 42, cyclomatic: 7 } }).success).toBe(true);
+    // An extractor's own measure needs no core release.
+    expect(TRAITS.TMetrics.safeParse({ metrics: { "acme:halstead": 3.5 } }).success).toBe(true);
+    expect(TRAITS.TMetrics.safeParse({ metrics: {} }).success).toBe(true);
+    for (const bad of [{ sloc: "42" }, { sloc: null }, { sloc: NaN }, { sloc: Infinity }]) {
+      expect(TRAITS.TMetrics.safeParse({ metrics: bad }).success, JSON.stringify(bad)).toBe(false);
+    }
+    // The trait declared, the key absent, is not a thing: presence IS the claim.
+    expect(TRAITS.TMetrics.safeParse({}).success).toBe(false);
   });
 
   it("enforces the type of the keys it does contribute", () => {

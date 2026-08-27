@@ -108,6 +108,9 @@ entity_key(id INTEGER PK1, module TEXT NOT NULL, symbol TEXT NOT NULL, disambigu
 entity_local_variable(entity_id INTEGER NOT NULL PK1, ord INTEGER NOT NULL PK2, variable_id INTEGER NOT NULL) WITHOUT ROWID
   index entity_local_target (variable_id)
   unique index <pk> (entity_id, ord)
+entity_metric(entity_id INTEGER NOT NULL PK1, key TEXT NOT NULL PK2, value REAL NOT NULL) WITHOUT ROWID
+  index entity_metric_key (key)
+  unique index <pk> (entity_id, key)
 entity_parameter(entity_id INTEGER NOT NULL PK1, ord INTEGER NOT NULL PK2, parameter_id INTEGER NOT NULL) WITHOUT ROWID
   index entity_parameter_target (parameter_id)
   unique index <pk> (entity_id, ord)

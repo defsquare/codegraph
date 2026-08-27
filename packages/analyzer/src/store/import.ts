@@ -173,6 +173,7 @@ export function writeModelRows(db: SqliteDatabase, jsonlPath: string): ImportRes
     localVariable: db.prepare(
       "INSERT INTO entity_local_variable(entity_id, ord, variable_id) VALUES (?, ?, ?)",
     ),
+    metric: db.prepare("INSERT INTO entity_metric(entity_id, key, value) VALUES (?, ?, ?)"),
     edge: db.prepare(
       `INSERT INTO edge(id, kind_id, from_id, to_id, provenance_id,
                         anchor_file_id, anchor_start, anchor_end,
@@ -242,6 +243,11 @@ export function writeModelRows(db: SqliteDatabase, jsonlPath: string): ImportRes
         record.definedIn?.forEach((file, ord) => insert.definedIn.run(record.i, ord, file));
         record.parameters?.forEach((ref, ord) => insert.parameter.run(record.i, ord, ref));
         record.localVariables?.forEach((ref, ord) => insert.localVariable.run(record.i, ord, ref));
+        if (record.metrics !== undefined) {
+          for (const [key, value] of Object.entries(record.metrics)) {
+            insert.metric.run(record.i, key, value);
+          }
+        }
         entities += 1;
         break;
       }
@@ -379,6 +385,16 @@ export function* readStoreRecords(db: SqliteDatabase): Generator<ModelRecord> {
     db,
     "SELECT entity_id AS owner, variable_id AS value FROM entity_local_variable ORDER BY entity_id, ord",
   );
+  // Key-sorted, which is the canonical order the wire wrote them in.
+  const metrics = new Map<number, Record<string, number>>();
+  for (const [owner, key, value] of rowsAsArrays(
+    db,
+    "SELECT entity_id, key, value FROM entity_metric ORDER BY entity_id, key",
+  )) {
+    let map = metrics.get(owner as number);
+    if (map === undefined) metrics.set(owner as number, (map = {}));
+    map[key as string] = value as number;
+  }
 
   /**
    * WHICH ARRAY-VALUED KEYS AN ENTITY CARRIES COMES FROM ITS TRAIT SET, never
@@ -406,7 +422,7 @@ export function* readStoreRecords(db: SqliteDatabase): Generator<ModelRecord> {
 
   for (const row of rowsAsArrays(db, `SELECT ${ENTITY_COLUMNS} FROM entity ORDER BY id`)) {
     const traits = traitSetInfo.get(row[2] as number) ?? EMPTY_TRAIT_SET;
-    yield entityRecordOf(row, traits, comments, definedIn, parameters, locals);
+    yield entityRecordOf(row, traits, comments, definedIn, parameters, locals, metrics);
   }
 
   const candidates = groupOrdered(
@@ -498,6 +514,7 @@ function entityRecordOf(
   definedIn: Map<number, unknown[]>,
   parameters: Map<number, unknown[]>,
   locals: Map<number, unknown[]>,
+  metrics: Map<number, Record<string, number>>,
 ): EntityRec {
   const [id, kindId, , moduleId, symbol, disambiguator, name, signature,
          parentId, attachedToId, declaredTypeId, isStub,
@@ -529,6 +546,8 @@ function entityRecordOf(
   for (const [key, trait] of Object.entries(LIST_KEY_TRAIT)) {
     if (traits.names.has(trait)) record[key] = lists[key as keyof typeof lists].get(id) ?? [];
   }
+  // The one MAP-valued key, same rule: TMetrics vouches for it, rows fill it.
+  if (traits.names.has("TMetrics")) record["metrics"] = metrics.get(id) ?? {};
 
   if (space !== null) record["space"] = JSON.parse(space) as unknown;
   if (extra !== null) Object.assign(record, JSON.parse(extra) as object);

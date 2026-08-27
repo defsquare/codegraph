@@ -45,6 +45,14 @@ export const TRAITS = {
   // structure
   TStructural: z.object({}),
   TWithAccesses: z.object({}),
+
+  // measures (METAMODEL.md §3.8). ONLY an extractor writes this: every value
+  // required reading source no consumer sees. The keys are deliberately open —
+  // a closed vocabulary would gate every new measure on a core release — so
+  // what is validated is the values: finite numbers, which `z.number()` is in
+  // Zod v4 (NaN and Infinity are rejected). Absence means NOT MEASURED, never
+  // zero; nothing downstream may default a missing key.
+  TMetrics: z.object({ metrics: z.record(z.string().min(1), z.number()) }),
 } satisfies Record<TraitName, z.ZodObject>;
 
 /**

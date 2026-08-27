@@ -41,6 +41,7 @@ const ENTITY_KEY_ORDER = [
   "localVariables",
   "definedIn",
   "comments",
+  "metrics",
   "space",
   "anchor",
 ] as const;
@@ -288,6 +289,10 @@ export function* encodeModel(model: Model): Generator<string> {
   ): unknown {
     if (key === "anchor") return wireAnchor(value as SourceAnchor);
     if (key in PATH_KEYS) return (value as string[]).map(file);
+    // A measure map is written key-sorted: canonical order (MM-5) reaches
+    // inside the record, or two runs that measured the same thing in a
+    // different order would produce different bytes.
+    if (key === "metrics") return sortedMetrics(value as Record<string, number>);
     const many = REF_KEYS.get(key);
     if (many === undefined) return value;
     return many
@@ -298,6 +303,13 @@ export function* encodeModel(model: Model): Generator<string> {
 
 function compareText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** The same map, key-sorted — see `encodeValue`. */
+function sortedMetrics(metrics: Record<string, number>): Record<string, number> {
+  const sorted: Record<string, number> = {};
+  for (const key of Object.keys(metrics).sort()) sorted[key] = metrics[key] as number;
+  return sorted;
 }
 
 // ---------------------------------------------------------------- decoding

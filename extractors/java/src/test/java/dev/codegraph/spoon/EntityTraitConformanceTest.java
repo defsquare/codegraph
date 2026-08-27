@@ -50,31 +50,31 @@ class EntityTraitConformanceTest {
               "class",
               kind(
                   of("TNamed", "TType", "TWithInheritances", "TWithImplements", "TWithChildren", "TChildOf", "TSourceAnchor"),
-                  of("TComment"))),
+                  of("TComment", "TMetrics"))),
           Map.entry(
               "interface",
               kind(
                   of("TNamed", "TType", "TWithInheritances", "TWithChildren", "TChildOf", "TSourceAnchor"),
-                  of("TComment"))),
+                  of("TComment", "TMetrics"))),
           Map.entry(
               "enum",
               kind(
                   of("TNamed", "TType", "TWithImplements", "TWithChildren", "TChildOf", "TSourceAnchor"),
-                  of("TComment"))),
+                  of("TComment", "TMetrics"))),
           Map.entry(
               "record",
               kind(
                   of("TNamed", "TType", "TWithImplements", "TWithChildren", "TChildOf", "TSourceAnchor"),
-                  of("TComment"))),
+                  of("TComment", "TMetrics"))),
           Map.entry(
               "annotation",
-              kind(of("TNamed", "TType", "TWithChildren", "TChildOf", "TSourceAnchor"), of("TComment"))),
+              kind(of("TNamed", "TType", "TWithChildren", "TChildOf", "TSourceAnchor"), of("TComment", "TMetrics"))),
           Map.entry(
               "method",
               kind(
                   of("TNamed", "TInvocable", "TWithChildren", "TWithParameters", "TWithLocalVariables",
                       "TWithInvocations", "TWithAccesses", "TTypedEntity", "TChildOf", "TSourceAnchor"),
-                  of("TComment"))),
+                  of("TComment", "TMetrics"))),
           // No TNamed (a constructor has no name of its own) and no
           // TTypedEntity (it has no return type). The id's disambiguator is the signature.
           Map.entry(
@@ -82,14 +82,14 @@ class EntityTraitConformanceTest {
               kind(
                   of("TInvocable", "TWithChildren", "TWithParameters", "TWithLocalVariables",
                       "TWithInvocations", "TWithAccesses", "TChildOf", "TSourceAnchor"),
-                  of("TComment"))),
+                  of("TComment", "TMetrics"))),
           // Lambdas and anonymous classes: invocable but nameless.
           Map.entry(
               "lambda",
               kind(
                   of("TInvocable", "TWithChildren", "TWithParameters", "TWithLocalVariables",
                       "TWithInvocations", "TWithAccesses", "TChildOf", "TSourceAnchor"),
-                  of("TTypedEntity"))),
+                  of("TTypedEntity", "TMetrics"))),
           Map.entry(
               "attribute",
               kind(of("TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"), of("TComment"))),

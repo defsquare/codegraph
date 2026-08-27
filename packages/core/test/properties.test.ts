@@ -67,6 +67,23 @@ function traitKeys(trait: TraitName, ids: fc.Arbitrary<string>): Record<string, 
       return { parameters: fc.array(ids, { maxLength: 4 }) };
     case "TWithLocalVariables":
       return { localVariables: fc.array(ids, { maxLength: 4 }) };
+    case "TMetrics":
+      // Open keys, finite values (§3.8) — including the empty map, which is a
+      // legal statement ("measured nothing here") the wire must round-trip.
+      //
+      // NOT -0: `JSON.stringify(-0)` is `"0"`, so a model carrying it is not a
+      // JSON fixed point. That is a fact about JSON, not about the metamodel —
+      // no measurement yields negative zero — so it is excluded here rather
+      // than papered over with a normalization in the encoder.
+      return {
+        metrics: fc.dictionary(
+          textArb,
+          fc
+            .double({ noNaN: true, noDefaultInfinity: true })
+            .map((value) => (Object.is(value, -0) ? 0 : value)),
+          { maxKeys: 3 },
+        ),
+      };
     default:
       return {}; // markers contribute nothing
   }
