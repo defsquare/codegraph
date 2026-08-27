@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Model, parseModel, SCHEMA_VERSION } from "../src/model.js";
+import { Model, Repository, parseModel, SCHEMA_VERSION } from "../src/model.js";
 
 /**
  * The worked example of METAMODEL §10 / PLAN §4.6, completed with the keys its
@@ -101,5 +101,62 @@ describe("Model", () => {
   it("throws a readable aggregate error on invalid input", () => {
     expect(() => parseModel({ lang: "java" })).toThrow(/invalid model\.json/);
     expect(() => parseModel(null)).toThrow(/invalid model\.json/);
+  });
+});
+
+/**
+ * Repository provenance (METAMODEL §8a, M10a). The block is optional and holds
+ * FACTS: a normalized https remote, the sha extracted, and the analyzed root
+ * relative to the repository root. Every shape a URL projection would silently
+ * mangle — an ssh remote, a `.git` suffix, an absolute or escaping root — is
+ * refused here, so a consumer that concatenates them cannot produce a link
+ * that 404s.
+ */
+describe("Model.repository", () => {
+  const repository = {
+    remote: "https://github.com/google/gson",
+    commit: "4b9d4a51ea36d18a0e6e1c0bc0f3d1a8b3a5f0c1",
+    root: "gson/src/main/java",
+  };
+
+  it("is optional — a model that does not know its repository says nothing", () => {
+    expect(parseModel(model).repository).toBeUndefined();
+    expect(Model.safeParse({ ...model, repository }).success).toBe(true);
+  });
+
+  it("carries the four facts, provider only when the hostname does not say", () => {
+    const parsed = parseModel({ ...model, repository });
+    expect(parsed.repository).toEqual(repository);
+    expect(
+      Repository.safeParse({ ...repository, provider: "gitlab" }).success,
+    ).toBe(true);
+    expect(Repository.safeParse({ ...repository, provider: "bitbucket" }).success).toBe(false);
+  });
+
+  it("refuses a remote that is not normalized https", () => {
+    for (const remote of [
+      "git@github.com:google/gson.git",
+      "ssh://git@github.com/google/gson",
+      "http://github.com/google/gson",
+      "https://github.com/google/gson.git",
+      "https://github.com/google/gson/",
+      "",
+    ]) {
+      expect(Repository.safeParse({ ...repository, remote }).success, remote).toBe(false);
+    }
+  });
+
+  it("refuses a commit that is not a sha — a branch name moves and is not a fact", () => {
+    for (const commit of ["main", "HEAD", "", "4b9d4a", "4B9D4A51EA36D18A0E6E1C0BC0F3D1A8B3A5F0C1"]) {
+      expect(Repository.safeParse({ ...repository, commit }).success, commit).toBe(false);
+    }
+  });
+
+  it("refuses a root that is not repo-relative — the prefix every anchor is joined onto", () => {
+    for (const root of ["/gson/src/main/java", "../gson", "gson/../../etc", "gson/src/", "./gson"]) {
+      expect(Repository.safeParse({ ...repository, root }).success, root).toBe(false);
+    }
+    // The analyzed root IS the repository root: an empty prefix, not a missing one.
+    expect(Repository.safeParse({ ...repository, root: "" }).success).toBe(true);
   });
 });

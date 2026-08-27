@@ -246,6 +246,20 @@ body {
   font-style: italic;
 }
 
+/* "View source": present only when the artifact carries repository facts. */
+#details .source-link {
+  display: block;
+  margin-top: 8px;
+  color: #2f5d8c;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+#details .source-link:hover {
+  text-decoration: none;
+}
+
 #details details {
   margin-top: 8px;
 }

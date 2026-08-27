@@ -276,6 +276,45 @@ describe("entity history — the replay city's input", () => {
       db.close();
     }
   });
+
+  /**
+   * The replay links a building to the file it stood in AT THE SCRUBBED
+   * REVISION, so the remote and the repo-relative root travel with the history
+   * while the per-frame commit stays the revision's own sha (M10a DoD).
+   */
+  it("carries the repository facts of the latest import", () => {
+    const dbPath = join(scratch, "repo-facts.db");
+    const repository = {
+      remote: "https://github.com/acme/demo",
+      commit: SHA.a,
+      root: "app/src",
+    } as const;
+    importModelAt(
+      jsonlOf("repo-r0", { ...REVISIONS[0]!.model, repository } as Model),
+      dbPath,
+      { sha: SHA.a, time: 1000 },
+    );
+    importModelAt(
+      jsonlOf("repo-r1", { ...REVISIONS[1]!.model, repository: { ...repository, commit: SHA.b } } as Model),
+      dbPath,
+      { sha: SHA.b, time: 2000 },
+    );
+
+    const db = openStore(dbPath);
+    try {
+      const history = readEntityHistory(db);
+      expect(history.repository?.remote).toBe("https://github.com/acme/demo");
+      expect(history.repository?.root).toBe("app/src");
+      // Per-frame permalinks come from the revisions, never from this commit.
+      expect(history.revisions.map((revision) => revision.sha)).toEqual([SHA.a, SHA.b]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("says nothing when the snapshots knew no repository", () => {
+    expect(opened(readEntityHistory).repository).toBeUndefined();
+  });
 });
 
 describe("the cache never destroys a temporal store", () => {

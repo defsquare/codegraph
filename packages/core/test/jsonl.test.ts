@@ -115,6 +115,36 @@ describe("round trip on the real fixture corpus", () => {
   });
 });
 
+describe("repository provenance rides in the header (M10a)", () => {
+  const repository = {
+    remote: "https://github.com/google/gson",
+    commit: "4b9d4a51ea36d18a0e6e1c0bc0f3d1a8b3a5f0c1",
+    root: "gson/src/main/java",
+  } as const;
+
+  it("survives a round trip, verbatim", () => {
+    const model: Model = { ...loadFixture(), repository };
+    const back = decodeModel(encodeModelToString(model).split("\n"));
+    expect(back.repository).toEqual(repository);
+    expect(HeaderRec.parse(JSON.parse(lines(model)[0]!)).repository).toEqual(repository);
+  });
+
+  it("is absent from the header of a model that has none — absence is honest", () => {
+    const model = loadFixture();
+    expect(lines(model)[0]).not.toContain("repository");
+    expect(decodeModel(encodeModelToString(model).split("\n")).repository).toBeUndefined();
+  });
+
+  it("refuses a header whose repository is not the normalized form", () => {
+    const model: Model = {
+      ...loadFixture(),
+      // Cast: the writer trusts its input, so the refusal must come from the READER.
+      repository: { ...repository, remote: "git@github.com:google/gson.git" } as never,
+    };
+    expect(() => decodeModel(encodeModelToString(model).split("\n"))).toThrow(/header/);
+  });
+});
+
 describe("the container contract — section order and the trailer", () => {
   const model = loadFixture();
 

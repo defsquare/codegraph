@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { accessSync, constants, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { JsonlError } from "@codegraph/core";
+import { JsonlError, type Repository } from "@codegraph/core";
 import {
   TemporalStoreError,
   diagnoseStore,
@@ -14,6 +14,7 @@ import {
 import type { SnapshotsOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, outLines, type IoSink } from "../io.js";
+import { repositoryFacts } from "../repository.js";
 
 /**
  * `codegraph snapshots [repo] --jar FILE (--every N | --tags) [--store FILE]`.
@@ -52,6 +53,20 @@ export function snapshotsCommand(
   const frames = options.tags ? tagFrames(git) : strideFrames(git, options.every ?? 1);
   const held = existingShas(store);
 
+  // Repository provenance (M10a): the remote is the repo's, the root is the
+  // `--src` prefix already relative to it, and the commit is the FRAME's — a
+  // permalink per revision is what makes a scrubbed link open the right tree.
+  const remote = originRemote(git);
+  const factsAt = (sha: string): Repository | undefined =>
+    repositoryFacts(remote, sha, options.src);
+  if (factsAt(frames[0]?.sha ?? "0".repeat(40)) === undefined) {
+    errLine(
+      io,
+      `note: ${options.repo} has no https-projectable \`origin\` remote — the snapshots will ` +
+        "carry no repository facts, so the city shows no source links.",
+    );
+  }
+
   const imported: ImportedFrame[] = [];
   const skipped: string[] = [];
   const failed: { sha: string; message: string }[] = [];
@@ -74,7 +89,13 @@ export function snapshotsCommand(
       const started = performance.now();
       let result: ImportedFrame;
       try {
-        result = snapshotOne(git, frame, { scratch, store, src: options.src, extract });
+        result = snapshotOne(git, frame, {
+          scratch,
+          store,
+          src: options.src,
+          extract,
+          repository: factsAt(frame.sha),
+        });
       } catch (error) {
         // Usage errors (no java, a store refusing revisions) abort the run;
         // anything else is this FRAME failing, and the loop continues.
@@ -108,8 +129,16 @@ export function snapshotsCommand(
   return ok ? EXIT.OK : EXIT.FINDINGS;
 }
 
-/** The extractor seam: produce a model.jsonl for the tree at `srcDir`. */
-export type Extract = (srcDir: string, modelPath: string) => void;
+/**
+ * The extractor seam: produce a model.jsonl for the tree at `srcDir`.
+ * `repository` is the frame's provenance (M10a) — undefined when the repo has
+ * no projectable remote, and the extraction then states no repository at all.
+ */
+export type Extract = (
+  srcDir: string,
+  modelPath: string,
+  repository: Repository | undefined,
+) => void;
 
 interface Frame {
   readonly sha: string;
@@ -131,14 +160,20 @@ interface ImportedFrame {
 function snapshotOne(
   git: GitRunner,
   frame: Frame,
-  ctx: { scratch: string; store: string; src: string | undefined; extract: Extract },
+  ctx: {
+    scratch: string;
+    store: string;
+    src: string | undefined;
+    extract: Extract;
+    repository: Repository | undefined;
+  },
 ): ImportedFrame {
   const worktree = join(ctx.scratch, `wt-${frame.sha.slice(0, 12)}`);
   const model = join(ctx.scratch, `model-${frame.sha.slice(0, 12)}.jsonl`);
   git(["worktree", "add", "--detach", worktree, frame.sha]);
   try {
     const srcDir = ctx.src === undefined ? worktree : join(worktree, ctx.src);
-    ctx.extract(srcDir, model);
+    ctx.extract(srcDir, model, ctx.repository);
     return appendRevision(model, ctx.store, frame);
   } finally {
     rmSync(model, { force: true });
@@ -293,11 +328,33 @@ function existingShas(store: string): Set<string> {
 
 // ─────────────────────────────────────────────────────────── the extractor
 
+/**
+ * `git remote get-url origin`, or undefined when there is no origin. A repo
+ * with several remotes still has exactly one the analysis is "about", and
+ * origin is that one by universal convention.
+ */
+function originRemote(git: GitRunner): string | undefined {
+  try {
+    const url = git(["remote", "get-url", "origin"]).trim();
+    return url === "" ? undefined : url;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The real extractor: `java -jar <jar> --src <dir> --out <model>`. */
 function javaExtract(jar: string): Extract {
-  return (srcDir, modelPath) => {
+  return (srcDir, modelPath, repository) => {
+    const repoFlags =
+      repository === undefined
+        ? []
+        : [
+            "--repo-remote", repository.remote,
+            "--repo-commit", repository.commit,
+            "--repo-root", repository.root,
+          ];
     try {
-      execFileSync("java", ["-jar", jar, "--src", srcDir, "--out", modelPath], {
+      execFileSync("java", ["-jar", jar, "--src", srcDir, "--out", modelPath, ...repoFlags], {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
         maxBuffer: 1 << 28,

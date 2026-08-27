@@ -176,6 +176,17 @@ public final class JsonlWriter {
           }
           generator.writeEndObject();
           generator.writeStringField("root", model.root());
+          Repository repository = model.repository();
+          if (repository != null) {
+            generator.writeObjectFieldStart("repository");
+            generator.writeStringField("remote", repository.remote());
+            generator.writeStringField("commit", repository.commit());
+            generator.writeStringField("root", repository.root());
+            if (repository.provider() != null) {
+              generator.writeStringField("provider", repository.provider());
+            }
+            generator.writeEndObject();
+          }
           generator.writeObjectFieldStart("dict");
           strings(generator, "kinds", dict.kinds);
           strings(generator, "traits", dict.traits);

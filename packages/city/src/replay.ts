@@ -1,4 +1,4 @@
-import { getProfile, renderId } from "@codegraph/core";
+import { getProfile, renderId, type Repository } from "@codegraph/core";
 import {
   CITY_ARTEFACT_KIND,
   CITY_GENERATOR,
@@ -347,6 +347,12 @@ function coChangeArcsOf(
  */
 export interface EntityHistory {
   readonly lang: string;
+  /**
+   * Where the corpus lives (M10a). Its `commit` is the latest snapshot's; a
+   * scrubbed link uses the TICK's sha instead, so the file it opens is the one
+   * on screen.
+   */
+  readonly repository?: Repository;
   readonly revisions: readonly { readonly sha: string; readonly time: number | null }[];
   readonly entities: readonly {
     readonly module: string;
@@ -492,6 +498,8 @@ export function buildEntityCity(history: EntityHistory, options: EntityCityOptio
       district: idOf(life.module, ""),
       height: heightOf(life.finalLoc),
       footprint: { width: side, depth: side },
+      // No span: the history keys entities to a FILE, not to a line range.
+      ...(life.file === null ? {} : { source: { file: life.file } }),
       metrics: {
         loc: life.finalLoc,
         "peak-loc": life.peak,
@@ -549,7 +557,11 @@ export function buildEntityCity(history: EntityHistory, options: EntityCityOptio
     kind: CITY_ARTEFACT_KIND,
     generatedBy: CITY_GENERATOR,
     view: { name: "internal", filters: ["internal-only"] },
-    corpus: { name: options.name, roots: [] },
+    corpus: {
+      name: options.name,
+      roots: [],
+      ...(history.repository === undefined ? {} : { repository: history.repository }),
+    },
     conventions: {
       arrowAttachment: "roof",
       heightAxis: "y",

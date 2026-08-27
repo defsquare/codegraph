@@ -298,6 +298,10 @@ function writeHeader(insert: Inserts, header: HeaderRec, jsonlPath: string): voi
     ["lang", header.lang],
     ["root", header.root],
     ["extractor", JSON.stringify(header.extractor)],
+    // Optional: no row rather than a "null" row, so absence reads as absence.
+    ...(header.repository === undefined
+      ? []
+      : ([["repository", JSON.stringify(header.repository)]] as [string, string][])),
     ["sourcePath", jsonlPath],
     ["sourceBytes", String(source.size)],
     ["sourceMtimeMs", String(source.mtimeMs)],
@@ -340,6 +344,9 @@ export function* readStoreRecords(db: SqliteDatabase): Generator<ModelRecord> {
     lang: meta.get("lang") ?? "",
     extractor: JSON.parse(meta.get("extractor") ?? "{}") as HeaderRec["extractor"],
     root: meta.get("root") ?? "",
+    ...(meta.has("repository")
+      ? { repository: JSON.parse(meta.get("repository")!) as HeaderRec["repository"] }
+      : {}),
     dict: {
       kinds: names("kind"),
       traits: names("trait") as HeaderRec["dict"]["traits"],

@@ -1,7 +1,9 @@
+import type { BuildingSource } from "@codegraph/city";
 import type { DistrictArc } from "./districtArrows.js";
 import type { BuildingBox } from "./buildings.js";
 import type { Plate } from "./districts.js";
 import { districtLabel } from "./labels.js";
+import { sourceUrl, type RepositoryFacts } from "./source.js";
 
 /**
  * The click panel's data, DOM-free: what the shell prints when a building or
@@ -28,6 +30,12 @@ export interface BuildingDetails {
   readonly rows: readonly DetailRow[];
   readonly attributes: BuildingBox["attributes"];
   readonly operations: BuildingBox["operations"];
+  /**
+   * "View source", when the artifact says where the corpus lives AND the model
+   * anchored this building. Absent means absent: no link beats a link that
+   * 404s (M10a).
+   */
+  readonly link?: { readonly url: string; readonly label: string };
 }
 
 export function districtDetails(
@@ -104,8 +112,20 @@ export function operationList(operations: BuildingBox["operations"]): {
   };
 }
 
-export function buildingDetails(box: BuildingBox): BuildingDetails {
+/**
+ * The panel's data for one building. `at` is the artifact's repository facts
+ * plus the commit to link AT — the scrubbed tick's sha in a replay, so the
+ * permalink follows the city instead of the latest snapshot.
+ */
+export function buildingDetails(
+  box: BuildingBox,
+  at: { repository?: RepositoryFacts | undefined; commit?: string | undefined } = {},
+): BuildingDetails {
+  const url = sourceUrl(at.repository, box.source, at.commit ?? at.repository?.commit ?? "");
   return {
+    ...(url === undefined || box.source === undefined
+      ? {}
+      : { link: { url, label: sourceLabel(box.source) } }),
     title: box.name ?? box.id,
     // The module component when the artifact gives it; the district id is the
     // opaque fallback for artifacts from before `identity` existed.
@@ -132,4 +152,11 @@ export function buildingDetails(box: BuildingBox): BuildingDetails {
     attributes: box.attributes,
     operations: box.operations,
   };
+}
+
+/** What the link says it opens: the anchor, verbatim, path and lines. */
+function sourceLabel(source: BuildingSource): string {
+  if (source.span === undefined) return source.file;
+  const [start, end] = source.span;
+  return `${source.file}:${start}${end > start ? `-${end}` : ""}`;
 }

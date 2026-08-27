@@ -1,5 +1,5 @@
 import { parseRenderedId } from "@codegraph/core";
-import type { EdgeKind, Entity, EntityId, Provenance } from "@codegraph/core";
+import type { EdgeKind, Entity, EntityId, Provenance, Repository } from "@codegraph/core";
 import {
   coupling,
   createFolder,
@@ -124,6 +124,17 @@ export interface IdentityComponents {
   readonly disambiguator?: string;
 }
 
+/**
+ * Where the element is written, for a renderer to project a permalink onto the
+ * corpus's `repository` (§9). The path is relative to the model root, exactly
+ * as the anchor states it; `span` is absent when the source is a per-file fact
+ * without a line range (the replay's history).
+ */
+export interface BuildingSource {
+  readonly file: string;
+  readonly span?: readonly [number, number];
+}
+
 /** One field of a type, for the detail panel: its name and, when the model
  * resolves it, the NAME of its declared type — never a raw id. */
 export interface BuildingAttribute {
@@ -154,6 +165,8 @@ export interface Building {
   readonly isStub: boolean;
   readonly district: EntityId;
   readonly identity?: IdentityComponents;
+  /** The anchor, for source links; absent when the model anchors nothing (stubs). */
+  readonly source?: BuildingSource;
   /** Along the height axis. */
   readonly height: number;
   /** Base rectangle; square today, a layout concern the day it is not. */
@@ -251,8 +264,16 @@ export interface CityModel {
    * What corpus this city renders: a display name (the deduped, sorted root
    * basenames joined with " + ", or the caller's `name`) and the model roots
    * verbatim. The renderer's header shows `name`; it decides nothing.
+   *
+   * `repository` is the union's — present only when every model that carries
+   * one agrees, since a building does not know which model declared it and a
+   * link to the wrong repository is worse than no link (M10a).
    */
-  readonly corpus: { readonly name: string; readonly roots: readonly string[] };
+  readonly corpus: {
+    readonly name: string;
+    readonly roots: readonly string[];
+    readonly repository?: Repository;
+  };
   readonly conventions: CityConventions;
   readonly bindings: readonly ResolvedBinding[];
   /** Sorted by id. */
@@ -393,6 +414,7 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
     }
     const members = membersByType.get(building.node.id) ?? [];
     const identity = identityOf(building.node.id);
+    const source = sourceOf(graph.entity(building.node.id));
     return {
       id: building.node.id,
       name: building.node.name,
@@ -400,6 +422,7 @@ export function buildCity(graph: CodeGraph, options: CityOptions = {}): CityMode
       isStub: building.node.isStub,
       district: building.district,
       ...(identity === undefined ? {} : { identity }),
+      ...(source === undefined ? {} : { source }),
       height: dimension("height"),
       footprint: { width: side, depth: side },
       metrics,
@@ -543,10 +566,7 @@ function domainOf(measured: readonly Measured[], metric: string): Domain | undef
  * basenames of the model roots (or the caller's override) — a label for a
  * header, deciding nothing. Roots are reported verbatim, blanks excluded.
  */
-function corpusOf(
-  graph: CodeGraph,
-  name: string | undefined,
-): { name: string; roots: readonly string[] } {
+function corpusOf(graph: CodeGraph, name: string | undefined): CityModel["corpus"] {
   const roots = [...new Set(graph.union.models.map((model) => model.root))]
     .filter((root) => root.length > 0)
     .sort();
@@ -558,7 +578,38 @@ function corpusOf(
         .filter((base) => base.length > 0),
     ),
   ].sort();
-  return { name: name ?? (basenames.length > 0 ? basenames.join(" + ") : "codegraph"), roots };
+  const repository = unanimousRepository(graph);
+  return {
+    name: name ?? (basenames.length > 0 ? basenames.join(" + ") : "codegraph"),
+    roots,
+    ...(repository === undefined ? {} : { repository }),
+  };
+}
+
+/**
+ * The union's repository, when the models that state one all state the SAME
+ * one. Disagreement yields nothing: a building carries no model of origin, so
+ * picking a winner would attach half the city to the wrong repository.
+ */
+function unanimousRepository(graph: CodeGraph): Repository | undefined {
+  const stated = graph.union.models
+    .map((model) => model.repository)
+    .filter((repository): repository is Repository => repository !== undefined);
+  if (stated.length === 0) return undefined;
+  const first = JSON.stringify(stated[0]);
+  return stated.every((repository) => JSON.stringify(repository) === first) ? stated[0] : undefined;
+}
+
+/**
+ * The element's own anchor, path and span verbatim (they are relative to the
+ * model root, which is where a `repository.root` prefix meets them). A stub
+ * anchors nothing and gets no source.
+ */
+function sourceOf(entity: Entity | undefined): BuildingSource | undefined {
+  const anchor = (entity as { anchor?: { file?: string; span?: [number, number] } } | undefined)
+    ?.anchor;
+  if (anchor?.file === undefined || anchor.span === undefined) return undefined;
+  return { file: anchor.file, span: [anchor.span[0], anchor.span[1]] };
 }
 
 /**

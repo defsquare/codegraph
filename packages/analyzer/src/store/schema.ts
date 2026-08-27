@@ -116,6 +116,8 @@ export const META_KEYS = [
   "lang",
   "root",
   "extractor",
+  // M10a: the header's optional repository block, JSON — absent key, absent block.
+  "repository",
   "sourcePath",
   "sourceBytes",
   "sourceMtimeMs",

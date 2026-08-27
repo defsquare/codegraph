@@ -30,13 +30,19 @@ export function graphOf(entities: readonly Entity[], edges: readonly Edge[] = []
 
 /** Several models under one union — for corpus-name tests over multiple roots. */
 export function graphOfModels(
-  parts: readonly { root: string; entities: readonly Entity[]; edges?: readonly Edge[] }[],
+  parts: readonly {
+    root: string;
+    entities: readonly Entity[];
+    edges?: readonly Edge[];
+    repository?: Model["repository"];
+  }[],
 ): CodeGraph {
   const models: Model[] = parts.map((part) => ({
     schemaVersion: "1.0.0",
     lang: "java",
     extractor: { name: "test", version: "0.0.0" },
     root: part.root,
+    ...(part.repository === undefined ? {} : { repository: part.repository }),
     entities: [...part.entities],
     edges: [...(part.edges ?? [])],
   }));

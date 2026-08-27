@@ -1365,7 +1365,165 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
 - **`.mailmap` author normalization** (start with email identity; add it
   when it bites).
 
-## 12. Milestones
+## 12. Phase 9 — Back to source, measures, framework semantics (M10)
+
+Motivation: the model says what the code *is* (structure) and what *happened*
+to it (Phase 8). This phase makes it say **where it lives** (a permalink for
+every anchor), **how big and how branchy it is** (measured, not guessed),
+**what it says verbatim** (the constant values the source writes — annotation
+arguments, constant initializers, defaults), and **what frameworks do to it**
+(the DI wiring the static graph cannot see). All four land on hooks the
+codebase already carries: anchors are repo-projectable the moment the header
+knows the repo; the city's metric registry was written for extractor-emitted
+measures (`attribute:`/`sum:` sources, `metrics.ts`); annotation usage is
+already an edge and Spring wiring is already a documented blind spot in the
+Java profile notes.
+
+Four principles, locked up front:
+
+1. **Facts in the model, projections downstream.** The header gains the
+   repository facts (`remote`, `commit`, repo-relative `root`); the blob-URL
+   template of a particular host is presentation, derived by consumers — a
+   stored URL would freeze one host's scheme into the interchange
+   (METAMODEL §8a/§9).
+2. **Only the extractor measures.** `sloc` and `cyclomatic` require reading
+   source; nothing downstream may re-parse or approximate them. Gross span
+   length stays a *derived* proxy (the city's `loc`), and the two claims are
+   never conflated (METAMODEL §3.8).
+3. **A value is what is written, never runtime state.** A `Literal`
+   (METAMODEL §1.6) is emitted only when the language fixes it at the
+   declaration — a literal, or an expression folding from constants; anything
+   else is `unevaluated` (source text kept) or absent. Ids inside values obey
+   closure like edge endpoints.
+4. **Framework knowledge is data, like profiles.** The analyzer derives DI
+   wiring from declared facts plus a declarative annotation table
+   (METAMODEL §9.1); the extractor stays framework-blind, and derived wiring
+   edges are in-memory only — invariant 4 applied to inference.
+
+### 12.1 M10a — repository provenance + source links
+
+- [x] Core: optional `repository {remote, commit, root, provider?}` on the
+      header record (Model, wire, container contract), `pnpm run gen:schemas`
+      committed with it. Additive — `schemaVersion` unchanged (M6 decision:
+      the format is internal, bumping a version nobody consumes buys nothing).
+      `root` is the analyzed root **relative to the repo root** — the M9b gson
+      gotcha (`--src gson/src/main/java`) resurfacing as a data requirement;
+      without it no anchor projects back to a repo path. Every field is a
+      PATTERN, not a refinement: `z.toJSONSchema()` drops refinements, and the
+      published schema has to refuse an ssh remote or a `../` root exactly as
+      core does, or `schemas/` is not the contract it claims to be.
+- [x] Java extractor: passthrough flags (`--repo-remote`, `--repo-commit`,
+      `--repo-root`, `--repo-provider`) copied verbatim into the header — no
+      git knowledge, no metamodel intelligence, one writer per file. The flags
+      travel together (a remote without a sha links nowhere) and are checked
+      against the published patterns at the flag, not written into a header
+      the analyzer would then refuse whole.
+- [x] CLI derives the values: normalize `git remote get-url origin` (ssh,
+      `ssh://`, `git://`, embedded credentials → https, strip `.git`);
+      `snapshots` supplies the per-frame sha it already checks out and the
+      `--src` prefix, which is already repo-relative. A remote no browser can
+      open (local path, `file://`, plain http) yields NOTHING and says so —
+      a guessed URL is a link that lies.
+- [x] Analyzer/city carry `repository` into artifact metadata (store `meta`
+      row; `readEntityHistory` exposes it beside the revisions); viz details
+      panel renders a "view source" link from the selected entity's anchor —
+      GitHub `{remote}/blob/{commit}/{root}/{file}#L{s}-L{e}`, GitLab
+      `{remote}/-/blob/{commit}/{root}/{file}#L{s}-{e}`; provider guessed
+      from hostname, `provider` field overriding (self-hosted GitLab). An
+      unknown host template renders no link. In a replay the commit is the
+      SCRUBBED tick's sha, retargeted in place so playback churns no DOM.
+- **DoD** ✅ verified on gson at `b3f4ca2`: the JsonReader link opened
+  `gson/src/main/java/com/google/gson/stream/JsonReader.java#L211-L2005` on
+  github.com at the extraction sha (screenshot reviewed); the fixture city,
+  whose model carries no block, renders no link at all; a 4-revision gson
+  replay store retargeted the link to `ed2b25d` (2011) when scrubbed to
+  revision 2/4, and that URL resolves too.
+
+### 12.2 M10b — measures (`TMetrics`)
+
+- [ ] Core: `TMetrics` trait contributing `metrics: Record<string, number>`
+      (finite values validated; keys deliberately open — METAMODEL §3.8),
+      optional on the Java profile's measurable kinds (types + invocables);
+      header trait dictionary grows; `gen:schemas` committed.
+- [ ] Java extractor emits `sloc` per type and invocable (span lines minus
+      blank and comment-only lines) and `cyclomatic` per invocable:
+      1 + count of `CtIf`, `CtFor`/`CtForEach`/`CtWhile`/`CtDo`, non-default
+      `CtCase` (one per case expression), `CtCatch`, `CtConditional`,
+      `CtBinaryOperator` AND/OR, switch-pattern guards. A lambda's branches
+      count toward the lambda — it is its own invocable. Purely syntactic:
+      immune to the noClasspath resolution ceiling.
+- [ ] City: `numericKey` reads the `metrics` map (top-level loose keys stay
+      legal but uncontractual), so `--height sum:cyclomatic` and
+      `attribute:sloc` work exactly as `metrics.ts` promised the day the key
+      exists.
+- [ ] Fixture: hand-counted `cyclomatic` values asserted on the fixture
+      corpus (branchy method, `&&`-chain, switch, lambda-in-method);
+      property: every emitted measure is a finite non-negative number.
+- **DoD**: `--height sum:cyclomatic --footprint loc` on commons-lang
+  reviewed as a screenshot at user-facing angles; unmeasured buildings are
+  floored and counted in diagnostics (existing behavior), never zeroed;
+  `sloc ≤` span length holds as a property.
+
+### 12.3 M10c — literal values (the value door)
+
+- [ ] Core: `Literal` primitive (METAMODEL §1.6) — tagged union: string,
+      number (canonical decimal **text** — a Java `long` does not fit a JSON
+      number), boolean, null, enum (type id + simple name — a member stub is
+      never fabricated, §6 verbatim), type, array, nested annotation, and
+      `unevaluated` (source text of a constant expression the extractor did
+      not fold). `TWithValue { value: Literal }` optional on `attribute` and
+      `method` (annotation element defaults) in the Java profile; new edge
+      kind `annotationUse` — Entity → annotation Type, `arguments:
+      {name, value}[]`, the implicit `value =` normalized explicit. Header
+      dictionaries grow (one trait, one edge kind); `gen:schemas` committed.
+- [ ] Encoding: ids inside Literals are file-scoped surrogates, so closure
+      over values is enforced by the wire exactly as for edge endpoints.
+      Property suite extended: closure reaches into `value` and `arguments`;
+      determinism untouched — argument and array order is written order, a
+      source fact like parameter order.
+- [ ] Java extractor: `emitAnnotations` upgraded from `reference` to
+      `annotationUse` with arguments (Spoon annotation values + partial
+      evaluator; chars ride as one-character strings; a class literal in an
+      argument still emits its own `reference` edge — a value never replaces
+      a dependency). Constant `attribute` initializers (JLS compile-time
+      constant expressions) and annotation element `default`s carried via
+      `TWithValue`. In-place clean break for the usage edge kind — fixtures
+      regenerated, no dual emission (the M6 precedent).
+- [ ] Analyzer and city: values pass through untouched on load; the details
+      panel may show a constant's value — presentation, no new derivation.
+- **DoD**: the fixture asserts `@Retention(RetentionPolicy.RUNTIME)` on
+  `Audited` as an `annotationUse` edge whose argument is the enum form,
+  `value() default ""` as a `TWithValue` string, a `static final` constant
+  folded across an arithmetic expression, and one honest `unevaluated`;
+  property suite green including value-closure; regenerated gson and
+  commons-lang models diagnose clean.
+
+### 12.4 M10d — framework semantics (Spring first)
+
+- [ ] Framework profile as data in the analyzer (METAMODEL §9.1): annotation
+      identity → role (`stereotype`, `injection-point`, `entry-point`,
+      `qualifier`) for the Spring/Jakarta vocabulary; specifiable without
+      being implemented — the profile robustness test, again.
+- [ ] Analyzer DI pass: for each injection point (field / constructor param
+      whose `declaredType` is an interface, on a stereotyped class), derive
+      in-memory `dynamic-candidate` edges from the consumer to every corpus
+      implementation of that interface — candidates straight from the
+      existing `interfaceImplementation` inverse index; `@Primary` narrows on
+      presence, `@Qualifier` on its `annotationUse` argument value (M10c) —
+      exact strings, not guesswork. Injection points and roles are selected
+      on `annotationUse` edges directly; matching reads the referenced
+      annotation entity's `name` + parent chain, never a parsed id, and
+      tolerates stub targets (the petclinic case: all Spring types are
+      stubs).
+- [ ] Stereotype classification surfaced as a report and as a semantic city
+      color channel ("architectural role"), legended like every channel —
+      derivable from `annotationUse` edges (M10c), no further model change.
+- **DoD**: on spring-petclinic, every `@Autowired` interface injection lists
+  exactly its corpus implementations as candidates (hand-verified); the
+  facts-only (`declared`) view is byte-identical before and after the pass —
+  inference added nothing to the facts.
+
+## 13. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -1382,8 +1540,11 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
 | M9b | Temporal store | ✅ sampled `import --at` revisions in `model.db` (orchestrated by `codegraph snapshots`); lifespans + `codegraph timeline`; hidden-coupling/ownership queries verified on gson history (55 release keyframes, 2008–2025); property suite green at every keyframe |
 | M9c | Entity-level city replay | ✅ frozen union layout; temporal `city.json` with per-building series (`codegraph replay`); time colors (heat + age), owner color mode and dashed co-change arcs via the `--history` join; scrubbed replay reviewed as screenshots on gson at user-facing angles, allocation-free scrub path |
 | NV | Navigator frontend | ✅ `codegraph navigator --serve`: `@codegraph/navigator` builds an index-addressed browsable artifact (tree + one classified dependency row per base edge, reference sub-roles recovered from the source entity); `@codegraph/navigator-ui` renders it — virtualized tree with search, fan-in/fan-out sectioned by role with member, provenance and anchor. Design record: `docs/navigator.md`. Verified on fineract (102 972 nodes / 668 286 rows, 100 MB artifact loading in 1.3 s, 45 rows mounted after scrolling) |
-
-## 13. Decisions made in this plan (deltas vs. the design doc)
+| M10a | Source links | ✅ header `repository` facts (remote, commit, repo-relative root, provider?) in core + `schemas/` as patterns; extractor passthrough flags; CLI-derived normalization carried per snapshot frame; store/city/viz carry them and the details panel links at the scrubbed sha — verified on gson (`JsonReader.java#L211-L2005` at `b3f4ca2`, replay retargeting to `ed2b25d`, fixture city linkless) |
+| M10b | Measures | `TMetrics` trait; Java extractor emits `sloc` + `cyclomatic`; `--height sum:cyclomatic` reviewed as screenshot on commons-lang; fixture CC values hand-counted |
+| M10c | Literal values | `Literal` + `TWithValue` + `annotationUse` in core and schemas; Java extractor carries annotation arguments, constant initializers and element defaults; value-closure property green; fixture asserts the `Audited` cases |
+| M10d | Framework semantics | data-driven Spring framework profile; derived DI `dynamic-candidate` wiring (qualifier narrowing on M10c argument values) hand-verified on spring-petclinic; `declared` view unchanged by the pass |
+## 14. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -1410,3 +1571,8 @@ genuinely hard viz problem (layout stability) is forced on cheap data.
 | Lineage over time (Phase 8) | natural-key equality across snapshots; a rename is a death + a birth; anonymous entities untracked | invariant 7 makes temporal identity free for named entities; rename matching is heuristic machinery, deferred until a corpus proves it necessary |
 | Replay layout (Phase 8) | one layout over the union of all keys that ever existed, plots frozen; buildings animate in place | shelf packing is chaotic — one insertion reshuffles the city; a readable replay needs positional stability more than land density |
 | Snapshot strategy (Phase 8) | sampled keyframes via `git worktree`; per-commit incremental extraction deferred | full extraction × thousands of commits is prohibitive, 50–200 frames give the replay effect; noClasspath makes non-compiling historic commits extractable |
+| Repository provenance (Phase 9) | facts in the header — `remote` (normalized https), `commit` (sha), repo-relative `root`; host URL templates derived by consumers, `provider` only when the hostname lies | a serialized URL freezes one host's scheme into the interchange; a sha is a permalink where a branch moves; anchors are relative to the analyzed root, which sits below the repo root (gson) — without the prefix no anchor projects back |
+| Measures (Phase 9) | `TMetrics` open numeric map; canonical key names documented (METAMODEL §3.8), values validated finite, keys deliberately NOT a closed MM-3 vocabulary | measures are the extractor-innovation surface — a closed set gates every new measure on a core release; loose top-level keys stay legal (container contract) but uncontractual, and only a trait makes `sloc`/`cyclomatic` comparable across extractors |
+| DI wiring (Phase 9) | derived by the analyzer from declared facts + a framework data table; `dynamic-candidate` provenance, in-memory only, matched by entity name — never id parsing | the extractor stays framework-blind; the candidate set needs whole-corpus implementor knowledge only the analyzer holds; Spring dispatch is §1.3's `dynamic-candidate` definition verbatim |
+| Literal values (Phase 9) | tagged-union `Literal`: numbers as canonical decimal text, enum values as type id + simple name, unfoldable constant expressions kept as `unevaluated` source text; ids inside values obey closure | a JSON number loses a Java `long`; a fabricated enum-member stub is the one thing §6 forbids; dropping an unfoldable expression erases a written fact — degraded honesty over silent loss, the stub discipline applied to values |
+| Annotation usage (Phase 9) | dedicated `annotationUse` edge kind carrying `arguments`, replacing the plain `reference` — in-place clean break, fixtures regenerated | overloading `reference` would make `arguments` meaningful on one disguised subset of a kind; consumers cannot select annotation usages today without guessing from the target's kind, which a stub target cannot answer |

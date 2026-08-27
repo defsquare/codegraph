@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { EdgeKind, TraitName } from "./names.js";
 import { Provenance, Space } from "./primitives.js";
-import { ExtractorInfo } from "./model.js";
+import { ExtractorInfo, Repository } from "./model.js";
 
 /**
  * The JSONL interchange records (docs/model-encoding.md §2). One JSON object
@@ -88,6 +88,8 @@ export const HeaderRec = z.object({
   lang: z.string().min(1),
   extractor: ExtractorInfo,
   root: z.string(),
+  /** Optional (METAMODEL §8a): a model that does not know its repository says nothing. */
+  repository: Repository.optional(),
   dict: WireDict,
 });
 export type HeaderRec = z.infer<typeof HeaderRec>;

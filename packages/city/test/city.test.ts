@@ -356,6 +356,62 @@ describe("buildCity: corpus name", () => {
   });
 });
 
+/**
+ * M10a: the city carries the repository facts and each building's anchor, so a
+ * renderer can project a permalink. It projects NOTHING itself — a stored URL
+ * would freeze one host's scheme into an artifact (METAMODEL §8a/§9).
+ */
+describe("buildCity: source provenance", () => {
+  const repository = {
+    remote: "https://github.com/acme/demo",
+    commit: "4b9d4a51ea36d18a0e6e1c0bc0f3d1a8b3a5f0c1",
+    root: "src/main/java",
+  } as const;
+
+  it("carries the union's repository and every anchored building's file and span", () => {
+    const graph = graphOfModels([
+      { root: "src", repository, entities: [pkg("java:a"), type("java:a/A", "java:a", 12)] },
+    ]);
+    const city = buildCity(graph);
+    expect(city.corpus.repository).toEqual(repository);
+    expect(city.buildings[0]?.source).toEqual({ file: "java:a/A.java", span: [1, 12] });
+  });
+
+  it("says nothing when the model does not know where it lives", () => {
+    const city = buildCity(toyGraph());
+    expect(city.corpus).not.toHaveProperty("repository");
+  });
+
+  it("leaves an unanchored building — a stub — without a source", () => {
+    const graph = graphOfModels([
+      {
+        root: "src",
+        repository,
+        entities: [pkg("java:a"), type("java:a/A", "java:a", 12), stubType("java:a/S", "java:a")],
+      },
+    ]);
+    const stub = buildCity(graph).buildings.find((building) => building.id === "java:a/S");
+    expect(stub?.isStub).toBe(true);
+    expect(stub).not.toHaveProperty("source");
+  });
+
+  /**
+   * Two models from two repositories cannot share one block, and a building
+   * does not know which model declared it — so the honest city states none.
+   */
+  it("states no repository when the union's models disagree", () => {
+    const graph = graphOfModels([
+      { root: "a", repository, entities: [pkg("java:a"), type("java:a/A", "java:a", 5)] },
+      {
+        root: "b",
+        repository: { ...repository, remote: "https://github.com/acme/other" },
+        entities: [pkg("java:b"), type("java:b/B", "java:b", 5)],
+      },
+    ]);
+    expect(buildCity(graph).corpus).not.toHaveProperty("repository");
+  });
+});
+
 describe("buildCity: members on buildings", () => {
   it("lists attributes and operations on every building, sorted", () => {
     const city = buildCity(toyGraph());

@@ -11,12 +11,14 @@ import java.util.List;
  * holds no metamodel intelligence beyond emitting a conforming file.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({"schemaVersion", "lang", "extractor", "root", "entities", "edges"})
+@JsonPropertyOrder({"schemaVersion", "lang", "extractor", "root", "repository", "entities", "edges"})
 public record Model(
     String schemaVersion,
     String lang,
     ExtractorInfo extractor,
     String root,
+    /** Optional (METAMODEL.md §8a): null when the run was told nothing about a repository. */
+    Repository repository,
     List<Entity> entities,
     List<Edge> edges) {
 
@@ -31,6 +33,17 @@ public record Model(
     edges = List.copyOf(edges);
   }
 
+  /** A model that knows nothing of a repository — the shape before M10a. */
+  public Model(
+      String schemaVersion,
+      String lang,
+      ExtractorInfo extractor,
+      String root,
+      List<Entity> entities,
+      List<Edge> edges) {
+    this(schemaVersion, lang, extractor, root, null, entities, edges);
+  }
+
   /**
    * Assembles a model in canonical order (MM-1): entities by natural key, which
    * is what {@link JsonlWriter} turns into surrogates. Edges are sorted by their
@@ -39,11 +52,21 @@ public record Model(
    * for anything that inspects it before writing.
    */
   public static Model sorted(ExtractorInfo extractor, String root, List<Entity> entities, List<Edge> edges) {
+    return sorted(extractor, root, null, entities, edges);
+  }
+
+  /** As above, carrying the repository facts the run was given (null when none). */
+  public static Model sorted(
+      ExtractorInfo extractor,
+      String root,
+      Repository repository,
+      List<Entity> entities,
+      List<Edge> edges) {
     List<Entity> sortedEntities =
         entities.stream()
             .sorted(Comparator.comparing(entity -> NaturalKey.parse(entity.id())))
             .toList();
     List<Edge> sortedEdges = edges.stream().sorted(Edge.DETERMINISTIC_ORDER).toList();
-    return new Model(SCHEMA_VERSION, LANG, extractor, root, sortedEntities, sortedEdges);
+    return new Model(SCHEMA_VERSION, LANG, extractor, root, repository, sortedEntities, sortedEdges);
   }
 }

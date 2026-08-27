@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readModelRecordsSync } from "@codegraph/core";
+import { readModelRecordsSync, type Repository } from "@codegraph/core";
 
 import { importModel, writeModelRows } from "./import.js";
 import { DB_VERSION, STORE_OPEN_OPTIONS } from "./schema.js";
@@ -321,6 +321,12 @@ export interface EntityHistoryEntry {
 
 export interface EntityHistoryData {
   readonly lang: string;
+  /**
+   * Where the corpus lives (M10a), from the latest imported snapshot. Its
+   * `commit` is that snapshot's; a per-frame permalink uses the REVISION's own
+   * sha, which is what makes a scrubbed link point at the tree on screen.
+   */
+  readonly repository?: Repository;
   /** Chronological; series ordinals index into this array. */
   readonly revisions: readonly RevisionRef[];
   /** Every key with at least one corpus (non-stub) version, sorted by key. */
@@ -387,7 +393,13 @@ export function readEntityHistory(db: SqliteDatabase): EntityHistoryData {
     ...entry,
     series: entry.series.sort((a, b) => a[0] - b[0]),
   }));
-  return { lang, revisions, entities };
+  const repository = metaOf(db, "repository");
+  return {
+    lang,
+    ...(repository === undefined ? {} : { repository: JSON.parse(repository) as Repository }),
+    revisions,
+    entities,
+  };
 }
 
 export function listRevisions(db: SqliteDatabase): RevisionRef[] {

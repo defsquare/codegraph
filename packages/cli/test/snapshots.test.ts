@@ -127,12 +127,14 @@ function javaFilesUnder(dir: string, prefix = ""): { name: string; loc: number }
 }
 
 /** The seam: models the worktree's .java files the way the real jar would. */
-const fakeExtract: Extract = (srcDir, outPath) => {
+const fakeExtract: Extract = (srcDir, outPath, repository) => {
   const model: Model = {
     schemaVersion: "1.0.0",
     lang: "java",
     extractor: { name: "fake", version: "0" },
     root: "demo",
+    // Copied verbatim, exactly as the jar copies its --repo-* flags.
+    ...(repository === undefined ? {} : { repository }),
     entities: [
       {
         id: moduleId,
@@ -245,10 +247,10 @@ describe("codegraph snapshots --tags", () => {
 describe("codegraph snapshots failure isolation", () => {
   it("a revision that fails to extract is reported and the rest still import", () => {
     const store = join(scratch, "failing.db");
-    const failing: Extract = (srcDir, outPath) => {
+    const failing: Extract = (srcDir, outPath, repository) => {
       const app = javaFilesUnder(srcDir).find((file) => file.name.endsWith("App.java"));
       if (app?.loc === 3) throw new Error("boom: this revision does not extract");
-      fakeExtract(srcDir, outPath);
+      fakeExtract(srcDir, outPath, repository);
     };
     const { io, code } = snapshots({ every: 2, store }, failing);
     expect(code).toBe(EXIT.FINDINGS);
@@ -257,6 +259,81 @@ describe("codegraph snapshots failure isolation", () => {
     expect(io.stdout()).toContain("holds 3 revisions");
     expect(io.stderr()).toContain("boom");
     expect(series(id("App"), store)).toEqual([6, 8, 10]);
+  });
+});
+
+/**
+ * M10a: the orchestrator is the only party that knows git, so it derives the
+ * repository facts and hands each frame ITS OWN sha. The store then holds one
+ * permalink per revision, which is what a scrubbed replay needs.
+ */
+describe("codegraph snapshots repository facts", () => {
+  const withOrigin = join(scratch, "origin-repo");
+
+  beforeAll(() => {
+    mkdirSync(join(withOrigin, "src"), { recursive: true });
+    execFileSync("git", ["init", "-q", "-b", "main", withOrigin]);
+    // The ssh form on purpose: normalization is part of the derivation.
+    git(withOrigin, ["remote", "add", "origin", "git@github.com:acme/demo.git"]);
+    for (const [lines, date] of [[3, "2024-02-01T10:00:00+00:00"], [5, "2024-02-02T10:00:00+00:00"]] as const) {
+      writeFileSync(
+        join(withOrigin, "src/App.java"),
+        Array.from({ length: lines }, (_, i) => `// ${i}`).join("\n") + "\n",
+      );
+      git(withOrigin, ["add", "."]);
+      git(withOrigin, ["commit", "-q", "--no-verify", "-m", `c${lines}`], {
+        GIT_AUTHOR_NAME: "A", GIT_AUTHOR_EMAIL: "a@example.com", GIT_AUTHOR_DATE: date,
+        GIT_COMMITTER_NAME: "A", GIT_COMMITTER_EMAIL: "a@example.com", GIT_COMMITTER_DATE: date,
+      });
+    }
+  });
+
+  it("hands every frame the normalized remote, the --src root and its own sha", () => {
+    const seen: { commit: string; remote: string; root: string }[] = [];
+    const recording: Extract = (srcDir, outPath, repository) => {
+      if (repository !== undefined) seen.push({ ...repository });
+      fakeExtract(srcDir, outPath, repository);
+    };
+    const { code } = snapshots(
+      { repo: withOrigin, every: 1, src: "src", store: join(scratch, "origin.db") },
+      recording,
+    );
+    expect(code).toBe(EXIT.OK);
+
+    const shas = git(withOrigin, ["log", "--first-parent", "--reverse", "--format=%H"])
+      .split("\n")
+      .filter((line) => line !== "");
+    expect(seen.map((facts) => facts.commit)).toEqual(shas);
+    expect(new Set(seen.map((facts) => facts.remote))).toEqual(new Set(["https://github.com/acme/demo"]));
+    expect(new Set(seen.map((facts) => facts.root))).toEqual(new Set(["src"]));
+  });
+
+  it("the store keeps the facts, and the replay reads them back", () => {
+    const store = join(scratch, "origin-replay.db");
+    expect(snapshots({ repo: withOrigin, every: 1, src: "src", store }).code).toBe(EXIT.OK);
+
+    const { io, code } = invoke(["replay", "--store", store]);
+    expect(code).toBe(EXIT.OK);
+    const city = JSON.parse(io.stdout()) as {
+      corpus: { repository?: { remote: string; root: string } };
+    };
+    expect(city.corpus.repository?.remote).toBe("https://github.com/acme/demo");
+    expect(city.corpus.repository?.root).toBe("src");
+  });
+
+  it("says so, and carries no facts, when there is no projectable origin", () => {
+    const seen: (unknown | undefined)[] = [];
+    const recording: Extract = (srcDir, outPath, repository) => {
+      seen.push(repository);
+      fakeExtract(srcDir, outPath, repository);
+    };
+    const { io, code } = snapshots(
+      { every: 2, store: join(scratch, "no-origin.db") },
+      recording,
+    );
+    expect(code).toBe(EXIT.OK);
+    expect(seen.every((facts) => facts === undefined)).toBe(true);
+    expect(io.stderr()).toContain("no https-projectable `origin` remote");
   });
 });
 

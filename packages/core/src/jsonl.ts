@@ -185,6 +185,7 @@ export function* encodeModel(model: Model): Generator<string> {
     lang: model.lang,
     extractor: model.extractor,
     root: model.root,
+    ...(model.repository === undefined ? {} : { repository: model.repository }),
     dict,
   };
   yield JSON.stringify(header);
@@ -738,6 +739,7 @@ export class ModelBuilder {
       lang: header.lang,
       extractor: header.extractor,
       root: header.root,
+      ...(header.repository === undefined ? {} : { repository: header.repository }),
       entities: this.#entities,
       edges: this.#edges,
     };

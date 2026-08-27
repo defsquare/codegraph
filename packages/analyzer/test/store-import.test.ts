@@ -176,6 +176,54 @@ describe("the keys no fixture exercises", () => {
 });
 
 /**
+ * Repository provenance (M10a) is a HEADER fact, and the header is `meta` rows.
+ * The cache must hand it back exactly as the file stated it — a link built from
+ * a half-remembered remote points at the wrong tree.
+ */
+describe("the header's repository block", () => {
+  const repository = {
+    remote: "https://github.com/google/gson",
+    commit: "4b9d4a51ea36d18a0e6e1c0bc0f3d1a8b3a5f0c1",
+    root: "gson/src/main/java",
+    provider: "github",
+  } as const;
+
+  function withRepository(name: string): string {
+    const lines = readFileSync(fixture, "utf8").split("\n").filter((l) => l !== "");
+    const header = JSON.parse(lines[0]!) as Record<string, unknown>;
+    header["repository"] = repository;
+    lines[0] = JSON.stringify(header);
+    const path = join(scratch, `${name}.jsonl`);
+    writeFileSync(path, `${lines.join("\n")}\n`, "utf8");
+    return path;
+  }
+
+  it("survives the cache, verbatim", () => {
+    const source = withRepository("repository");
+    const db = openStore(importInto("repository", source));
+    try {
+      const back = [...readStoreRecords(db)].find((record) => record.t === "header");
+      expect((back as { repository?: unknown }).repository).toEqual(repository);
+      expect([...readStoreRecords(db)]).toEqual([...readModelRecordsSync(source)]);
+      expect(hydrateModel(db).repository).toEqual(repository);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("stays absent for a model that carries none", () => {
+    const db = openStore(importInto("no-repository"));
+    try {
+      const back = [...readStoreRecords(db)].find((record) => record.t === "header");
+      expect(back).not.toHaveProperty("repository");
+      expect(hydrateModel(db).repository).toBeUndefined();
+    } finally {
+      db.close();
+    }
+  });
+});
+
+/**
  * `candidates` is the one array-valued key no trait contributes, so the trick
  * that saves the entity lists — presence follows the trait set — has nothing to
  * work with. `edge.candidate_count` exists for exactly this: NULL is absent,

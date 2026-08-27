@@ -5,6 +5,7 @@ import dev.codegraph.spoon.model.Entity;
 import dev.codegraph.spoon.model.ExtractorInfo;
 import dev.codegraph.spoon.model.Model;
 import dev.codegraph.spoon.model.JsonlWriter;
+import dev.codegraph.spoon.model.Repository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -167,7 +168,7 @@ public final class Main {
 
     // Pass 5 — deterministic assembly and output.
     ExtractorInfo extractor = new ExtractorInfo(NAME, VERSION, Boolean.TRUE);
-    Model model = Model.sorted(extractor, root.toString(), entities, edges);
+    Model model = Model.sorted(extractor, root.toString(), options.repository(), entities, edges);
     try (Progress.Phase phase = progress.phase("write", "records")) {
       new JsonlWriter().write(model, options.out(), observing(phase));
     }
@@ -279,6 +280,14 @@ public final class Main {
           --no-progress  same as --progress none
           --help         print this and exit
 
+        REPOSITORY PROVENANCE (copied verbatim into the header; the extractor runs
+        no git — whoever invokes it supplies the facts, e.g. codegraph snapshots)
+          --repo-remote <url>   normalized https clone URL, no .git suffix
+          --repo-commit <sha>   the sha this tree is at — a permalink, not a branch
+          --repo-root <path>    the analyzed root RELATIVE to the repository root
+                                (default: empty — they are the same directory)
+          --repo-provider <p>   github | gitlab, only when the hostname does not say
+
         The run prints a RESOLUTION SUMMARY to stderr: how many type references
         Spoon resolved in noClasspath mode, how many entities and stubs were
         emitted, and how many edges. Progress goes to stderr too, and never to a
@@ -289,7 +298,13 @@ public final class Main {
   }
 
   /** Hand-rolled parsing: an argument parser is not worth a dependency here. */
-  record Options(List<Path> sources, Path out, boolean help, Progress.Mode progress) {
+  record Options(
+      List<Path> sources,
+      Path out,
+      boolean help,
+      Progress.Mode progress,
+      /** Repository facts to copy into the header; null when the run was told none. */
+      Repository repository) {
 
     private static final Path CURRENT_DIRECTORY = Path.of(".");
 
@@ -308,17 +323,25 @@ public final class Main {
       Set<Path> sources = new LinkedHashSet<>();
       Path out = null;
       Progress.Mode progress = Progress.Mode.AUTO;
+      String remote = null;
+      String commit = null;
+      String repoRoot = null;
+      String provider = null;
 
       for (int i = 0; i < args.length; i++) {
         String arg = args[i];
         switch (arg) {
           case "--help", "-h" -> {
-            return new Options(List.of(), null, true, Progress.Mode.NONE);
+            return new Options(List.of(), null, true, Progress.Mode.NONE, null);
           }
           case "--src" -> sources.add(Path.of(value(args, ++i, "--src")));
           case "--out" -> out = Path.of(value(args, ++i, "--out"));
           case "--progress" -> progress = Progress.Mode.parse(value(args, ++i, "--progress"));
           case "--no-progress" -> progress = Progress.Mode.NONE;
+          case "--repo-remote" -> remote = value(args, ++i, "--repo-remote");
+          case "--repo-commit" -> commit = value(args, ++i, "--repo-commit");
+          case "--repo-root" -> repoRoot = value(args, ++i, "--repo-root");
+          case "--repo-provider" -> provider = value(args, ++i, "--repo-provider");
           default -> throw new IllegalArgumentException("unknown option: " + arg);
         }
       }
@@ -334,7 +357,25 @@ public final class Main {
           throw new IllegalArgumentException("source root does not exist: " + source);
         }
       }
-      return new Options(List.copyOf(sources), out, false, progress);
+      return new Options(List.copyOf(sources), out, false, progress, repository(remote, commit, repoRoot, provider));
+    }
+
+    /**
+     * The facts travel together: a remote without a sha (or the reverse) links
+     * nowhere, so a half-given block is a usage error rather than a header
+     * consumers must second-guess. Only {@code --repo-root} has a meaningful
+     * default — the analyzed root IS the repository root.
+     */
+    private static Repository repository(String remote, String commit, String root, String provider) {
+      if (remote == null && commit == null && root == null && provider == null) {
+        return null;
+      }
+      if (remote == null || commit == null) {
+        throw new IllegalArgumentException(
+            "--repo-remote and --repo-commit are needed together (add --repo-root when the "
+                + "analyzed root sits below the repository root)");
+      }
+      return new Repository(remote, commit, root == null ? "" : root, provider);
     }
 
     private static String value(String[] args, int index, String option) {

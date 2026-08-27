@@ -97,6 +97,35 @@
       "minLength": 1,
       "type": "string"
     },
+    "repository": {
+      "properties": {
+        "commit": {
+          "pattern": "^[0-9a-f]{7,64}$",
+          "type": "string"
+        },
+        "provider": {
+          "enum": [
+            "github",
+            "gitlab"
+          ],
+          "type": "string"
+        },
+        "remote": {
+          "pattern": "^https:\\/\\/(?![^\\s]*\\.git$)[^\\s?#]*[^\\s?#/]$",
+          "type": "string"
+        },
+        "root": {
+          "pattern": "^$|^(?!\\.\\.?(?:\\/|$))[^/\\s]+(?:\\/(?!\\.\\.?(?:\\/|$))[^/\\s]+)*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "remote",
+        "commit",
+        "root"
+      ],
+      "type": "object"
+    },
     "root": {
       "type": "string"
     },

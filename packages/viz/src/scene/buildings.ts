@@ -1,6 +1,7 @@
 import type {
   BuildingAttribute,
   BuildingOperation,
+  BuildingSource,
   CityLayout,
   IdentityComponents,
 } from "@codegraph/city";
@@ -33,6 +34,8 @@ export interface BuildingBox {
   readonly operations: readonly BuildingOperation[];
   /** Dominant author of the element's file, when a history was joined. */
   readonly owner: { readonly name: string; readonly share: number } | undefined;
+  /** Where it is written; absent when the model anchors it nowhere (stubs). */
+  readonly source: BuildingSource | undefined;
 }
 
 /**
@@ -62,6 +65,7 @@ export function buildingBoxes(city: CityLayout): readonly BuildingBox[] {
       attributes: building.attributes ?? [],
       operations: building.operations ?? [],
       owner: building.owner,
+      source: building.source,
     };
   });
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildingBoxes } from "../src/scene/buildings.js";
+import { buildingBoxes, type BuildingBox } from "../src/scene/buildings.js";
 import {
   buildingDetails,
   districtDetails,
@@ -173,5 +173,39 @@ describe("buildingDetails", () => {
     expect(details.rows).toContainEqual({ label: "owner", value: "alice (85% of added lines)" });
     // Without a join, no owner row is invented.
     expect(buildingDetails(service).rows.some((row) => row.label === "owner")).toBe(false);
+  });
+
+  /** M10a: the panel offers "view source" exactly when both facts are there. */
+  describe("the source link", () => {
+    const repository = {
+      remote: "https://github.com/acme/demo",
+      commit: "4b9d4a51ea36d18a0e6e1c0bc0f3d1a8b3a5f0c1",
+      root: "src/main/java",
+    } as const;
+    const anchored = {
+      ...(boxes.find((box) => box.id === "java:com.acme.order/OrderService") as BuildingBox),
+      source: { file: "com/acme/order/OrderService.java", span: [15, 22] as const },
+    };
+
+    it("points at the anchor's lines and says which they are", () => {
+      const details = buildingDetails(anchored, { repository });
+      expect(details.link?.url).toBe(
+        `https://github.com/acme/demo/blob/${repository.commit}/` +
+          "src/main/java/com/acme/order/OrderService.java#L15-L22",
+      );
+      expect(details.link?.label).toBe("com/acme/order/OrderService.java:15-22");
+    });
+
+    it("follows the scrubbed revision when a replay supplies one", () => {
+      const scrubbed = "e".repeat(40);
+      const details = buildingDetails(anchored, { repository, commit: scrubbed });
+      expect(details.link?.url).toContain(`/blob/${scrubbed}/`);
+    });
+
+    it("is absent without repository facts, and absent for an unanchored building", () => {
+      expect(buildingDetails(anchored).link).toBeUndefined();
+      const stub = boxes.find((box) => box.id === "java:com.acme.web/OrderController");
+      expect(buildingDetails(stub as BuildingBox, { repository }).link).toBeUndefined();
+    });
   });
 });

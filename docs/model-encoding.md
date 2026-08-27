@@ -56,6 +56,10 @@ contractual (single-pass streaming): `header → files → entities → edges �
 {"t":"header","schemaVersion":"1.0.0","lang":"java",
  "extractor":{"name":"codegraph-spoon","version":"0.2.0","noClasspath":true},
  "root":"/home/jeremie/fineract",
+ // optional (M10a): where the analyzed root lives in a hosted repository.
+ "repository":{"remote":"https://github.com/apache/fineract",
+               "commit":"4b9d4a51ea36d18a0e6e1c0bc0f3d1a8b3a5f0c1",
+               "root":"fineract-provider/src/main/java"},
  "dict":{
    "kinds":["package","class","interface","enum","record","annotation",
             "method","constructor","attribute","parameter","localVariable","lambda"],

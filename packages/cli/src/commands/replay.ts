@@ -84,6 +84,8 @@ export function replayCommand(
 
   const name = options.name ?? basename(storePath).replace(/\.db$/, "");
   const joined = options.history === undefined ? undefined : joinHistory(options.history, history, io);
+  // `history` already carries the store's repository facts (M10a); the city
+  // only forwards them, and the viewer projects the per-tick permalink.
   const city = buildEntityCity(history, {
     name,
     ...(joined === undefined ? {} : { owners: joined.owners, coChange: joined.coChange }),

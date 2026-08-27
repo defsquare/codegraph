@@ -24,6 +24,7 @@ import {
   serializePalette,
   type CityPalette,
 } from "./scene/palette.js";
+import { sourceUrl } from "./scene/source.js";
 import { createCityScene, type CityScene } from "./three/cityScene.js";
 import { BuildingPicker } from "./three/picking.js";
 import { AGE_FADE_GRAY, CO_CHANGE_COLOR, COLORS, REPLAY_HEAT_COLOR, TANGLE_COLOR } from "./theme.js";
@@ -301,6 +302,15 @@ let ownerColors: readonly (number | null)[] | null = null;
 let replayTimer: number | null = null;
 const PLAY_TICK_MS = 140;
 
+/** The ticks of the loaded replay, for the per-frame permalink; null if static. */
+let replayTicks: readonly { readonly hash: string }[] | null = null;
+
+/** The sha the scrubber is standing on, or undefined outside a replay. */
+function scrubbedCommit(): string | undefined {
+  if (replayTicks === null) return undefined;
+  return replayTicks[Number(timelineScrub.value)]?.hash;
+}
+
 function stopPlayback(): void {
   if (replayTimer !== null) {
     window.clearInterval(replayTimer);
@@ -321,6 +331,19 @@ function setTick(tick: number): void {
   }
   timelineLabel.textContent = timeline.label(tick);
   timelineScrub.value = String(tick);
+  retargetSourceLink();
+}
+
+/**
+ * Scrubbing moves the permalink with the timeline. The panel is NOT rebuilt —
+ * only the href changes — so playback stays free of DOM churn.
+ */
+function retargetSourceLink(): void {
+  const anchor = detailsBody.querySelector<HTMLAnchorElement>("a.source-link");
+  if (anchor === null || !cityScene || locked === null) return;
+  const box = cityScene.boxes[locked];
+  const url = sourceUrl(currentCity?.corpus?.repository, box?.source, scrubbedCommit());
+  if (url !== undefined) anchor.href = url;
 }
 
 /** One sink for the 'Colors' selector: exactly one mode owns the base color. */
@@ -341,6 +364,7 @@ function setupReplay(city: CityLayout): void {
   const replay = (city as Partial<ReplayCityLayout>).replay;
   if (!cityScene || replay === undefined || replay.ticks.length === 0) {
     timeline = null;
+    replayTicks = null;
     heightsBuffer = heatsBuffer = agesBuffer = null;
     ownerColors = null;
     timelineBar.hidden = true;
@@ -349,6 +373,7 @@ function setupReplay(city: CityLayout): void {
     return;
   }
   timeline = timelineModel(replay, cityScene.boxes.map((box) => box.id));
+  replayTicks = replay.ticks;
   heightsBuffer = new Float32Array(cityScene.boxes.length);
   heatsBuffer = new Float32Array(cityScene.boxes.length);
   agesBuffer = new Float32Array(cityScene.boxes.length);
@@ -557,6 +582,18 @@ function detailsHeader(title: string, meta: string): readonly HTMLElement[] {
   return [heading, metaLine];
 }
 
+/** "View source": a real anchor, opened in a new tab, or nothing at all. */
+function sourceLink(details: BuildingDetails): readonly HTMLElement[] {
+  if (details.link === undefined) return [];
+  const anchor = document.createElement("a");
+  anchor.className = "source-link";
+  anchor.href = details.link.url;
+  anchor.target = "_blank";
+  anchor.rel = "noreferrer noopener";
+  anchor.textContent = `View source — ${details.link.label}`;
+  return [anchor];
+}
+
 function renderBuildingPanel(details: BuildingDetails): void {
   const operations = operationList(details.operations);
   const operationsFold = memberList(
@@ -573,6 +610,7 @@ function renderBuildingPanel(details: BuildingDetails): void {
   detailsBody.replaceChildren(
     ...detailsHeader(details.title, details.meta),
     rowsTable(details.rows),
+    ...sourceLink(details),
     memberList(
       "Attributes",
       details.attributes.map((attribute) => ({
@@ -591,7 +629,14 @@ function renderDetails(): void {
   if (!cityScene) return;
   const box = locked === null ? undefined : cityScene.boxes[locked];
   if (box !== undefined) {
-    renderBuildingPanel(buildingDetails(box));
+    // The link follows the SCRUBBED revision in a replay: the tick's own sha,
+    // so what opens is the file the city is showing, not today's tip.
+    renderBuildingPanel(
+      buildingDetails(box, {
+        repository: currentCity?.corpus?.repository,
+        commit: scrubbedCommit(),
+      }),
+    );
     return;
   }
   const plate =

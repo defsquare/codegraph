@@ -85,6 +85,7 @@ CityModel {
 District { id, name, kind, isStub, parent?, buildings: EntityId[], footprintDemand }
 Building { id, name, kind, isStub, district,
             height, footprint: { width, depth },
+            source?: { file, span? },   // the anchor, for source links (M10a)
             metrics: Record<string, number | null> }
 Arrow    { from, to, count, kinds[], provenances[], inferred, crossDistrict, feedback }
 ```
@@ -94,6 +95,15 @@ Two later additions to the shape (details in CM-8's nesting note):
 - **`District.parent`** — the nearest ancestor module that is itself a district,
   when the model declares module containment. Absent for roots and for models
   without containment.
+- **`corpus.repository` and `Building.source`** (M10a) — the header's
+  repository facts (`remote`, `commit`, repo-relative `root`, `provider?`) and
+  each building's anchor (`file`, `span?`), carried so a renderer can project a
+  permalink. The city projects NO url: a blob template belongs to one host, and
+  the artefact states facts (METAMODEL §8a/§9). `repository` is present only
+  when every model in the union that states one states the SAME one — a
+  building carries no model of origin, so half a city linked to the wrong
+  repository is the alternative. A replay city has the file but no span (the
+  history keys entities to files) and links at the scrubbed tick's sha.
 - **`CityModel.districtArrows`** — module-level dependencies between districts,
   from the analyzer's fold at `level: "module"` under the same view: the
   fan-in/fan-out a landscape view renders. Same `Arrow` shape; kept in the

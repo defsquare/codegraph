@@ -173,6 +173,37 @@ describe("buildEntityCity", () => {
     expect(city.replay.coChange).toBeUndefined();
   });
 
+  /**
+   * M10a: the replay carries the repository facts once and each building's
+   * file; the per-frame permalink comes from the TICK's sha, which the ticks
+   * already state. No span — the history stores a file per key, not a range.
+   */
+  it("carries the repository facts and the file each building stood in", () => {
+    const linked = buildEntityCity(
+      {
+        lang: "java",
+        repository: {
+          remote: "https://github.com/acme/demo",
+          commit: sha(2),
+          root: "src/main/java",
+        },
+        revisions: [{ sha: sha(0), time: 1000 }],
+        entities: [
+          entity("app", "A", "class", [[0, 10]], "", "app/A.java"),
+          entity("app", "B", "class", [[0, 4]]),
+        ],
+      },
+      { name: "linked" },
+    );
+    expect(linked.corpus.repository?.remote).toBe("https://github.com/acme/demo");
+    expect(linked.buildings.find((b) => b.id === id("app", "A"))?.source).toEqual({
+      file: "app/A.java",
+    });
+    // Unanchored at its last revision: no file, so no link. Absence is honest.
+    expect(linked.buildings.find((b) => b.id === id("app", "B"))).not.toHaveProperty("source");
+    expect(city.corpus).not.toHaveProperty("repository");
+  });
+
   it("is deterministic and survives an empty store", () => {
     expect(JSON.stringify(buildEntityCity(HISTORY, { name: "demo" }))).toBe(
       JSON.stringify(buildEntityCity(HISTORY, { name: "demo" })),
