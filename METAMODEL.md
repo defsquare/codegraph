@@ -121,6 +121,41 @@ appears as `anchor.file` values and in `TModule.definedIn`. It becomes an
 explicit node only where a language has file-level dependencies (PHP
 `FileInclude` edges).
 
+### 1.6 Literal
+
+A **written, declaration-site value**: what an annotation argument, a constant
+initializer, or a default carries in the source. A tagged union whose tags are
+a closed core-owned vocabulary (MM-3):
+
+| Form | Shape | Notes |
+|---|---|---|
+| `string` | `{k: "string", v: string}` | chars ride as one-character strings; the declared type keeps `'a'` and `"a"` apart |
+| `number` | `{k: "number", v: string}` | the evaluated constant's **canonical decimal text** — lossless where JSON numbers are not (a Java `long`, a big decimal) |
+| `boolean` | `{k: "boolean", v: boolean}` | |
+| `null` | `{k: "null"}` | |
+| `enum` | `{k: "enum", type: EntityId, name: string}` | a reference to the *type* plus the constant's simple name — a member is never fabricated to close a value (§6, verbatim) |
+| `type` | `{k: "type", type: EntityId}` | `Foo.class` and kin. The written type use still emits its own `reference` edge — a value never replaces a dependency |
+| `array` | `{k: "array", items: Literal[]}` | written order kept — a source fact, like parameter order |
+| `annotation` | `{k: "annotation", type: EntityId, arguments: NamedArgument[]}` | a nested annotation value |
+| `unevaluated` | `{k: "unevaluated", source: string}` | a written constant expression the extractor did not fold. The source text is still a fact — kept, and honest about what it is, mirroring stub degradation |
+
+`NamedArgument` is `{name: string, value: Literal}`; a language-implicit name
+is normalized explicit (Java's `@Foo("x")` is `value = "x"`).
+
+Two rules:
+
+- **A Literal is what is written, never runtime state.** Emitted only when the
+  language fixes the value at the declaration — a literal, or an expression
+  that folds from constants (Java: JLS compile-time constant expressions).
+  Anything else is `unevaluated` or absent; nothing downstream may "run" one.
+- **Ids inside values count for closure** (§8a): `enum.type`, `type.type` and
+  nested annotation types resolve to a declared entity or a stub exactly like
+  an edge endpoint — in the M6 encoding they are file-scoped surrogates, so a
+  dangling one is unwritable.
+
+**Relations:** carried by Entities via `TWithValue` (§3.6) and by
+`annotationUse` edges (§4).
+
 ---
 
 ## 2. Entity
@@ -218,12 +253,43 @@ attachment distinction needs. Only the serialized key goes, in M6.
 |---|---|---|
 | `TStructural` | *(marker)* — value holder | attributes, variables, parameters, Clojure vars. Legal target of `Access` edges |
 | `TWithAccesses` | *(marker)* — see `Access` edges | outgoing only |
+| `TWithValue` | `value: Literal` (§1.6) | the entity's declaration-site constant value: a Java `static final` constant initializer, an annotation element's `default`, a TS enum member's value, a Clojure def'd constant. Optional wherever licensed — an attribute whose initializer is not a compile-time constant simply carries no value, and absence means "not constant", never "empty" |
 
 ### 3.7 The composition that motivates the whole design
 
 A Clojure var holding a function is simultaneously named, a value holder, and
 invocable: `traits: [TNamed, TStructural, TInvocable]`. No tree-shaped
 hierarchy can place it; trait composition expresses it directly.
+
+### 3.8 Measures
+
+| Trait | Attributes contributed | Notes |
+|---|---|---|
+| `TMetrics` | `metrics: Record<string, number>` | open map of **measured** finite numbers. Only the extractor writes it: every value here required reading source no consumer sees. Optional on every kind that licenses it — a profile without measures is complete, not deficient |
+
+Two rules give the map meaning:
+
+- **Absence means "not measured", never zero.** A consumer may not default a
+  missing key: "nothing measured this" and "measured as zero" are different
+  statements, and only the second is a fact about the code (the city's metric
+  sources already honor this — an unmeasured building is floored and counted,
+  not zeroed).
+- **Keys are canonical by documentation, not by schema.** Deliberately *not* a
+  closed MM-3 vocabulary: a new measure must not wait on a core release.
+  Validation checks the values (finite numbers); the canonical names below are
+  what makes one key comparable across extractors — an extractor inventing a
+  key documents it in its profile `notes`.
+
+| Key | Unit | Definition |
+|---|---|---|
+| `sloc` | source lines | lines in the entity's own span that are neither blank nor comment-only |
+| `cyclomatic` | branches + 1 | per invocable: 1 + count of decision points — `if`, loops, non-default `case` labels, `catch`, `?:`, short-circuit `&&`/`\|\|`, pattern guards. A lambda's branches belong to the lambda: it is its own invocable |
+
+The **derived** counterpart: gross span length (`end − start + 1`) is
+computable from `TSourceAnchor` alone and is not a measure (it is the city's
+`loc` source); a module's size is a sum over its derived children. `sloc`
+exists because blanks and comments are invisible downstream — the two claims
+("how much is written here" vs "how much of it is code") are never conflated.
 
 ---
 
@@ -259,7 +325,8 @@ Rules:
 | `interfaceImplementation` | Type → Type (interface/trait/protocol) | | `declared` (Java `implements`) or `derived` (Go, TS structural) depending on language. For Rust/Clojure the anchor is the reified impl block (§7) |
 | `invocation` | Invocable → Invocable | `candidates` | uncertain dispatch → `provenance: dynamic-candidate` + candidates list |
 | `access` | Invocable → Structural | `isRead: bool`, `isWrite: bool` | field/variable reads and writes |
-| `reference` | Entity → Type | | type usage that is none of the above (declarations, generics, casts, annotations) |
+| `reference` | Entity → Type | | type usage that is none of the above (declarations, generics, casts) |
+| `annotationUse` | Entity → Type (annotation) | `arguments: NamedArgument[]` (§1.6) | a written annotation on any entity, with its arguments. Formerly a plain `reference`; the dedicated kind both carries the values and lets a consumer select annotation usages without guessing from the target's kind — which a stub target cannot answer |
 | `embedding` | Type → Type | | Go `struct { Base }` — neither inheritance nor attribute (method promotion); dedicated relation |
 | `traitUsage` | Type → Trait (PHP) | | PHP `use TraitX;` — kept as a usage edge, never flattened into the class |
 | `fileInclude` | CodeFile → CodeFile | | PHP `include`/`require` — the only file-to-file dependency in the metamodel |
@@ -393,12 +460,30 @@ extraction run. Its content is format-independent.
 | `lang` | string | profile id of the extractor |
 | `extractor` | `{name, version, ...flags}` | provenance of the model itself (e.g. `noClasspath: true`) |
 | `root` | string | analyzed source root (anchors are relative to it) |
+| `repository` | `{remote, commit, root, provider?}` | optional — where the analyzed root lives in a hosted repository (see below) |
 | `entities` | Entity[] | all nodes, stubs included |
 | `edges` | Edge[] | all relations, outgoing direction |
 
+**`repository`** records provenance of the *corpus*, as facts:
+
+| Field | Meaning |
+|---|---|
+| `remote` | normalized https clone URL (`https://github.com/google/gson` — never the ssh form, never trailing `.git`) |
+| `commit` | the sha the corpus was extracted at — a permalink; a branch name moves and is not a fact |
+| `root` | path of the analyzed root **relative to the repository root**. Anchors are relative to the *analyzed* root, which may sit below the repo root (gson: `gson/src/main/java`) — without this prefix no anchor can be projected back to a repo path |
+| `provider` | `github` \| `gitlab`, only when the hostname does not say (self-hosted); consumers guess from the host otherwise |
+
+The model stores these facts; the blob-URL of a particular host is a
+**projection** consumers derive (§9), never serialized — a stored URL would
+freeze one host's scheme into the interchange. The extractor copies the four
+strings verbatim from its invocation (it has no git knowledge); the values are
+supplied by whoever runs it, e.g. the CLI's snapshot orchestration, which
+already knows the per-frame sha.
+
 The integrity properties a model must satisfy, whatever encodes it:
 
-- **closure** — every reference resolves to a declared entity or a stub (§4, §6);
+- **closure** — every reference resolves to a declared entity or a stub (§4,
+  §6), the ids inside `Literal` values included (§1.6);
 - **no self-reference** — `from ≠ to` on every edge;
 - **provenance set** on every edge, from the closed set of §1.3;
 - **profile validity** for every entity (§5);
@@ -449,6 +534,24 @@ part of the conceptual vocabulary even though no encoding stores them:
 | Tangle / minimum feedback set | folded graphs | per-SCC minimal weighted edge set whose removal leaves the component acyclic; tangle metric = feedback references / cyclic references |
 | Internal view | `isStub` | model minus stubs and their edges |
 | Facts-only view | `provenance` | model restricted to `declared` edges |
+| Source links | `repository` + anchors | per-anchor host permalink — `{remote}/blob/{commit}/{root}/{file}#L{s}-L{e}` on GitHub, `{remote}/-/blob/{commit}/{root}/{file}#L{s}-{e}` on GitLab; template chosen by hostname, `provider` overriding |
+| Framework roles | `annotationUse` edges + a framework profile (§9.1) | stereotype classification of types (`@Service`, `@RestController`, …) and identification of injection points |
+| DI wiring | injection points + the interfaceImplementation inverse index | `dynamic-candidate` edges from a consumer to every corpus implementation of the injected interface — §1.3's definition verbatim: dispatch not statically resolvable, targets are guesses |
+
+### 9.1 Framework profiles (data, consumed by the analyzer)
+
+Mirror of §5's rule at the framework level: what an annotation *means*
+(`@Autowired` marks an injection point, `@Service` a stereotype, `@Qualifier`
+narrows candidates) is a declarative table — annotation identity → role —
+specifiable without being implemented, extensible to another framework (CDI,
+Micronaut) without code. It lives in the analyzer: the extractor stays
+framework-blind (it already emits the facts — a `reference` edge per written
+annotation), and the wiring it licenses is derived in memory, never
+serialized. Matching reads the referenced entity's `name` and parent chain —
+never a parsed id — and must tolerate the target being a stub, which is the
+normal case for a corpus whose framework jars are absent. Injection points and
+roles are selected on `annotationUse` edges, and qualifier narrowing reads
+their `arguments` (§1.6) — exact values, not guesswork.
 
 ---
 
