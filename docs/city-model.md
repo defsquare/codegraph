@@ -86,7 +86,7 @@ District { id, name, kind, isStub, parent?, buildings: EntityId[], footprintDema
 Building { id, name, kind, isStub, district,
             height, footprint: { width, depth },
             metrics: Record<string, number | null> }
-Arrow    { from, to, count, kinds[], provenances[], inferred, crossDistrict }
+Arrow    { from, to, count, kinds[], provenances[], inferred, crossDistrict, feedback }
 ```
 
 Two later additions to the shape (details in CM-8's nesting note):
@@ -125,6 +125,13 @@ Choices worth naming:
   set stays for anyone who wants the detail.
 - **`crossDistrict`** is precomputed for the same reason: it is the flag a
   layout uses to decide which arrows must survive district packing.
+- **`feedback`** — the arrow is in the minimum feedback set of its strongly
+  connected component at its own fold level (the analyzer's `cycles()` tangle
+  cut, computed per level in `buildCity`). Precomputed so a renderer draws the
+  recommendation without re-deriving graph facts. A boolean "in tangle"
+  metric CHANNEL for buildings/districts is deliberately deferred: height and
+  footprint are continuous channels and a membership bit would mislead there;
+  the open metric-source registry (CM-4) can host one later.
 
 ## CM-4 Metric sources: a registry, not an enum
 

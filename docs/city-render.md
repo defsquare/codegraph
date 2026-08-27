@@ -76,6 +76,7 @@ its own:
 | plate elevation + tint | district nesting depth (`District.parent` chain) — a child plate stacks one thickness higher and reads slightly lighter | `theme.ts` |
 | district-arrow hue | direction relative to the SELECTED district — amber fan-in (who depends on it), blue fan-out (what it depends on) | `theme.ts`, legend |
 | district-arrow saturation | provenance: an inferred module arrow desaturates toward gray but keeps its direction hue | `theme.ts`, legend |
+| tangle red (both arc families) | the artifact's `feedback` flag — the minimum feedback set, the analyzer's cycle cut; shown AT REST behind the 'Tangles' toggle, kept red under a selection (the offense outranks direction hue), dimmed when non-incident | `theme.ts` (`TANGLE_COLOR`), legend |
 
 Honesty rules inherited and kept mechanical:
 

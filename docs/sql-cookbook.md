@@ -279,7 +279,8 @@ connected component — the cookbook test asserts that agreement rather than
 trusting it.
 
 It finds *which* modules are in a cycle, not the components themselves; for
-ranked SCCs with weights and the edges that close each loop, use the command.
+ranked SCCs with weights, the edges that close each loop, and the minimum
+feedback set (the tangle cut — analyzer-only, no SQL recipe), use the command.
 
 ## Evidence
 

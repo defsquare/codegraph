@@ -293,7 +293,10 @@ ahead of `lang3.builder`, and flags `lang3.time`, `lang3.concurrent` and
 `lang3.event` as maximally unstable leaf consumers — which is the answer a human
 who knows the library would give. `--report cycles` finds the genuine 13-package
 mutually-recursive core (`lang3` ↔ `builder` ↔ `math` ↔ `exception` …) and exits
-`3`, because a dependency cycle is a finding about the architecture.
+`3`, because a dependency cycle is a finding about the architecture. Each cycle
+also carries its Structure101-style tangle score and minimum feedback set — the
+`[feedback]`-marked edges are the cheapest cut that would leave the graph
+acyclic, and the 3D city draws them in red behind the "Tangles" toggle.
 
 Every number the analyzer reports carries the **fold level** and the **view** it
 was computed under. `internalOnly` drops stubs, `declaredOnly` drops inferences;

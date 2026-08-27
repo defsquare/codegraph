@@ -216,6 +216,34 @@ list of ids says a problem exists and nothing about how to break it. Each link
 carries `count` (the cost of cutting it), its kinds, its provenances and
 `allDeclared`, so a user can attack an inferred link before a declared one.
 
+**Tangle / minimum feedback set** (`feedbackArcSet(edges)`, `metrics/tangle.ts`,
+composed by `cycles()`): each component additionally carries `feedbackEdges` —
+a minimal weighted subset of its non-self edges whose removal leaves the
+component acyclic (Structure101's "offending dependencies") — plus
+`feedbackWeight` and `tangleMetric` = feedbackWeight / non-self cyclic weight;
+the report rolls the union up in `report.tangle`. Decisions:
+
+- The exact minimum feedback arc set is NP-hard; the heuristic is
+  **Eades–Lin–Smyth GR adapted to weights** (strip sinks/sources, else remove
+  the vertex maximizing `outWeight − inWeight`, ties by id ascending; backward
+  edges in the resulting sequence are the candidates), followed by a
+  **minimality pass** that re-admits, heaviest first, every candidate that no
+  longer closes a cycle. Minimality makes the heuristic testable: removing the
+  set yields a DAG and re-adding any single member restores a cycle — both are
+  property-suite invariants, independent of optimality.
+- Weights are `CycleEdge.count`: cutting a folded edge means fixing that many
+  base references, exactly what the metric should price.
+- **Self-loops are excluded from both sides of the metric** — it scores
+  references *between* members; a folding-induced self-dependency is cohesion
+  inside one member and is never cuttable. `weight` (self-loops included) is
+  unchanged.
+- `feedbackEdges` are the SAME objects as `component.edges` entries, so
+  membership downstream is a reference-`Set` lookup, never a packed string key
+  (AN-5). The JSON export detaches them like every other edge.
+- Iterative throughout, same rule and same reason as Tarjan; a 20 000-node ring
+  in `tangle.test.ts` guards it. `O((V+E) log V)` per component, plus
+  `O(|F|·(V+E))` for the minimality pass.
+
 ## AN-8 Stage 7 — exports: renderings, and honest ones
 
 `toDot`, `toPlantUml`, `foldedGraphToCsv` / `couplingToCsv` / `cyclesToCsv`,
@@ -292,6 +320,7 @@ re-applied defensively downstream.
 | fold | O(V + E) with the memoized folder |
 | coupling | O(V + E) |
 | cycles (Tarjan) | O(V + E) |
+| feedback arc set (per SCC) | O((V + E) log V) + O(&#124;F&#124;·(V + E)) minimality pass |
 | exports | O(V + E) |
 
 On **apache/fineract** (`fineract-provider/src/main/java`: 77 644 entities,
@@ -323,6 +352,7 @@ importGraph(graph, view) · typeDependencyGraph(graph, view) · neighboursOf(gra
 dependenciesOf(folded, id) · dependentsOf(folded, id)
 // stage 6
 coupling(folded, options) · cycles(folded, options) · topByFanIn/topByFanOut(table, n)
+feedbackArcSet(edges)
 // stage 7
 toDot(folded, options) · toPlantUml(folded, options) · foldedGraphToCsv · couplingToCsv
 cyclesToCsv · foldedGraphToJson · couplingToJson · cyclesToJson · toJsonString

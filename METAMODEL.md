@@ -446,6 +446,7 @@ part of the conceptual vocabulary even though no encoding stores them:
 | Module import graph | `import` edges | the cross-language comparison layer |
 | Coupling metrics | folded graphs | fan-in/fan-out, afferent/efferent coupling, instability |
 | Cycles | folded graphs | strongly connected components at module or type level |
+| Tangle / minimum feedback set | folded graphs | per-SCC minimal weighted edge set whose removal leaves the component acyclic; tangle metric = feedback references / cyclic references |
 | Internal view | `isStub` | model minus stubs and their edges |
 | Facts-only view | `provenance` | model restricted to `declared` edges |
 

@@ -423,7 +423,10 @@ Input: one or more `model.json` files (multi-language later — union of models)
       `importGraph` (module→module, the cross-language layer), `typeDependencyGraph`,
       `dependenciesOf`/`dependentsOf`, `neighboursOf` (METAMODEL §9 in one record),
       `coupling` (fan-in/fan-out, Ca/Ce, instability) with `topByFanIn`/`topByFanOut`,
-      `cycles` (Tarjan SCC) at module and type level, and the view stack
+      `cycles` (Tarjan SCC) at module and type level — each SCC carrying its
+      minimum feedback set and tangle metric (weighted ELS-GR + minimality
+      pass, `metrics/tangle.ts`; pinned in `tangle.test.ts` and the property
+      suite) — and the view stack
       (`internalOnly`, `declaredOnly`, `provenanceOnly`, `composeViews`).
 - [x] **Exports**: DOT/Graphviz, CSV (folded graph, coupling, cycles) and JSON
       artefacts (GraphML/Mermaid later).
