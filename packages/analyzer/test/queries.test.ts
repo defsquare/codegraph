@@ -42,17 +42,17 @@ describe("importGraph over the committed Java snapshot", () => {
     expect(folded.view).toEqual({ name: "all", filters: [] });
   });
 
-  it("aggregates the corpus's 10 import edges into the 6 module pairs", () => {
+  it("aggregates the corpus's 11 import edges into the 6 module pairs", () => {
     const folded = importGraph(graph);
     expect(folded.edges.map((e) => [e.from, e.to, e.count])).toEqual([
-      [ORDER_PKG, LEDGER_PKG, 1],
+      [ORDER_PKG, LEDGER_PKG, 2],
       [ORDER_PKG, JAVA_ANNOTATION, 2],
       [ORDER_PKG, JAVA_TIME, 1],
       [ORDER_PKG, JAVA_UTIL, 4],
       [ORDER_PKG, JAVA_FUNCTION, 1],
       [ADAPTER_PKG, LEDGER_PKG, 1],
     ]);
-    expect(folded.edges.reduce((sum, e) => sum + e.count, 0)).toBe(10);
+    expect(folded.edges.reduce((sum, e) => sum + e.count, 0)).toBe(11);
     expect(folded.edges.every((e) => [...e.kinds].join() === "import")).toBe(true);
   });
 
@@ -83,7 +83,7 @@ describe("importGraph over the committed Java snapshot", () => {
 
   it("has no non-module endpoint to fold in a conforming model", () => {
     const folded = importGraph(graph);
-    expect(folded.importDiagnostics.importEdges).toBe(10);
+    expect(folded.importDiagnostics.importEdges).toBe(11);
     expect(folded.importDiagnostics.nonModuleEndpoints).toEqual([]);
   });
 
@@ -181,17 +181,17 @@ describe("typeDependencyGraph over the committed Java snapshot", () => {
     expect(folded.view).toEqual({ name: "all", filters: [] });
   });
 
-  it("folds all 173 edges: 163 aggregate into 71 pairs, 10 have no type", () => {
+  it("folds all 179 edges: 168 aggregate into 74 pairs, 11 have no type", () => {
     const folded = typeDependencyGraph(graph);
-    expect(folded.edges).toHaveLength(71);
+    expect(folded.edges).toHaveLength(74);
     expect(folded.nodes).toHaveLength(36);
     const weight = folded.edges.reduce((sum, e) => sum + e.count, 0);
-    expect(weight).toBe(165);
+    expect(weight).toBe(168);
     expect(weight).toBe(folded.diagnostics.foldedEdges);
-    // The 10 dropped edges are the module-level imports: a package has no
+    // The 11 dropped edges are the module-level imports: a package has no
     // containing TYPE. Reported, never silently discarded.
-    expect(folded.diagnostics.droppedEdges).toBe(10);
-    expect(weight + folded.diagnostics.droppedEdges).toBe(175);
+    expect(folded.diagnostics.droppedEdges).toBe(11);
+    expect(weight + folded.diagnostics.droppedEdges).toBe(179);
     // Packages have no containing TYPE — the corpus's three plus the seven
     // external modules external types now hang off. Reported, never hidden.
     expect(folded.diagnostics.unfoldableEntities).toEqual([
@@ -214,6 +214,7 @@ describe("typeDependencyGraph over the committed Java snapshot", () => {
     for (const e of folded.edges) for (const kind of e.kinds) kinds.add(kind);
     expect([...kinds].sort()).toEqual([
       "access",
+      "annotationUse",
       "inheritance",
       "interfaceImplementation",
       "invocation",
@@ -250,7 +251,7 @@ describe("typeDependencyGraph over the committed Java snapshot", () => {
   it("honours internalOnly by filtering, not by dropping data at load", () => {
     const folded = typeDependencyGraph(graph, internalOnly);
     expect(folded.nodes).toHaveLength(17);
-    expect(folded.edges).toHaveLength(36);
+    expect(folded.edges).toHaveLength(37);
     expect(folded.nodes.every((n) => !n.isStub)).toBe(true);
     for (const e of folded.edges) {
       expect(graph.isStub(e.from)).toBe(false);

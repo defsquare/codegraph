@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NamedArgument } from "./literal.js";
 import { EntityId, Provenance, SourceAnchor } from "./primitives.js";
 
 /**
@@ -54,8 +55,24 @@ export const TraitUsageEdge = z.object({ edge: z.literal("traitUsage"), ...edgeB
 export const FileIncludeEdge = z.object({ edge: z.literal("fileInclude"), ...edgeBase });
 
 /**
+ * Entity → annotation Type: a written annotation, with its arguments
+ * (METAMODEL.md §4, §1.6). A dedicated kind rather than a plain `reference`
+ * for two reasons: it carries the VALUES, and it lets a consumer select
+ * annotation usages without guessing from the target's kind — which a stub
+ * target, the usual case for a framework annotation, cannot answer.
+ *
+ * `arguments` is required and may be empty: `@Override` writes no argument,
+ * which is a fact about the source, not a gap in the extraction.
+ */
+export const AnnotationUseEdge = z.object({
+  edge: z.literal("annotationUse"),
+  ...edgeBase,
+  arguments: z.array(NamedArgument),
+});
+
+/**
  * The single relationship concept, discriminated on `edge` (METAMODEL.md §4).
- * Only `access` contributes extra keys. Graph-level rules — closure and
+ * Only `access` and `annotationUse` contribute extra keys. Graph-level rules — closure and
  * `from !== to` — are properties checked by the analyzer, not by this parser.
  */
 export const Edge = z.discriminatedUnion("edge", [
@@ -68,6 +85,7 @@ export const Edge = z.discriminatedUnion("edge", [
   EmbeddingEdge,
   TraitUsageEdge,
   FileIncludeEdge,
+  AnnotationUseEdge,
 ]);
 export type Edge = z.infer<typeof Edge>;
 

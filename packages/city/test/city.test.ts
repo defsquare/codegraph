@@ -442,6 +442,47 @@ describe("buildCity: source provenance", () => {
   });
 });
 
+/**
+ * M10c: a declared constant reaches the detail panel as TEXT. The city derives
+ * nothing — it states what the model wrote, with ids shown as names.
+ */
+describe("buildCity: declared values on attributes", () => {
+  it("renders each literal form, and says nothing where the model says nothing", () => {
+    const graph = graphOf([
+      pkg("java:a"),
+      type("java:a/Policy", "java:a", 4),
+      type("java:a/T", "java:a", 20),
+      field("java:a/T.NAME", "java:a/T", {
+        traits: ["TNamed", "TChildOf", "TStructural", "TWithValue"],
+        value: { k: "string", v: "monthly" },
+      }),
+      field("java:a/T.LIMIT", "java:a/T", {
+        traits: ["TNamed", "TChildOf", "TStructural", "TWithValue"],
+        value: { k: "number", v: "100" },
+      }),
+      field("java:a/T.MODE", "java:a/T", {
+        traits: ["TNamed", "TChildOf", "TStructural", "TWithValue"],
+        value: { k: "enum", type: "java:a/Policy", name: "RUNTIME" },
+      }),
+      field("java:a/T.TAG", "java:a/T", {
+        traits: ["TNamed", "TChildOf", "TStructural", "TWithValue"],
+        value: { k: "unevaluated", source: "Ledger.AUDIT_TAG" },
+      }),
+      field("java:a/T.mutable", "java:a/T"),
+    ]);
+    const building = buildCity(graph).buildings.find((candidate) => candidate.id === "java:a/T");
+    const byName = new Map(building?.attributes.map((a) => [a.name, a.value]));
+    expect(byName.get("java:a/T.NAME")).toBe('"monthly"');
+    expect(byName.get("java:a/T.LIMIT")).toBe("100");
+    // The id inside the value is shown as the entity's NAME, never as an id.
+    expect(byName.get("java:a/T.MODE")).toBe("java:a/Policy.RUNTIME");
+    expect(byName.get("java:a/T.TAG")).toBe("Ledger.AUDIT_TAG");
+    // No value declared: the key is absent, not an empty string.
+    expect(byName.has("java:a/T.mutable")).toBe(true);
+    expect(byName.get("java:a/T.mutable")).toBeUndefined();
+  });
+});
+
 describe("buildCity: members on buildings", () => {
   it("lists attributes and operations on every building, sorted", () => {
     const city = buildCity(toyGraph());

@@ -162,8 +162,8 @@ export function writeModelRows(db: SqliteDatabase, jsonlPath: string): ImportRes
     entity: db.prepare(
       `INSERT INTO entity(id, kind_id, trait_set_id, module_id, symbol, disambiguator,
                           name, signature, parent_id, attached_to_id, declared_type_id,
-                          is_stub, anchor_file_id, anchor_start, anchor_end, space, extra)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                          is_stub, anchor_file_id, anchor_start, anchor_end, space, value, extra)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ),
     comment: db.prepare("INSERT INTO entity_comment(entity_id, ord, text) VALUES (?, ?, ?)"),
     definedIn: db.prepare("INSERT INTO entity_defined_in(entity_id, ord, file_id) VALUES (?, ?, ?)"),
@@ -176,9 +176,9 @@ export function writeModelRows(db: SqliteDatabase, jsonlPath: string): ImportRes
     metric: db.prepare("INSERT INTO entity_metric(entity_id, key, value) VALUES (?, ?, ?)"),
     edge: db.prepare(
       `INSERT INTO edge(id, kind_id, from_id, to_id, provenance_id,
-                        anchor_file_id, anchor_start, anchor_end,
+                        anchor_file_id, anchor_start, anchor_end, arguments,
                         is_read, is_write, source_file_id, candidate_count, extra)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ),
     candidate: db.prepare(
       "INSERT INTO edge_candidate(edge_id, ord, candidate_id) VALUES (?, ?, ?)",
@@ -237,6 +237,7 @@ export function writeModelRows(db: SqliteDatabase, jsonlPath: string): ImportRes
           anchor[1],
           anchor[2],
           json(record.space),
+          json(record.value),
           extraOf(record, TYPED_ENTITY_KEYS),
         );
         record.comments?.forEach((text, ord) => insert.comment.run(record.i, ord, text));
@@ -266,6 +267,7 @@ export function writeModelRows(db: SqliteDatabase, jsonlPath: string): ImportRes
           record.anchor[0],
           record.anchor[1],
           record.anchor[2],
+          json(record.arguments),
           bool(record.isRead),
           bool(record.isWrite),
           record.sourceFile ?? null,
@@ -496,11 +498,11 @@ const EMPTY_TRAIT_SET: TraitSetInfo = { ids: [], names: new Set() };
 const ENTITY_COLUMNS =
   "id, kind_id, trait_set_id, module_id, symbol, disambiguator, name, signature, " +
   "parent_id, attached_to_id, declared_type_id, is_stub, " +
-  "anchor_file_id, anchor_start, anchor_end, space, extra";
+  "anchor_file_id, anchor_start, anchor_end, space, value, extra";
 
 const EDGE_COLUMNS =
   "id, kind_id, from_id, to_id, provenance_id, anchor_file_id, anchor_start, anchor_end, " +
-  "is_read, is_write, source_file_id, candidate_count, extra";
+  "arguments, is_read, is_write, source_file_id, candidate_count, extra";
 
 /** NULL means the key was absent; anything else is a value the wire carried. */
 function put(record: Record<string, unknown>, key: string, value: unknown): void {
@@ -518,10 +520,10 @@ function entityRecordOf(
 ): EntityRec {
   const [id, kindId, , moduleId, symbol, disambiguator, name, signature,
          parentId, attachedToId, declaredTypeId, isStub,
-         anchorFile, anchorStart, anchorEnd, space, extra] = row as [
+         anchorFile, anchorStart, anchorEnd, space, value, extra] = row as [
     number, number, number, number, string, string | null, string | null, string | null,
     number | null, number | null, number | null, number | null,
-    number | null, number | null, number | null, string | null, string | null,
+    number | null, number | null, number | null, string | null, string | null, string | null,
   ];
 
   const record: Record<string, unknown> = {
@@ -550,15 +552,16 @@ function entityRecordOf(
   if (traits.names.has("TMetrics")) record["metrics"] = metrics.get(id) ?? {};
 
   if (space !== null) record["space"] = JSON.parse(space) as unknown;
+  if (value !== null) record["value"] = JSON.parse(value) as unknown;
   if (extra !== null) Object.assign(record, JSON.parse(extra) as object);
   return record as unknown as EntityRec;
 }
 
 function edgeRecordOf(row: SqliteValue[], candidates: Map<number, unknown[]>): EdgeRec {
   const [id, kindId, fromId, toId, provenanceId, anchorFile, anchorStart, anchorEnd,
-         isRead, isWrite, sourceFileId, candidateCount, extra] = row as [
+         args, isRead, isWrite, sourceFileId, candidateCount, extra] = row as [
     number, number, number, number, number, number, number, number,
-    number | null, number | null, number | null, number | null, string | null,
+    string | null, number | null, number | null, number | null, number | null, string | null,
   ];
 
   const record: Record<string, unknown> = {
@@ -572,6 +575,7 @@ function edgeRecordOf(row: SqliteValue[], candidates: Map<number, unknown[]>): E
   // Presence from the count column, contents from the rows: an empty
   // `candidates` array has no rows, and no trait would vouch for the key.
   if (candidateCount !== null) record["candidates"] = candidates.get(id) ?? [];
+  if (args !== null) record["arguments"] = JSON.parse(args) as unknown;
   if (isRead !== null) record["isRead"] = isRead === 1;
   if (isWrite !== null) record["isWrite"] = isWrite === 1;
   put(record, "sourceFile", sourceFileId);

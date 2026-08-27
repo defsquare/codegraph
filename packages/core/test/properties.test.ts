@@ -67,6 +67,33 @@ function traitKeys(trait: TraitName, ids: fc.Arbitrary<string>): Record<string, 
       return { parameters: fc.array(ids, { maxLength: 4 }) };
     case "TWithLocalVariables":
       return { localVariables: fc.array(ids, { maxLength: 4 }) };
+    case "TWithValue":
+      // A value is a TREE with ids inside it (§1.6). The generator draws from
+      // the SAME id pool as every other reference, so closure over values is
+      // exercised by construction rather than by a special case.
+      return {
+        value: fc.oneof(
+          fc.record({ k: fc.constant("string"), v: fc.string() }),
+          fc.record({ k: fc.constant("number"), v: fc.integer().map(String) }),
+          fc.record({ k: fc.constant("boolean"), v: fc.boolean() }),
+          fc.record({ k: fc.constant("null") }),
+          fc.record({ k: fc.constant("type"), type: ids }),
+          fc.record({ k: fc.constant("enum"), type: ids, name: textArb }),
+          fc.record({ k: fc.constant("unevaluated"), source: textArb }),
+          fc.record({
+            k: fc.constant("array"),
+            items: fc.array(fc.record({ k: fc.constant("type"), type: ids }), { maxLength: 2 }),
+          }),
+          fc.record({
+            k: fc.constant("annotation"),
+            type: ids,
+            arguments: fc.array(
+              fc.record({ name: textArb, value: fc.record({ k: fc.constant("null") }) }),
+              { maxLength: 2 },
+            ),
+          }),
+        ),
+      };
     case "TMetrics":
       // Open keys, finite values (§3.8) — including the empty map, which is a
       // legal statement ("measured nothing here") the wire must round-trip.
@@ -139,6 +166,8 @@ function edgeArb(profile: Profile, ids: fc.Arbitrary<string>): fc.Arbitrary<unkn
     )
     .map(([kind, from, to, provenance, anchor, candidates, sourceFile, isRead, isWrite]) => {
       const edge: Record<string, unknown> = { edge: kind, from, to, provenance, anchor };
+      // An annotation use always carries its (possibly empty) argument list.
+      if (kind === "annotationUse") edge["arguments"] = [];
       if (candidates !== undefined) edge["candidates"] = candidates;
       if (sourceFile !== undefined) edge["sourceFile"] = sourceFile;
       if (kind === "access") {
@@ -178,6 +207,16 @@ function modelArb(profile: Profile): fc.Arbitrary<unknown> {
           edges,
         }));
     });
+}
+
+/**
+ * The keys a kind contributes beyond `edgeBase` (METAMODEL §4): `access` states
+ * both flags, `annotationUse` carries its (possibly empty) argument list.
+ */
+function extraKeysOf(kind: (typeof EDGE_KINDS)[number]): Record<string, unknown> {
+  if (kind === "access") return { isRead: true, isWrite: false };
+  if (kind === "annotationUse") return { arguments: [] };
+  return {};
 }
 
 describe.each(profiles.map((p) => [p.lang, p] as const))(
@@ -325,7 +364,7 @@ describe("provenance (METAMODEL §1.3)", () => {
         from: "a:m/x",
         to: "a:m/y",
         anchor: { file: "a", span: [1, 1] },
-        ...(kind === "access" ? { isRead: true, isWrite: false } : {}),
+        ...extraKeysOf(kind),
       };
       expect(Edge.safeParse(edge).success, `${kind} without provenance`).toBe(false);
       expect(
@@ -342,7 +381,7 @@ describe("provenance (METAMODEL §1.3)", () => {
         from: "a:m/x",
         to: "a:m/y",
         provenance: "declared",
-        ...(kind === "access" ? { isRead: true, isWrite: false } : {}),
+        ...extraKeysOf(kind),
       };
       expect(Edge.safeParse(edge).success, `${kind} without anchor`).toBe(false);
     }
@@ -406,7 +445,7 @@ describe("graph integrity helpers (CLAUDE.md 4 and 10)", () => {
           to: id,
           provenance: "declared",
           anchor,
-          ...(kind === "access" ? { isRead: true, isWrite: false } : {}),
+          ...extraKeysOf(kind),
         };
         const edge = Edge.parse(raw);
         expect(isSelfReference(edge)).toBe(true);

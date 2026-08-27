@@ -279,6 +279,10 @@ public final class JsonlWriter {
             }
             generator.writeEndObject();
           }
+          if (entity.value() != null) {
+            generator.writeFieldName("value");
+            writeLiteral(generator, entity.value(), surrogates);
+          }
           if (entity.anchor() != null) {
             anchor(generator, entity.anchor(), files);
           }
@@ -302,6 +306,11 @@ public final class JsonlWriter {
               generator.writeNumber(surrogates.of(candidate));
             }
             generator.writeEndArray();
+          }
+          // Omitted when EMPTY: the edge kind already vouches for the key, so
+          // `@Override` costs no bytes and the reader restores the empty list.
+          if (edge.arguments() != null && !edge.arguments().isEmpty()) {
+            writeArguments(generator, edge.arguments(), surrogates);
           }
           if (edge.isRead() != null) {
             generator.writeBooleanField("isRead", edge.isRead());
@@ -388,6 +397,58 @@ public final class JsonlWriter {
     } else {
       generator.writeNumber(number);
     }
+  }
+
+  /**
+   * A value, with every id inside it written as a SURROGATE (§1.6) — the same
+   * rule as any other reference, which is what makes a dangling one unwritable.
+   * Written order is kept: array items and annotation arguments are source
+   * facts, so nothing here sorts.
+   */
+  private static void writeLiteral(JsonGenerator out, Literal value, Surrogates surrogates)
+      throws IOException {
+    out.writeStartObject();
+    out.writeStringField("k", value.k());
+    // if/else rather than a pattern switch: the extractor compiles at source 17
+    // (the compliance level Spoon reads corpora with), where patterns in switch
+    // are not available.
+    if (value instanceof Literal.Str str) {
+      out.writeStringField("v", str.v());
+    } else if (value instanceof Literal.Num num) {
+      out.writeStringField("v", num.v());
+    } else if (value instanceof Literal.Bool bool) {
+      out.writeBooleanField("v", bool.v());
+    } else if (value instanceof Literal.EnumValue enumValue) {
+      out.writeNumberField("type", surrogates.of(enumValue.type()));
+      out.writeStringField("name", enumValue.name());
+    } else if (value instanceof Literal.TypeValue type) {
+      out.writeNumberField("type", surrogates.of(type.type()));
+    } else if (value instanceof Literal.Arr array) {
+      out.writeArrayFieldStart("items");
+      for (Literal item : array.items()) {
+        writeLiteral(out, item, surrogates);
+      }
+      out.writeEndArray();
+    } else if (value instanceof Literal.Annotation annotation) {
+      out.writeNumberField("type", surrogates.of(annotation.type()));
+      writeArguments(out, annotation.arguments(), surrogates);
+    } else if (value instanceof Literal.Unevaluated unevaluated) {
+      out.writeStringField("source", unevaluated.source());
+    }
+    out.writeEndObject();
+  }
+
+  private static void writeArguments(
+      JsonGenerator out, List<NamedArgument> arguments, Surrogates surrogates) throws IOException {
+    out.writeArrayFieldStart("arguments");
+    for (NamedArgument argument : arguments) {
+      out.writeStartObject();
+      out.writeStringField("name", argument.name());
+      out.writeFieldName("value");
+      writeLiteral(out, argument.value(), surrogates);
+      out.writeEndObject();
+    }
+    out.writeEndArray();
   }
 
   private static void refs(

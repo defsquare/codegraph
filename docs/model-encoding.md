@@ -73,6 +73,7 @@ contractual (single-pass streaming): `header → files → entities → edges �
  "declaredType":9241,"parent":1099,"anchor":[12,15,22]}   // [fileIdx, start, end]
 {"t":"x","k":3,"f":1102,"o":8804,"p":0,"anchor":[12,19,19],"candidates":[8804]}
 {"t":"x","k":4,"f":1102,"o":1101,"p":0,"anchor":[12,20,20],"isRead":false,"isWrite":true}
+{"t":"x","k":9,"f":1102,"o":8231,"p":0,"arguments":[{"name":"value","value":{"k":"string","v":"monthly"}}],"anchor":[12,14,14]}   // annotationUse (§1.6)
 {"t":"eof","counts":{"files":4213,"entities":240910,"edges":782031}}
 ```
 
@@ -190,6 +191,11 @@ CREATE TABLE entity_local_variable(entity_id, ord, variable_id,  PRIMARY KEY (en
 -- aggregates. No `ord` — the wire writes the map key-sorted, so ORDER BY key
 -- restores it.
 CREATE TABLE entity_metric        (entity_id, key, value,        PRIMARY KEY (entity_id, key)) WITHOUT ROWID;
+
+-- A Literal (§1.6) is a TREE, and nothing queries inside one, so it stays a
+-- single JSON value on `entity.value` (and on `edge.arguments` for an
+-- annotationUse). The ids inside it are the wire's own surrogates, so the blob
+-- round-trips byte for byte.
 
 CREATE TABLE edge (
   id INTEGER PRIMARY KEY,                           -- position in the edge section

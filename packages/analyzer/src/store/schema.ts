@@ -98,7 +98,7 @@ export const STORE_OPEN_OPTIONS: SqliteOpenOptions = { enableForeignKeyConstrain
  * (A store that holds revisions is the one exception: the cache refuses to
  * touch it, because K snapshots cost K extractions — see `cache.ts`.)
  */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 /**
  * `meta` keys the importer writes. Values are TEXT; anything structured is
@@ -163,6 +163,10 @@ export const ENTITY_KEY_STORAGE = {
   parameters: { table: "entity_parameter", columns: ["parameter_id"] },
   localVariables: { table: "entity_local_variable", columns: ["variable_id"] },
   metrics: { table: "entity_metric", columns: ["key", "value"] },
+  // A Literal is a TREE (§1.6), so it is stored as one JSON value rather than
+  // shredded into rows: nothing queries INSIDE a value, and the ids it holds
+  // are the wire's own surrogates, so the blob round-trips exactly.
+  value: { table: "entity", columns: ["value"] },
 } as const satisfies KeyStorage;
 
 /** The same, for edge records. */
@@ -176,6 +180,9 @@ export const EDGE_KEY_STORAGE = {
   isRead: { table: "edge", columns: ["is_read"] },
   isWrite: { table: "edge", columns: ["is_write"] },
   sourceFile: { table: "edge", columns: ["source_file_id"] },
+  // The same, for an annotation use's arguments: absent column = absent key,
+  // which on the wire means the empty list the edge kind implies.
+  arguments: { table: "edge", columns: ["arguments"] },
 } as const satisfies KeyStorage;
 
 /**
@@ -239,6 +246,7 @@ CREATE TABLE entity (
   anchor_start     INTEGER,
   anchor_end       INTEGER,
   space            TEXT,
+  value            TEXT,                            -- JSON Literal (§1.6), surrogates inside
   extra            TEXT
 );
 
@@ -291,6 +299,7 @@ CREATE TABLE edge (
   anchor_file_id INTEGER NOT NULL REFERENCES file,
   anchor_start   INTEGER NOT NULL,
   anchor_end     INTEGER NOT NULL,
+  arguments      TEXT,                              -- JSON NamedArgument[] (annotationUse)
   is_read        INTEGER,
   is_write       INTEGER,
   source_file_id INTEGER REFERENCES file,

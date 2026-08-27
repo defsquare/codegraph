@@ -118,7 +118,7 @@ describe("foldedGraphToCsv", () => {
     const rows = parseCsv(foldedGraphToCsv(folded)).slice(1);
     const selfLoop = rows.find((row) => row[0] === "java:com.acme.order" && row[5] === "true");
     expect(selfLoop?.[3]).toBe(
-      "access;inheritance;interfaceImplementation;invocation;reference",
+      "access;annotationUse;inheritance;interfaceImplementation;invocation;reference",
     );
     expect(foldedGraphToCsv(folded)).toBe(
       foldedGraphToCsv(foldGraph(javaGraph(), { level: "module" })),

@@ -147,6 +147,10 @@ function traitKeys(trait: TraitName, ctx: TraitContext): Record<string, unknown>
     // from the index so a corpus stays reproducible.
     case "TMetrics":
       return { metrics: { sloc: ctx.index + 1, cyclomatic: 1 } };
+    // A value with an id in it (§1.6): closure must reach INSIDE the tree, so
+    // the generator points at the root exactly as `TChildOf` does.
+    case "TWithValue":
+      return { value: { k: "array", items: [{ k: "type", type: ctx.rootId }, { k: "null" }] } };
     // Marker traits contribute no keys: what they declare lives in `edges[]`.
     case "TWithInheritances":
     case "TWithImplements":
@@ -219,6 +223,11 @@ function buildEdges(
     if (kind === "access") {
       edge["isRead"] = !seed.write;
       edge["isWrite"] = seed.write;
+    }
+    // An annotation use always carries its argument list; one written argument
+    // keeps the value path (and closure over values) exercised.
+    if (kind === "annotationUse") {
+      edge["arguments"] = [{ name: "value", value: { k: "type", type: to } }];
     }
     return edge as Edge;
   });

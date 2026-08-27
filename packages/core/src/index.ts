@@ -19,6 +19,9 @@ export * from "./traits.js";
 // The single node concept (METAMODEL.md §2).
 export * from "./entity.js";
 
+// Written declaration-site values (METAMODEL.md §1.6).
+export * from "./literal.js";
+
 // The single relationship concept (METAMODEL.md §4).
 export * from "./edges.js";
 

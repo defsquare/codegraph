@@ -1,6 +1,7 @@
 import type { TraitName } from "./names.js";
 import type { Entity } from "./entity.js";
 import type { Edge } from "./edges.js";
+import { argumentReferences, literalReferences, type Literal } from "./literal.js";
 import type { Model } from "./model.js";
 
 /**
@@ -38,6 +39,20 @@ export interface UnknownReference {
   readonly id: string;
 }
 
+/**
+ * `TWithValue` is deliberately NOT in the table above: its references are a
+ * TREE (an array of annotations, each with arguments, each possibly a class
+ * literal — §1.6), not a key holding an id. Closure still reaches every one of
+ * them, through `literalReferences`, which is why this is stated here rather
+ * than left to a reader to notice.
+ */
+function valueReferences(entity: Entity, index: number): UnknownReference[] {
+  if (!entity.traits.includes("TWithValue")) return [];
+  const value = (entity as unknown as Record<string, unknown>)["value"];
+  if (value === undefined) return [];
+  return literalReferences(value as Literal, `entities[${index}].value`);
+}
+
 function entityReferences(entity: Entity, index: number): UnknownReference[] {
   const out: UnknownReference[] = [];
   const bag = entity as unknown as Record<string, unknown>;
@@ -65,6 +80,11 @@ function edgeReferences(edge: Edge, index: number): UnknownReference[] {
     { path: `edges[${index}].to`, id: edge.to },
   ];
   edge.candidates?.forEach((id, i) => out.push({ path: `edges[${index}].candidates[${i}]`, id }));
+  // An annotation use's arguments carry ids too (§1.6): a class literal, an
+  // enum constant's type, a nested annotation's type.
+  if (edge.edge === "annotationUse") {
+    out.push(...argumentReferences(edge.arguments, `edges[${index}].arguments`));
+  }
   return out;
 }
 
@@ -74,7 +94,10 @@ function edgeReferences(edge: Edge, index: number): UnknownReference[] {
  */
 export function references(model: Model): UnknownReference[] {
   const out: UnknownReference[] = [];
-  model.entities.forEach((entity, i) => out.push(...entityReferences(entity, i)));
+  model.entities.forEach((entity, i) => {
+    out.push(...entityReferences(entity, i));
+    out.push(...valueReferences(entity, i));
+  });
   model.edges.forEach((edge, i) => out.push(...edgeReferences(edge, i)));
   return out;
 }

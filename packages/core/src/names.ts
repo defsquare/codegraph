@@ -31,6 +31,8 @@ export const TRAIT_NAMES = [
   "TWithAccesses",
   // measures (METAMODEL.md §3.8)
   "TMetrics",
+  // values (METAMODEL.md §3.6, §1.6)
+  "TWithValue",
 ] as const;
 
 export const TraitName = z.enum(TRAIT_NAMES);
@@ -47,6 +49,8 @@ export const EDGE_KINDS = [
   "embedding",
   "traitUsage",
   "fileInclude",
+  // A written annotation, with its arguments (METAMODEL.md §4, §1.6).
+  "annotationUse",
 ] as const;
 
 export const EdgeKind = z.enum(EDGE_KINDS);

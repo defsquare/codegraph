@@ -213,10 +213,10 @@ class EntityExtractorTest {
           Map.entry("enum", traits(TraitName.TComment, TraitName.TMetrics)),
           Map.entry("record", traits(TraitName.TComment, TraitName.TMetrics)),
           Map.entry("annotation", traits(TraitName.TComment, TraitName.TMetrics)),
-          Map.entry("method", traits(TraitName.TComment, TraitName.TMetrics)),
+          Map.entry("method", traits(TraitName.TComment, TraitName.TMetrics, TraitName.TWithValue)),
           Map.entry("constructor", traits(TraitName.TComment, TraitName.TMetrics)),
           Map.entry("lambda", traits(TraitName.TTypedEntity, TraitName.TMetrics)),
-          Map.entry("attribute", traits(TraitName.TComment)),
+          Map.entry("attribute", traits(TraitName.TComment, TraitName.TWithValue)),
           Map.entry("parameter", traits(TraitName.TSourceAnchor)),
           Map.entry("localVariable", traits(TraitName.TSourceAnchor)));
 

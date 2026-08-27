@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Edge } from "./edges.js";
 import type { Entity } from "./entity.js";
 import { ENTITY_REFERENCE_KEYS } from "./integrity.js";
+import type { Literal, NamedArgument } from "./literal.js";
 import { type NaturalKey, compareNaturalKeys, naturalKeyIndex, parseRenderedId, renderId } from "./identity.js";
 import type { EdgeKind, TraitName } from "./names.js";
 import type { Model } from "./model.js";
@@ -15,6 +16,8 @@ import {
   WIRE_TRAITS,
   type ModelRecord,
   type WireAnchor,
+  type WireLiteral,
+  type WireNamedArgument,
 } from "./wire.js";
 
 /**
@@ -42,11 +45,12 @@ const ENTITY_KEY_ORDER = [
   "definedIn",
   "comments",
   "metrics",
+  "value",
   "space",
   "anchor",
 ] as const;
 
-const EDGE_KEY_ORDER = ["candidates", "isRead", "isWrite", "sourceFile", "anchor"] as const;
+const EDGE_KEY_ORDER = ["candidates", "arguments", "isRead", "isWrite", "sourceFile", "anchor"] as const;
 
 /** The record's own fields — everything else on a line is an extension key. */
 const ENTITY_RECORD_KEYS: readonly string[] = ["t", "i", "k", "tr", "m", "s", "d"];
@@ -58,6 +62,7 @@ const EDGE_RECORD_KEYS: readonly string[] = [
   "p",
   "anchor",
   "candidates",
+  "arguments",
   "isRead",
   "isWrite",
   "sourceFile",
@@ -270,7 +275,14 @@ export function* encodeModel(model: Model): Generator<string> {
       else if (wireKey === "sourceFile") record["sourceFile"] = fileRef(value as string);
       else if (wireKey === "candidates")
         record["candidates"] = (value as string[]).map((id) => refOf(id, "edge candidates"));
-      else record[wireKey] = value;
+      else if (wireKey === "arguments") {
+        // Omitted when empty: the edge KIND already says the key is there, so
+        // `@Override` costs no bytes and the reader restores the empty list.
+        const args = value as readonly NamedArgument[];
+        if (args.length > 0) {
+          record["arguments"] = encodeArguments(args, (id) => refOf(id, "annotation argument"));
+        }
+      } else record[wireKey] = value;
     }
     yield JSON.stringify(record);
   }
@@ -293,6 +305,16 @@ export function* encodeModel(model: Model): Generator<string> {
     // inside the record, or two runs that measured the same thing in a
     // different order would produce different bytes.
     if (key === "metrics") return sortedMetrics(value as Record<string, number>);
+    // A value is a TREE of references (§1.6): every id inside it becomes a
+    // surrogate, which is what makes closure over values unwritable to violate.
+    if (key === "value") {
+      return encodeLiteral(value as Literal, (id) => ref(id, `${owner}.value`));
+    }
+    if (key === "arguments") {
+      return encodeArguments(value as readonly NamedArgument[], (id) =>
+        ref(id, `${owner}.arguments`),
+      );
+    }
     const many = REF_KEYS.get(key);
     if (many === undefined) return value;
     return many
@@ -303,6 +325,90 @@ export function* encodeModel(model: Model): Generator<string> {
 
 function compareText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * A value, with every id inside it turned into a surrogate (§1.6). Written
+ * order is kept everywhere — array items and annotation arguments are source
+ * facts, like parameter order, so nothing here sorts.
+ */
+function encodeLiteral(value: Literal, ref: (id: string) => number): WireLiteral {
+  switch (value.k) {
+    case "enum":
+      return { k: "enum", type: ref(value.type), name: value.name };
+    case "type":
+      return { k: "type", type: ref(value.type) };
+    case "array":
+      return { k: "array", items: value.items.map((item) => encodeLiteral(item, ref)) };
+    case "annotation":
+      return {
+        k: "annotation",
+        type: ref(value.type),
+        arguments: encodeArguments(value.arguments, ref),
+      };
+    default:
+      return value;
+  }
+}
+
+function encodeArguments(
+  args: readonly NamedArgument[],
+  ref: (id: string) => number,
+): WireNamedArgument[] {
+  return args.map((argument) => ({ name: argument.name, value: encodeLiteral(argument.value, ref) }));
+}
+
+/** The inverse: surrogates back to rendered ids, the shape untouched. */
+function decodeLiteral(value: WireLiteral, id: (ref: number) => string): Literal {
+  switch (value.k) {
+    case "enum":
+      return { k: "enum", type: id(value.type), name: value.name };
+    case "type":
+      return { k: "type", type: id(value.type) };
+    case "array":
+      return { k: "array", items: value.items.map((item) => decodeLiteral(item, id)) };
+    case "annotation":
+      return {
+        k: "annotation",
+        type: id(value.type),
+        arguments: decodeArguments(value.arguments, id),
+      };
+    default:
+      return value;
+  }
+}
+
+function decodeArguments(
+  args: readonly WireNamedArgument[],
+  id: (ref: number) => string,
+): NamedArgument[] {
+  return args.map((argument) => ({ name: argument.name, value: decodeLiteral(argument.value, id) }));
+}
+
+/** Every surrogate a value points at — what the reader checks closure against. */
+function literalRefs(value: WireLiteral, out: number[] = []): number[] {
+  switch (value.k) {
+    case "enum":
+    case "type":
+      out.push(value.type);
+      return out;
+    case "array":
+      for (const item of value.items) literalRefs(item, out);
+      return out;
+    case "annotation":
+      out.push(value.type);
+      for (const argument of value.arguments) literalRefs(argument.value, out);
+      return out;
+    default:
+      return out;
+  }
+}
+
+/** The same, over an annotation use's argument list. */
+function argumentRefs(args: readonly WireNamedArgument[]): number[] {
+  const out: number[] = [];
+  for (const argument of args) literalRefs(argument.value, out);
+  return out;
 }
 
 /** The same map, key-sorted — see `encodeValue`. */
@@ -536,6 +642,11 @@ export class RecordReader {
       const refs = spec ? (value_ as number[]) : [value_ as number];
       for (const ref of refs) this.#noteEntityRef(ref, `entity ${record.i} ${key}`);
     }
+    if (record.value !== undefined) {
+      for (const ref of literalRefs(record.value)) {
+        this.#noteEntityRef(ref, `entity ${record.i} value`);
+      }
+    }
     this.#noteEntityRef(record.m, `entity ${record.i} module`);
     return record;
   }
@@ -551,6 +662,11 @@ export class RecordReader {
     this.#requireEntity(record.o, "edge to");
     if (record.candidates !== undefined) {
       for (const ref of record.candidates) this.#requireEntity(ref, "edge candidate");
+    }
+    if (record.arguments !== undefined) {
+      for (const ref of argumentRefs(record.arguments)) {
+        this.#requireEntity(ref, "annotation argument");
+      }
     }
     this.#requireFile(record.anchor[0]);
     if (record.sourceFile !== undefined) this.#requireFile(record.sourceFile);
@@ -681,6 +797,11 @@ export class ModelBuilder {
     if (record.candidates !== undefined) {
       edge["candidates"] = record.candidates.map((ref) => this.#id(ref));
     }
+    // An annotation use always carries the key; the wire omits it when empty
+    // (the kind vouches for it), so an absent list decodes back to `[]`.
+    if (edge["edge"] === "annotationUse") {
+      edge["arguments"] = decodeArguments(record.arguments ?? [], (ref) => this.#id(ref));
+    }
     if (record.isRead !== undefined) edge["isRead"] = record.isRead;
     if (record.isWrite !== undefined) edge["isWrite"] = record.isWrite;
     if (record.sourceFile !== undefined) edge["sourceFile"] = this.#path(record.sourceFile);
@@ -764,6 +885,7 @@ export class ModelBuilder {
 
   #decodeValue(key: string, value: unknown): unknown {
     if (key === "anchor") return this.#anchor(value as WireAnchor);
+    if (key === "value") return decodeLiteral(value as WireLiteral, (ref) => this.#id(ref));
     if (key in PATH_KEYS) return (value as number[]).map((ref) => this.#path(ref));
     const many = REF_KEYS.get(key);
     if (many === undefined) return value;

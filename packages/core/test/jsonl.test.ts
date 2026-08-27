@@ -154,6 +154,124 @@ describe("a measure map on the wire", () => {
   });
 });
 
+/**
+ * Values on the wire (M10c, §1.6). The claim that matters is the one the
+ * ENCODING makes: an id inside a value is a surrogate like any other, so
+ * closure reaches into a value tree without anyone checking it afterwards.
+ */
+describe("a value on the wire", () => {
+  const module = "java:com.acme.order";
+  const audited = "java:com.acme.order/Audited";
+  const money = "java:com.acme.order/Money";
+
+  /** A tiny closed model: a module, an annotation type, a type, one constant. */
+  function valued(value: unknown, args: unknown[]): Model {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      lang: "java",
+      extractor: { name: "test", version: "0" },
+      root: "demo",
+      entities: [
+        {
+          id: module,
+          kind: "package",
+          traits: ["TNamed", "TModule", "TWithChildren"],
+          name: "com.acme.order",
+          definedIn: ["A.java"],
+          isStub: false,
+        },
+        {
+          id: audited,
+          kind: "annotation",
+          traits: ["TNamed", "TType", "TWithChildren", "TChildOf", "TSourceAnchor"],
+          name: "Audited",
+          isStub: false,
+          parent: module,
+          anchor: { file: "A.java", span: [1, 3] },
+        },
+        {
+          id: money,
+          kind: "class",
+          traits: [
+            "TNamed", "TType", "TWithInheritances", "TWithImplements",
+            "TWithChildren", "TChildOf", "TSourceAnchor",
+          ],
+          name: "Money",
+          isStub: false,
+          parent: module,
+          anchor: { file: "A.java", span: [5, 9] },
+        },
+        {
+          id: `${money}.LIMIT`,
+          kind: "attribute",
+          traits: ["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor", "TWithValue"],
+          name: "LIMIT",
+          parent: money,
+          anchor: { file: "A.java", span: [6, 6] },
+          value,
+        },
+      ],
+      edges: [
+        {
+          edge: "annotationUse",
+          from: money,
+          to: audited,
+          provenance: "declared",
+          anchor: { file: "A.java", span: [4, 4] },
+          arguments: args,
+        },
+      ],
+    } as unknown as Model;
+  }
+
+  it("round-trips a value tree, ids and written order intact", () => {
+    const value = {
+      k: "array",
+      items: [
+        { k: "type", type: money },
+        { k: "enum", type: audited, name: "RUNTIME" },
+        { k: "number", v: "9223372036854775807" },
+      ],
+    };
+    const args = [
+      { name: "value", value: { k: "string", v: "monthly" } },
+      { name: "on", value: { k: "type", type: money } },
+    ];
+    const back = decodeModel(encodeModelToString(valued(value, args)).split("\n"));
+    const constant = back.entities.find((entity) => entity.traits.includes("TWithValue"));
+    expect((constant as unknown as { value: unknown }).value).toEqual(value);
+    expect((back.edges[0] as unknown as { arguments: unknown }).arguments).toEqual(args);
+  });
+
+  it("writes every id inside a value as a surrogate — no rendered id survives", () => {
+    const text = encodeModelToString(
+      valued({ k: "type", type: money }, [{ name: "value", value: { k: "type", type: audited } }]),
+    );
+    expect(text).not.toContain(money);
+    expect(text).not.toContain(audited);
+    // The value line names the type by its surrogate (Money is entity 3 of 4).
+    expect(text).toContain('"value":{"k":"type","type":');
+  });
+
+  it("cannot express a value pointing at an entity the model does not declare", () => {
+    expect(() =>
+      encodeModelToString(valued({ k: "type", type: "java:elsewhere/Ghost" }, [])),
+    ).toThrow(/references an entity this model does not declare/);
+    expect(() =>
+      encodeModelToString(
+        valued({ k: "null" }, [{ name: "value", value: { k: "enum", type: "java:elsewhere/Ghost", name: "X" } }]),
+      ),
+    ).toThrow(/references an entity this model does not declare/);
+  });
+
+  it("omits an empty argument list and restores it — the edge kind vouches for the key", () => {
+    const text = encodeModelToString(valued({ k: "null" }, []));
+    expect(text).not.toContain('"arguments"');
+    const back = decodeModel(text.split("\n"));
+    expect((back.edges[0] as unknown as { arguments: unknown }).arguments).toEqual([]);
+  });
+});
+
 describe("repository provenance rides in the header (M10a)", () => {
   const repository = {
     remote: "https://github.com/google/gson",

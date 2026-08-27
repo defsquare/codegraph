@@ -246,6 +246,11 @@ body {
   font-style: italic;
 }
 
+/* A declared constant beside the field it belongs to (M10c). */
+#details details .value {
+  color: #7a4f2a;
+}
+
 /* "View source": present only when the artifact carries repository facts. */
 #details .source-link {
   display: block;

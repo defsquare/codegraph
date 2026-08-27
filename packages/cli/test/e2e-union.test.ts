@@ -11,10 +11,10 @@ import { describeResult, ensureCliBinary, javaFixture, runCli } from "./cli-proc
  * Passing the SAME model twice is the degenerate case, and it was measured
  * against `loadModels` before these assertions were written:
  *
- *   entities  dedupe by id            166 -> 166
+ *   entities  dedupe by id            169 -> 169
  *   edges     DO NOT dedupe           173 -> 346
  *   folding   same shape, doubled     10 nodes / 14 edges, every `count` × 2
- *   isClean   TRUE                    166 duplicate ids, none CONFLICTING
+ *   isClean   TRUE                    169 duplicate ids, none CONFLICTING
  *
  * So the honest answer is not "reject it" and not "silently halve it": the
  * duplication is benign by METAMODEL §1.1 (a declaration repeated identically
@@ -43,7 +43,7 @@ describe("the same model twice is benign, and reported", () => {
     expect(result.code, describeResult(result)).toBe(EXIT.OK);
   });
 
-  it("reports all 166 duplicated ids rather than passing over them", () => {
+  it("reports all 169 duplicated ids rather than passing over them", () => {
     const result = runCli(["validate", ...TWICE, "--json"]);
     const parsed = parseJsonArtifact(result.stdout, "validate --json over two copies");
 
@@ -59,7 +59,7 @@ describe("the same model twice is benign, and reported", () => {
     expect(
       counts,
       `expected a duplicate count of 167, found ${JSON.stringify(counts)}`,
-    ).toContain(167);
+    ).toContain(169);
   });
 
   it("says so in the text form too", () => {

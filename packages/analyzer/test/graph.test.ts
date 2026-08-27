@@ -14,8 +14,8 @@ describe("buildGraph over the committed Java snapshot", () => {
   const graph = javaGraph();
 
   it("indexes every declared entity, stubs included", () => {
-    expect(graph.entities.size).toBe(167);
-    expect(graph.ids()).toHaveLength(167);
+    expect(graph.entities.size).toBe(169);
+    expect(graph.ids()).toHaveLength(169);
     expect(graph.has(STRING)).toBe(true);
     expect(graph.isStub(STRING)).toBe(true);
     expect(graph.isStub(ORDER)).toBe(false);

@@ -107,10 +107,10 @@ describe("validate says the same thing in both forms", () => {
     const numbers = new Set(
       valuesUnderKey(parsed, /.*/).filter((value): value is number => typeof value === "number"),
     );
-    expect(numbers, "the JSON form must state how many entities were validated").toContain(167);
-    expect(numbers, "the JSON form must state how many edges were validated").toContain(175);
-    expect(text.stdout).toContain("167");
-    expect(text.stdout).toContain("175");
+    expect(numbers, "the JSON form must state how many entities were validated").toContain(169);
+    expect(numbers, "the JSON form must state how many edges were validated").toContain(179);
+    expect(text.stdout).toContain("169");
+    expect(text.stdout).toContain("179");
   });
 });
 

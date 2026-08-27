@@ -118,7 +118,7 @@ describe("foldGraph", () => {
     // Nothing is lost: the aggregated weights account for every folded edge.
     const total = folded.edges.reduce((sum, e) => sum + e.count, 0);
     expect(total).toBe(folded.diagnostics.foldedEdges);
-    expect(total + folded.diagnostics.droppedEdges).toBe(175);
+    expect(total + folded.diagnostics.droppedEdges).toBe(179);
 
     // Aggregation is real on this fixture: some pair carries more than one edge.
     expect(folded.edges.some((e) => e.count > 1)).toBe(true);
@@ -155,7 +155,7 @@ describe("foldGraph", () => {
     expect(stubNode?.isStub).toBe(true);
     // Every entity is either a member of exactly one node or reported unfoldable.
     const members = folded.nodes.reduce((sum, n) => sum + n.members, 0);
-    expect(members + folded.diagnostics.unfoldableEntities.length).toBe(167);
+    expect(members + folded.diagnostics.unfoldableEntities.length).toBe(169);
   });
 
   it("is deterministic: nodes and edges are sorted, and two runs agree", () => {
@@ -173,7 +173,7 @@ describe("foldGraph", () => {
   it("restricts to the requested edge kinds — the module import layer", () => {
     const folded = foldGraph(graph, { level: "module", edgeKinds: ["import"] });
     expect(folded.edges.every((e) => e.kinds.size === 1 && e.kinds.has("import"))).toBe(true);
-    expect(folded.edges.reduce((sum, e) => sum + e.count, 0)).toBe(10);
+    expect(folded.edges.reduce((sum, e) => sum + e.count, 0)).toBe(11);
     // Import edges are already module -> module, so folding them is the identity.
     const raw = graph.edges.filter((e) => e.edge === "import");
     for (const e of raw) {

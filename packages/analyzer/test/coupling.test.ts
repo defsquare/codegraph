@@ -61,14 +61,14 @@ describe("coupling over the module-level import graph of the Java snapshot", () 
     const order = row(table, ORDER_PKG);
     // Ce = |{ledger, java.lang.annotation, java.time, java.util,
     //         java.util.function}| = 5 — five DISTINCT modules, although the
-    // aggregated weight is 1+2+1+4+1 = 9. Nothing imports com.acme.order, so
+    // aggregated weight is 2+2+1+4+1 = 10. Nothing imports com.acme.order, so
     // Ca = 0 and I = 5 / (0 + 5) = 1.
     expect(order.fanOut).toBe(5);
     expect(order.fanIn).toBe(0);
     expect(order.ce).toBe(5);
     expect(order.ca).toBe(0);
     expect(order.instability).toBe(1);
-    expect(order.outgoingEdgeCount).toBe(9);
+    expect(order.outgoingEdgeCount).toBe(10);
     expect(order.incomingEdgeCount).toBe(0);
     expect(order.isStub).toBe(false);
   });
@@ -76,12 +76,13 @@ describe("coupling over the module-level import graph of the Java snapshot", () 
   it("scores the imported external module as maximally stable", () => {
     const ledger = row(table, LEDGER_PKG);
     // Ca = |{com.acme.order, com.acme.order.adapter}| = 2, Ce = 0,
-    // I = 0 / (2 + 0) = 0. It is a stub: it has no outgoing edges because the
-    // corpus never saw its body, and the row says so.
+    // I = 0 / (2 + 0) = 0. Its three incoming EDGES (two from com.acme.order,
+    // one from the adapter) collapse to those two distinct importers. It is a
+    // stub: no outgoing edges, because the corpus never saw its body.
     expect(ledger.fanIn).toBe(2);
     expect(ledger.fanOut).toBe(0);
     expect(ledger.instability).toBe(0);
-    expect(ledger.incomingEdgeCount).toBe(2);
+    expect(ledger.incomingEdgeCount).toBe(3);
     expect(ledger.isStub).toBe(true);
   });
 

@@ -138,6 +138,9 @@ public final class EdgeExtractor {
           .thenComparing(e -> String.valueOf(e.isRead()))
           .thenComparing(e -> String.valueOf(e.isWrite()));
 
+  /** Spoon expressions → values (§1.6); stateless apart from its evaluator. */
+  private final Literals literals = new Literals();
+
   private final CorpusWhitelist whitelist;
   private final Anchors anchors;
 
@@ -663,7 +666,17 @@ public final class EdgeExtractor {
       if (target.isEmpty() || anchor.isEmpty() || owner.isEmpty()) {
         continue;
       }
-      add(Edge.reference(owner.get().id(), target.get(), provenance.get(), anchor.get()));
+      // M10c: an annotation use is its own kind, and it CARRIES its arguments.
+      // The written type reference inside an argument (`@Foo(Bar.class)`) still
+      // reaches the reference pass on its own — a value never replaces a
+      // dependency.
+      add(
+          Edge.annotationUse(
+              owner.get().id(),
+              target.get(),
+              provenance.get(),
+              anchor.get(),
+              literals.argumentsOf(annotation)));
     }
   }
 

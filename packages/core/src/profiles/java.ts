@@ -95,7 +95,9 @@ export const javaProfile: Profile = {
         "TChildOf",
         "TSourceAnchor",
       ],
-      optional: ["TComment", "TMetrics"],
+      // TWithValue on a METHOD is the annotation-element `default` — the one
+      // place Java writes a value on something invocable.
+      optional: ["TComment", "TMetrics", "TWithValue"],
     },
 
     // No TNamed (a constructor has no own name) and no TTypedEntity (it has no
@@ -132,9 +134,12 @@ export const javaProfile: Profile = {
       optional: ["TTypedEntity", "TMetrics"],
     },
 
+    // TWithValue: a `static final` compile-time constant's initializer (§1.6).
+    // Optional and often absent — an initializer that is not constant carries
+    // no value at all, which is not the same claim as an empty one.
     attribute: {
       required: ["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"],
-      optional: ["TComment"],
+      optional: ["TComment", "TWithValue"],
     },
 
     parameter: {
@@ -155,6 +160,7 @@ export const javaProfile: Profile = {
     "invocation",
     "access",
     "reference",
+    "annotationUse",
   ],
 
   notes: [

@@ -81,7 +81,7 @@ function digest(db: SqliteDatabase): string {
  * diff — which is the entire point. Bump `DB_VERSION` alongside any change:
  * migration is regeneration, so an old cache must be recognised as old.
  */
-const EXPECTED = `edge(id INTEGER PK1, kind_id INTEGER NOT NULL, from_id INTEGER NOT NULL, to_id INTEGER NOT NULL, provenance_id INTEGER NOT NULL, anchor_file_id INTEGER NOT NULL, anchor_start INTEGER NOT NULL, anchor_end INTEGER NOT NULL, is_read INTEGER, is_write INTEGER, source_file_id INTEGER, candidate_count INTEGER, extra TEXT)
+const EXPECTED = `edge(id INTEGER PK1, kind_id INTEGER NOT NULL, from_id INTEGER NOT NULL, to_id INTEGER NOT NULL, provenance_id INTEGER NOT NULL, anchor_file_id INTEGER NOT NULL, anchor_start INTEGER NOT NULL, anchor_end INTEGER NOT NULL, arguments TEXT, is_read INTEGER, is_write INTEGER, source_file_id INTEGER, candidate_count INTEGER, extra TEXT)
   index edge_from (from_id, kind_id)
   index edge_provenance (provenance_id)
   index edge_to (to_id, kind_id)
@@ -93,7 +93,7 @@ edge_kind(id INTEGER PK1, name TEXT NOT NULL)
 edge_version(revision_id INTEGER NOT NULL PK1, from_key INTEGER NOT NULL PK2, to_key INTEGER NOT NULL PK3, kind TEXT NOT NULL PK4, provenance TEXT NOT NULL PK5, count INTEGER NOT NULL) WITHOUT ROWID
   index edge_version_keys (from_key, to_key)
   unique index <pk> (revision_id, from_key, to_key, kind, provenance)
-entity(id INTEGER PK1, kind_id INTEGER NOT NULL, trait_set_id INTEGER NOT NULL, module_id INTEGER NOT NULL, symbol TEXT NOT NULL, disambiguator TEXT, name TEXT, signature TEXT, parent_id INTEGER, attached_to_id INTEGER, declared_type_id INTEGER, is_stub INTEGER, anchor_file_id INTEGER, anchor_start INTEGER, anchor_end INTEGER, space TEXT, extra TEXT)
+entity(id INTEGER PK1, kind_id INTEGER NOT NULL, trait_set_id INTEGER NOT NULL, module_id INTEGER NOT NULL, symbol TEXT NOT NULL, disambiguator TEXT, name TEXT, signature TEXT, parent_id INTEGER, attached_to_id INTEGER, declared_type_id INTEGER, is_stub INTEGER, anchor_file_id INTEGER, anchor_start INTEGER, anchor_end INTEGER, space TEXT, value TEXT, extra TEXT)
   index entity_anchor_file (anchor_file_id)
   index entity_kind (kind_id)
   index entity_natural_key (module_id, symbol, disambiguator)

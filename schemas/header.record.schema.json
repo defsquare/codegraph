@@ -16,7 +16,8 @@
               "reference",
               "embedding",
               "traitUsage",
-              "fileInclude"
+              "fileInclude",
+              "annotationUse"
             ],
             "type": "string"
           },
@@ -61,7 +62,8 @@
               "TWithInvocations",
               "TStructural",
               "TWithAccesses",
-              "TMetrics"
+              "TMetrics",
+              "TWithValue"
             ],
             "type": "string"
           },

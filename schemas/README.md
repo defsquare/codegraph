@@ -121,6 +121,7 @@ present when the trait is declared, absent when it is not. Optional-valued keys
 | `TStructural` | — | *(marker)*
 | `TWithAccesses` | — | *(marker)*
 | `TMetrics` | `metrics` |
+| `TWithValue` | `value` |
 
 This is the one rule the per-record schemas cannot state, because deciding it
 means resolving `tr` through the header — which a line-at-a-time validator

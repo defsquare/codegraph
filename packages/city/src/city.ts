@@ -1,5 +1,5 @@
 import { parseRenderedId } from "@codegraph/core";
-import type { EdgeKind, Entity, EntityId, Provenance, Repository } from "@codegraph/core";
+import type { EdgeKind, Entity, EntityId, Literal, Provenance, Repository } from "@codegraph/core";
 import {
   coupling,
   createFolder,
@@ -140,6 +140,14 @@ export interface BuildingSource {
 export interface BuildingAttribute {
   readonly name: string;
   readonly type?: string;
+  /**
+   * The DECLARED constant the model states (`TWithValue`, METAMODEL §1.6),
+   * rendered for display: `"monthly"`, `100`, `RetentionPolicy.RUNTIME`,
+   * or the source text of an expression the extractor did not fold. Absent
+   * when the field has no declaration-site value — which is not the same as
+   * an empty one, and is why this is optional rather than "".
+   */
+  readonly value?: string;
 }
 
 /** One declared parameter of an operation; `type` is the resolved entity's
@@ -653,9 +661,53 @@ function attributesOf(
         declared === undefined
           ? undefined
           : (graph.entity(declared) as { name?: string } | undefined)?.name;
-      return { name, ...(typeName === undefined ? {} : { type: typeName }) };
+      const value = displayValue(graph, (member as { value?: Literal }).value);
+      return {
+        name,
+        ...(typeName === undefined ? {} : { type: typeName }),
+        ...(value === undefined ? {} : { value }),
+      };
     })
     .sort((a, b) => compareStrings(a.name, b.name));
+}
+
+/**
+ * A value as one line of text. PRESENTATION only — the city derives nothing
+ * here and states no value the model did not carry; an id inside a value is
+ * shown as the referenced entity's NAME, never as a raw id, exactly as an
+ * attribute's declared type is.
+ */
+function displayValue(graph: CodeGraph, value: Literal | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  switch (value.k) {
+    case "string":
+      return JSON.stringify(value.v);
+    case "number":
+      return value.v;
+    case "boolean":
+      return String(value.v);
+    case "null":
+      return "null";
+    case "enum": {
+      const name = (graph.entity(value.type) as { name?: string } | undefined)?.name;
+      return name === undefined ? value.name : `${name}.${value.name}`;
+    }
+    case "type": {
+      const name = (graph.entity(value.type) as { name?: string } | undefined)?.name;
+      return name === undefined ? undefined : `${name}.class`;
+    }
+    case "array":
+      return `{${value.items
+        .map((item) => displayValue(graph, item) ?? "…")
+        .join(", ")}}`;
+    case "annotation": {
+      const name = (graph.entity(value.type) as { name?: string } | undefined)?.name;
+      return name === undefined ? undefined : `@${name}`;
+    }
+    // Labeled, so a reader can tell a written expression from a folded value.
+    case "unevaluated":
+      return value.source;
+  }
 }
 
 function operationsOf(graph: CodeGraph, members: readonly Entity[]): readonly BuildingOperation[] {

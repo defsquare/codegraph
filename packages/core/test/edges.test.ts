@@ -54,7 +54,12 @@ describe("Edge", () => {
 
   it("accepts every kind of the closed edge vocabulary", () => {
     for (const kind of EDGE_KINDS) {
-      const extra = kind === "access" ? { isRead: true, isWrite: true } : {};
+      const extra =
+        kind === "access"
+          ? { isRead: true, isWrite: true }
+          : kind === "annotationUse"
+            ? { arguments: [] }
+            : {};
       const parsed = Edge.parse({ ...base, ...extra, edge: kind });
       expect(parsed.edge).toBe(kind);
     }

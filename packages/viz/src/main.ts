@@ -544,7 +544,7 @@ function rowsTable(rows: readonly DetailRow[]): HTMLTableElement {
 
 function memberList(
   summaryText: string,
-  items: readonly { lead?: string; text: string; type?: string }[],
+  items: readonly { lead?: string; text: string; type?: string; value?: string }[],
   open: boolean,
 ): HTMLDetailsElement {
   const fold = document.createElement("details");
@@ -566,6 +566,14 @@ function memberList(
       type.className = "type";
       type.textContent = `: ${item.type}`;
       line.append(type);
+    }
+    // A declared constant (§1.6), when the model states one. Its own class:
+    // "the field is 100" and "the field is an int" are different claims.
+    if (item.value !== undefined) {
+      const value = document.createElement("span");
+      value.className = "value";
+      value.textContent = ` = ${item.value}`;
+      line.append(value);
     }
     list.append(line);
   }
@@ -616,6 +624,7 @@ function renderBuildingPanel(details: BuildingDetails): void {
       details.attributes.map((attribute) => ({
         text: attribute.name,
         ...(attribute.type === undefined ? {} : { type: attribute.type }),
+        ...(attribute.value === undefined ? {} : { value: attribute.value }),
       })),
       true,
     ),

@@ -183,6 +183,83 @@ describe("fixtures/java/expected/model.jsonl", () => {
     expect(measured).toBeGreaterThan(50);
   });
 
+  /**
+   * VALUES (M10c, METAMODEL §1.6). Four cases, each readable in
+   * `fixtures/java/src` — the point of a fixture nobody has to trust:
+   *
+   *   @Retention(RetentionPolicy.RUNTIME)   an enum argument, type + NAME
+   *   String value() default ""             an element default, on a method
+   *   MAX_LINES = 4 * 25                    folded across the arithmetic
+   *   @Audited(LedgerClient.AUDIT_TAG)      unevaluated — honest about not folding
+   */
+  it("carries the written values of the corpus, folded where the language folds them", () => {
+    const model = loadSnapshot();
+    const byId = new Map(model.entities.map((entity) => [entity.id, entity]));
+    const valueOf = (id: string): unknown =>
+      (byId.get(id) as unknown as Record<string, unknown> | undefined)?.["value"];
+
+    // An annotation element's default — the one place Java writes a value on
+    // something invocable.
+    expect(valueOf('java:com.acme.order/Audited.value()')).toEqual({ k: "string", v: "" });
+
+    // A compile-time constant: the model states the FOLDED value, as text.
+    expect(valueOf("java:com.acme.order/Order.MAX_LINES")).toEqual({ k: "number", v: "100" });
+
+    // Final but not constant: `new StringBuilder()` is code. Absence means "not
+    // constant" — a claim of its own, and not the same as an empty value.
+    const trail = byId.get("java:com.acme.order/Order.trail");
+    expect(trail, "the non-constant field must still be an entity").toBeDefined();
+    expect(trail?.traits).not.toContain("TWithValue");
+    expect(valueOf("java:com.acme.order/Order.trail")).toBeUndefined();
+
+    const uses = model.edges.filter((edge) => edge.edge === "annotationUse");
+    const argumentOf = (from: string, to: string): unknown => {
+      const use = uses.find((edge) => edge.from === from && edge.to === to);
+      expect(use, `${from} -> ${to}`).toBeDefined();
+      return (use as unknown as { arguments: { name: string; value: unknown }[] }).arguments[0];
+    };
+
+    // The enum form: a reference to the TYPE plus the constant's simple name —
+    // no member entity is fabricated to close the value (§6, verbatim).
+    expect(argumentOf("java:com.acme.order/Audited", "java:java.lang.annotation/Retention")).toEqual({
+      name: "value",
+      value: { k: "enum", type: "java:java.lang.annotation/RetentionPolicy", name: "RUNTIME" },
+    });
+
+    // The implicit `value =` is normalized explicit.
+    expect(
+      argumentOf("java:com.acme.order/Reporting.max(java.util.List)", "java:com.acme.order/Audited"),
+    ).toEqual({ name: "value", value: { k: "string", v: "monthly" } });
+
+    // An honest `unevaluated`: a constant on an external type noClasspath
+    // cannot resolve. The written text is still a fact, so it is kept — and
+    // labeled, so nobody mistakes it for a folded value.
+    expect(
+      argumentOf("java:com.acme.order/Order.discount(int)", "java:com.acme.order/Audited"),
+    ).toEqual({ name: "value", value: { k: "unevaluated", source: "LedgerClient.AUDIT_TAG" } });
+
+    // A marker annotation writes no argument, and says so with an empty list.
+    const override = uses.find((edge) => edge.to === "java:java.lang/Override");
+    expect((override as unknown as { arguments: unknown[] }).arguments).toEqual([]);
+  });
+
+  it("closes over values: every id inside one resolves like an edge endpoint", () => {
+    const model = loadSnapshot();
+    // `unknownReferences` walks values and annotation arguments too (§8a); the
+    // whole-model check above would already have caught a dangling one, so this
+    // asserts the walk REACHES them rather than that the corpus is clean.
+    const valued = model.entities.filter((entity) => entity.traits.includes("TWithValue"));
+    expect(valued.length).toBeGreaterThan(0);
+    const argumentIds = model.edges
+      .filter((edge) => edge.edge === "annotationUse")
+      .flatMap((edge) => (edge as unknown as { arguments: { value: { type?: string } }[] }).arguments)
+      .map((argument) => argument.value.type)
+      .filter((id): id is string => id !== undefined);
+    expect(argumentIds.length).toBeGreaterThan(0);
+    const declared = new Set(model.entities.map((entity) => entity.id));
+    for (const id of argumentIds) expect(declared.has(id), id).toBe(true);
+  });
+
   it("anchors every entity that claims TSourceAnchor to a 1-based span in the corpus", () => {
     const model = loadSnapshot();
     for (const entity of model.entities) {

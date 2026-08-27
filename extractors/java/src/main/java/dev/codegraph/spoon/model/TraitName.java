@@ -26,7 +26,8 @@ public enum TraitName {
   TWithInvocations,
   TStructural,
   TWithAccesses,
-  TMetrics;
+  TMetrics,
+  TWithValue;
 
   /**
    * Marker traits contribute no attribute: their data lives in {@code edges[]}

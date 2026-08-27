@@ -3,8 +3,8 @@ package dev.codegraph.spoon.model;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
- * The nine edge kinds of the contract (METAMODEL.md §4). The Java profile
- * licenses only six of them — {@link #EMBEDDING} (Go), {@link #TRAIT_USAGE}
+ * The ten edge kinds of the contract (METAMODEL.md §4). The Java profile
+ * licenses seven of them — {@link #EMBEDDING} (Go), {@link #TRAIT_USAGE}
  * (PHP) and {@link #FILE_INCLUDE} (PHP) exist here because this enum mirrors
  * the interchange format, not because this extractor may emit them. There is
  * deliberately no {@link Edge} factory for those three.
@@ -18,7 +18,8 @@ public enum EdgeKind {
   REFERENCE("reference"),
   EMBEDDING("embedding"),
   TRAIT_USAGE("traitUsage"),
-  FILE_INCLUDE("fileInclude");
+  FILE_INCLUDE("fileInclude"),
+  ANNOTATION_USE("annotationUse");
 
   private final String json;
 

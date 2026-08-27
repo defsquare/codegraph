@@ -41,13 +41,13 @@ import { edge, javaFixture, javaGraph, pkg, toyModel, type } from "./fixture.js"
  * here with the stage that noticed, rather than as a silent metric drift.
  */
 
-const ENTITIES = 167;
-const EDGES = 175;
+const ENTITIES = 169;
+const EDGES = 179;
 const STUBS = 26;
-/** 75 of the 175 edges touch a stub; the internal-only corpus keeps 100. */
-const INTERNAL_EDGES = 100;
-/** Exactly two edges are the extractor's inference, both module→module imports. */
-const DECLARED_EDGES = 173;
+/** 78 of the 179 edges touch a stub; the internal-only corpus keeps 101. */
+const INTERNAL_EDGES = 101;
+/** Exactly three edges are the extractor's inference, all module→module imports. */
+const DECLARED_EDGES = 176;
 
 const ORDER = "java:com.acme.order";
 const ADAPTER = "java:com.acme.order.adapter";
@@ -145,9 +145,9 @@ describe("stage 4/5 — folding and the queries built on it", () => {
     expect(query.edges).toEqual(folded.edges);
 
     expect(query.nodes).toHaveLength(36);
-    expect(query.edges).toHaveLength(71);
+    expect(query.edges).toHaveLength(74);
     // The three corpus-declared packages carry TModule but not TType, so they
-    // have no containing type. Reported, never hidden — and the 10 import edges
+    // have no containing type. Reported, never hidden — and the 11 import edges
     // they own are the ones dropped.
     // Packages have no containing TYPE — the corpus's three plus the seven
     // external modules external types now hang off. Reported, never hidden.
@@ -163,8 +163,8 @@ describe("stage 4/5 — folding and the queries built on it", () => {
       "java:java.util",
       "java:java.util.function",
     ]);
-    expect(query.diagnostics.droppedEdges).toBe(10);
-    expect(query.diagnostics.foldedEdges).toBe(165);
+    expect(query.diagnostics.droppedEdges).toBe(11);
+    expect(query.diagnostics.foldedEdges).toBe(168);
     expect(query.diagnostics.foldedEdges + query.diagnostics.droppedEdges).toBe(EDGES);
   });
 
@@ -172,7 +172,7 @@ describe("stage 4/5 — folding and the queries built on it", () => {
     const query = typeDependencyGraph(graph, internalOnly);
     expect(query.view.name).toBe("internalOnly");
     expect(query.nodes).toHaveLength(17);
-    expect(query.edges).toHaveLength(36);
+    expect(query.edges).toHaveLength(37);
     expect(query.nodes.every((node) => !node.isStub)).toBe(true);
   });
 
@@ -183,15 +183,15 @@ describe("stage 4/5 — folding and the queries built on it", () => {
     expect(query.nodes).toEqual(folded.nodes);
     expect(query.edges).toEqual(folded.edges);
 
-    // 10 base import edges aggregate to 6 module pairs; nothing is dropped,
+    // 11 base import edges aggregate to 6 module pairs; nothing is dropped,
     // because an import is already written between two modules.
     expect(query.diagnostics.droppedEdges).toBe(0);
-    expect(query.diagnostics.foldedEdges).toBe(10);
-    expect(query.edges.reduce((sum, e) => sum + e.count, 0)).toBe(10);
+    expect(query.diagnostics.foldedEdges).toBe(11);
+    expect(query.edges.reduce((sum, e) => sum + e.count, 0)).toBe(11);
     expect(
       query.edges.map((e) => [e.from, e.to, e.count, [...e.provenances].sort()] as const),
     ).toEqual([
-      [ORDER, LEDGER, 1, ["derived"]],
+      [ORDER, LEDGER, 2, ["derived"]],
       [ORDER, "java:java.lang.annotation", 2, ["declared"]],
       [ORDER, "java:java.time", 1, ["declared"]],
       [ORDER, "java:java.util", 4, ["declared"]],

@@ -123,13 +123,14 @@ export function param(id: string, parent: string): Entity {
   } as Entity;
 }
 
-export function field(id: string, parent: string): Entity {
+export function field(id: string, parent: string, extra: Record<string, unknown> = {}): Entity {
   return {
     id,
     kind: "attribute",
     traits: ["TNamed", "TChildOf", "TStructural"],
     name: id,
     parent,
+    ...extra,
   } as Entity;
 }
 

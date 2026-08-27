@@ -49,6 +49,7 @@ import java.util.TreeMap;
   "definedIn",
   "comments",
   "metrics",
+  "value",
   "anchor"
 })
 public record Entity(
@@ -66,6 +67,7 @@ public record Entity(
     List<String> definedIn,
     List<String> comments,
     Map<String, Number> metrics,
+    Literal value,
     SourceAnchor anchor) {
 
   public static Builder builder(String id, String kind) {
@@ -92,6 +94,7 @@ public record Entity(
     private List<String> definedIn;
     private List<String> comments;
     private Map<String, Number> metrics;
+    private Literal value;
     private SourceAnchor anchor;
 
     private Builder(String id, String kind) {
@@ -210,6 +213,20 @@ public record Entity(
     }
 
     /**
+     * TWithValue → {@code value} (METAMODEL.md §1.6): the entity's
+     * declaration-site constant. Never called with a value the extractor only
+     * guessed — absence means "not constant", which is a claim of its own.
+     */
+    public Builder valued(Literal value) {
+      if (value == null) {
+        return this;
+      }
+      this.value = value;
+      traits.add(TraitName.TWithValue);
+      return this;
+    }
+
+    /**
      * Adds a marker trait — one that contributes no key because its data lives
      * in {@code edges[]}. Key-contributing traits are rejected here on purpose:
      * they may only be added by the method that also supplies the key.
@@ -250,6 +267,7 @@ public record Entity(
           definedIn,
           comments,
           metrics,
+          value,
           anchor);
     }
 

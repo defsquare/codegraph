@@ -40,6 +40,78 @@ export const WireAnchor = z.tuple([FileRef, z.int().min(1), z.int().min(1)]);
 export type WireAnchor = z.infer<typeof WireAnchor>;
 
 /**
+ * A Literal (§1.6) with every EntityId replaced by a surrogate — the same rule
+ * as any other reference, applied INSIDE a value. That is what makes closure
+ * over values an encoding guarantee rather than a check: a value pointing at an
+ * entity the file does not declare has no surrogate to name it with, so it
+ * cannot be written at all.
+ */
+export type WireLiteral =
+  | { readonly k: "string"; readonly v: string }
+  | { readonly k: "number"; readonly v: string }
+  | { readonly k: "boolean"; readonly v: boolean }
+  | { readonly k: "null" }
+  | { readonly k: "enum"; readonly type: number; readonly name: string }
+  | { readonly k: "type"; readonly type: number }
+  | { readonly k: "array"; readonly items: readonly WireLiteral[] }
+  | {
+      readonly k: "annotation";
+      readonly type: number;
+      readonly arguments: readonly WireNamedArgument[];
+    }
+  | { readonly k: "unevaluated"; readonly source: string };
+
+export interface WireNamedArgument {
+  readonly name: string;
+  readonly value: WireLiteral;
+}
+
+const DECIMAL_TEXT = /^(?:-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|NaN|-?Infinity)$/;
+
+export const WireLiteral: z.ZodType<WireLiteral> = z
+  .discriminatedUnion("k", [
+    z.object({ k: z.literal("string"), v: z.string() }),
+    z.object({ k: z.literal("number"), v: z.string().regex(DECIMAL_TEXT) }),
+    z.object({ k: z.literal("boolean"), v: z.boolean() }),
+    z.object({ k: z.literal("null") }),
+    z.object({ k: z.literal("enum"), type: Ref, name: z.string().min(1) }),
+    z.object({ k: z.literal("type"), type: Ref }),
+    z.object({
+      k: z.literal("array"),
+      get items() {
+        return z.array(WireLiteral);
+      },
+    }),
+    z.object({
+      k: z.literal("annotation"),
+      type: Ref,
+      get arguments() {
+        return z.array(WireNamedArgument);
+      },
+    }),
+    z.object({ k: z.literal("unevaluated"), source: z.string().min(1) }),
+  ])
+  .meta({
+    id: "Literal",
+    description:
+      "A written, declaration-site value (METAMODEL.md §1.6), with entity ids as " +
+      "surrogates. Never runtime state: an expression the extractor did not fold " +
+      "rides as `unevaluated` with its source text.",
+  }) as unknown as z.ZodType<WireLiteral>;
+
+export const WireNamedArgument: z.ZodType<WireNamedArgument> = z
+  .object({
+    name: z.string().min(1),
+    get value() {
+      return WireLiteral;
+    },
+  })
+  .meta({
+    id: "NamedArgument",
+    description: "One argument of an annotation use; an implicit name is normalized explicit.",
+  }) as unknown as z.ZodType<WireNamedArgument>;
+
+/**
  * The wire form of each trait's contributed keys — the mirror of `TRAITS`, with
  * every EntityId replaced by a surrogate and every path by a file reference.
  * `wire.test.ts` pins the correspondence key-for-key, so the two tables cannot
@@ -73,6 +145,9 @@ export const WIRE_TRAITS = {
 
   // Measures ride verbatim: no ids, no paths, nothing to intern (§3.8).
   TMetrics: z.object({ metrics: z.record(z.string().min(1), z.number()) }),
+
+  // A value's ids are surrogates like any other reference (§1.6).
+  TWithValue: z.object({ value: WireLiteral }),
 } satisfies Record<TraitName, z.ZodObject>;
 
 /** The vocabularies a model declares, by the indices its records use (MM-3). */
@@ -137,6 +212,7 @@ export const EntityRec = z.looseObject({
   parameters: z.array(Ref).optional(),
   localVariables: z.array(Ref).optional(),
   metrics: z.record(z.string().min(1), z.number()).optional(),
+  value: WireLiteral.optional(),
   space: z.array(Space).optional(),
 });
 export type EntityRec = z.infer<typeof EntityRec>;
@@ -153,6 +229,9 @@ export const EdgeRec = z.looseObject({
   p: DictRef,
   anchor: WireAnchor,
   candidates: z.array(Ref).optional(),
+  // annotationUse only. Omitted when EMPTY: the edge kind already says the key
+  // is there, so `@Override` costs no bytes and the reader restores `[]`.
+  arguments: z.array(WireNamedArgument).optional(),
   isRead: z.boolean().optional(),
   isWrite: z.boolean().optional(),
   sourceFile: FileRef.optional(),

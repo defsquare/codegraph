@@ -1,4 +1,191 @@
 {
+  "$defs": {
+    "Literal": {
+      "description": "A written, declaration-site value (METAMODEL.md §1.6), with entity ids as surrogates. Never runtime state: an expression the extractor did not fold rides as `unevaluated` with its source text.",
+      "oneOf": [
+        {
+          "properties": {
+            "k": {
+              "const": "string",
+              "type": "string"
+            },
+            "v": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "k",
+            "v"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "k": {
+              "const": "number",
+              "type": "string"
+            },
+            "v": {
+              "pattern": "^(?:-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?|NaN|-?Infinity)$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "k",
+            "v"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "k": {
+              "const": "boolean",
+              "type": "string"
+            },
+            "v": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "k",
+            "v"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "k": {
+              "const": "null",
+              "type": "string"
+            }
+          },
+          "required": [
+            "k"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "k": {
+              "const": "enum",
+              "type": "string"
+            },
+            "name": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "k",
+            "type",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "k": {
+              "const": "type",
+              "type": "string"
+            },
+            "type": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "k",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "items": {
+              "items": {
+                "$ref": "#/$defs/Literal"
+              },
+              "type": "array"
+            },
+            "k": {
+              "const": "array",
+              "type": "string"
+            }
+          },
+          "required": [
+            "k",
+            "items"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "arguments": {
+              "items": {
+                "$ref": "#/$defs/NamedArgument"
+              },
+              "type": "array"
+            },
+            "k": {
+              "const": "annotation",
+              "type": "string"
+            },
+            "type": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "k",
+            "type",
+            "arguments"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "k": {
+              "const": "unevaluated",
+              "type": "string"
+            },
+            "source": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "k",
+            "source"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "NamedArgument": {
+      "description": "One argument of an annotation use; an implicit name is normalized explicit.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Literal"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "type": "object"
+    }
+  },
   "$id": "https://codegraph.dev/schemas/e.record-1.0.0.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": {},
@@ -132,6 +319,9 @@
         "type": "integer"
       },
       "type": "array"
+    },
+    "value": {
+      "$ref": "#/$defs/Literal"
     }
   },
   "required": [

@@ -125,6 +125,9 @@ public final class EntityExtractor {
   /** Measures the source itself (§3.8) — the one thing no consumer can redo. */
   private final Measures measures = new Measures();
 
+  /** Written declaration-site values (§1.6): constants and element defaults. */
+  private final Literals literals = new Literals();
+
   public EntityExtractor(CorpusWhitelist whitelist, Anchors anchors) {
     this.whitelist = whitelist;
     this.anchors = anchors;
@@ -356,9 +359,20 @@ public final class EntityExtractor {
               .typed(declaredTypeIdOf(method.getType()))
               .childOf(ownerId)
               .anchoredAt(anchor.get())
-              .measured(measures.of(method, anchor.get()));
+              .measured(measures.of(method, anchor.get()))
+              // An annotation element's `default` — the one place Java writes a
+              // value on something invocable (§1.6).
+              .valued(annotationDefaultOf(method));
       comments(builder, method);
       add(new Draft(id, ownerId, true, builder));
+    }
+
+    /** `String value() default ""` — absent on any method that is not one. */
+    private dev.codegraph.spoon.model.Literal annotationDefaultOf(CtMethod<?> method) {
+      if (!(method instanceof spoon.reflect.declaration.CtAnnotationMethod<?> element)) {
+        return null;
+      }
+      return literals.defaultOf(element.getDefaultExpression()).orElse(null);
     }
 
     private void constructor(CtConstructor<?> constructor, String ownerId) {
@@ -413,7 +427,10 @@ public final class EntityExtractor {
               .marker(TraitName.TStructural)
               .typed(declaredTypeIdOf(field.getType()))
               .childOf(ownerId)
-              .anchoredAt(anchor.get());
+              .anchoredAt(anchor.get())
+              // Only a compile-time constant has a declaration-site value; a
+              // `new ArrayList<>()` initializer is code, and carries none.
+              .valued(literals.constantOf(field).orElse(null));
       comments(builder, field);
       add(new Draft(id, ownerId, false, builder));
     }

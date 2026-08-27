@@ -74,7 +74,7 @@ class EntityTraitConformanceTest {
               kind(
                   of("TNamed", "TInvocable", "TWithChildren", "TWithParameters", "TWithLocalVariables",
                       "TWithInvocations", "TWithAccesses", "TTypedEntity", "TChildOf", "TSourceAnchor"),
-                  of("TComment", "TMetrics"))),
+                  of("TComment", "TMetrics", "TWithValue"))),
           // No TNamed (a constructor has no name of its own) and no
           // TTypedEntity (it has no return type). The id's disambiguator is the signature.
           Map.entry(
@@ -92,7 +92,9 @@ class EntityTraitConformanceTest {
                   of("TTypedEntity", "TMetrics"))),
           Map.entry(
               "attribute",
-              kind(of("TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"), of("TComment"))),
+              kind(
+                  of("TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"),
+                  of("TComment", "TWithValue"))),
           Map.entry(
               "parameter",
               kind(of("TNamed", "TStructural", "TTypedEntity", "TChildOf"), of("TSourceAnchor"))),

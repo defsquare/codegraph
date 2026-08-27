@@ -21,8 +21,8 @@ describe("loading model files", () => {
   it("loads the java fixture as one clean union", () => {
     const loaded = loadModelFiles([FIXTURE]);
     expect(loaded.paths).toEqual([FIXTURE]);
-    expect(loaded.union.entities.length).toBe(167);
-    expect(loaded.union.edges.length).toBe(175);
+    expect(loaded.union.entities.length).toBe(169);
+    expect(loaded.union.edges.length).toBe(179);
     expect(loaded.union.langs).toEqual(["java"]);
     expect(loaded.clean).toBe(true);
     expect(loadExitCode(loaded)).toBe(EXIT.OK);
@@ -31,9 +31,9 @@ describe("loading model files", () => {
   it("loads several paths as ONE union (decision 5)", () => {
     const loaded = loadModelFiles([FIXTURE, FIXTURE]);
     expect(loaded.union.models.length).toBe(2);
-    expect(loaded.union.entities.length).toBe(334);
+    expect(loaded.union.entities.length).toBe(338);
     // The same model twice duplicates every id — a finding, not a crash.
-    expect(loaded.diagnostics.duplicateIds.length).toBe(167);
+    expect(loaded.diagnostics.duplicateIds.length).toBe(169);
     expect(loaded.diagnostics.duplicateIds.every((d) => !d.conflicting)).toBe(true);
   });
 
@@ -70,7 +70,7 @@ describe("loading model files", () => {
     const broken = tempFile("broken.jsonl", "nope\n");
     const loaded = loadModelFiles([broken, FIXTURE]);
     expect(loaded.diagnostics.schemaErrors.length).toBe(1);
-    expect(loaded.union.entities.length).toBe(167);
+    expect(loaded.union.entities.length).toBe(169);
     expect(loadExitCode(loaded)).toBe(EXIT.FINDINGS);
   });
 

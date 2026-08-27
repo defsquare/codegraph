@@ -95,6 +95,12 @@ Two later additions to the shape (details in CM-8's nesting note):
 - **`District.parent`** — the nearest ancestor module that is itself a district,
   when the model declares module containment. Absent for roots and for models
   without containment.
+- **`BuildingAttribute.value`** (M10c) — the declared constant the model
+  states (`TWithValue`, METAMODEL §1.6), rendered as one line of text: an id
+  inside a value is shown as the referenced entity's NAME, exactly as a
+  field's declared type is. Absent when the field has no declaration-site
+  value, which is a different claim from an empty one. Presentation only: the
+  city states no value the model did not carry, and evaluates nothing.
 - **`corpus.repository` and `Building.source`** (M10a) — the header's
   repository facts (`remote`, `commit`, repo-relative `root`, `provider?`) and
   each building's anchor (`file`, `span?`), carried so a renderer can project a

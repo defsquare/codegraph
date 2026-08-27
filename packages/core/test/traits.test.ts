@@ -24,6 +24,7 @@ const EXPECTED_KEYS: Record<TraitName, readonly string[]> = {
   TStructural: [],
   TWithAccesses: [],
   TMetrics: ["metrics"],
+  TWithValue: ["value"],
 };
 
 describe("TRAITS", () => {

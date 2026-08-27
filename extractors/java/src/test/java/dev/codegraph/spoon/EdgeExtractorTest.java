@@ -376,7 +376,20 @@ class EdgeExtractorTest {
 
     assertTrue(fromBill.contains("java:com.acme.order/Invoice"), () -> "return type missing from " + fromBill);
     assertTrue(fromBill.contains("java:com.acme.order/BillingException"), () -> "throws missing from " + fromBill);
-    assertTrue(fromBill.contains("java:java.lang/Override"), () -> "annotation missing from " + fromBill);
+    // M10c: a written annotation is an `annotationUse` edge, NOT a reference —
+    // the clean break, so a consumer selecting annotation usages never has to
+    // ask what kind the target is (a stub target could not answer).
+    assertFalse(
+        fromBill.contains("java:java.lang/Override"),
+        () -> "an annotation is no longer a plain reference: " + fromBill);
+    Set<String> annotatedFromBill =
+        of(extract(root), EdgeKind.ANNOTATION_USE).stream()
+            .filter(e -> e.from().equals(BILL))
+            .map(Edge::to)
+            .collect(Collectors.toCollection(TreeSet::new));
+    assertTrue(
+        annotatedFromBill.contains("java:java.lang/Override"),
+        () -> "annotation missing from " + annotatedFromBill);
 
     Set<String> fromOrders =
         references.stream()
@@ -478,6 +491,7 @@ class EdgeExtractorTest {
   void everyEdgeCarriesProvenanceAnchoredEvidenceAndALicensedKind(@TempDir Path root) throws IOException {
     Set<EdgeKind> licensed =
         Set.of(
+            EdgeKind.ANNOTATION_USE,
             EdgeKind.IMPORT,
             EdgeKind.INHERITANCE,
             EdgeKind.INTERFACE_IMPLEMENTATION,

@@ -11,8 +11,8 @@ import type { AnalyzeOptions } from "../src/args.js";
 
 /**
  * The java fixture is real Spoon output, and every number asserted below was
- * read off the analyzer before it was written here (166 entities / 173 edges;
- * module fold 10 nodes / 14 edges with 5 dropped; type fold 36 / 71 with 10
+ * read off the analyzer before it was written here (169 entities / 179 edges;
+ * module fold 10 nodes / 14 edges with 5 dropped; type fold 36 / 74 with 11
  * dropped; the module IMPORT layer 10 nodes / 6 edges). Asserting "it printed
  * something" would pass against a command that folded the wrong graph.
  */
@@ -78,8 +78,8 @@ describe("analyze --report deps at module level is the import graph", () => {
   it("lists every module with its member count and marks the external ones", () => {
     const { lines } = analyze({ report: "deps", level: "module" });
     const nodeLines = lines.filter((line) => line.startsWith("  java:"));
-    // com.acme.order holds 126 of the 167 entities; java.lang is a stub package.
-    expect(nodeLines.some((line) => line.includes("java:com.acme.order ") && line.includes("members=126"))).toBe(true);
+    // com.acme.order holds 128 of the 169 entities; java.lang is a stub package.
+    expect(nodeLines.some((line) => line.includes("java:com.acme.order ") && line.includes("members=128"))).toBe(true);
     expect(nodeLines.some((line) => line.includes("java:java.lang ") && line.includes("external (stub)"))).toBe(true);
     // Exactly 7 of the 10 modules are stubs (3 com.acme.* packages are internal).
     expect(nodeLines.filter((line) => line.includes("external (stub)")).length).toBe(7);
@@ -108,17 +108,17 @@ describe("analyze --report deps at module level is the import graph", () => {
 /* ----------------------------------------------------------------- deps: type */
 
 describe("analyze --report deps at type level is the type dependency graph", () => {
-  it("reports the fixture's 36 types and 71 aggregated dependencies", () => {
+  it("reports the fixture's 36 types and 74 aggregated dependencies", () => {
     const result = analyze({ report: "deps", level: "type" });
     expect(result.stdout).toContain("nodes: 36");
-    expect(result.stdout).toContain("edges: 71 aggregated dependencies");
+    expect(result.stdout).toContain("edges: 74 aggregated dependencies");
     expect(result.stdout).toContain("layer:  every edge kind folded to type level");
   });
 
   it("--top narrows the node list to the shown dependencies, and says how many it omitted", () => {
     const result = analyze({ report: "deps", level: "type", top: 5 });
-    expect(result.stdout).toContain("edges: 5 of 71 aggregated dependencies (--top 5)");
-    expect(result.stdout).toContain("… 66 lower-weight dependencies not shown.");
+    expect(result.stdout).toContain("edges: 5 of 74 aggregated dependencies (--top 5)");
+    expect(result.stdout).toContain("… 69 lower-weight dependencies not shown.");
     // The header still reports the TRUE total — narrowing the list must not
     // change what is true about the graph, only how much of it is printed.
     expect(result.stdout).toContain("nodes: 36");
@@ -152,7 +152,7 @@ describe("analyze --report deps at type level is the type dependency graph", () 
     const weights = analyze({ report: "deps", level: "type" })
       .lines.filter((line) => line.includes("weight="))
       .map((line) => Number(/weight=(\d+)/.exec(line)?.[1] ?? "0"));
-    expect(weights.length).toBe(71);
+    expect(weights.length).toBe(74);
     expect([...weights].sort((a, b) => b - a)).toEqual(weights);
   });
 });
@@ -234,10 +234,13 @@ describe("analyze --report coupling", () => {
       /^ {2}java:/.test(line),
     );
     expect(rows.length).toBe(36);
-    // Notifications (Ca 0 + Ce 10) outranks Money (7 + 2) and Reporting (0 + 8).
-    expect(rows[0]).toContain("java:com.acme.order/Notifications");
-    expect(rows[1]).toContain("java:com.acme.order/Money");
-    expect(rows[2]).toContain("java:com.acme.order/Reporting");
+    // Order (Ca 2 + Ce 8) and Notifications (0 + 10) both reach degree 10 and
+    // lead; Money (7 + 2) and Reporting (0 + 8) follow. The ranking is by
+    // DEGREE, so a tie is broken by the table's own rule, not by luck.
+    expect(rows[0]).toContain("java:com.acme.order/Order");
+    expect(rows[1]).toContain("java:com.acme.order/Notifications");
+    expect(rows[2]).toContain("java:com.acme.order/Money");
+    expect(rows[3]).toContain("java:com.acme.order/Reporting");
     expect(analyze({ report: "coupling", level: "type" }).stdout).toBe(
       analyze({ report: "coupling", level: "type" }).stdout,
     );
@@ -362,24 +365,24 @@ describe("--json carries the same information as the text form (decision 8)", ()
   it("deps: the same counts, the same limiting, the same provenances", () => {
     const full = jsonOf({ report: "deps", level: "type" });
     expect(full["nodeCount"]).toBe(36);
-    expect(full["edgeCount"]).toBe(71);
+    expect(full["edgeCount"]).toBe(74);
     expect((full["nodes"] as unknown[]).length).toBe(36);
-    expect((full["edges"] as unknown[]).length).toBe(71);
+    expect((full["edges"] as unknown[]).length).toBe(74);
 
     const limited = jsonOf({ report: "deps", level: "type", top: 5 });
-    expect(limited["edgeCount"]).toBe(71);
+    expect(limited["edgeCount"]).toBe(74);
     expect((limited["edges"] as unknown[]).length).toBe(5);
     expect(limited["ranking"]).toEqual({
       by: "weight descending (base edges aggregated), ties by (from, to)",
       top: 5,
       shown: 5,
-      total: 71,
+      total: 74,
     });
   });
 
   it("deps at module level carries the import diagnostics", () => {
     const payload = jsonOf({ report: "deps", level: "module" });
-    expect(payload["importDiagnostics"]).toEqual({ importEdges: 10, nonModuleEndpoints: [] });
+    expect(payload["importDiagnostics"]).toEqual({ importEdges: 11, nonModuleEndpoints: [] });
     const derived = (payload["edges"] as { to: string; provenances: string[] }[]).filter(
       (edge) => edge.to === "java:com.megacorp.ledger",
     );
@@ -391,11 +394,11 @@ describe("--json carries the same information as the text form (decision 8)", ()
     const payload = jsonOf({ report: "coupling", level: "type", top: 3 });
     const rows = payload["rows"] as { id: string; ca: number; ce: number }[];
     expect(rows.map((row) => row.id)).toEqual([
+      "java:com.acme.order/Order",
       "java:com.acme.order/Notifications",
       "java:com.acme.order/Money",
-      "java:com.acme.order/Reporting",
     ]);
-    expect(rows[0]).toMatchObject({ ca: 0, ce: 10, fanIn: 0, fanOut: 10 });
+    expect(rows[0]).toMatchObject({ ca: 2, ce: 8, fanIn: 2, fanOut: 8 });
     expect(payload["ranking"]).toMatchObject({ shown: 3, total: 36 });
   });
 
@@ -431,10 +434,10 @@ describe("--json carries the same information as the text form (decision 8)", ()
 
   it("reports the fold diagnostics the stderr note states", () => {
     const payload = jsonOf({ report: "coupling", level: "type" });
-    expect(payload["foldDiagnostics"]).toMatchObject({ droppedEdges: 10, foldedEdges: 165 });
+    expect(payload["foldDiagnostics"]).toMatchObject({ droppedEdges: 11, foldedEdges: 168 });
     expect(jsonOf({ report: "coupling", level: "module" })["foldDiagnostics"]).toMatchObject({
       droppedEdges: 5,
-      foldedEdges: 170,
+      foldedEdges: 174,
     });
   });
 
@@ -454,20 +457,20 @@ describe("--json carries the same information as the text form (decision 8)", ()
 describe("stream discipline and exit codes (decisions 2 and 3)", () => {
   it("keeps the fold diagnostics on stderr, never in the artifact", () => {
     const result = analyze({ report: "deps", level: "type" });
-    expect(result.stderr).toContain("10 dropped (an endpoint has no type container in this view)");
-    expect(result.stderr).toContain("165 base edges aggregated into 71");
+    expect(result.stderr).toContain("11 dropped (an endpoint has no type container in this view)");
+    expect(result.stderr).toContain("168 base edges aggregated into 74");
     expect(result.stdout).not.toContain("dropped (");
   });
 
   it("reports the module fold's 5 dropped edges — a smaller graph is never silent", () => {
     expect(analyze({ report: "coupling", level: "module" }).stderr).toContain(
-      "fold(module): 170 base edges aggregated into 14; 5 dropped",
+      "fold(module): 174 base edges aggregated into 14; 5 dropped",
     );
   });
 
   it("reports the import layer's base edge count", () => {
     expect(analyze({ report: "deps", level: "module" }).stderr).toContain(
-      "import layer: 10 base import edges kept by this view.",
+      "import layer: 11 base import edges kept by this view.",
     );
   });
 

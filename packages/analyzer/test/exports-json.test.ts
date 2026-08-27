@@ -58,6 +58,7 @@ describe("foldedGraphToJson", () => {
     );
     expect(selfLoop?.kinds).toEqual([
       "access",
+      "annotationUse",
       "inheritance",
       "interfaceImplementation",
       "invocation",
@@ -75,7 +76,7 @@ describe("foldedGraphToJson", () => {
 
     const type = foldedGraphToJson(foldGraph(graph, { level: "type" }));
     expect(type.nodes).toHaveLength(36);
-    expect(type.diagnostics.foldedEdges + type.diagnostics.droppedEdges).toBe(175);
+    expect(type.diagnostics.foldedEdges + type.diagnostics.droppedEdges).toBe(179);
     // Packages have no containing TYPE — the corpus's three plus the seven
     // external modules external types now hang off. Reported, never hidden.
     expect(type.diagnostics.unfoldableEntities).toEqual([

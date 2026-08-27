@@ -20,7 +20,7 @@ import java.util.List;
  * the only kind whose schema variant requires them.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({"edge", "from", "to", "provenance", "anchor", "candidates", "isRead", "isWrite", "sourceFile"})
+@JsonPropertyOrder({"edge", "from", "to", "provenance", "anchor", "candidates", "arguments", "isRead", "isWrite", "sourceFile"})
 public record Edge(
     EdgeKind edge,
     String from,
@@ -28,6 +28,8 @@ public record Edge(
     Provenance provenance,
     SourceAnchor anchor,
     List<String> candidates,
+    /** annotationUse only: the written arguments, in written order (§1.6). */
+    List<NamedArgument> arguments,
     @JsonProperty("isRead") Boolean isRead,
     @JsonProperty("isWrite") Boolean isWrite,
     String sourceFile) {
@@ -45,22 +47,27 @@ public record Edge(
       throw new IllegalArgumentException("an anchor is required on every edge (evidence)");
     }
     candidates = candidates == null ? null : List.copyOf(candidates);
+    arguments = arguments == null ? null : List.copyOf(arguments);
+    if ((edge == EdgeKind.ANNOTATION_USE) != (arguments != null)) {
+      throw new IllegalArgumentException(
+          "an annotationUse edge carries an argument list (possibly empty) and no other kind does");
+    }
   }
 
   /** Module → Module. The first-class, cross-language comparable layer. */
   public static Edge importEdge(String from, String to, Provenance provenance, SourceAnchor anchor) {
-    return new Edge(EdgeKind.IMPORT, from, to, provenance, anchor, null, null, null, null);
+    return new Edge(EdgeKind.IMPORT, from, to, provenance, anchor, null, null, null, null, null);
   }
 
   /** Type → Type: {@code extends} (classes and interfaces alike). */
   public static Edge inheritance(String from, String to, Provenance provenance, SourceAnchor anchor) {
-    return new Edge(EdgeKind.INHERITANCE, from, to, provenance, anchor, null, null, null, null);
+    return new Edge(EdgeKind.INHERITANCE, from, to, provenance, anchor, null, null, null, null, null);
   }
 
   /** Type → interface: a class/enum/record {@code implements} clause. */
   public static Edge interfaceImplementation(
       String from, String to, Provenance provenance, SourceAnchor anchor) {
-    return new Edge(EdgeKind.INTERFACE_IMPLEMENTATION, from, to, provenance, anchor, null, null, null, null);
+    return new Edge(EdgeKind.INTERFACE_IMPLEMENTATION, from, to, provenance, anchor, null, null, null, null, null);
   }
 
   /**
@@ -71,7 +78,7 @@ public record Edge(
   public static Edge invocation(
       String from, String to, Provenance provenance, SourceAnchor anchor, List<String> candidates) {
     List<String> cands = (candidates == null || candidates.isEmpty()) ? null : candidates;
-    return new Edge(EdgeKind.INVOCATION, from, to, provenance, anchor, cands, null, null, null);
+    return new Edge(EdgeKind.INVOCATION, from, to, provenance, anchor, cands, null, null, null, null);
   }
 
   /** Invocable → Structural. At least one of read/write must be true. */
@@ -85,12 +92,25 @@ public record Edge(
     if (!isRead && !isWrite) {
       throw new IllegalArgumentException("an access that is neither a read nor a write is not an access");
     }
-    return new Edge(EdgeKind.ACCESS, from, to, provenance, anchor, null, isRead, isWrite, null);
+    return new Edge(EdgeKind.ACCESS, from, to, provenance, anchor, null, null, isRead, isWrite, null);
+  }
+
+  /**
+   * Entity → annotation Type: a WRITTEN annotation, with its arguments (§1.6).
+   * A kind of its own rather than a `reference` because it carries the values,
+   * and because a consumer must be able to select annotation usages without
+   * inspecting the target's kind — which a stub target cannot answer.
+   */
+  public static Edge annotationUse(
+      String from, String to, Provenance provenance, SourceAnchor anchor, List<NamedArgument> arguments) {
+    return new Edge(
+        EdgeKind.ANNOTATION_USE, from, to, provenance, anchor, null,
+        arguments == null ? List.of() : arguments, null, null, null);
   }
 
   /** Entity → Type: a type usage that is none of the above (casts, generics, annotations). */
   public static Edge reference(String from, String to, Provenance provenance, SourceAnchor anchor) {
-    return new Edge(EdgeKind.REFERENCE, from, to, provenance, anchor, null, null, null, null);
+    return new Edge(EdgeKind.REFERENCE, from, to, provenance, anchor, null, null, null, null, null);
   }
 
   /**

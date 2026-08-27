@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { TraitName } from "./names.js";
+import { Literal } from "./literal.js";
 import { EntityId, SourceAnchor } from "./primitives.js";
 
 /**
@@ -53,6 +54,12 @@ export const TRAITS = {
   // Zod v4 (NaN and Infinity are rejected). Absence means NOT MEASURED, never
   // zero; nothing downstream may default a missing key.
   TMetrics: z.object({ metrics: z.record(z.string().min(1), z.number()) }),
+
+  // values (METAMODEL.md §3.6): the entity's declaration-site constant — a
+  // `static final` initializer, an annotation element's default. Optional
+  // wherever licensed: an initializer that is not a compile-time constant
+  // carries no value at all, and absence means "not constant", never "empty".
+  TWithValue: z.object({ value: Literal }),
 } satisfies Record<TraitName, z.ZodObject>;
 
 /**

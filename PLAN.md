@@ -1482,7 +1482,7 @@ Four principles, locked up front:
 
 ### 12.3 M10c — literal values (the value door)
 
-- [ ] Core: `Literal` primitive (METAMODEL §1.6) — tagged union: string,
+- [x] Core: `Literal` primitive (METAMODEL §1.6) — tagged union: string,
       number (canonical decimal **text** — a Java `long` does not fit a JSON
       number), boolean, null, enum (type id + simple name — a member stub is
       never fabricated, §6 verbatim), type, array, nested annotation, and
@@ -1491,46 +1491,62 @@ Four principles, locked up front:
       `method` (annotation element defaults) in the Java profile; new edge
       kind `annotationUse` — Entity → annotation Type, `arguments:
       {name, value}[]`, the implicit `value =` normalized explicit. Header
-      dictionaries grow (one trait, one edge kind); `gen:schemas` committed.
-- [ ] Encoding: ids inside Literals are file-scoped surrogates, so closure
-      over values is enforced by the wire exactly as for edge endpoints.
-      Property suite extended: closure reaches into `value` and `arguments`;
-      determinism untouched — argument and array order is written order, a
-      source fact like parameter order.
-- [ ] Java extractor: `emitAnnotations` upgraded from `reference` to
+      dictionaries grew (one trait, one edge kind); `gen:schemas` committed —
+      the recursive union publishes as a NAMED `$defs/Literal`, so the
+      contract states the tree once and both record schemas reference it.
+- [x] Encoding: ids inside Literals are file-scoped surrogates, so closure
+      over values is enforced by the wire exactly as for edge endpoints — a
+      value pointing at an undeclared entity has no surrogate to name it with
+      and is unwritable. Property suite extended: the generators build values
+      from the same id pool as every other reference, so closure over values
+      is exercised by construction; determinism untouched — argument and array
+      order is written order, a source fact like parameter order. An EMPTY
+      argument list is omitted on the wire (the edge kind vouches for the key)
+      and restored on read, so `@Override` costs no bytes.
+- [x] Store: `entity.value` and `edge.arguments` are JSON columns — a Literal
+      is a tree, nothing queries inside one, and the ids it holds are the
+      wire's own surrogates, so the blob round-trips exactly. `DB_VERSION`
+      3 → 4.
+- [x] Java extractor: `emitAnnotations` upgraded from `reference` to
       `annotationUse` with arguments (Spoon annotation values + partial
       evaluator; chars ride as one-character strings; a class literal in an
-      argument still emits its own `reference` edge — a value never replaces
-      a dependency). Constant `attribute` initializers (JLS compile-time
+      argument still emits its own `reference` edge — a value never replaces a
+      dependency). Constant `attribute` initializers (JLS compile-time
       constant expressions) and annotation element `default`s carried via
-      `TWithValue`. In-place clean break for the usage edge kind — fixtures
-      regenerated, no dual emission (the M6 precedent).
-- [ ] Analyzer and city: values pass through untouched on load; the details
-      panel may show a constant's value — presentation, no new derivation.
-- **DoD**: the fixture asserts `@Retention(RetentionPolicy.RUNTIME)` on
+      `TWithValue`. A field that is `final` but whose initializer is CODE
+      (`new StringBuilder()`) carries nothing: absence means "not constant".
+      In-place clean break for the usage edge kind — fixtures regenerated, no
+      dual emission (the M6 precedent).
+- [x] Analyzer and city: values pass through untouched on load; the details
+      panel shows a constant beside its field, ids rendered as the referenced
+      entity's NAME — presentation, no new derivation.
+- **DoD** ✅ the fixture asserts `@Retention(RetentionPolicy.RUNTIME)` on
   `Audited` as an `annotationUse` edge whose argument is the enum form,
-  `value() default ""` as a `TWithValue` string, a `static final` constant
-  folded across an arithmetic expression, and one honest `unevaluated`;
-  property suite green including value-closure; regenerated gson and
-  commons-lang models diagnose clean.
+  `value() default ""` as a `TWithValue` string, `MAX_LINES = 4 * 25` folded
+  to `100`, and one honest `unevaluated` (`@Audited(LedgerClient.AUDIT_TAG)`,
+  a constant noClasspath cannot resolve); property suite green including
+  value-closure; regenerated gson (63 valued entities, 599 annotation uses,
+  122 with arguments) and commons-lang (458 valued, 1 164 uses) diagnose
+  clean. The discipline is visible on real code: `SAFE_MAX_ARRAY_LENGTH`
+  (`static final`) states `2147483639`, while `SOFT_MAX_ARRAY_LENGTH` — the
+  same `Integer.MAX_VALUE - 8` initializer, but not `final` — states nothing.
 
 ### 12.4 M10d — framework semantics (Spring first)
 
 - [ ] Framework profile as data in the analyzer (METAMODEL §9.1): annotation
       identity → role (`stereotype`, `injection-point`, `entry-point`,
-      `qualifier`) for the Spring/Jakarta vocabulary; specifiable without
-      being implemented — the profile robustness test, again.
+      `qualifier`) for the Spring/Jakarta vocabulary; specifiable without being
+      implemented — the profile robustness test, again.
 - [ ] Analyzer DI pass: for each injection point (field / constructor param
       whose `declaredType` is an interface, on a stereotyped class), derive
       in-memory `dynamic-candidate` edges from the consumer to every corpus
-      implementation of that interface — candidates straight from the
-      existing `interfaceImplementation` inverse index; `@Primary` narrows on
-      presence, `@Qualifier` on its `annotationUse` argument value (M10c) —
-      exact strings, not guesswork. Injection points and roles are selected
-      on `annotationUse` edges directly; matching reads the referenced
-      annotation entity's `name` + parent chain, never a parsed id, and
-      tolerates stub targets (the petclinic case: all Spring types are
-      stubs).
+      implementation of that interface — candidates straight from the existing
+      `interfaceImplementation` inverse index; `@Primary` narrows on presence,
+      `@Qualifier` on its `annotationUse` argument value (M10c) — exact
+      strings, not guesswork. Injection points and roles are selected on
+      `annotationUse` edges directly; matching reads the referenced annotation
+      entity's `name` + parent chain, never a parsed id, and tolerates stub
+      targets (the petclinic case: all Spring types are stubs).
 - [ ] Stereotype classification surfaced as a report and as a semantic city
       color channel ("architectural role"), legended like every channel —
       derivable from `annotationUse` edges (M10c), no further model change.
@@ -1558,7 +1574,7 @@ Four principles, locked up front:
 | NV | Navigator frontend | ✅ `codegraph navigator --serve`: `@codegraph/navigator` builds an index-addressed browsable artifact (tree + one classified dependency row per base edge, reference sub-roles recovered from the source entity); `@codegraph/navigator-ui` renders it — virtualized tree with search, fan-in/fan-out sectioned by role with member, provenance and anchor. Design record: `docs/navigator.md`. Verified on fineract (102 972 nodes / 668 286 rows, 100 MB artifact loading in 1.3 s, 45 rows mounted after scrolling) |
 | M10a | Source links | ✅ header `repository` facts (remote, commit, repo-relative root, provider?) in core + `schemas/` as patterns; extractor passthrough flags; CLI-derived normalization carried per snapshot frame; store/city/viz carry them and the details panel links at the scrubbed sha — verified on gson (`JsonReader.java#L211-L2005` at `b3f4ca2`, replay retargeting to `ed2b25d`, fixture city linkless) |
 | M10b | Measures | ✅ `TMetrics` (open keys, finite values) in core, `schemas/` and the store (`entity_metric` rows, DB_VERSION 3); Java extractor emits `sloc` (lexer-based) + `cyclomatic` with a lambda's branches charged to the lambda; fixture CC values hand-counted, `sloc ≤ span` a property; `--height sum:cyclomatic --footprint loc` reviewed as screenshots on commons-lang (`JavaVersion.get` hand-count 33 = emitted 33) |
-| M10c | Literal values | `Literal` + `TWithValue` + `annotationUse` in core and schemas; Java extractor carries annotation arguments, constant initializers and element defaults; value-closure property green; fixture asserts the `Audited` cases |
+| M10c | Literal values | ✅ `Literal` + `TWithValue` + `annotationUse` in core, `schemas/` (a named `$defs/Literal`) and the store (JSON columns, DB_VERSION 4); Java extractor carries annotation arguments, constant initializers and element defaults, `unevaluated` where it cannot fold; closure reaches inside values by ENCODING; fixture asserts the four `Audited`/`MAX_LINES` cases; gson and commons-lang diagnose clean |
 | M10d | Framework semantics | data-driven Spring framework profile; derived DI `dynamic-candidate` wiring (qualifier narrowing on M10c argument values) hand-verified on spring-petclinic; `declared` view unchanged by the pass |
 ## 14. Decisions made in this plan (deltas vs. the design doc)
 
