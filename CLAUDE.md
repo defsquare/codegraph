@@ -36,11 +36,14 @@ packages/cli/        @codegraph/cli — `codegraph` command.
 packages/viz/        @codegraph/viz — Three.js code city: renders a laid-out
                      city.json artifact (its ONLY input; guard-enforced). The
                      ONLY package that may import three. Vite app, no library.
-packages/navigator-ui/ @codegraph/navigator-ui — React model navigator: a
-                     virtualized tree with search beside a fan-in/fan-out
-                     dependency view. Renders a navigator.json artifact (its
-                     ONLY input; guard-enforced). The ONLY package that may
-                     import react. Vite app, no library.
+packages/navigator-ui/ @codegraph/navigator-ui — React model navigator, four
+                     tabs: Navigate (virtualized tree + fan-in/fan-out
+                     evidence), Graph (Cytoscape+fcose dependency graph,
+                     module/type modes), Cycles (the artifact's precomputed
+                     tangle report), Coupling (ranked metrics). Renders a
+                     navigator.json artifact (its ONLY input; guard-enforced).
+                     The ONLY package that may import react and cytoscape.
+                     Vite app, no library.
 fixtures/            Reference corpora + expected model.jsonl snapshots.
 ```
 

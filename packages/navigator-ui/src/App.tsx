@@ -4,6 +4,9 @@ import { expandedToReveal } from "./model/flatten.js";
 import { ArtifactUnavailableError, loadFromFile, loadFromUrl, type LoadProgress } from "./load.js";
 import { TreePanel } from "./components/TreePanel.js";
 import { DepsView } from "./components/DepsView.js";
+import { GraphView } from "./components/GraphView.js";
+import { CyclesView } from "./components/CyclesView.js";
+import { CouplingView } from "./components/CouplingView.js";
 import { ProgressOverlay } from "./components/ProgressOverlay.js";
 import { Loader } from "./components/Loader.js";
 
@@ -22,9 +25,26 @@ type Phase =
 /** The progress overlay appears only when initialization outlasts this. */
 export const SLOW_LOAD_MS = 2000;
 
+/**
+ * The tabs: NAVIGATE is the working surface (tree + evidence); the others are
+ * the reports, each on its own tab so a report never crowds the navigation.
+ * Every report row leads BACK to Navigate through `reveal` — one selection,
+ * four ways of looking at it.
+ */
+const TABS = ["navigate", "graph", "cycles", "coupling"] as const;
+type Tab = (typeof TABS)[number];
+const TAB_LABEL: Readonly<Record<Tab, string>> = {
+  navigate: "Navigate",
+  graph: "Graph",
+  cycles: "Cycles",
+  coupling: "Coupling",
+};
+
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [slow, setSlow] = useState(false);
+  const [tab, setTab] = useState<Tab>("navigate");
+  const [graphVisited, setGraphVisited] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
   const [selection, setSelection] = useState<number | undefined>(undefined);
   const [query, setQuery] = useState("");
@@ -45,6 +65,8 @@ export function App() {
         setExpanded(new Set(ix.fold.roots));
         setSelection(undefined);
         setQuery("");
+        setTab("navigate");
+        setGraphVisited(false);
         setPhase({ kind: "ready", ix });
       } catch (error) {
         if (!alive()) return;
@@ -101,7 +123,7 @@ export function App() {
 
   const ix = phase.kind === "ready" ? phase.ix : undefined;
 
-  /** Select a node from anywhere: reveal it in the tree and scroll to it. */
+  /** Select a node from anywhere: jump to Navigate, reveal it, scroll to it. */
   const reveal = useCallback(
     (node: number) => {
       if (ix === undefined) return;
@@ -109,6 +131,7 @@ export function App() {
       setExpanded((current) => expandedToReveal(ix.model, ix.fold, current, node));
       setQuery("");
       setScrollTo(node);
+      setTab("navigate");
     },
     [ix],
   );
@@ -126,9 +149,21 @@ export function App() {
     () =>
       ix === undefined
         ? undefined
-        : { nodes: ix.model.nodes.length, deps: ix.model.deps.length },
+        : {
+            nodes: ix.model.nodes.length,
+            deps: ix.model.deps.length,
+            cycles: ix.model.reports?.cycles.reduce(
+              (sum, report) => sum + report.components.length,
+              0,
+            ),
+          },
     [ix],
   );
+
+  const pickTab = useCallback((next: Tab) => {
+    setTab(next);
+    if (next === "graph") setGraphVisited(true);
+  }, []);
 
   if (phase.kind === "loading" && !slow) {
     return <div className="app app-blank" />;
@@ -151,6 +186,23 @@ export function App() {
         <span className="header-stats">
           {stats?.nodes.toLocaleString()} nodes · {stats?.deps.toLocaleString()} dependency rows
         </span>
+        <nav className="tab-strip" role="tablist" aria-label="Views">
+          {TABS.map((candidate) => (
+            <button
+              key={candidate}
+              type="button"
+              role="tab"
+              aria-selected={tab === candidate}
+              className={tab === candidate ? "tab tab-on" : "tab"}
+              onClick={() => pickTab(candidate)}
+            >
+              {TAB_LABEL[candidate]}
+              {candidate === "cycles" && stats?.cycles !== undefined && stats.cycles > 0 && (
+                <span className="tab-count">{stats.cycles}</span>
+              )}
+            </button>
+          ))}
+        </nav>
         <label className="header-toggle">
           <input
             type="checkbox"
@@ -160,7 +212,7 @@ export function App() {
           Show externals
         </label>
       </header>
-      <div className="app-body">
+      <div className="app-body" hidden={tab !== "navigate"}>
         <TreePanel
           ix={ix}
           expanded={expanded}
@@ -176,6 +228,30 @@ export function App() {
         />
         <DepsView ix={ix} selection={selection} onNavigate={reveal} />
       </div>
+      {(graphVisited || tab === "graph") && (
+        // Mounted on first visit, then kept alive hidden: the fcose layout of
+        // a real corpus is too expensive to redo on every tab switch.
+        <div className="app-body" hidden={tab !== "graph"}>
+          <GraphView
+            ix={ix}
+            hideExternals={hideExternals}
+            active={tab === "graph"}
+            selection={selection}
+            onSelect={setSelection}
+            onReveal={reveal}
+          />
+        </div>
+      )}
+      {tab === "cycles" && (
+        <div className="app-body">
+          <CyclesView ix={ix} onReveal={reveal} />
+        </div>
+      )}
+      {tab === "coupling" && (
+        <div className="app-body">
+          <CouplingView ix={ix} hideExternals={hideExternals} onReveal={reveal} />
+        </div>
+      )}
     </div>
   );
 }

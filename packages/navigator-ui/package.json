@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "description": "Codegraph model navigator: searchable tree + fan-in/fan-out dependency explorer over a navigator.json artifact",
-  "files": ["dist", "index.html"],
+  "files": [
+    "dist",
+    "index.html"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -14,11 +17,14 @@
   },
   "dependencies": {
     "@codegraph/navigator": "workspace:*",
+    "cytoscape": "^3.34.2",
+    "cytoscape-fcose": "^2.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-window": "^1.8.11"
   },
   "devDependencies": {
+    "@types/cytoscape": "^3.31.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@types/react-window": "^1.8.8",

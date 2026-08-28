@@ -18,7 +18,7 @@ export function artifact(): NavigatorModel {
       isStub: false,
       parent: 0,
       children: [2, 3],
-      metrics: { fanIn: 0, fanOut: 1 },
+      metrics: { fanIn: 0, fanOut: 1, instability: 1 },
     },
     { name: "m", kind: "method", category: "operation", isStub: false, parent: 1, children: [], signature: "m()" },
     { name: "f", kind: "attribute", category: "attribute", isStub: false, parent: 1, children: [] },
@@ -29,7 +29,7 @@ export function artifact(): NavigatorModel {
       isStub: false,
       parent: 0,
       children: [5],
-      metrics: { fanIn: 1, fanOut: 0 },
+      metrics: { fanIn: 1, fanOut: 0, instability: 0 },
     },
     { name: "n", kind: "method", category: "operation", isStub: false, parent: 4, children: [], signature: "n()" },
   ];

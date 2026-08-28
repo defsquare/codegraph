@@ -713,3 +713,514 @@ button.twisty:hover {
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------- tab strip -- */
+/*
+ * The tabs separate NAVIGATION from the REPORTS. The strip is chrome, so it
+ * stays sans and quiet; the active tab is marked by the paper underline —
+ * selection's hue, the same meaning it has on a tree row.
+ */
+
+.tab-strip {
+  display: flex;
+  gap: 2px;
+  align-self: stretch;
+  align-items: stretch;
+  margin: -10px 0;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--paper-dim);
+  border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+  color: var(--paper);
+}
+
+.tab.tab-on {
+  color: var(--paper);
+  border-bottom-color: var(--paper);
+}
+
+.tab-count {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper-dim);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 0 5px;
+}
+
+/* `.app-body` is flex; the hidden attribute must still win. */
+.app-body[hidden] {
+  display: none;
+}
+
+/* -------------------------------------------------- shared report chrome -- */
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.seg button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--paper-dim);
+}
+
+.seg button + button {
+  border-left: 1px solid var(--rule);
+}
+
+.seg button:hover {
+  color: var(--paper);
+}
+
+.seg button.seg-on {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.seg-count {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.report-view {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 14px 18px;
+}
+
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.report-summary {
+  font-size: 12px;
+  color: var(--paper-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.report-clear {
+  color: var(--paper-dim);
+  font-size: 13px;
+}
+
+.report-empty {
+  display: grid;
+  place-items: center;
+  color: var(--paper-dim);
+}
+
+.report-empty code {
+  color: var(--paper);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-in {
+  color: var(--in);
+}
+
+.metric-out {
+  color: var(--out);
+}
+
+/* ------------------------------------------------------------- graph tab -- */
+
+.graph-view {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--ink-raised);
+}
+
+.graph-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--paper-dim);
+}
+
+.graph-slider b {
+  min-width: 2ch;
+  text-align: right;
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-slider input[type="range"] {
+  width: 120px;
+  accent-color: var(--paper-dim);
+}
+
+.graph-search {
+  font: inherit;
+  font-size: 12px;
+  color: var(--paper);
+  background: var(--ink-sunken);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 4px 8px;
+  width: 190px;
+}
+
+.graph-search::placeholder {
+  color: var(--paper-faint);
+}
+
+.graph-stats {
+  font-size: 11px;
+  color: var(--paper-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-truncated {
+  font-size: 11px;
+  color: var(--out);
+}
+
+.graph-canvas {
+  flex: 1;
+  min-height: 0;
+}
+
+.graph-legend {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--paper-dim);
+  background: color-mix(in srgb, var(--ink-raised) 88%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 6px 10px;
+  pointer-events: none;
+}
+
+.graph-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lg-line {
+  width: 16px;
+  border-top: 2px solid var(--rule);
+}
+
+.lg-line.lg-dashed {
+  border-top-style: dashed;
+  border-top-color: var(--inference);
+}
+
+.lg-line.lg-in {
+  border-top-color: var(--in);
+}
+
+.lg-line.lg-out {
+  border-top-color: var(--out);
+}
+
+.lg-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #5b8dd9;
+}
+
+.graph-details {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  max-width: 340px;
+  background: color-mix(in srgb, var(--ink-raised) 92%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 10px 12px;
+}
+
+.graph-details-name code {
+  font-size: 13px;
+}
+
+.graph-details-path {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--paper-dim);
+}
+
+.graph-details-metrics {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-details-reveal {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 3px 8px;
+}
+
+.graph-details-reveal:hover {
+  border-color: var(--paper-dim);
+}
+
+.graph-details code.stub {
+  color: var(--paper-faint);
+  font-style: italic;
+}
+
+/* ------------------------------------------------------------ cycles tab -- */
+
+.cycle {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  margin-bottom: 10px;
+  background: var(--ink-raised);
+}
+
+.cycle-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+}
+
+.cycle-head:hover {
+  background: var(--rule-soft);
+}
+
+.cycle-title {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cycle-title em {
+  font-style: normal;
+  color: var(--paper-dim);
+}
+
+.cycle-numbers {
+  display: flex;
+  gap: 14px;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--paper-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.cycle-cut {
+  color: var(--out);
+}
+
+.cycle-body {
+  padding: 4px 12px 12px 30px;
+}
+
+.cycle-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.cycle-member {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 2px 7px;
+}
+
+.cycle-member:hover {
+  border-color: var(--paper-dim);
+}
+
+.cycle-more {
+  font-size: 11px;
+  color: var(--paper-dim);
+  padding: 2px 7px;
+}
+
+.cycle-more:hover {
+  color: var(--paper);
+}
+
+.cycle-edges {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.cycle-edges th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--paper-faint);
+  padding: 4px 10px 4px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.cycle-edges td {
+  padding: 4px 10px 4px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.cycle-scissors {
+  width: 20px;
+  color: var(--out);
+}
+
+/* The minimal cut — the rows a reader acts on. */
+.cycle-feedback td {
+  background: color-mix(in srgb, var(--out) 7%, transparent);
+}
+
+.cycle-endpoint {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--paper);
+}
+
+.cycle-endpoint:hover {
+  text-decoration: underline;
+}
+
+.cycle-arrow {
+  color: var(--paper-faint);
+}
+
+.prov-declared {
+  font-size: 11px;
+  color: var(--paper-faint);
+}
+
+/* ---------------------------------------------------------- coupling tab -- */
+
+.coupling-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.coupling-table th {
+  position: sticky;
+  top: 0;
+  background: var(--ink);
+  text-align: left;
+  padding: 4px 14px 6px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.coupling-table th.num,
+.coupling-table td.num {
+  text-align: right;
+}
+
+.sort {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--paper-faint);
+  white-space: nowrap;
+}
+
+.sort:hover,
+.sort.sort-on {
+  color: var(--paper);
+}
+
+.sort-dir {
+  margin-left: 3px;
+}
+
+.coupling-table td {
+  padding: 4px 14px 4px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: baseline;
+}
+
+.coupling-name {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.coupling-name .dep-path {
+  margin: 0;
+}
+
+.coupling-i {
+  white-space: nowrap;
+}
+
+/*
+ * Instability between its poles: 0 stable (cyan, the fan-in hue) to
+ * 1 unstable (amber, the fan-out hue) — the bar IS that ratio.
+ */
+.i-bar {
+  display: inline-block;
+  width: 64px;
+  height: 5px;
+  margin-right: 8px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--in) 30%, var(--ink-sunken));
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.i-fill {
+  display: block;
+  height: 100%;
+  background: var(--out);
+  border-radius: 2px;
+}
