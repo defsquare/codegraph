@@ -95,6 +95,11 @@ public final class Main {
     // of the wall clock, so it is the one that most needs a bar.
     Launcher launcher = new Launcher();
     launcher.getEnvironment().setNoClasspath(true);
+    // A multi-module corpus may declare one FQN in several modules (each compiles
+    // alone); Spoon sees all roots as one unit and JDT's duplicate-type error
+    // would abort the run. Keep the first declaration, drop the rest — same
+    // simple name in DIFFERENT packages is never a duplicate.
+    launcher.getEnvironment().setIgnoreDuplicateDeclarations(true);
     launcher.getEnvironment().setComplianceLevel(COMPLIANCE_LEVEL);
     launcher.getEnvironment().setCommentEnabled(true);
     if (progress.isEnabled()) {
