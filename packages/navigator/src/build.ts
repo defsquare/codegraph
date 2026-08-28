@@ -1,6 +1,7 @@
 import type { Entity, EntityId } from "@codegraph/core";
 import {
   coupling,
+  cycles,
   folderFor,
   hasTrait,
   identityView,
@@ -9,6 +10,7 @@ import {
   typeDependencyGraph,
   type CodeGraph,
   type CouplingRow,
+  type CycleReport,
   type View,
 } from "@codegraph/analyzer";
 import {
@@ -16,6 +18,9 @@ import {
   NAVIGATOR_GENERATOR,
   type DepRow,
   type NavAnchor,
+  type NavCycleComponent,
+  type NavCycleEdge,
+  type NavCycleReport,
   type NavNode,
   type NavigatorModel,
   type NodeCategory,
@@ -90,9 +95,12 @@ export function buildNavigator(
     if (children !== undefined) for (let i = children.length - 1; i >= 0; i -= 1) stack.push(children[i] as EntityId);
   }
 
-  // --- coupling metrics, at each category's own fold level ------------------
-  const typeRows = rowsById(coupling(typeDependencyGraph(graph, view)).rows);
-  const moduleRows = rowsById(coupling(importGraph(graph, view)).rows);
+  // --- coupling and cycle metrics, at each category's own fold level --------
+  // Both metrics read the same two folds, so each fold is built once.
+  const typeFold = typeDependencyGraph(graph, view);
+  const moduleFold = importGraph(graph, view);
+  const typeRows = rowsById(coupling(typeFold).rows);
+  const moduleRows = rowsById(coupling(moduleFold).rows);
 
   // --- emit nodes, interning anchor files as they appear --------------------
   const files: string[] = [];
@@ -130,7 +138,15 @@ export function buildNavigator(
       ...(signature === undefined ? {} : { signature }),
       ...(declaredIndex === undefined ? {} : { declaredType: declaredIndex }),
       ...(anchor === undefined ? {} : { anchor }),
-      ...(metrics === undefined ? {} : { metrics: { fanIn: metrics.fanIn, fanOut: metrics.fanOut } }),
+      ...(metrics === undefined
+        ? {}
+        : {
+            metrics: {
+              fanIn: metrics.fanIn,
+              fanOut: metrics.fanOut,
+              instability: metrics.instability,
+            },
+          }),
     };
   });
 
@@ -166,6 +182,13 @@ export function buildNavigator(
   }
   deps.sort(compareDeps);
 
+  const reports = {
+    cycles: [
+      mapCycleReport("module", cycles(moduleFold), indexOf),
+      mapCycleReport("type", cycles(typeFold), indexOf),
+    ],
+  };
+
   return {
     kind: NAVIGATOR_ARTEFACT_KIND,
     generatedBy: NAVIGATOR_GENERATOR,
@@ -175,7 +198,62 @@ export function buildNavigator(
     nodes,
     roots: roots.map((id) => indexOf.get(id) as number),
     deps,
+    reports,
     diagnostics: { selfDeps, droppedDeps },
+  };
+}
+
+/**
+ * Re-address the analyzer's cycle report onto node indexes. A folded id that
+ * is not a selected node (possible only for an entity outside every category)
+ * drops its component — a dangling index is unwritable, like everywhere else
+ * in this artifact. Folding self-loops are cohesion inside one member, never a
+ * cuttable link, so they are excluded here as the tangle metric excludes them.
+ */
+function mapCycleReport(
+  level: "module" | "type",
+  report: CycleReport,
+  indexOf: ReadonlyMap<EntityId, number>,
+): NavCycleReport {
+  const components: NavCycleComponent[] = [];
+  for (const component of report.components) {
+    const members = component.members.map((member) => indexOf.get(member));
+    if (members.some((member) => member === undefined)) continue;
+    const feedback = new Set(component.feedbackEdges);
+    const edges: NavCycleEdge[] = [];
+    let weight = 0;
+    for (const cycleEdge of component.edges) {
+      if (cycleEdge.selfLoop) continue;
+      const from = indexOf.get(cycleEdge.from);
+      const to = indexOf.get(cycleEdge.to);
+      if (from === undefined || to === undefined) continue;
+      weight += cycleEdge.count;
+      edges.push({
+        from,
+        to,
+        count: cycleEdge.count,
+        provenances: cycleEdge.provenances,
+        allDeclared: cycleEdge.allDeclared,
+        feedback: feedback.has(cycleEdge),
+      });
+    }
+    components.push({
+      members: members as number[],
+      edges,
+      weight,
+      feedbackWeight: component.feedbackWeight,
+      tangleMetric: component.tangleMetric,
+    });
+  }
+  return {
+    level,
+    components,
+    tangle: {
+      feedbackEdgeCount: report.tangle.feedbackEdgeCount,
+      feedbackWeight: report.tangle.feedbackWeight,
+      cyclicWeight: report.tangle.cyclicWeight,
+      metric: report.tangle.metric,
+    },
   };
 }
 

@@ -63,6 +63,8 @@ export interface NavNodeMetrics {
   /** Distinct dependents / dependencies at this node's fold level, from `coupling()`. */
   readonly fanIn: number;
   readonly fanOut: number;
+  /** The analyzer's I = Ce / (Ca + Ce) in [0,1]; 0 by definition when Ca + Ce = 0. */
+  readonly instability: number;
 }
 
 export interface NavNode {
@@ -104,6 +106,64 @@ export interface DepRow {
   readonly anchor: NavAnchor;
 }
 
+/**
+ * One aggregated link inside a cycle, mapped to node indexes. Everything here
+ * is the ANALYZER's cycle report re-addressed — the renderer displays which
+ * dependency to attack and what cutting it costs; it never runs Tarjan itself.
+ */
+export interface NavCycleEdge {
+  readonly from: number;
+  readonly to: number;
+  /** Base edges aggregated into this link — the cost of cutting it. */
+  readonly count: number;
+  /** Sorted; more than one entry when facts and inferences mix on the link. */
+  readonly provenances: readonly Provenance[];
+  /** True only when every aggregated base edge is a `declared` fact. */
+  readonly allDeclared: boolean;
+  /** Member of the minimum feedback set — the minimal cut that breaks the cycle. */
+  readonly feedback: boolean;
+}
+
+export interface NavCycleComponent {
+  /** Node indexes, in the analyzer's member order (sorted by entity id). */
+  readonly members: readonly number[];
+  /** Links BETWEEN members, sorted (from, to); folding self-loops excluded. */
+  readonly edges: readonly NavCycleEdge[];
+  /** Sum of `edges` counts — the base-edge weight of the cycle. */
+  readonly weight: number;
+  /** Sum of the feedback edges' counts — the references the minimal cut severs. */
+  readonly feedbackWeight: number;
+  /** Structure101's tangle metric: feedbackWeight / weight, in [0,1]. */
+  readonly tangleMetric: number;
+}
+
+export interface NavTangleSummary {
+  readonly feedbackEdgeCount: number;
+  readonly feedbackWeight: number;
+  /** Non-self internal weight summed over the components. */
+  readonly cyclicWeight: number;
+  /** feedbackWeight / cyclicWeight; 0 — not NaN — on an acyclic graph. */
+  readonly metric: number;
+}
+
+export interface NavCycleReport {
+  /** The analyzer's fold: `module` over imports, `type` over every edge kind. */
+  readonly level: "module" | "type";
+  /** Sorted by first member, as the analyzer reports them. */
+  readonly components: readonly NavCycleComponent[];
+  readonly tangle: NavTangleSummary;
+}
+
+/**
+ * Precomputed report data — graph facts the renderer must never re-derive
+ * (CLAUDE.md hard boundary). Optional in the TYPE so artifacts written before
+ * this section stay loadable; the builder always emits it.
+ */
+export interface NavReports {
+  /** One report per level, module first. */
+  readonly cycles: readonly NavCycleReport[];
+}
+
 export interface NavigatorDiagnostics {
   /** Edges whose endpoints resolved to the SAME owner — internal cohesion, not a dependency. */
   readonly selfDeps: number;
@@ -126,5 +186,7 @@ export interface NavigatorModel {
   readonly roots: readonly number[];
   /** Sorted by (from, to, role, member, toMember, anchor). */
   readonly deps: readonly DepRow[];
+  /** Absent only in artifacts written before the reports section existed. */
+  readonly reports?: NavReports;
   readonly diagnostics: NavigatorDiagnostics;
 }

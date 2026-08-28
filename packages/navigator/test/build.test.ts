@@ -170,8 +170,8 @@ describe("views, metrics, closure", () => {
 
   it("agrees with coupling(): distinct counterparts, self excluded", () => {
     const model = toyGraph();
-    expect(nodeByName(model, "A").metrics).toEqual({ fanIn: 0, fanOut: 1 });
-    expect(nodeByName(model, "C").metrics).toEqual({ fanIn: 1, fanOut: 0 });
+    expect(nodeByName(model, "A").metrics).toEqual({ fanIn: 0, fanOut: 1, instability: 1 });
+    expect(nodeByName(model, "C").metrics).toEqual({ fanIn: 1, fanOut: 0, instability: 0 });
   });
 
   it("closes every index: parents, children, roots, deps, anchors, declaredType", () => {
