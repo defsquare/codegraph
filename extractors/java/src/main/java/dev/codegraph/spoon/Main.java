@@ -184,6 +184,21 @@ public final class Main {
       progress.log(
           "warning: " + droppedDanglingEdges + " edge(s) dropped for an undeclarable endpoint");
     }
+
+    notice(options);
+  }
+
+  /**
+   * What was read and where it landed — the only thing this run writes to stdout,
+   * every diagnostic staying on stderr. Absolute and normalized: both options
+   * default, and both may be relative to a working directory the caller has left,
+   * so the notice has to be copyable into the next command as-is.
+   */
+  private static void notice(Options options) {
+    for (Path source : options.sources()) {
+      System.out.println("source: " + source.toAbsolutePath().normalize());
+    }
+    System.out.println("model:  " + options.out().toAbsolutePath().normalize());
   }
 
   /** The writer counts records; the bar shows them. */
@@ -296,8 +311,8 @@ public final class Main {
         The run prints a RESOLUTION SUMMARY to stderr: how many type references
         Spoon resolved in noClasspath mode, how many entities and stubs were
         emitted, and how many edges. Progress goes to stderr too, and never to a
-        stream that is not a terminal unless asked for. stdout stays free for
-        future piping.
+        stream that is not a terminal unless asked for. stdout carries one thing:
+        the finished run's `source:` roots and `model:` file, absolute.
         """
         .formatted(VERSION);
   }

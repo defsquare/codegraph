@@ -70,6 +70,23 @@ class CliDefaultsTest {
     Path expected = corpus.resolve("my-corpus-codegraph.jsonl");
     assertTrue(Files.exists(expected), () -> "no " + expected.getFileName() + ":\n" + stderr);
     assertTrue(Files.readString(expected).contains("\"s\":\"Greeter\""), stderr);
+
+    // The defaults are the case the notice exists for: neither path was typed,
+    // and both are relative to a working directory the caller may not be in.
+    // Compared as paths, not as text: the notice does not resolve symlinks, and
+    // on macOS a temp directory is one.
+    List<String> notice = Files.readString(work.resolve("stdout")).lines().toList();
+    assertEquals(2, notice.size(), () -> "unexpected stdout: " + notice);
+    assertEquals(corpus.toRealPath(), realPath(notice.get(0), "source: "));
+    assertEquals(expected.toRealPath(), realPath(notice.get(1), "model:  "));
+  }
+
+  /** The absolute path a notice line names, canonical so two spellings compare equal. */
+  private static Path realPath(String line, String prefix) throws Exception {
+    assertTrue(line.startsWith(prefix), () -> "expected a " + prefix.trim() + " line: " + line);
+    Path path = Path.of(line.substring(prefix.length()));
+    assertTrue(path.isAbsolute(), () -> "the notice must name an absolute path: " + line);
+    return path.toRealPath();
   }
 
   /** The forked JVM starts elsewhere, so every classpath entry must be absolute. */

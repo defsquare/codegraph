@@ -129,9 +129,19 @@ class ModelSchemaValidationTest {
     }
   }
 
-  /** stdout stays free for piping; the summary belongs on stderr (PLAN.md §5.3). */
+  /**
+   * No diagnostic reaches stdout: the summary, the warnings and the progress
+   * belong on stderr (PLAN.md §5.3). stdout carries only the completion notice —
+   * its two lines are {@link CompletionNoticeTest}'s subject, not this one's.
+   */
   @Test
-  void nothingIsWrittenToStdout() {
-    assertTrue(run.stdout().isBlank(), () -> "stdout was not empty: " + run.stdout());
+  void noDiagnosticIsWrittenToStdout() {
+    List<String> unexpected =
+        run.stdout()
+            .lines()
+            .filter(line -> !line.startsWith("source: ") && !line.startsWith("model:  "))
+            .toList();
+
+    assertTrue(unexpected.isEmpty(), () -> "diagnostics leaked to stdout: " + unexpected);
   }
 }
