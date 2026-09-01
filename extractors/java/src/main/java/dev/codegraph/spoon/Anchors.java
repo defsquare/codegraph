@@ -98,6 +98,14 @@ public final class Anchors {
     return (position == null || !position.isValidPosition()) ? null : relativeFile(position);
   }
 
+  /**
+   * Root-relative path of a file named by something other than a Spoon element —
+   * the JDT compiler reports the declarations it discarded by filename only.
+   */
+  public String relativeFile(Path file) {
+    return file == null ? null : relativeByFile.computeIfAbsent(file, this::relativize);
+  }
+
   private String relativeFile(SourcePosition position) {
     File file = position.getFile();
     if (file == null && position.getCompilationUnit() != null) {

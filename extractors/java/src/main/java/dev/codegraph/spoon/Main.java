@@ -13,7 +13,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-import spoon.Launcher;
 import spoon.reflect.CtModel;
 
 /**
@@ -23,7 +22,9 @@ import spoon.reflect.CtModel;
  * <p>THE PASS ORDER, and why it is not negotiable:
  *
  * <pre>
- *   0. build the Spoon model            noClasspath: unresolvable code still parses
+ *   0. build the Spoon model            noClasspath: unresolvable code still parses;
+ *                                       CorpusLauncher: a name declared in two modules
+ *                                       is a corpus fact, not a fatal compile error
  *   1. CorpusWhitelist.build            what the corpus DECLARES — before anything
  *                                       else, because it is the only answer to
  *                                       "internal or external?" that Spoon's
@@ -93,13 +94,8 @@ public final class Main {
     // do not compile, and an extractor that requires a classpath extracts nothing.
     // Spoon reports its own per-file progress; on a real corpus this pass is most
     // of the wall clock, so it is the one that most needs a bar.
-    Launcher launcher = new Launcher();
+    CorpusLauncher launcher = new CorpusLauncher();
     launcher.getEnvironment().setNoClasspath(true);
-    // A multi-module corpus may declare one FQN in several modules (each compiles
-    // alone); Spoon sees all roots as one unit and JDT's duplicate-type error
-    // would abort the run. Keep the first declaration, drop the rest — same
-    // simple name in DIFFERENT packages is never a duplicate.
-    launcher.getEnvironment().setIgnoreDuplicateDeclarations(true);
     launcher.getEnvironment().setComplianceLevel(COMPLIANCE_LEVEL);
     launcher.getEnvironment().setCommentEnabled(true);
     if (progress.isEnabled()) {
@@ -112,6 +108,17 @@ public final class Main {
 
     ResolutionStats stats = ResolutionStats.measure(spoonModel);
     Anchors anchors = new Anchors(root);
+
+    // A file JDT discarded declares nothing here, so nothing downstream can
+    // notice its absence — the run has to name it while it still can.
+    for (CorpusLauncher.Shadowed dropped : launcher.shadowedDeclarations()) {
+      progress.log(
+          "warning: "
+              + anchors.relativeFile(dropped.file())
+              + ": "
+              + dropped.message()
+              + " elsewhere in the corpus; this declaration is absent from the model");
+    }
 
     // Pass 1 — corpus membership, decided once and consulted by everything after.
     // The anchors matter: lambda/anonymous ids embed the root-relative file, so the
