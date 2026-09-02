@@ -32,6 +32,14 @@ packages/navigator/  @codegraph/navigator — the navigator MODEL: the browsable
                      tree (modules → types → operations/attributes) plus one
                      classified dependency row per base edge, carrying member,
                      provenance and anchor included. Pure computation.
+packages/insights/   @codegraph/insights — the bottom-up EXPLANATION walk: units
+                     (operations → types → modules), SCC-condensed walk order,
+                     context packs, prompts, Merkle fingerprints, plan/run, and
+                     the `.insights.jsonl` side-car (Specy domain vocabulary).
+                     Pure computation: source and model calls are injected.
+packages/llm/        @codegraph/llm — LlmClient + the OpenRouter implementation +
+                     a deterministic fake. The ONLY package that may import
+                     @openrouter/sdk.
 packages/cli/        @codegraph/cli — `codegraph` command.
 packages/viz/        @codegraph/viz — Three.js code city: renders a laid-out
                      city.json artifact (its ONLY input; guard-enforced). The
@@ -70,6 +78,12 @@ fixtures/            Reference corpora + expected model.jsonl snapshots.
 - **`core` owns the vocabulary.** Trait names (`TNamed`, `TInvocable`,
   `TAttachedTo`…), edge kinds, and provenance values are canonical — never
   rename or alias them locally.
+- **Only `packages/llm` talks to a model provider.** `@openrouter/sdk` is
+  imported in exactly one file there (a boundary test scans the workspace);
+  `insights`, `core`, `analyzer` and the CLI never open a socket, and every
+  test in the workspace runs against the fake client or a fake transport.
+  Explanations live in the side-car `<model>.insights.jsonl`, never in
+  `model.jsonl`/`model.db`.
 
 ## Stack
 
@@ -98,6 +112,9 @@ java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 ./bin/codegraph city model.jsonl --serve           # 3D city at http://localhost:4177
 ./bin/codegraph navigator model.jsonl --serve      # navigator at http://localhost:4178
 #   both bind EVERY interface by default; --host 127.0.0.1 keeps them local
+./bin/codegraph explain model.jsonl --src DIR --dry-run   # the walk plan, no call
+OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-calls N]
+#   → model.insights.jsonl beside the model; re-runs redo only what changed
 ```
 
 ## Metamodel invariants (violating these is a bug, not a style choice)

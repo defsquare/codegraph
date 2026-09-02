@@ -28,12 +28,15 @@ export default tseslint.config(
     },
   },
   // Architectural boundary: core and analyzer must run in plain Node, no DOM.
-  // three.js is only ever allowed in packages/viz.
+  // three.js is only ever allowed in packages/viz; the model-provider SDK only
+  // in packages/llm (everything else programs against its LlmClient).
   {
     files: [
       "packages/core/**/*.ts",
       "packages/analyzer/**/*.ts",
       "packages/city/**/*.ts",
+      "packages/navigator/**/*.ts",
+      "packages/insights/**/*.ts",
       "packages/cli/**/*.ts",
     ],
     rules: {
@@ -42,6 +45,10 @@ export default tseslint.config(
         {
           patterns: [
             { group: ["three", "three/*"], message: "Three.js is confined to packages/viz." },
+            {
+              group: ["@openrouter/sdk", "@openrouter/sdk/*"],
+              message: "The provider SDK is confined to packages/llm; import @codegraph/llm.",
+            },
           ],
         },
       ],

@@ -98,6 +98,14 @@ codegraph domain-facts [model.jsonl] [--framework spring] [--out FILE]
                    # one dossier per corpus type, every fact pre-joined for
                    # a domain-extraction consumer — see "Domain facts" below
 
+codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
+                   [--model SLUG] [--rollup-model SLUG] [--depth N]
+                   [--max-calls N] [--scope IDS] [--concurrency N]
+                   [--max-lines N] [--max-scc N] [--force] [--json]
+                   [--framework spring] [--internal-only] [--declared-only]
+                   # bottom-up LLM explanations into <model>.insights.jsonl —
+                   # needs OPENROUTER_API_KEY unless --dry-run; see docs/insights.md
+
 codegraph city     [model.jsonl] [--serve [--port N] [--host ADDR]] [--layout] [--out FILE]
                    [--height METRIC] [--footprint METRIC] [--carry M1,M2]
                    [--internal-only] [--declared-only]
