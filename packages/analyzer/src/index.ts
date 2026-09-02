@@ -27,6 +27,11 @@
 // Deterministic ordering helpers — every output is sorted with these.
 export * from "./order.js";
 
+// The one iterative Tarjan: strongly connected components and their
+// condensation over any (nodes, successors) digraph — the cycle report and
+// every bottom-up walk share it.
+export * from "./scc.js";
+
 // Stage 1: load, validate, unify (schema errors fatal, profile issues collected).
 export * from "./load.js";
 

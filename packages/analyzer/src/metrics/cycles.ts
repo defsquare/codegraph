@@ -1,21 +1,18 @@
 import type { EdgeKind, EntityId, Provenance } from "@codegraph/core";
 import type { FoldedEdge, FoldedGraph, FoldLevel } from "../fold.js";
-import { compareIds, sortIds, sortedUnique } from "../order.js";
+import { sortIds, sortedUnique } from "../order.js";
+import { compareComponents, stronglyConnectedComponents } from "../scc.js";
 import type { ViewDescriptor } from "../views.js";
 import { feedbackArcSet } from "./tangle.js";
 
 /**
  * Stage 6: cycle detection (decision 5, PLAN.md §6.4, METAMODEL.md §9).
  *
- * Tarjan strongly connected components, ITERATIVE — an explicit frame stack,
- * never recursion. This is deliberate and must stay that way: the textbook
- * formulation recurses once per node on the DFS path, and a folded graph of
- * 15 000 nodes (the order apache/commons-lang folds to) exhausts V8's call
- * stack. The failure presents as `Maximum call stack size exceeded` thrown from
- * inside a metric — an inscrutable crash that appears only on real corpora,
- * because every hand-built test graph is shallow enough to survive. The deep
- * chain cases in `test/cycles.test.ts` fail loudly if anyone "simplifies" this
- * back to recursion.
+ * The strongly connected components come from `../scc.ts` — the one iterative
+ * Tarjan in the workspace, shared with every other consumer that needs a
+ * condensation. This module turns raw components into a REPORT: which folded
+ * edges hold each cycle together, how heavy they are, and which minimal cut
+ * breaks them.
  *
  * Pure computation: the folded graph is only read, and nothing here is an
  * inverse index that could reach disk (CLAUDE.md invariant 4).
@@ -105,90 +102,6 @@ export interface CyclesOptions {
   readonly minSize?: number;
 }
 
-/** A DFS frame: the node, its (already sorted) successors, and how far we got. */
-interface Frame {
-  readonly node: EntityId;
-  readonly successors: readonly FoldedEdge[];
-  next: number;
-}
-
-/**
- * Tarjan's SCC, iterative. Returns the raw components, unsorted — ordering is
- * applied once, in `cycles`, so determinism has a single owner (decision 6).
- */
-function stronglyConnectedComponents(folded: FoldedGraph): EntityId[][] {
-  const index = new Map<EntityId, number>();
-  const lowlink = new Map<EntityId, number>();
-  const onStack = new Set<EntityId>();
-  const stack: EntityId[] = [];
-  const components: EntityId[][] = [];
-  let counter = 0;
-
-  // The recursive call is replaced by pushing a frame; `open` is what the
-  // prologue of the recursive function would do.
-  const open = (id: EntityId, frames: Frame[]): void => {
-    index.set(id, counter);
-    lowlink.set(id, counter);
-    counter += 1;
-    stack.push(id);
-    onStack.add(id);
-    frames.push({ node: id, successors: folded.outgoing(id), next: 0 });
-  };
-
-  // Roots are taken in node order (sorted), so the DFS itself is deterministic.
-  for (const root of folded.nodes) {
-    if (index.has(root.id)) continue;
-    const frames: Frame[] = [];
-    open(root.id, frames);
-
-    while (frames.length > 0) {
-      const frame = frames[frames.length - 1];
-      if (frame === undefined) break;
-      const v = frame.node;
-
-      if (frame.next < frame.successors.length) {
-        const successor = frame.successors[frame.next];
-        frame.next += 1;
-        if (successor === undefined) continue;
-        const w = successor.to;
-        const wIndex = index.get(w);
-        if (wIndex === undefined) {
-          open(w, frames);
-        } else if (onStack.has(w)) {
-          // Back edge into the current DFS stack: v can reach w's depth.
-          const vLow = lowlink.get(v);
-          if (vLow === undefined || wIndex < vLow) lowlink.set(v, wIndex);
-        }
-        continue;
-      }
-
-      // v is exhausted — this is the epilogue of the recursive call.
-      // Both were set by `open` when the frame was pushed.
-      const vIndex = index.get(v) ?? 0;
-      const vLow = lowlink.get(v) ?? 0;
-      if (vLow === vIndex) {
-        const component: EntityId[] = [];
-        for (;;) {
-          const popped = stack.pop();
-          if (popped === undefined) break;
-          onStack.delete(popped);
-          component.push(popped);
-          if (popped === v) break;
-        }
-        components.push(component);
-      }
-      frames.pop();
-      const caller = frames[frames.length - 1];
-      if (caller !== undefined) {
-        const callerLow = lowlink.get(caller.node);
-        if (callerLow === undefined || vLow < callerLow) lowlink.set(caller.node, vLow);
-      }
-    }
-  }
-
-  return components;
-}
-
 function toCycleEdge(edge: FoldedEdge): CycleEdge {
   const provenances = sortIds<Provenance>(edge.provenances);
   return {
@@ -200,16 +113,6 @@ function toCycleEdge(edge: FoldedEdge): CycleEdge {
     allDeclared: provenances.length === 1 && provenances[0] === "declared",
     selfLoop: edge.selfLoop,
   };
-}
-
-/** Total order on components: disjoint and internally sorted, so members decide. */
-function compareComponents(a: readonly EntityId[], b: readonly EntityId[]): number {
-  const shared = Math.min(a.length, b.length);
-  for (let i = 0; i < shared; i += 1) {
-    const order = compareIds(a[i] ?? "", b[i] ?? "");
-    if (order !== 0) return order;
-  }
-  return a.length - b.length;
 }
 
 /**
@@ -229,7 +132,10 @@ export function cycles(folded: FoldedGraph, options?: CyclesOptions): CycleRepor
   const membership = new Map<EntityId, number>();
   const memberLists: EntityId[][] = [];
 
-  for (const component of stronglyConnectedComponents(folded)) {
+  const nodeIds = folded.nodes.map((node) => node.id);
+  const successors = (id: EntityId): readonly EntityId[] =>
+    folded.outgoing(id).map((edge) => edge.to);
+  for (const component of stronglyConnectedComponents(nodeIds, successors)) {
     if (component.length < minSize) continue;
     memberLists.push(sortIds(component));
   }
