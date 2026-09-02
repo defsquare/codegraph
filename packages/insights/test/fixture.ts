@@ -55,7 +55,7 @@ export function type(id: string, parent: string, extra: Record<string, unknown> 
   return {
     id,
     kind: "class",
-    traits: ["TNamed", "TChildOf", "TWithChildren", "TType", "TSourceAnchor"],
+    traits: ["TNamed", "TChildOf", "TWithChildren", "TType", "TSourceAnchor", ...("comments" in extra ? ["TComment"] : [])],
     name: id.slice(id.lastIndexOf("/") + 1),
     isStub: false,
     parent,
