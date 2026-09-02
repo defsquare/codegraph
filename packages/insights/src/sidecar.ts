@@ -60,14 +60,19 @@ export function mergeRecords(base: Iterable<InsightRecord>, journal: Iterable<In
   return sortRecords(merged.values());
 }
 
+/** Key order normalized through the schema: a record built in memory and one read back serialize alike. */
+export function encodeRecord(record: InsightRecord): string {
+  return JSON.stringify(InsightRecord.parse(record));
+}
+
 export function* encodeInsights(
   header: InsightsHeader,
   records: Iterable<InsightRecord>,
   eof: InsightsEof,
 ): Generator<string> {
-  yield JSON.stringify(header);
-  for (const record of sortRecords(records)) yield JSON.stringify(record);
-  yield JSON.stringify(eof);
+  yield JSON.stringify(InsightsHeader.parse(header));
+  for (const record of sortRecords(records)) yield encodeRecord(record);
+  yield JSON.stringify(InsightsEof.parse(eof));
 }
 
 export function encodeInsightsToString(header: InsightsHeader, records: Iterable<InsightRecord>, eof: InsightsEof): string {
@@ -75,7 +80,7 @@ export function encodeInsightsToString(header: InsightsHeader, records: Iterable
 }
 
 export function encodeJournalLine(record: InsightRecord): string {
-  return `${JSON.stringify(record)}\n`;
+  return `${encodeRecord(record)}\n`;
 }
 
 function nonEmptyLines(text: string): string[] {

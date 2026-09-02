@@ -26,6 +26,7 @@ export const COMMAND_NAMES = [
   "city",
   "navigator",
   "domain-facts",
+  "explain",
   "scm",
   "snapshots",
   "history",
@@ -434,6 +435,110 @@ export const DOMAIN_FACTS_SPEC: CommandSpec = {
   ],
 };
 
+export const DEFAULT_EXPLAIN_MODEL = "openai/gpt-5.6-luna";
+
+export const EXPLAIN_SPEC: CommandSpec = {
+  name: "explain",
+  summary: "Explain every operation, type and module with an LLM, bottom-up, into a side-car.",
+  positional: MODELS_POSITIONAL_DEFAULTED,
+  options: [
+    {
+      name: "src",
+      type: "string",
+      describe:
+        "The source root the model's anchors are relative to. Defaults to the model's own " +
+        "`root`, resolved against the current directory.",
+      placeholder: "DIR",
+    },
+    {
+      name: "out",
+      type: "string",
+      describe: "The side-car to write (and to resume from). Defaults to <model>.insights.jsonl.",
+      placeholder: "FILE",
+    },
+    {
+      name: "model",
+      type: "string",
+      describe: "OpenRouter model slug for operations (the leaves).",
+      placeholder: "SLUG",
+      defaultValue: DEFAULT_EXPLAIN_MODEL,
+    },
+    {
+      name: "rollup-model",
+      type: "string",
+      describe: "Model slug for types and modules; defaults to --model.",
+      placeholder: "SLUG",
+    },
+    {
+      name: "depth",
+      type: "string",
+      describe: "How many levels of dependency explanations a prompt carries.",
+      placeholder: "N",
+      integer: true,
+      defaultValue: "1",
+    },
+    {
+      name: "max-calls",
+      type: "string",
+      describe: "Stop planning model calls after this many; what runs is a dependency-consistent prefix.",
+      placeholder: "N",
+      integer: true,
+    },
+    {
+      name: "concurrency",
+      type: "string",
+      describe: "Model calls in flight at once.",
+      placeholder: "N",
+      integer: true,
+      defaultValue: "4",
+    },
+    {
+      name: "max-lines",
+      type: "string",
+      describe: "Source lines shown per unit before the middle is elided.",
+      placeholder: "N",
+      integer: true,
+      defaultValue: "200",
+    },
+    {
+      name: "max-scc",
+      type: "string",
+      describe: "Members of a dependency cycle explained in one call; larger cycles are chunked.",
+      placeholder: "N",
+      integer: true,
+      defaultValue: "12",
+    },
+    {
+      name: "scope",
+      type: "string",
+      describe:
+        "Comma-separated module or type ids: explain only units inside them (dependencies outside " +
+        "are reused when already explained, never called).",
+      placeholder: "IDS",
+    },
+    {
+      name: "framework",
+      type: "string",
+      describe: "Add a framework's stereotypes and entry points to the facts shown.",
+      choices: Object.keys(FRAMEWORK_PROFILES),
+      placeholder: "NAME",
+    },
+    ...VIEW_OPTIONS,
+    NO_CACHE_OPTION,
+    {
+      name: "dry-run",
+      type: "boolean",
+      describe: "Print the plan — units, order, statuses, estimated tokens — and make no call.",
+    },
+    {
+      name: "force",
+      type: "boolean",
+      describe: "Re-explain every unit, ignoring records whose fingerprint still matches.",
+    },
+    JSON_OPTION,
+  ],
+};
+
 /**
  * A store holds ONE model. Surrogates are file-scoped and are not identity
  * (MM-1), so unioning several models into one database would mean renumbering
@@ -753,6 +858,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   CITY_SPEC,
   NAVIGATOR_SPEC,
   DOMAIN_FACTS_SPEC,
+  EXPLAIN_SPEC,
   SCM_SPEC,
   SNAPSHOTS_SPEC,
   HISTORY_SPEC,
@@ -843,6 +949,26 @@ export interface DomainFactsOptions extends ModelInputOptions, ViewOptions, Cach
   readonly framework: string | undefined;
   /** `--out FILE`; undefined means stdout. */
   readonly out: string | undefined;
+}
+
+export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOptions {
+  /** `--src DIR`; undefined = the model's `root`. */
+  readonly src: string | undefined;
+  /** `--out FILE`; undefined = `<model>.insights.jsonl` beside the first model. */
+  readonly out: string | undefined;
+  readonly model: string;
+  readonly rollupModel: string;
+  readonly depth: number;
+  readonly maxCalls: number | undefined;
+  readonly concurrency: number;
+  readonly maxLines: number;
+  readonly maxScc: number;
+  /** `--scope a,b`; empty = everything. */
+  readonly scope: readonly string[];
+  readonly framework: string | undefined;
+  readonly dryRun: boolean;
+  readonly force: boolean;
+  readonly json: boolean;
 }
 
 export interface ImportOptions extends ModelInputOptions {
@@ -943,6 +1069,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
   | { readonly kind: "run"; readonly command: "navigator"; readonly options: NavigatorOptions }
   | { readonly kind: "run"; readonly command: "domain-facts"; readonly options: DomainFactsOptions }
+  | { readonly kind: "run"; readonly command: "explain"; readonly options: ExplainOptions }
   | { readonly kind: "run"; readonly command: "scm"; readonly options: ScmOptions }
   | { readonly kind: "run"; readonly command: "snapshots"; readonly options: SnapshotsOptions }
   | { readonly kind: "run"; readonly command: "history"; readonly options: HistoryOptions }
@@ -1392,6 +1519,39 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           out: stringOf(values, "out"),
         },
       };
+    case "explain": {
+      const src = stringOf(values, "src");
+      if (src !== undefined && models.length > 1) {
+        throw new UsageError(
+          "--src applies to one model: its anchors are relative to ONE source root",
+          "Run explain once per model, or drop --src to read each model's own root.",
+        );
+      }
+      const model = stringOf(values, "model") ?? DEFAULT_EXPLAIN_MODEL;
+      return {
+        kind: "run",
+        command: "explain",
+        options: {
+          models,
+          src,
+          out: stringOf(values, "out"),
+          model,
+          rollupModel: stringOf(values, "rollup-model") ?? model,
+          depth: integerOf(values, "depth") ?? 1,
+          maxCalls: integerOf(values, "max-calls"),
+          concurrency: integerOf(values, "concurrency") ?? 4,
+          maxLines: integerOf(values, "max-lines") ?? 200,
+          maxScc: integerOf(values, "max-scc") ?? 12,
+          scope: metricList(stringOf(values, "scope")),
+          framework: stringOf(values, "framework"),
+          ...viewOf(values),
+          noCache: flagOf(values, "no-cache"),
+          dryRun: flagOf(values, "dry-run"),
+          force: flagOf(values, "force"),
+          json: flagOf(values, "json"),
+        },
+      };
+    }
     case "scm":
       return {
         kind: "run",

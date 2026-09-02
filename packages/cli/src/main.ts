@@ -101,6 +101,10 @@ function dispatch(invocation: Invocation, io: IoSink): ExitCode | Promise<ExitCo
           return navigatorCommand(invocation.options, io);
         case "domain-facts":
           return domainFactsCommand(invocation.options, io);
+        case "explain":
+          // Loaded on demand: this command pulls in the insights package and
+          // the provider SDK, and `codegraph --help` must not pay for them.
+          return import("./commands/explain.js").then((m) => m.explainCommand(invocation.options, io));
         case "scm":
           return scmCommand(invocation.options, io);
         case "snapshots":

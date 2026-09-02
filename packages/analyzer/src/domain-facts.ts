@@ -5,7 +5,7 @@ import type {
   Provenance,
   SourceAnchor,
 } from "@codegraph/core";
-import { containingModule, containingType, folderFor } from "./fold.js";
+import { folderFor } from "./fold.js";
 import { entityName, hasTrait, type CodeGraph } from "./graph.js";
 import { compareIds } from "./order.js";
 import { importGraph } from "./queries.js";

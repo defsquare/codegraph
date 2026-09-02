@@ -1,4 +1,4 @@
-import { LlmError, type LlmClient, type LlmRequest, type LlmResponse } from "./client.js";
+import type { LlmClient, LlmError, LlmRequest, LlmResponse } from "./client.js";
 
 export interface FakeLlmOptions {
   /**

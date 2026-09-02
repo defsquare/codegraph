@@ -130,6 +130,7 @@ describe("no ANSI colour anywhere (decision 4)", () => {
     ["analyze", FIXTURE, "--report", "coupling"],
     ["export", FIXTURE, "--format", "dot"],
     ["export", FIXTURE, "--format", "plantuml"],
+    ["explain", FIXTURE, "--dry-run"],
     ["frobnicate"],
   ];
 

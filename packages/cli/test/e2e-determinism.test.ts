@@ -37,6 +37,9 @@ const INVOCATIONS: readonly (readonly string[])[] = [
   ["export", FIXTURE, "--format", "csv", "--level", "type"],
   ["export", FIXTURE, "--format", "json", "--internal-only"],
   ["export", FIXTURE, "--format", "plantuml", "--internal-only"],
+  // The explain plan: no model call, no key — the walk order and estimates alone.
+  ["explain", FIXTURE, "--dry-run"],
+  ["explain", FIXTURE, "--dry-run", "--json"],
   // The collation fixture: its identifiers order differently under UTF-16 code
   // units (what codegraph uses) than under UTF-8 bytes (what a database would),
   // so it is the one input where "sorted" is not a single answer.

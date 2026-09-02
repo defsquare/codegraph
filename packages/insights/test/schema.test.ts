@@ -1,11 +1,11 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { CONCEPT_DEFINITIONS, DOMAIN_CONCEPTS } from "../src/ddd.js";
+import type { OperationBlock } from "../src/schema.js";
 import {
   BLOCKS,
   InsightRecord,
   LEVELS,
-  OperationBlock,
   clampConfidence,
   responseJsonSchema,
   responseSchemaName,

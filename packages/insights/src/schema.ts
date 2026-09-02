@@ -137,30 +137,40 @@ export type RecordUsage = z.infer<typeof RecordUsage>;
 export const ORIGINS = ["llm", "template"] as const;
 export type Origin = (typeof ORIGINS)[number];
 
-const recordBase = {
-  t: z.literal("i"),
-  /** The rendered entity id — compared as an opaque token, never parsed. */
-  id: z.string().min(1),
-  key: RecordKey.optional(),
-  kind: z.string(),
-  name: z.string().optional(),
-  /** The anchor file, root-relative. */
-  file: z.string().optional(),
-  /** Present when the unit sits in a dependency cycle: every member, sorted, this id included. */
-  scc: z.array(z.string()).optional(),
-  origin: z.enum(ORIGINS),
-  /** sha256 hex of everything the explanation was computed from — see fingerprint.ts. */
-  fingerprint: z.string().length(64),
-  model: z.string().optional(),
-  usage: RecordUsage.optional(),
-  /** The metamodel convention's free key/value map. */
-  metadata: z.record(z.string(), z.string()).optional(),
-};
+/**
+ * One record shape per level. The KEY ORDER here is the order on the wire:
+ * `encodeInsights` re-parses every record through this schema before
+ * stringifying, so a record built in memory and one read back from disk
+ * serialize to the same bytes.
+ */
+function recordShape<L extends Level, B extends z.ZodType>(level: L, block: B) {
+  return z.object({
+    t: z.literal("i"),
+    /** The rendered entity id — compared as an opaque token, never parsed. */
+    id: z.string().min(1),
+    key: RecordKey.optional(),
+    level: z.literal(level),
+    kind: z.string(),
+    name: z.string().optional(),
+    /** The anchor file, root-relative. */
+    file: z.string().optional(),
+    /** Present when the unit sits in a dependency cycle: every member, sorted, this id included. */
+    scc: z.array(z.string()).optional(),
+    origin: z.enum(ORIGINS),
+    block,
+    /** sha256 hex of everything the explanation was computed from — see fingerprint.ts. */
+    fingerprint: z.string().length(64),
+    model: z.string().optional(),
+    usage: RecordUsage.optional(),
+    /** The metamodel convention's free key/value map. */
+    metadata: z.record(z.string(), z.string()).optional(),
+  });
+}
 
 export const InsightRecord = z.discriminatedUnion("level", [
-  z.object({ ...recordBase, level: z.literal("operation"), block: OperationBlock }),
-  z.object({ ...recordBase, level: z.literal("type"), block: TypeBlock }),
-  z.object({ ...recordBase, level: z.literal("module"), block: ModuleBlock }),
+  recordShape("operation", OperationBlock),
+  recordShape("type", TypeBlock),
+  recordShape("module", ModuleBlock),
 ]);
 export type InsightRecord = z.infer<typeof InsightRecord>;
 
