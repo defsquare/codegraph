@@ -4,6 +4,7 @@ packages:
 # Single source of truth for shared dependency versions across the workspace.
 # Packages reference them as "catalog:" so no two packages can drift apart.
 catalog:
+  "@openrouter/sdk": ^1.2.93
   "@types/node": ^22.15.0
   fast-check: ^4.3.0
   tsup: ^8.5.0

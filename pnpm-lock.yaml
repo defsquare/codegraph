@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@openrouter/sdk':
+      specifier: ^1.2.93
+      version: 1.2.93
     '@types/node':
       specifier: ^22.15.0
       version: 22.20.1
@@ -156,6 +159,25 @@ importers:
       tsx:
         specifier: 'catalog:'
         version: 4.23.12
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
+
+  packages/llm:
+    dependencies:
+      '@openrouter/sdk':
+        specifier: 'catalog:'
+        version: 1.2.93
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.1
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -761,6 +783,9 @@ packages:
     engines: {node: ^22.20 || ^24.12 || >=25}
     cpu: [x64]
     os: [linux]
+
+  '@openrouter/sdk@1.2.93':
+    resolution: {integrity: sha512-ef2j/Pwt0kcFX5gxXxFMmx3Z5DfWZHiGzRyG3M6prNPIOU7gNSTbu8y4mRqL+PyvEx0zJ1MsAuZQKiIpGk+mHQ==}
 
   '@rolldown/pluginutils@1.0.0-rc.3':
     resolution: {integrity: sha512-eybk3TjzzzV97Dlj5c+XrBFW57eTNhzod66y9HrBlzJ6NsCrWCp/2kaPS3K9wJmurBC0Tdw4yPjXKZqlznim3Q==}
@@ -2183,6 +2208,10 @@ snapshots:
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
+
+  '@openrouter/sdk@1.2.93':
+    dependencies:
+      zod: 4.4.3
 
   '@rolldown/pluginutils@1.0.0-rc.3': {}
 
