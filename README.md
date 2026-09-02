@@ -93,6 +93,11 @@ codegraph export   model.jsonl --format dot|json|csv|plantuml
                    [--level module|type] [--internal-only] [--declared-only]
                    [--out FILE]
 
+codegraph domain-facts [model.jsonl] [--framework spring] [--out FILE]
+                   [--internal-only] [--declared-only]
+                   # one dossier per corpus type, every fact pre-joined for
+                   # a domain-extraction consumer — see "Domain facts" below
+
 codegraph city     [model.jsonl] [--serve [--port N] [--host ADDR]] [--layout] [--out FILE]
                    [--height METRIC] [--footprint METRIC] [--carry M1,M2]
                    [--internal-only] [--declared-only]
@@ -197,6 +202,41 @@ dashed outline is an entity the corpus does not declare, and the title carries
 the level and the view — an analysis picture without its view is not a fact. A
 stereotype that would only repeat the element (`package "x" <<package>>`) is
 dropped, and the legend describes only the encodings the diagram actually drew.
+
+### Domain facts: the dossier a domain-extraction consumer reads
+
+`codegraph domain-facts` writes one JSON artifact
+(`codegraph.domainFacts/1`) with **one dossier per corpus type**, every fact
+the model holds about it pre-joined — so a consumer deciding "is this
+operation a command handler?", "is this field a status?", "what does this
+service reject?" reads one record instead of chasing edges:
+
+```bash
+codegraph domain-facts model.jsonl --framework spring --out domain-facts.json
+```
+
+Each dossier carries the type's **annotations with their exact written
+arguments**, its **fields** joined to their declared types (name, kind —
+an `enum`-kinded field is a state-machine candidate — and constant values),
+and its **operations** with their outgoing **invocations** (target joined to
+its containing type and framework stereotype), **accesses** (read/write per
+field, joined to the owning type), and **throw sites** — the `throws` edges
+the Java extractor emits per written `throw` statement, anchored at the
+statement, which is the evidence a guard clause (`if (x) throw new E(...)`)
+leaves in the model. External targets are flagged, never dropped, and
+provenance rides on every joined fact.
+
+`--framework spring` adds the one inference layer, labelled as such:
+stereotype classification (`service`, `repository`, `controller`…), framework
+entry points (the reason a controller method looks dead to a static call
+graph), and per-consumer injection points with their corpus DI candidates —
+`deriveFrameworkWiring`'s output attached to the dossiers it concerns. Without
+the flag the artifact interprets nothing: the written annotations are still
+there, their meaning is not guessed.
+
+The artifact also summarizes each **module** (its types, its imports with
+external flags) — the bounded-context candidate layer — and is deterministic:
+two runs over one model are byte-identical.
 
 ### The code city: from a model file to the browser
 

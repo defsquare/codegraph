@@ -25,6 +25,7 @@ export const COMMAND_NAMES = [
   "export",
   "city",
   "navigator",
+  "domain-facts",
   "scm",
   "snapshots",
   "history",
@@ -401,6 +402,39 @@ export const NAVIGATOR_SPEC: CommandSpec = {
 };
 
 /**
+ * `codegraph domain-facts`: the per-type dossier artifact for domain-extraction
+ * consumers — every fact the model holds about a type, pre-joined (annotations
+ * with arguments, operations with their invocations/accesses/throw sites,
+ * framework roles, module imports). The transform lives in the analyzer
+ * (`buildDomainFacts`); this command only resolves flags and moves bytes.
+ */
+export const DOMAIN_FACTS_SPEC: CommandSpec = {
+  name: "domain-facts",
+  summary: "Write per-type domain dossiers: joined facts for domain extraction.",
+  positional: MODELS_POSITIONAL_DEFAULTED,
+  options: [
+    {
+      name: "framework",
+      type: "string",
+      describe:
+        "Classify types and entry points by a framework's own vocabulary and attach " +
+        "DI candidates to each dossier. An inference from written annotations; " +
+        "absent means the dossiers say nothing about roles.",
+      choices: Object.keys(FRAMEWORK_PROFILES),
+      placeholder: "NAME",
+    },
+    ...VIEW_OPTIONS,
+    NO_CACHE_OPTION,
+    {
+      name: "out",
+      type: "string",
+      describe: "Write the artifact to this file instead of stdout.",
+      placeholder: "FILE",
+    },
+  ],
+};
+
+/**
  * A store holds ONE model. Surrogates are file-scoped and are not identity
  * (MM-1), so unioning several models into one database would mean renumbering
  * them — and a renumbered corpus is a repointed one. Several paths are still
@@ -718,6 +752,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   EXPORT_SPEC,
   CITY_SPEC,
   NAVIGATOR_SPEC,
+  DOMAIN_FACTS_SPEC,
   SCM_SPEC,
   SNAPSHOTS_SPEC,
   HISTORY_SPEC,
@@ -799,6 +834,13 @@ export interface NavigatorOptions extends ModelInputOptions, ViewOptions, CacheO
   readonly port: number;
   /** `--host ADDR` for `--serve`; `0.0.0.0` (every interface) by default. */
   readonly host: string;
+  /** `--out FILE`; undefined means stdout. */
+  readonly out: string | undefined;
+}
+
+export interface DomainFactsOptions extends ModelInputOptions, ViewOptions, CacheOptions {
+  /** `--framework NAME`: classify by that framework; undefined = no roles. */
+  readonly framework: string | undefined;
   /** `--out FILE`; undefined means stdout. */
   readonly out: string | undefined;
 }
@@ -900,6 +942,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "export"; readonly options: ExportOptions }
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
   | { readonly kind: "run"; readonly command: "navigator"; readonly options: NavigatorOptions }
+  | { readonly kind: "run"; readonly command: "domain-facts"; readonly options: DomainFactsOptions }
   | { readonly kind: "run"; readonly command: "scm"; readonly options: ScmOptions }
   | { readonly kind: "run"; readonly command: "snapshots"; readonly options: SnapshotsOptions }
   | { readonly kind: "run"; readonly command: "history"; readonly options: HistoryOptions }
@@ -1332,6 +1375,18 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           serve: flagOf(values, "serve"),
           port: portOf(values, spec),
           host: hostOf(values, spec),
+          ...viewOf(values),
+          noCache: flagOf(values, "no-cache"),
+          out: stringOf(values, "out"),
+        },
+      };
+    case "domain-facts":
+      return {
+        kind: "run",
+        command: "domain-facts",
+        options: {
+          models,
+          framework: stringOf(values, "framework"),
           ...viewOf(values),
           noCache: flagOf(values, "no-cache"),
           out: stringOf(values, "out"),

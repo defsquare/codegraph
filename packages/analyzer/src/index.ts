@@ -54,6 +54,9 @@ export * from "./queries.js";
 export * from "./framework/profile.js";
 export * from "./framework/wiring.js";
 
+// Domain facts: the per-type dossier artifact for domain-extraction consumers.
+export * from "./domain-facts.js";
+
 // Stage 6: metrics over a folded graph. Each result repeats the level and view
 // it was computed under; a coupling number without its view is not a fact.
 export * from "./metrics/coupling.js";
