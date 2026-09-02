@@ -161,6 +161,7 @@ export const javaProfile: Profile = {
     "access",
     "reference",
     "annotationUse",
+    "throws",
   ],
 
   notes: [
@@ -170,6 +171,7 @@ export const javaProfile: Profile = {
     "Reflection is invisible: Class.forName, Method.invoke, proxies, Spring XML/annotation wiring, ServiceLoader/META-INF/services, and JNDI lookups produce no edge. The import/invocation graph of a reflection-heavy corpus is a lower bound.",
     "Lombok-generated members (getters, setters, @Builder, @Data constructors) are emitted with provenance \"generated\" when the expansion is visible to Spoon, and are missing entirely when it is not.",
     "An interface's `extends` list is emitted as inheritance edges between types; interfaceImplementation is reserved for a class/enum/record `implements` clause, always with provenance \"declared\".",
+    "A `throws` edge is emitted per written `throw` statement whose static exception type resolves, anchored at the throw site — the evidence a guard clause (`if (x) throw new E(...)`) leaves in the model. A method's `throws` CLAUSE stays a plain reference edge: it declares propagation, not a failure exit of this body. A rethrow (`throw e;`) targets the caught variable's static type; a throw whose type Spoon cannot name is dropped and counted, like any unidentifiable target.",
     "Static and on-demand (`import x.y.*`) imports are folded to module-level import edges; the wildcard case names the package, not the individual types it brings in.",
     "Overloads are distinguished by the id's signature disambiguator, so an unresolved parameter type changes the id — a resolution failure shows up as a stub target, never as a merged entity.",
     "Java generics are erased in the model: type arguments are emitted as reference edges from the declaring entity, and declaredType carries the raw type.",

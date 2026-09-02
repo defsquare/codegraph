@@ -224,14 +224,14 @@ describe("coupling over the type-level dependency graph of the Java snapshot", (
   });
 
   it("ranks the load-bearing types deterministically", () => {
-    // Money (Ca 7) and the stub Override (Ca 7) tie; the id order breaks the
-    // tie, so the ranking never depends on Map iteration order. Then the stub
-    // String (Ca 6) — under the full view the most-depended-upon nodes of a
+    // Money (Ca 7), the stub Override (Ca 7) and the stub String (Ca 7) tie;
+    // the id order breaks the tie, so the ranking never depends on Map
+    // iteration order — under the full view the most-depended-upon nodes of a
     // small corpus are largely external, which is exactly why the view travels
     // with the table.
     const top = topByFanIn(table, 3);
     expect(top.map((r) => r.id)).toEqual([MONEY, OVERRIDE, STRING]);
-    expect(top.map((r) => r.fanIn)).toEqual([7, 7, 6]);
+    expect(top.map((r) => r.fanIn)).toEqual([7, 7, 7]);
     expect(topByFanOut(table, 1).map((r) => r.id)).toEqual([NOTIFICATIONS]);
     expect(topByFanIn(table, 0)).toEqual([]);
   });

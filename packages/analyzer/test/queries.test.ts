@@ -181,17 +181,17 @@ describe("typeDependencyGraph over the committed Java snapshot", () => {
     expect(folded.view).toEqual({ name: "all", filters: [] });
   });
 
-  it("folds all 179 edges: 168 aggregate into 74 pairs, 11 have no type", () => {
+  it("folds all 188 edges: 177 aggregate into 78 pairs, 11 have no type", () => {
     const folded = typeDependencyGraph(graph);
-    expect(folded.edges).toHaveLength(74);
-    expect(folded.nodes).toHaveLength(36);
+    expect(folded.edges).toHaveLength(78);
+    expect(folded.nodes).toHaveLength(39);
     const weight = folded.edges.reduce((sum, e) => sum + e.count, 0);
-    expect(weight).toBe(168);
+    expect(weight).toBe(177);
     expect(weight).toBe(folded.diagnostics.foldedEdges);
     // The 11 dropped edges are the module-level imports: a package has no
     // containing TYPE. Reported, never silently discarded.
     expect(folded.diagnostics.droppedEdges).toBe(11);
-    expect(weight + folded.diagnostics.droppedEdges).toBe(179);
+    expect(weight + folded.diagnostics.droppedEdges).toBe(188);
     // Packages have no containing TYPE — the corpus's three plus the seven
     // external modules external types now hang off. Reported, never hidden.
     expect(folded.diagnostics.unfoldableEntities).toEqual([
@@ -219,6 +219,7 @@ describe("typeDependencyGraph over the committed Java snapshot", () => {
       "interfaceImplementation",
       "invocation",
       "reference",
+      "throws",
     ]);
   });
 
@@ -234,7 +235,7 @@ describe("typeDependencyGraph over the committed Java snapshot", () => {
   it("keeps folding-induced self-loops flagged rather than dropping them", () => {
     const folded = typeDependencyGraph(graph);
     const loops = folded.edges.filter((e) => e.selfLoop);
-    expect(loops).toHaveLength(11);
+    expect(loops).toHaveLength(12);
     for (const loop of loops) expect(loop.from).toBe(loop.to);
     // Not the forbidden `from === to` of a stored edge.
     expect(graph.edges.some((e) => e.from === e.to)).toBe(false);
@@ -250,8 +251,8 @@ describe("typeDependencyGraph over the committed Java snapshot", () => {
 
   it("honours internalOnly by filtering, not by dropping data at load", () => {
     const folded = typeDependencyGraph(graph, internalOnly);
-    expect(folded.nodes).toHaveLength(17);
-    expect(folded.edges).toHaveLength(37);
+    expect(folded.nodes).toHaveLength(19);
+    expect(folded.edges).toHaveLength(39);
     expect(folded.nodes.every((n) => !n.isStub)).toBe(true);
     for (const e of folded.edges) {
       expect(graph.isStub(e.from)).toBe(false);

@@ -70,8 +70,8 @@ describe("export puts ONLY the artifact on stdout", () => {
 
     const json = runCli(["export", FIXTURE, "--format", "json", "--level", "type"]);
     const parsed = parseJsonArtifact(json.stdout, "type-level json");
-    expect((parsed["nodes"] as unknown[]).length).toBe(36);
-    expect((parsed["edges"] as unknown[]).length).toBe(74);
+    expect((parsed["nodes"] as unknown[]).length).toBe(39);
+    expect((parsed["edges"] as unknown[]).length).toBe(78);
   });
 });
 

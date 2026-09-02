@@ -41,13 +41,13 @@ import { edge, javaFixture, javaGraph, pkg, toyModel, type } from "./fixture.js"
  * here with the stage that noticed, rather than as a silent metric drift.
  */
 
-const ENTITIES = 169;
-const EDGES = 179;
-const STUBS = 26;
+const ENTITIES = 179;
+const EDGES = 188;
+const STUBS = 27;
 /** 78 of the 179 edges touch a stub; the internal-only corpus keeps 101. */
-const INTERNAL_EDGES = 101;
+const INTERNAL_EDGES = 107;
 /** Exactly three edges are the extractor's inference, all module→module imports. */
-const DECLARED_EDGES = 176;
+const DECLARED_EDGES = 185;
 
 const ORDER = "java:com.acme.order";
 const ADAPTER = "java:com.acme.order.adapter";
@@ -107,7 +107,7 @@ describe("stage 2 — the indexed graph", () => {
     expect(graph.importersOf(LEDGER)).toEqual([ORDER, ADAPTER]);
     const total = (of: (id: EntityId) => readonly EntityId[]): number =>
       graph.ids().reduce((sum, id) => sum + of(id).length, 0);
-    expect(total((id) => graph.subtypesOf(id))).toBe(3);
+    expect(total((id) => graph.subtypesOf(id))).toBe(4);
     expect(total((id) => graph.implementersOf(id))).toBe(3);
     expect(total((id) => graph.importersOf(id))).toBe(6);
     for (const id of graph.ids()) {
@@ -144,8 +144,8 @@ describe("stage 4/5 — folding and the queries built on it", () => {
     expect(query.nodes).toEqual(folded.nodes);
     expect(query.edges).toEqual(folded.edges);
 
-    expect(query.nodes).toHaveLength(36);
-    expect(query.edges).toHaveLength(74);
+    expect(query.nodes).toHaveLength(39);
+    expect(query.edges).toHaveLength(78);
     // The three corpus-declared packages carry TModule but not TType, so they
     // have no containing type. Reported, never hidden — and the 11 import edges
     // they own are the ones dropped.
@@ -164,15 +164,15 @@ describe("stage 4/5 — folding and the queries built on it", () => {
       "java:java.util.function",
     ]);
     expect(query.diagnostics.droppedEdges).toBe(11);
-    expect(query.diagnostics.foldedEdges).toBe(168);
+    expect(query.diagnostics.foldedEdges).toBe(177);
     expect(query.diagnostics.foldedEdges + query.diagnostics.droppedEdges).toBe(EDGES);
   });
 
   it("typeDependencyGraph honours the view it is given", () => {
     const query = typeDependencyGraph(graph, internalOnly);
     expect(query.view.name).toBe("internalOnly");
-    expect(query.nodes).toHaveLength(17);
-    expect(query.edges).toHaveLength(37);
+    expect(query.nodes).toHaveLength(19);
+    expect(query.edges).toHaveLength(39);
     expect(query.nodes.every((node) => !node.isStub)).toBe(true);
   });
 
@@ -336,9 +336,9 @@ describe("stage 6 — cycles", () => {
 
   it("separates folding self-loops from architectural cycles", () => {
     const report = cycles(foldGraph(graph, { level: "type" }));
-    // 11 types contain a method that calls or reads a sibling of the same type.
+    // 12 types contain a method that calls or reads a sibling of the same type.
     // That is not a cycle between components and must not be reported as one.
-    expect(report.selfLoops).toHaveLength(11);
+    expect(report.selfLoops).toHaveLength(12);
     expect(report.selfLoops).toContain("java:com.acme.order/Order");
     expect(report.components.every((c) => c.size > 1)).toBe(true);
   });
@@ -488,7 +488,7 @@ describe("stage 7 — exports render the model honestly", () => {
     const members = report.components.reduce((s, c) => s + c.members.length, 0);
     expect(cycled).toHaveLength(1 + members + report.selfLoops.length);
     expect(members).toBe(4); // the fixture's two genuine 2-cycles
-    expect(report.selfLoops).toHaveLength(11);
+    expect(report.selfLoops).toHaveLength(12);
     const label = (row: string[]) => row[0]!;
     const body = cycled.slice(1);
     expect(body.filter((r) => label(r) === "selfLoop")).toHaveLength(report.selfLoops.length);

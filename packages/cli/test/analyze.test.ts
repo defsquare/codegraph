@@ -78,8 +78,8 @@ describe("analyze --report deps at module level is the import graph", () => {
   it("lists every module with its member count and marks the external ones", () => {
     const { lines } = analyze({ report: "deps", level: "module" });
     const nodeLines = lines.filter((line) => line.startsWith("  java:"));
-    // com.acme.order holds 128 of the 169 entities; java.lang is a stub package.
-    expect(nodeLines.some((line) => line.includes("java:com.acme.order ") && line.includes("members=128"))).toBe(true);
+    // com.acme.order holds 137 of the 179 entities; java.lang is a stub package.
+    expect(nodeLines.some((line) => line.includes("java:com.acme.order ") && line.includes("members=137"))).toBe(true);
     expect(nodeLines.some((line) => line.includes("java:java.lang ") && line.includes("external (stub)"))).toBe(true);
     // Exactly 7 of the 10 modules are stubs (3 com.acme.* packages are internal).
     expect(nodeLines.filter((line) => line.includes("external (stub)")).length).toBe(7);
@@ -108,20 +108,20 @@ describe("analyze --report deps at module level is the import graph", () => {
 /* ----------------------------------------------------------------- deps: type */
 
 describe("analyze --report deps at type level is the type dependency graph", () => {
-  it("reports the fixture's 36 types and 74 aggregated dependencies", () => {
+  it("reports the fixture's 39 types and 78 aggregated dependencies", () => {
     const result = analyze({ report: "deps", level: "type" });
-    expect(result.stdout).toContain("nodes: 36");
-    expect(result.stdout).toContain("edges: 74 aggregated dependencies");
+    expect(result.stdout).toContain("nodes: 39");
+    expect(result.stdout).toContain("edges: 78 aggregated dependencies");
     expect(result.stdout).toContain("layer:  every edge kind folded to type level");
   });
 
   it("--top narrows the node list to the shown dependencies, and says how many it omitted", () => {
     const result = analyze({ report: "deps", level: "type", top: 5 });
-    expect(result.stdout).toContain("edges: 5 of 74 aggregated dependencies (--top 5)");
-    expect(result.stdout).toContain("… 69 lower-weight dependencies not shown.");
+    expect(result.stdout).toContain("edges: 5 of 78 aggregated dependencies (--top 5)");
+    expect(result.stdout).toContain("… 73 lower-weight dependencies not shown.");
     // The header still reports the TRUE total — narrowing the list must not
     // change what is true about the graph, only how much of it is printed.
-    expect(result.stdout).toContain("nodes: 36");
+    expect(result.stdout).toContain("nodes: 39");
 
     // The heaviest type dependency on the fixture is Batch -> Batch (weight 7).
     const shown = result.lines.filter((line) => line.includes("weight="));
@@ -144,7 +144,7 @@ describe("analyze --report deps at type level is the type dependency graph", () 
 
   it("without --top the full node inventory is still printed", () => {
     const result = analyze({ report: "deps", level: "type" });
-    expect(result.lines.filter((line) => line.includes("members=")).length).toBe(36);
+    expect(result.lines.filter((line) => line.includes("members=")).length).toBe(39);
     expect(result.stdout).not.toContain("other nodes not shown");
   });
 
@@ -152,7 +152,7 @@ describe("analyze --report deps at type level is the type dependency graph", () 
     const weights = analyze({ report: "deps", level: "type" })
       .lines.filter((line) => line.includes("weight="))
       .map((line) => Number(/weight=(\d+)/.exec(line)?.[1] ?? "0"));
-    expect(weights.length).toBe(74);
+    expect(weights.length).toBe(78);
     expect([...weights].sort((a, b) => b - a)).toEqual(weights);
   });
 });
@@ -170,8 +170,8 @@ describe("the view is part of the result, and internal-only drops the stubs", ()
     expect(filtered.stdout).toContain("view:   internalOnly+declaredOnly (internalOnly, declaredOnly)");
   });
 
-  it("--internal-only drops the 26 stubs: 36 types become 17, 10 modules become 3", () => {
-    expect(analyze({ report: "deps", level: "type", internalOnly: true }).stdout).toContain("nodes: 17");
+  it("--internal-only drops the 27 stubs: 39 types become 19, 10 modules become 3", () => {
+    expect(analyze({ report: "deps", level: "type", internalOnly: true }).stdout).toContain("nodes: 19");
     expect(analyze({ report: "deps", level: "module", internalOnly: true }).stdout).toContain("nodes: 3");
     const { lines } = analyze({ report: "deps", level: "type", internalOnly: true });
     expect(lines.some((line) => line.includes("external (stub)"))).toBe(false);
@@ -233,7 +233,7 @@ describe("analyze --report coupling", () => {
     const rows = analyze({ report: "coupling", level: "type" }).lines.filter((line) =>
       /^ {2}java:/.test(line),
     );
-    expect(rows.length).toBe(36);
+    expect(rows.length).toBe(39);
     // Order (Ca 2 + Ce 8) and Notifications (0 + 10) both reach degree 10 and
     // lead; Money (7 + 2) and Reporting (0 + 8) follow. The ranking is by
     // DEGREE, so a tie is broken by the table's own rule, not by luck.
@@ -251,8 +251,8 @@ describe("analyze --report coupling", () => {
     const result = analyze({ report: "coupling", level: "type", top: 5 });
     const rows = result.lines.filter((line) => /^ {2}java:/.test(line));
     expect(rows.length).toBe(5);
-    expect(result.stdout).toContain("coupling: 5 of 36 nodes (--top 5), ranked by total coupling Ca+Ce descending");
-    expect(result.stdout).toContain("… 31 less-coupled nodes not shown (--top 5).");
+    expect(result.stdout).toContain("coupling: 5 of 39 nodes (--top 5), ranked by total coupling Ca+Ce descending");
+    expect(result.stdout).toContain("… 34 less-coupled nodes not shown (--top 5).");
   });
 
   it("marks external nodes, because a stub inflates Ce for a real reason", () => {
@@ -320,7 +320,7 @@ describe("analyze --report cycles", () => {
     expect(module.stdout).toContain("java:com.acme.order.legacy");
 
     const type = analyze({ report: "cycles", level: "type" });
-    expect(type.stdout).toContain("self-dependencies after folding: 11");
+    expect(type.stdout).toContain("self-dependencies after folding: 12");
   });
 
   it("--top limits the components shown and says how many were hidden", () => {
@@ -330,7 +330,7 @@ describe("analyze --report cycles", () => {
     expect(result.stdout).toContain("cycle 1 —");
     expect(result.stdout).not.toContain("cycle 2 —");
     // The TOTAL is still stated, so a limited report cannot read as complete.
-    expect(result.stdout).toContain("self-dependencies after folding: 11");
+    expect(result.stdout).toContain("self-dependencies after folding: 12");
   });
 
   it("keeps the two cycles under --internal-only: they are corpus-internal", () => {
@@ -402,19 +402,19 @@ describe("--json carries the same information as the text form (decision 8)", ()
 
   it("deps: the same counts, the same limiting, the same provenances", () => {
     const full = jsonOf({ report: "deps", level: "type" });
-    expect(full["nodeCount"]).toBe(36);
-    expect(full["edgeCount"]).toBe(74);
-    expect((full["nodes"] as unknown[]).length).toBe(36);
-    expect((full["edges"] as unknown[]).length).toBe(74);
+    expect(full["nodeCount"]).toBe(39);
+    expect(full["edgeCount"]).toBe(78);
+    expect((full["nodes"] as unknown[]).length).toBe(39);
+    expect((full["edges"] as unknown[]).length).toBe(78);
 
     const limited = jsonOf({ report: "deps", level: "type", top: 5 });
-    expect(limited["edgeCount"]).toBe(74);
+    expect(limited["edgeCount"]).toBe(78);
     expect((limited["edges"] as unknown[]).length).toBe(5);
     expect(limited["ranking"]).toEqual({
       by: "weight descending (base edges aggregated), ties by (from, to)",
       top: 5,
       shown: 5,
-      total: 74,
+      total: 78,
     });
   });
 
@@ -437,13 +437,13 @@ describe("--json carries the same information as the text form (decision 8)", ()
       "java:com.acme.order/Money",
     ]);
     expect(rows[0]).toMatchObject({ ca: 2, ce: 8, fanIn: 2, fanOut: 8 });
-    expect(payload["ranking"]).toMatchObject({ shown: 3, total: 36 });
+    expect(payload["ranking"]).toMatchObject({ shown: 3, total: 39 });
   });
 
   it("cycles: the same components, and the count of what was hidden", () => {
     const payload = jsonOf({ report: "cycles", level: "type" });
     expect(payload["componentCount"]).toBe(2);
-    expect(payload["selfLoopCount"]).toBe(11);
+    expect(payload["selfLoopCount"]).toBe(12);
     const components = payload["components"] as {
       members: string[];
       weight: number;
@@ -472,10 +472,10 @@ describe("--json carries the same information as the text form (decision 8)", ()
 
   it("reports the fold diagnostics the stderr note states", () => {
     const payload = jsonOf({ report: "coupling", level: "type" });
-    expect(payload["foldDiagnostics"]).toMatchObject({ droppedEdges: 11, foldedEdges: 168 });
+    expect(payload["foldDiagnostics"]).toMatchObject({ droppedEdges: 11, foldedEdges: 177 });
     expect(jsonOf({ report: "coupling", level: "module" })["foldDiagnostics"]).toMatchObject({
       droppedEdges: 5,
-      foldedEdges: 174,
+      foldedEdges: 183,
     });
   });
 
@@ -496,13 +496,13 @@ describe("stream discipline and exit codes (decisions 2 and 3)", () => {
   it("keeps the fold diagnostics on stderr, never in the artifact", () => {
     const result = analyze({ report: "deps", level: "type" });
     expect(result.stderr).toContain("11 dropped (an endpoint has no type container in this view)");
-    expect(result.stderr).toContain("168 base edges aggregated into 74");
+    expect(result.stderr).toContain("177 base edges aggregated into 78");
     expect(result.stdout).not.toContain("dropped (");
   });
 
   it("reports the module fold's 5 dropped edges — a smaller graph is never silent", () => {
     expect(analyze({ report: "coupling", level: "module" }).stderr).toContain(
-      "fold(module): 174 base edges aggregated into 14; 5 dropped",
+      "fold(module): 183 base edges aggregated into 14; 5 dropped",
     );
   });
 
@@ -585,7 +585,7 @@ describe("codegraph analyze end to end", () => {
     expect(code).toBe(EXIT.OK);
     const payload = JSON.parse(io.stdout()) as Record<string, unknown>;
     expect(payload["report"]).toBe("coupling");
-    expect(payload["ranking"]).toMatchObject({ shown: 4, total: 17 });
+    expect(payload["ranking"]).toMatchObject({ shown: 4, total: 19 });
   });
 
   it("turns an unreadable model path into a usage error, not a finding", () => {

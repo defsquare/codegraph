@@ -107,10 +107,10 @@ describe("validate says the same thing in both forms", () => {
     const numbers = new Set(
       valuesUnderKey(parsed, /.*/).filter((value): value is number => typeof value === "number"),
     );
-    expect(numbers, "the JSON form must state how many entities were validated").toContain(169);
-    expect(numbers, "the JSON form must state how many edges were validated").toContain(179);
-    expect(text.stdout).toContain("169");
+    expect(numbers, "the JSON form must state how many entities were validated").toContain(179);
+    expect(numbers, "the JSON form must state how many edges were validated").toContain(188);
     expect(text.stdout).toContain("179");
+    expect(text.stdout).toContain("188");
   });
 });
 
@@ -142,10 +142,10 @@ describe("analyze says the same thing in both forms", () => {
     );
   });
 
-  it("coupling at type level names the same 36 types in both forms", () => {
+  it("coupling at type level names the same 39 types in both forms", () => {
     const { text, json } = bothForms(["analyze", FIXTURE, "--report", "coupling", "--level", "type"]);
     const fromJson = reportNodeIds(parseJsonArtifact(json.stdout, "analyze coupling type --json"));
-    expect(fromJson.size).toBe(36);
+    expect(fromJson.size).toBe(39);
     expect([...entityIdsIn(text.stdout)].sort()).toEqual([...fromJson].sort());
   });
 

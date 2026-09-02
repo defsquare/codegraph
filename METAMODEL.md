@@ -327,6 +327,7 @@ Rules:
 | `access` | Invocable → Structural | `isRead: bool`, `isWrite: bool` | field/variable reads and writes |
 | `reference` | Entity → Type | | type usage that is none of the above (declarations, generics, casts) |
 | `annotationUse` | Entity → Type (annotation) | `arguments: NamedArgument[]` (§1.6) | a written annotation on any entity, with its arguments. Formerly a plain `reference`; the dedicated kind both carries the values and lets a consumer select annotation usages without guessing from the target's kind — which a stub target cannot answer |
+| `throws` | Invocable → Type (exception) | | a written `throw` statement whose static exception type resolved; the anchor is the throw SITE — the evidence a guard clause leaves. A declared propagation clause (Java `throws E`) is a plain `reference`, not this. Distinct from `reference` so failure exits are selectable without reading the target's kind, which a stub target cannot answer |
 | `embedding` | Type → Type | | Go `struct { Base }` — neither inheritance nor attribute (method promotion); dedicated relation |
 | `traitUsage` | Type → Trait (PHP) | | PHP `use TraitX;` — kept as a usage edge, never flattened into the class |
 | `fileInclude` | CodeFile → CodeFile | | PHP `include`/`require` — the only file-to-file dependency in the metamodel |

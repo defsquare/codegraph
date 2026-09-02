@@ -51,6 +51,8 @@ export const EDGE_KINDS = [
   "fileInclude",
   // A written annotation, with its arguments (METAMODEL.md §4, §1.6).
   "annotationUse",
+  // A `throw` site: the invocable exits with this exception type (METAMODEL.md §4).
+  "throws",
 ] as const;
 
 export const EdgeKind = z.enum(EDGE_KINDS);

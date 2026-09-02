@@ -27,6 +27,7 @@ import spoon.reflect.code.CtLambda;
 import spoon.reflect.code.CtLocalVariable;
 import spoon.reflect.code.CtNewClass;
 import spoon.reflect.code.CtOperatorAssignment;
+import spoon.reflect.code.CtThrow;
 import spoon.reflect.code.CtUnaryOperator;
 import spoon.reflect.code.UnaryOperatorKind;
 import spoon.reflect.declaration.CtAnnotation;
@@ -191,6 +192,7 @@ public final class EdgeExtractor {
       emit(phase, "method refs", () -> emitMethodReferences(model));
       emit(phase, "accesses", () -> emitAccesses(model));
       emit(phase, "annotations", () -> emitAnnotations(model));
+      emit(phase, "throw sites", () -> emitThrows(model));
       emit(phase, "type refs", () -> emitTypeReferences(model));
     }
 
@@ -198,7 +200,7 @@ public final class EdgeExtractor {
   }
 
   /** Kept beside the emitter calls above: the two must agree or the bar lies. */
-  private static final int EMITTERS = 7;
+  private static final int EMITTERS = 8;
 
   private static void emit(Progress.Phase phase, String what, Runnable emitter) {
     phase.detail(what);
@@ -677,6 +679,42 @@ public final class EdgeExtractor {
               provenance.get(),
               anchor.get(),
               literals.argumentsOf(annotation)));
+    }
+  }
+
+  /**
+   * A written {@code throw} statement is a failure exit of the enclosing
+   * invocable — the evidence a guard clause ({@code if (x) throw new E(...)})
+   * leaves in the model. The target is the thrown expression's STATIC type
+   * (a rethrown {@code throw e;} targets the caught variable's type), resolved
+   * to its declaration exactly like a type reference, so an external exception
+   * folds to its stub type id. The {@code throws} CLAUSE on a signature is
+   * deliberately not this: it declares propagation, and its written type use
+   * already reaches the reference pass.
+   */
+  private void emitThrows(CtModel model) {
+    for (CtThrow site : model.getElements(new TypeFilter<CtThrow>(CtThrow.class))) {
+      Optional<Provenance> provenance = provenanceOf(site);
+      if (provenance.isEmpty()) {
+        continue;
+      }
+      CtTypeReference<?> thrown =
+          site.getThrownExpression() == null ? null : site.getThrownExpression().getType();
+      Optional<String> target =
+          typeIdOfReference(thrown).filter(id -> !UNKNOWN_TYPE_ID.equals(id));
+      if (target.isEmpty()) {
+        droppedUnidentifiedTargets++;
+        continue;
+      }
+      Optional<SourceAnchor> anchor = anchorOf(site);
+      Optional<Owner> owner = invocableOwnerOf(site);
+      if (anchor.isEmpty() || owner.isEmpty() || owner.get().kind() != OwnerKind.INVOCABLE) {
+        // A throw outside every invocable (a field initializer cannot hold one,
+        // but a static block can): the metamodel's throws edge is Invocable →
+        // Type, so the fact degrades to the reference the type use already is.
+        continue;
+      }
+      add(Edge.throwsEdge(owner.get().id(), target.get(), provenance.get(), anchor.get()));
     }
   }
 

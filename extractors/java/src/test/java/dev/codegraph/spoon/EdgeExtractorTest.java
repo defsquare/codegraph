@@ -613,6 +613,107 @@ class EdgeExtractorTest {
     assertEquals(Provenance.GENERATED, generated.provenance());
   }
 
+  // -------------------------------------------------------------- throw sites
+
+  private static final String VAULT =
+      """
+      package com.acme.vault;
+
+      public class Vault {
+
+        public void withdraw(int amount) {
+          if (amount < 0) {
+            throw new EmptyVaultException("negative");
+          }
+          if (amount > 100) {
+            throw new IllegalArgumentException("too much");
+          }
+          try {
+            risky();
+          } catch (EmptyVaultException e) {
+            throw e;
+          }
+        }
+
+        void risky() throws EmptyVaultException {
+        }
+      }
+      """;
+
+  private static final String EMPTY_VAULT_EXCEPTION =
+      """
+      package com.acme.vault;
+
+      public class EmptyVaultException extends RuntimeException {
+        public EmptyVaultException(String message) {
+          super(message);
+        }
+      }
+      """;
+
+  /**
+   * A written {@code throw} is a failure exit of the enclosing invocable — the
+   * evidence a guard clause leaves. The anchor is the throw SITE; the target is
+   * the thrown expression's static type, folded to a stub id when external.
+   */
+  @Test
+  void throwSitesBecomeThrowsEdgesAnchoredAtTheStatement(@TempDir Path root) throws IOException {
+    List<Edge> edges = extractVault(root);
+    String withdraw = "java:com.acme.vault/Vault.withdraw(int)";
+
+    List<Edge> toCorpus =
+        of(edges, EdgeKind.THROWS).stream()
+            .filter(e -> e.from().equals(withdraw))
+            .filter(e -> e.to().equals("java:com.acme.vault/EmptyVaultException"))
+            .toList();
+    assertEquals(2, toCorpus.size(), "the guard throw AND the rethrow both leave evidence");
+    assertEquals(
+        List.of(7, 15),
+        toCorpus.stream().map(e -> e.anchor().startLine()).sorted().toList(),
+        "each edge is anchored at its own throw statement");
+    assertTrue(toCorpus.stream().allMatch(e -> e.provenance() == Provenance.DECLARED));
+  }
+
+  @Test
+  void aThrownExternalExceptionFoldsToItsStubTypeId(@TempDir Path root) throws IOException {
+    Edge external =
+        single(
+            extractVault(root),
+            EdgeKind.THROWS,
+            "java:com.acme.vault/Vault.withdraw(int)",
+            "java:java.lang/IllegalArgumentException");
+    assertEquals(10, external.anchor().startLine());
+    assertEquals(Provenance.DECLARED, external.provenance());
+  }
+
+  /** {@code throws E} on a signature declares propagation, not a failure exit. */
+  @Test
+  void aThrowsClauseIsNotAThrowSite(@TempDir Path root) throws IOException {
+    List<Edge> edges = extractVault(root);
+    assertTrue(
+        of(edges, EdgeKind.THROWS).stream()
+            .noneMatch(e -> e.from().startsWith("java:com.acme.vault/Vault.risky")),
+        "the clause stays a plain reference edge; only a throw statement is a throws edge");
+    assertFalse(
+        of(edges, EdgeKind.REFERENCE).stream()
+            .filter(e -> e.from().startsWith("java:com.acme.vault/Vault.risky"))
+            .filter(e -> e.to().equals("java:com.acme.vault/EmptyVaultException"))
+            .toList()
+            .isEmpty(),
+        "the clause's written type use is still a dependency");
+  }
+
+  private static List<Edge> extractVault(Path root) throws IOException {
+    write(root, "com/acme/vault/Vault.java", VAULT);
+    write(root, "com/acme/vault/EmptyVaultException.java", EMPTY_VAULT_EXCEPTION);
+    Launcher launcher = new Launcher();
+    launcher.getEnvironment().setNoClasspath(true);
+    launcher.getEnvironment().setComplianceLevel(17);
+    launcher.addInputResource(root.toString());
+    CtModel model = launcher.buildModel();
+    return new EdgeExtractor(whitelistOf(model, root), new Anchors(root)).extract(model);
+  }
+
   // -------------------------------------------------------------- fixtures
 
   private static List<Edge> extract(Path root) throws IOException {

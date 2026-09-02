@@ -65,6 +65,18 @@ describe("Edge", () => {
     }
   });
 
+  it("parses a throws edge — an invocable exiting with an exception type", () => {
+    const parsed = Edge.parse({
+      ...base,
+      edge: "throws",
+      to: "java:com.acme.order/InsufficientFundsException",
+    });
+    expect(parsed.edge).toBe("throws");
+    // No extra keys: the throw SITE is the anchor, the exception type the target.
+    expect(parsed).not.toHaveProperty("isRead");
+    expect(parsed).not.toHaveProperty("arguments");
+  });
+
   it("keeps candidates and sourceFile optional but preserved when present", () => {
     const minimal = Edge.parse({ ...base, edge: "invocation" });
     expect(minimal).not.toHaveProperty("candidates");

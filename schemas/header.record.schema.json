@@ -17,7 +17,8 @@
               "embedding",
               "traitUsage",
               "fileInclude",
-              "annotationUse"
+              "annotationUse",
+              "throws"
             ],
             "type": "string"
           },

@@ -63,6 +63,7 @@ describe("foldedGraphToJson", () => {
       "interfaceImplementation",
       "invocation",
       "reference",
+      "throws",
     ]);
   });
 
@@ -75,8 +76,8 @@ describe("foldedGraphToJson", () => {
     expect(module.diagnostics.droppedEdges).toBe(5);
 
     const type = foldedGraphToJson(foldGraph(graph, { level: "type" }));
-    expect(type.nodes).toHaveLength(36);
-    expect(type.diagnostics.foldedEdges + type.diagnostics.droppedEdges).toBe(179);
+    expect(type.nodes).toHaveLength(39);
+    expect(type.diagnostics.foldedEdges + type.diagnostics.droppedEdges).toBe(188);
     // Packages have no containing TYPE — the corpus's three plus the seven
     // external modules external types now hang off. Reported, never hidden.
     expect(type.diagnostics.unfoldableEntities).toEqual([

@@ -21,8 +21,8 @@ const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.jso
 
 const MODULE_NODES = 10;
 const MODULE_EDGES = 14;
-const TYPE_NODES = 36;
-const TYPE_EDGES = 74;
+const TYPE_NODES = 39;
+const TYPE_EDGES = 78;
 
 function options(overrides: Partial<ExportOptions> = {}): ExportOptions {
   return {

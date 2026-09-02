@@ -71,6 +71,17 @@ export const AnnotationUseEdge = z.object({
 });
 
 /**
+ * Invocable → Type (exception): a written `throw` statement whose static type
+ * resolved. The anchor is the throw SITE, which is what makes a precondition
+ * ("if X, reject with E") auditable; the exception type's own written use also
+ * emits its `reference`/`invocation` edges — a throws edge never replaces a
+ * dependency. Kept distinct from `reference` so a consumer can select failure
+ * exits without guessing from the target's kind — which a stub target (the
+ * usual case for framework exceptions) cannot answer.
+ */
+export const ThrowsEdge = z.object({ edge: z.literal("throws"), ...edgeBase });
+
+/**
  * The single relationship concept, discriminated on `edge` (METAMODEL.md §4).
  * Only `access` and `annotationUse` contribute extra keys. Graph-level rules — closure and
  * `from !== to` — are properties checked by the analyzer, not by this parser.
@@ -86,6 +97,7 @@ export const Edge = z.discriminatedUnion("edge", [
   TraitUsageEdge,
   FileIncludeEdge,
   AnnotationUseEdge,
+  ThrowsEdge,
 ]);
 export type Edge = z.infer<typeof Edge>;
 

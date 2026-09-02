@@ -43,7 +43,7 @@ describe("the same model twice is benign, and reported", () => {
     expect(result.code, describeResult(result)).toBe(EXIT.OK);
   });
 
-  it("reports all 169 duplicated ids rather than passing over them", () => {
+  it("reports all 179 duplicated ids rather than passing over them", () => {
     const result = runCli(["validate", ...TWICE, "--json"]);
     const parsed = parseJsonArtifact(result.stdout, "validate --json over two copies");
 
@@ -58,8 +58,8 @@ describe("the same model twice is benign, and reported", () => {
     );
     expect(
       counts,
-      `expected a duplicate count of 167, found ${JSON.stringify(counts)}`,
-    ).toContain(169);
+      `expected a duplicate count of 179, found ${JSON.stringify(counts)}`,
+    ).toContain(179);
   });
 
   it("says so in the text form too", () => {

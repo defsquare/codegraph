@@ -65,7 +65,8 @@ contractual (single-pass streaming): `header → files → entities → edges �
             "method","constructor","attribute","parameter","localVariable","lambda"],
    "traits":["TNamed","TSourceAnchor","TWithChildren","TChildOf","TType","..."],
    "edges":["import","inheritance","interfaceImplementation","invocation",
-            "access","reference","embedding","traitUsage","fileInclude"],
+            "access","reference","embedding","traitUsage","fileInclude",
+            "annotationUse","throws"],
    "provenance":["declared","derived","dynamic-candidate","generated"]}}
 {"t":"f","i":0,"path":"custom/acme/.../AcmeNoopJobTaskletTest.java"}
 {"t":"e","i":1102,"k":6,"tr":[0,5,9,12,14,17,20,3,1],"m":37,"s":"OrderService.bill",

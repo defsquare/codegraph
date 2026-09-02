@@ -114,6 +114,15 @@ public record Edge(
   }
 
   /**
+   * Invocable → Type (exception): a written {@code throw} statement, anchored at
+   * the throw SITE — the evidence a guard clause leaves. A {@code throws} CLAUSE
+   * declares propagation and stays a plain {@link #reference}.
+   */
+  public static Edge throwsEdge(String from, String to, Provenance provenance, SourceAnchor anchor) {
+    return new Edge(EdgeKind.THROWS, from, to, provenance, anchor, null, null, null, null, null);
+  }
+
+  /**
    * METAMODEL.md §4: {@code from ≠ to}. Java has legal self-reference (recursion,
    * a class referencing itself), so the extractor DROPS such edges rather than
    * failing — hence a predicate here instead of a constructor check.
