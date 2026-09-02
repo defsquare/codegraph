@@ -8,7 +8,7 @@ import { decodeHistoryText } from "@codegraph/scm";
 import { historyCommand, type ServeDeps } from "../src/commands/history.js";
 import { EXIT } from "../src/exit.js";
 import { captureIo, type CapturedIo } from "../src/io.js";
-import { run } from "../src/main.js";
+import { runSync } from "../src/main.js";
 
 /**
  * `codegraph scm` + `codegraph history`, end to end against a SCRIPTED git
@@ -80,7 +80,7 @@ beforeAll(() => {
 
 function invoke(argv: readonly string[]): { io: CapturedIo; code: number } {
   const io = captureIo();
-  const code = run(argv, io);
+  const code = runSync(argv, io);
   return { io, code };
 }
 
@@ -132,7 +132,7 @@ describe("codegraph scm mines the scripted repo", () => {
     execFileSync("git", ["init", "-q", "-b", "main", empty]);
     const out = join(scratch, "empty-history.jsonl");
     const io = captureIo();
-    const code = run(["scm", empty, "--out", out], io);
+    const code = runSync(["scm", empty, "--out", out], io);
     expect(code).toBe(EXIT.OK);
     const history = decodeHistoryText(io.files().get(out) ?? "");
     expect(history.commits).toEqual([]);
@@ -150,7 +150,7 @@ describe("codegraph scm mines the scripted repo", () => {
   it("respects --since, dropping the older commits", () => {
     const out = join(scratch, "since.jsonl");
     const io = captureIo();
-    const code = run(["scm", repo, "--since", "2024-01-02T00:00:00+00:00", "--out", out], io);
+    const code = runSync(["scm", repo, "--since", "2024-01-02T00:00:00+00:00", "--out", out], io);
     expect(code).toBe(EXIT.OK);
     const history = decodeHistoryText(io.files().get(out) ?? "");
     expect(history.commits).toHaveLength(3);
@@ -159,7 +159,7 @@ describe("codegraph scm mines the scripted repo", () => {
   it("--json reports the counts machine-readably", () => {
     const out = join(scratch, "json.jsonl");
     const io = captureIo();
-    const code = run(["scm", repo, "--out", out, "--json"], io);
+    const code = runSync(["scm", repo, "--out", out, "--json"], io);
     expect(code).toBe(EXIT.OK);
     const parsed = JSON.parse(io.stdout()) as {
       repo: string;

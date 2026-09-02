@@ -7,7 +7,7 @@ import { HISTORY_SCHEMA_VERSION, encodeHistoryToString, type History } from "@co
 
 import { EXIT } from "../src/exit.js";
 import { captureIo, type CapturedIo } from "../src/io.js";
-import { run } from "../src/main.js";
+import { runSync } from "../src/main.js";
 
 /**
  * The cross-graph reports (M9b), end to end: one mined history + one model,
@@ -129,7 +129,7 @@ const MODEL_PATH = modelFile();
 
 function invoke(argv: readonly string[]): { io: CapturedIo; code: number } {
   const io = captureIo();
-  const code = run(argv, io);
+  const code = runSync(argv, io);
   return { io, code };
 }
 

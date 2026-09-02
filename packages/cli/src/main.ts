@@ -22,35 +22,59 @@ import { cliVersion } from "./version.js";
  * `run` returns a code; it never calls `process.exit`. That keeps stdout
  * flushing to the caller's redirection intact and makes the whole CLI testable
  * in-process — a test calls `run(argv, captureIo())` and asserts on both.
+ *
+ * SYNC BY DEFAULT, ASYNC BY EXCEPTION. Every command that reads a model and
+ * writes an artifact is synchronous all the way down (see core's jsonl-file.ts
+ * for why), and `run` returns a plain number for them — the 700+ in-process
+ * tests depend on that. The one command that awaits a network client
+ * (`explain`) returns a promise instead, and `run` settles it through the same
+ * exit-code mapping, so a rejected promise is never an unhandled rejection.
  */
-export function run(argv: readonly string[], io: IoSink): ExitCode {
+export function run(argv: readonly string[], io: IoSink): ExitCode | Promise<ExitCode> {
   let invocation: Invocation;
   try {
     invocation = parseInvocation(argv);
   } catch (error) {
-    if (isUsageError(error)) {
-      errLine(io, `codegraph: ${error.message}`);
-      if (error.hint !== undefined) errLine(io, error.hint);
-      return error.exitCode;
-    }
-    return internalError(io, error);
+    return failure(io, error);
   }
 
   try {
-    return dispatch(invocation, io);
+    const outcome = dispatch(invocation, io);
+    return outcome instanceof Promise ? outcome.catch((error: unknown) => failure(io, error)) : outcome;
   } catch (error) {
-    // A usage error can also surface from a command (an unreadable model path,
-    // an unwritable --out): still exit 2, still no stack trace.
-    if (isUsageError(error)) {
-      errLine(io, `codegraph: ${error.message}`);
-      if (error.hint !== undefined) errLine(io, error.hint);
-      return error.exitCode;
-    }
-    return internalError(io, error);
+    return failure(io, error);
   }
 }
 
-function dispatch(invocation: Invocation, io: IoSink): ExitCode {
+/**
+ * `run` for callers that know the command is synchronous — every in-process
+ * test helper. A promise here means a test invoked the one async command
+ * through a sync helper, which is a test bug, so it throws instead of leaking
+ * an unsettled promise into an exit-code assertion.
+ */
+export function runSync(argv: readonly string[], io: IoSink): ExitCode {
+  const outcome = run(argv, io);
+  if (outcome instanceof Promise) {
+    throw new Error(`codegraph ${argv[0] ?? ""} is asynchronous: await run(...) instead of runSync`);
+  }
+  return outcome;
+}
+
+/**
+ * The single mapping from a thrown error to an exit code. A usage error can
+ * surface from the parser or from a command (an unreadable model path, an
+ * unwritable --out, a missing API key): still exit 2, still no stack trace.
+ */
+export function failure(io: IoSink, error: unknown): ExitCode {
+  if (isUsageError(error)) {
+    errLine(io, `codegraph: ${error.message}`);
+    if (error.hint !== undefined) errLine(io, error.hint);
+    return error.exitCode;
+  }
+  return internalError(io, error);
+}
+
+function dispatch(invocation: Invocation, io: IoSink): ExitCode | Promise<ExitCode> {
   switch (invocation.kind) {
     // Help and --version were REQUESTED: they are this invocation's artifact,
     // so they go to stdout and exit 0. Help printed because something was wrong

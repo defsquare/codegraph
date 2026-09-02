@@ -9,7 +9,7 @@ import type { SnapshotsOptions } from "../src/args.js";
 import { snapshotsCommand, type Extract } from "../src/commands/snapshots.js";
 import { EXIT } from "../src/exit.js";
 import { captureIo, type CapturedIo } from "../src/io.js";
-import { run } from "../src/main.js";
+import { runSync } from "../src/main.js";
 
 /**
  * `codegraph snapshots` — the M9b orchestration: sample revisions of a
@@ -155,7 +155,7 @@ const fakeExtract: Extract = (srcDir, outPath, repository) => {
 
 function invoke(argv: readonly string[]): { io: CapturedIo; code: number } {
   const io = captureIo();
-  const code = run(argv, io);
+  const code = runSync(argv, io);
   return { io, code };
 }
 

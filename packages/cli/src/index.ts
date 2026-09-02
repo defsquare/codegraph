@@ -6,7 +6,11 @@
 // `process.exitCode` rather than `process.exit()`: exiting outright can truncate
 // a large artifact still queued on a redirected stdout, and `codegraph export
 // … > graph.dot` on a 15 000-entity corpus is exactly that case.
+//
+// `await`: `run` returns a plain code for every synchronous command and a
+// promise only for the one that talks to the network (`explain`); awaiting a
+// number is a no-op, so this line serves both.
 import { processIo } from "./io.js";
 import { run } from "./main.js";
 
-process.exitCode = run(process.argv.slice(2), processIo());
+process.exitCode = await run(process.argv.slice(2), processIo());

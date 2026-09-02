@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { profilesCommand } from "../src/commands/profiles.js";
 import { EXIT, isUsageError } from "../src/exit.js";
 import { captureIo, type CapturedIo } from "../src/io.js";
-import { run } from "../src/main.js";
+import { runSync } from "../src/main.js";
 
 /**
  * `codegraph profiles` is how an extractor author discovers what a language's
@@ -17,7 +17,7 @@ const LANGS = Object.keys(PROFILES).sort();
 
 function invoke(argv: readonly string[]): { code: number; io: CapturedIo } {
   const io = captureIo();
-  return { code: run(argv, io), io };
+  return { code: runSync(argv, io), io };
 }
 
 function profileOf(lang: string): Profile {

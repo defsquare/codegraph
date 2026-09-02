@@ -1,9 +1,9 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { EXIT } from "../src/exit.js";
+import { EXIT, UsageError } from "../src/exit.js";
 import { captureIo, type IoSink } from "../src/io.js";
-import { run } from "../src/main.js";
+import { failure, run, runSync } from "../src/main.js";
 import { cliVersion } from "../src/version.js";
 
 /** Every .ts file under a directory, recursively. */
@@ -24,7 +24,7 @@ function invoke(argv: readonly string[]): {
   files: ReadonlyMap<string, string>;
 } {
   const io = captureIo();
-  const code = run(argv, io);
+  const code = runSync(argv, io);
   return { code, stdout: io.stdout(), stderr: io.stderr(), files: io.files() };
 }
 
@@ -136,7 +136,7 @@ describe("dispatch reaches every command", () => {
       err: io.err,
       writeFile: io.writeFile,
     };
-    const code = run(["profiles"], boom);
+    const code = runSync(["profiles"], boom);
     expect(code).toBe(EXIT.INTERNAL);
     expect(code).not.toBe(EXIT.FINDINGS);
     expect(io.stderr()).toContain("this is a bug in codegraph");
@@ -147,7 +147,7 @@ describe("dispatch reaches every command", () => {
 describe("the sink is the only way out", () => {
   it("routes everything through the sink rather than the process", () => {
     const io = captureIo();
-    const code = run(["--help"], io);
+    const code = runSync(["--help"], io);
     expect(code).toBe(EXIT.OK);
     expect(io.stdout().length).toBeGreaterThan(0);
     // Nothing reached the process: `run` was handed a capture and used it.
@@ -175,5 +175,28 @@ describe("error messages read as one sentence", () => {
     const { stderr } = invoke(argv);
     expect(stderr).not.toContain("codegraph: codegraph");
     expect(stderr.startsWith("codegraph: ")).toBe(true);
+  });
+});
+
+describe("run stays synchronous for every command that does not await the network", () => {
+  it("returns a plain number, not a promise, for help, version and a model command", () => {
+    for (const argv of [["--help"], ["--version"], ["validate", FIXTURE]]) {
+      const outcome = run(argv, captureIo());
+      expect(typeof outcome).toBe("number");
+    }
+  });
+
+  it("maps a UsageError to exit 2 and anything else to exit 1 through one function", () => {
+    const usage = captureIo();
+    expect(failure(usage, new UsageError("no key", "Set OPENROUTER_API_KEY."))).toBe(EXIT.USAGE);
+    expect(usage.stdout()).toBe("");
+    expect(usage.stderr()).toContain("codegraph: no key");
+    expect(usage.stderr()).toContain("Set OPENROUTER_API_KEY.");
+
+    const bug = captureIo();
+    expect(failure(bug, new TypeError("boom"))).toBe(EXIT.INTERNAL);
+    expect(bug.stdout()).toBe("");
+    expect(bug.stderr()).toContain("internal error");
+    expect(bug.stderr()).toContain("TypeError: boom");
   });
 });

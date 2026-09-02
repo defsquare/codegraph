@@ -37,6 +37,14 @@ export interface IoSink {
 /** A command: parsed options in, one exit code out, all output through the sink. */
 export type Command<Options> = (options: Options, io: IoSink) => ExitCode;
 
+/**
+ * The one exception to "sync all the way down": a command that awaits a
+ * network client. It still gets its options and its sink the same way, and
+ * `run` settles the promise through the same exit-code mapping — the only
+ * difference a caller sees is the `await`.
+ */
+export type AsyncCommand<Options> = (options: Options, io: IoSink) => Promise<ExitCode>;
+
 /** `out(text + "\n")`, the shape almost every line of a report wants. */
 export function outLine(io: IoSink, text = ""): void {
   io.out(`${text}\n`);

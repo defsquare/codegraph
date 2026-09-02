@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { analyzeCommand } from "../src/commands/analyze.js";
 import { EXIT } from "../src/exit.js";
 import { captureIo, type CapturedIo } from "../src/io.js";
-import { run } from "../src/main.js";
+import { runSync } from "../src/main.js";
 import type { AnalyzeOptions } from "../src/args.js";
 
 /**
@@ -558,7 +558,7 @@ describe("stream discipline and exit codes (decisions 2 and 3)", () => {
 describe("codegraph analyze end to end", () => {
   function invoke(argv: readonly string[]): { code: number; io: CapturedIo } {
     const io = captureIo();
-    return { code: run(argv, io), io };
+    return { code: runSync(argv, io), io };
   }
 
   it("runs from argv with the documented defaults (level module, no view filter)", () => {

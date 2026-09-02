@@ -10,7 +10,7 @@ import type { ReplayOptions } from "../src/args.js";
 import { replayCommand, type ServeDeps } from "../src/commands/replay.js";
 import { EXIT } from "../src/exit.js";
 import { captureIo, type CapturedIo } from "../src/io.js";
-import { run } from "../src/main.js";
+import { runSync } from "../src/main.js";
 
 /**
  * `codegraph replay` (M9c): the temporal store from the same three-revision
@@ -73,7 +73,7 @@ function snapshot(name: string, types: [string, number][]): string {
 
 function invoke(argv: readonly string[]): { io: CapturedIo; code: number } {
   const io = captureIo();
-  const code = run(argv, io);
+  const code = runSync(argv, io);
   return { io, code };
 }
 

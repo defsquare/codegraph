@@ -6,7 +6,7 @@ import { encodeModelToString, readModelFileSync, type Model } from "@codegraph/c
 import { afterAll, describe, expect, it } from "vitest";
 import { EXIT } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
-import { run } from "../src/main.js";
+import { runSync } from "../src/main.js";
 
 /**
  * `codegraph validate` is the acceptance gate an extractor author points at
@@ -71,7 +71,7 @@ function firstClassId(): string {
 
 function invoke(argv: readonly string[]): { code: number; stdout: string; stderr: string } {
   const io = captureIo();
-  const code = run(argv, io);
+  const code = runSync(argv, io);
   return { code, stdout: io.stdout(), stderr: io.stderr() };
 }
 
