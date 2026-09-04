@@ -28,7 +28,7 @@ import {
   type RunUsage,
   type Unit,
 } from "@codegraph/insights";
-import { openRouterClient, type LlmClient } from "@codegraph/llm";
+import { clientFromEnv, resolveProvider, type LlmClient, type Provider } from "@codegraph/llm";
 import type { ExplainOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, errLines, outLine, type IoSink } from "../io.js";
@@ -65,7 +65,8 @@ export interface ExplainFs {
 export interface ExplainSeam {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly fs: ExplainFs;
-  clientFor(apiKey: string): LlmClient;
+  /** The client for a RESOLVED provider whose variables are all present in `env`. */
+  clientFor(provider: Provider, env: Readonly<Record<string, string | undefined>>): LlmClient;
   now(): Date;
 }
 
@@ -89,12 +90,11 @@ export function realSeam(): ExplainSeam {
       },
       remove: (path) => rmSync(path, { force: true }),
     },
-    clientFor: (apiKey) => openRouterClient({ apiKey }),
+    clientFor: (provider, env) => clientFromEnv(provider, env),
     now: () => new Date(),
   };
 }
 
-export const API_KEY_VARIABLE = "OPENROUTER_API_KEY";
 
 export async function explainCommand(
   options: ExplainOptions,
@@ -116,7 +116,7 @@ export async function explainCommand(
 
     const out = options.out ?? sidecarPathFor(options.models[0] ?? "model.jsonl");
     const journal = `${out}.journal`;
-    const existing = loadExisting(out, journal, seam, io);
+    const { records: existing, header: previous } = loadExisting(out, journal, seam, io);
 
     const plan = planRun(walk, existing, env, {
       models: { leaf: options.model, rollup: options.rollupModel },
@@ -138,9 +138,10 @@ export async function explainCommand(
       return source.clean ? EXIT.OK : EXIT.FINDINGS;
     }
 
-    const complete = completerFor(plan, options, seam);
+    const { complete, provider } = completerFor(plan, options, seam, io);
     const keyOf = naturalKeys(options.models, io);
-    const header = headerFor(options, graph.union.langs, view.descriptor.name, view.descriptor.filters);
+    // A run that makes no call (everything reused) keeps saying who served the records.
+    const header = headerFor(options, provider ?? previous?.provider, graph.union.langs, view.descriptor.name, view.descriptor.filters);
     const total = plan.steps.length;
     let done = 0;
 
@@ -213,14 +214,21 @@ function resolveSourceRoot(
   return root;
 }
 
-function loadExisting(out: string, journal: string, seam: ExplainSeam, io: IoSink): Map<string, InsightRecord> {
+function loadExisting(
+  out: string,
+  journal: string,
+  seam: ExplainSeam,
+  io: IoSink,
+): { records: Map<string, InsightRecord>; header: InsightsHeader | undefined } {
   let base: InsightRecord[] = [];
+  let header: InsightsHeader | undefined;
   if (seam.fs.exists(out)) {
     const text = seam.fs.readFile(out);
     if (text !== undefined && text.trim() !== "") {
       try {
         const file = decodeInsights(text);
         base = [...file.records];
+        header = file.header;
         if (file.truncated) errLine(io, `note: ${out} was cut short; its ${base.length} records are reused, the rest redone.`);
       } catch (error) {
         throw new UsageError(
@@ -237,7 +245,7 @@ function loadExisting(out: string, journal: string, seam: ExplainSeam, io: IoSin
     extra = records;
     errLine(io, `note: resuming from ${journal} (${records.length} record${records.length === 1 ? "" : "s"}${dropped === 0 ? "" : `, ${dropped} unreadable line${dropped === 1 ? "" : "s"} dropped`}).`);
   }
-  return recordsById(mergeRecords(base, extra));
+  return { records: recordsById(mergeRecords(base, extra)), header };
 }
 
 function scopePredicate(
@@ -260,17 +268,33 @@ function scopePredicate(
     unit.members.some((m) => wanted.has(m) || wanted.has(folder.containingType(m) ?? "") || wanted.has(folder.containingModule(m) ?? ""));
 }
 
-function completerFor(plan: RunPlan, options: ExplainOptions, seam: ExplainSeam): Completer {
-  if (plan.estimates.calls === 0) return () => Promise.reject(new Error("no call was planned"));
-  const apiKey = seam.env[API_KEY_VARIABLE];
-  if (apiKey === undefined || apiKey.trim() === "") {
+/**
+ * The provider: `--provider` or, on `auto`, whichever of OpenRouter / Cloudflare
+ * AI Gateway the environment configures. Resolved BEFORE any call, so a
+ * missing variable is a usage error naming it — never a failed first request.
+ */
+function completerFor(
+  plan: RunPlan,
+  options: ExplainOptions,
+  seam: ExplainSeam,
+  io: IoSink,
+): { complete: Completer; provider: Provider | undefined } {
+  if (plan.estimates.calls === 0) return { complete: () => Promise.reject(new Error("no call was planned")), provider: undefined };
+  const resolution = resolveProvider(options.provider, seam.env);
+  if (resolution.missing.length > 0) {
+    const calls = `${plan.estimates.calls} model call${plan.estimates.calls === 1 ? "" : "s"}`;
+    const setup =
+      resolution.provider === "cloudflare"
+        ? "CLOUDFLARE_API_TOKEN needs the AI Gateway Run permission (wrangler auth token); CLOUDFLARE_AI_GATEWAY_ID is optional (the account's default gateway otherwise)."
+        : "Create one at https://openrouter.ai/keys, or export CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID to route through Cloudflare AI Gateway.";
     throw new UsageError(
-      `${API_KEY_VARIABLE} is not set, and this run needs ${plan.estimates.calls} model call${plan.estimates.calls === 1 ? "" : "s"}`,
-      `Export it (https://openrouter.ai/keys), or add --dry-run to see the plan without calling. Models: ${options.model}${options.rollupModel === options.model ? "" : `, ${options.rollupModel}`}.`,
+      `${resolution.missing.join(" and ")} ${resolution.missing.length === 1 ? "is" : "are"} not set (${resolution.reason}), and this run needs ${calls}`,
+      `${setup} Add --dry-run to see the plan without calling. Models: ${options.model}${options.rollupModel === options.model ? "" : `, ${options.rollupModel}`}.`,
     );
   }
-  const client = seam.clientFor(apiKey);
-  return async (request) => {
+  const client = seam.clientFor(resolution.provider, seam.env);
+  errLine(io, `provider: ${client.name} (${resolution.reason})`);
+  const complete: Completer = async (request) => {
     const response = await client.complete({
       model: request.model,
       system: request.system,
@@ -279,6 +303,7 @@ function completerFor(plan: RunPlan, options: ExplainOptions, seam: ExplainSeam)
     });
     return { json: response.json, model: response.model, ...(response.usage === undefined ? {} : { usage: response.usage }) };
   };
+  return { complete, provider: resolution.provider };
 }
 
 /**
@@ -310,7 +335,13 @@ function naturalKeys(paths: readonly string[], io: IoSink): ((id: string) => Rec
   return keys.size === 0 ? undefined : (id) => keys.get(id);
 }
 
-function headerFor(options: ExplainOptions, langs: readonly string[], viewName: string, filters: readonly string[]): InsightsHeader {
+function headerFor(
+  options: ExplainOptions,
+  provider: string | undefined,
+  langs: readonly string[],
+  viewName: string,
+  filters: readonly string[],
+): InsightsHeader {
   return {
     t: "header",
     kind: INSIGHTS_KIND,
@@ -318,6 +349,7 @@ function headerFor(options: ExplainOptions, langs: readonly string[], viewName: 
     promptVersion: PROMPT_VERSION,
     metamodel: INSIGHTS_METAMODEL,
     models: { leaf: options.model, rollup: options.rollupModel },
+    ...(provider === undefined ? {} : { provider }),
     depth: options.depth,
     source: { paths: [...options.models], langs: [...langs], view: { name: viewName, filters: [...filters] } },
   };

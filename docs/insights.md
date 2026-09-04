@@ -21,7 +21,8 @@ is why they live beside it.
 
     @codegraph/insights   pure: units, walk order, context packs, prompts,
                           fingerprints, plan, run, side-car format
-    @codegraph/llm        the model client: LlmClient + OpenRouter + a fake
+    @codegraph/llm        the model clients: LlmClient + OpenRouter (SDK) +
+                          Cloudflare AI Gateway (REST, plain fetch) + a fake
 
 `insights` depends on `core` and `analyzer` only and does no I/O: source text
 arrives through an injected reader, the model call through an injected
@@ -34,6 +35,19 @@ CLI wires the two: it owns the filesystem, the environment variable
 The provider SDK is itself held behind a one-function `OpenRouterTransport`,
 so every request/response/error path is driven by a fake transport in tests,
 and an SDK change is repaired in one file.
+
+**Two providers, one contract.** Both speak OpenAI's chat-completion shape,
+parsed once in `chat.ts`. What differs: OpenRouter goes through its SDK
+(camel-cased request and reply, its own API key per request); Cloudflare AI
+Gateway goes through the AI REST API on `api.cloudflare.com` with plain
+`fetch` (snake_case wire, one Cloudflare API token that both authenticates
+and bills through Unified Billing or a stored provider key, an optional
+`cf-aig-gateway-id`). Model names are the same `author/model` form on both,
+so switching the route leaves every fingerprint — and every reusable record
+— intact. `providers.ts` resolves `--provider auto|openrouter|cloudflare`
+from the environment in one place: the single configured provider wins;
+with both configured OpenRouter stays the default and the choice is printed.
+The side-car header records the provider that served the run.
 
 ## IN-2 · Units and the walk order
 

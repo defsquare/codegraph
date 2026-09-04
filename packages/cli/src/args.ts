@@ -436,6 +436,9 @@ export const DOMAIN_FACTS_SPEC: CommandSpec = {
 };
 
 export const DEFAULT_EXPLAIN_MODEL = "openai/gpt-5.6-luna";
+/** `--provider` values: the two clients of @codegraph/llm, or pick from the environment. */
+export const EXPLAIN_PROVIDERS = ["auto", "openrouter", "cloudflare"] as const;
+export type ExplainProvider = (typeof EXPLAIN_PROVIDERS)[number];
 
 export const EXPLAIN_SPEC: CommandSpec = {
   name: "explain",
@@ -457,9 +460,20 @@ export const EXPLAIN_SPEC: CommandSpec = {
       placeholder: "FILE",
     },
     {
+      name: "provider",
+      type: "string",
+      describe:
+        "Where the model calls go: openrouter (OPENROUTER_API_KEY) or cloudflare — Cloudflare AI " +
+        "Gateway's REST API (CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID, optional " +
+        "CLOUDFLARE_AI_GATEWAY_ID). auto picks whichever is configured, OpenRouter when both are.",
+      choices: [...EXPLAIN_PROVIDERS],
+      placeholder: "NAME",
+      defaultValue: "auto",
+    },
+    {
       name: "model",
       type: "string",
-      describe: "OpenRouter model slug for operations (the leaves).",
+      describe: "Model slug for operations (the leaves), in author/model form on either provider.",
       placeholder: "SLUG",
       defaultValue: DEFAULT_EXPLAIN_MODEL,
     },
@@ -956,6 +970,8 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly src: string | undefined;
   /** `--out FILE`; undefined = `<model>.insights.jsonl` beside the first model. */
   readonly out: string | undefined;
+  /** `--provider`; `auto` resolves from the environment at run time. */
+  readonly provider: ExplainProvider;
   readonly model: string;
   readonly rollupModel: string;
   readonly depth: number;
@@ -1535,6 +1551,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           models,
           src,
           out: stringOf(values, "out"),
+          provider: (stringOf(values, "provider") ?? "auto") as ExplainProvider,
           model,
           rollupModel: stringOf(values, "rollup-model") ?? model,
           depth: integerOf(values, "depth") ?? 1,

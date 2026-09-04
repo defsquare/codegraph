@@ -183,6 +183,8 @@ export const InsightsHeader = z.object({
   promptVersion: z.string(),
   metamodel: z.string(),
   models: z.object({ leaf: z.string(), rollup: z.string() }),
+  /** Which client served the calls (`openrouter`, `cloudflare`, …); absent on files written before it was recorded. */
+  provider: z.string().optional(),
   depth: z.int().nonnegative(),
   source: z.object({
     paths: z.array(z.string()),

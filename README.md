@@ -99,12 +99,15 @@ codegraph domain-facts [model.jsonl] [--framework spring] [--out FILE]
                    # a domain-extraction consumer — see "Domain facts" below
 
 codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
+                   [--provider auto|openrouter|cloudflare]
                    [--model SLUG] [--rollup-model SLUG] [--depth N]
                    [--max-calls N] [--scope IDS] [--concurrency N]
                    [--max-lines N] [--max-scc N] [--force] [--json]
                    [--framework spring] [--internal-only] [--declared-only]
                    # bottom-up LLM explanations into <model>.insights.jsonl —
-                   # needs OPENROUTER_API_KEY unless --dry-run; see docs/insights.md
+                   # needs OPENROUTER_API_KEY, or CLOUDFLARE_API_TOKEN +
+                   # CLOUDFLARE_ACCOUNT_ID [+ CLOUDFLARE_AI_GATEWAY_ID] for
+                   # Cloudflare AI Gateway, unless --dry-run; see docs/insights.md
 
 codegraph city     [model.jsonl] [--serve [--port N] [--host ADDR]] [--layout] [--out FILE]
                    [--height METRIC] [--footprint METRIC] [--carry M1,M2]

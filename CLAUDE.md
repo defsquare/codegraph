@@ -37,9 +37,9 @@ packages/insights/   @codegraph/insights — the bottom-up EXPLANATION walk: uni
                      context packs, prompts, Merkle fingerprints, plan/run, and
                      the `.insights.jsonl` side-car (Specy domain vocabulary).
                      Pure computation: source and model calls are injected.
-packages/llm/        @codegraph/llm — LlmClient + the OpenRouter implementation +
-                     a deterministic fake. The ONLY package that may import
-                     @openrouter/sdk.
+packages/llm/        @codegraph/llm — LlmClient + OpenRouter (SDK) + Cloudflare
+                     AI Gateway (REST) implementations + a deterministic fake.
+                     The ONLY package that may import @openrouter/sdk.
 packages/cli/        @codegraph/cli — `codegraph` command.
 packages/viz/        @codegraph/viz — Three.js code city: renders a laid-out
                      city.json artifact (its ONLY input; guard-enforced). The
@@ -114,6 +114,7 @@ java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 #   both bind EVERY interface by default; --host 127.0.0.1 keeps them local
 ./bin/codegraph explain model.jsonl --src DIR --dry-run   # the walk plan, no call
 OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-calls N]
+#   or CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… [--provider cloudflare]
 #   → model.insights.jsonl beside the model; re-runs redo only what changed
 ```
 

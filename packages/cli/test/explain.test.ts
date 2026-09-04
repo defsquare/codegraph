@@ -3,7 +3,7 @@ import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { decodeInsights, type InsightRecord } from "@codegraph/insights";
-import { fakeLlmClient, type LlmRequest } from "@codegraph/llm";
+import { fakeLlmClient, type LlmRequest, type Provider } from "@codegraph/llm";
 import { EXIT } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
 import { run } from "../src/main.js";
@@ -50,6 +50,7 @@ function answer(request: LlmRequest): unknown {
 function seamWith(env: Record<string, string | undefined>, files = new Map<string, string>()) {
   const client = fakeLlmClient({ respond: answer, usage: () => ({ promptTokens: 100, completionTokens: 20, cost: 0.0001 }) });
   const disk = new Map<string, string>([...SOURCES, ...files]);
+  const providers: Provider[] = [];
   const seam: ExplainSeam = {
     env,
     fs: {
@@ -59,11 +60,16 @@ function seamWith(env: Record<string, string | undefined>, files = new Map<strin
       writeFileAtomic: (path, text) => void disk.set(resolve(path), text),
       remove: (path) => void disk.delete(resolve(path)),
     },
-    clientFor: () => client,
+    clientFor: (provider) => {
+      providers.push(provider);
+      return client;
+    },
     now: () => new Date("2026-09-02T10:00:00.000Z"),
   };
-  return { seam, client, disk };
+  return { seam, client, disk, providers };
 }
+
+const CF_ENV = { CLOUDFLARE_API_TOKEN: "cf-token", CLOUDFLARE_ACCOUNT_ID: "acc-1" };
 
 function options(argv: readonly string[]) {
   const invocation = parseInvocation(["explain", FIXTURE, "--src", SRC, ...argv]);
@@ -180,6 +186,43 @@ describe("explain runs the walk against the model client", () => {
   });
 });
 
+describe("explain picks its provider from the flag or the environment", () => {
+  it("auto routes through Cloudflare AI Gateway when only its variables are set, and records it in the header", async () => {
+    const { seam, providers, disk } = seamWith(CF_ENV);
+    const io = captureIo();
+    const code = await explainCommand(options(["--out", OUT]), io, seam);
+    expect(code).toBe(EXIT.OK);
+    expect(new Set(providers)).toEqual(new Set(["cloudflare"]));
+    expect(io.stderr()).toContain("provider: fake (CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID set)");
+    expect(decodeInsights(disk.get(OUT)!).header.provider).toBe("cloudflare");
+  });
+
+  it("auto keeps OpenRouter when both are configured; --provider cloudflare overrides", async () => {
+    const both = { OPENROUTER_API_KEY: KEY, ...CF_ENV };
+    const a = seamWith(both);
+    await explainCommand(options(["--out", OUT]), captureIo(), a.seam);
+    expect(new Set(a.providers)).toEqual(new Set(["openrouter"]));
+    const b = seamWith(both);
+    const io = captureIo();
+    await explainCommand(options(["--out", OUT, "--provider", "cloudflare"]), io, b.seam);
+    expect(new Set(b.providers)).toEqual(new Set(["cloudflare"]));
+    expect(io.stderr()).toContain("--provider cloudflare");
+  });
+
+  it("--provider cloudflare without its variables is a usage error naming them", async () => {
+    const io = captureIo();
+    await expect(explainCommand(options(["--out", OUT, "--provider", "cloudflare"]), io, seamWith({ OPENROUTER_API_KEY: KEY }).seam)).rejects.toThrow(
+      /CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set/u,
+    );
+    expect(io.stdout()).toBe("");
+  });
+
+  it("rejects an unknown provider at parse time", () => {
+    expect(() => parseInvocation(["explain", FIXTURE, "--provider", "azure"])).toThrow(/invalid value 'azure' for --provider/u);
+    expect(options([]).provider).toBe("auto");
+  });
+});
+
 describe("explain usage errors exit 2 with nothing on stdout", () => {
   it("without an API key when calls are planned", async () => {
     const io = captureIo();
@@ -187,6 +230,7 @@ describe("explain usage errors exit 2 with nothing on stdout", () => {
     expect(code).toBe(EXIT.USAGE);
     expect(io.stdout()).toBe("");
     expect(io.stderr()).toContain("OPENROUTER_API_KEY");
+    expect(io.stderr()).toContain("CLOUDFLARE_API_TOKEN");
   }, 20_000);
 
   it("with --src and two models", () => {

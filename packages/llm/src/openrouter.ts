@@ -1,6 +1,7 @@
 import { OpenRouter } from "@openrouter/sdk";
 import type { ChatRequest } from "@openrouter/sdk/models";
 import { ConnectionError, OpenRouterError, RequestTimeoutError } from "@openrouter/sdk/models/errors";
+import { parseChatCompletion, retryAfterOf } from "./chat.js";
 import {
   LlmError,
   isLlmError,
@@ -8,7 +9,6 @@ import {
   type LlmClient,
   type LlmRequest,
   type LlmResponse,
-  type LlmUsage,
 } from "./client.js";
 import { withRetry, type RetryOptions } from "./retry.js";
 
@@ -18,6 +18,9 @@ import { withRetry, type RetryOptions } from "./retry.js";
  * held behind `OpenRouterTransport` — one function — so a test drives the whole
  * request/response/error path with a fake transport and never opens a socket,
  * and an SDK breaking change is repaired in exactly one place.
+ *
+ * The Cloudflare AI Gateway client (cloudflare.ts) speaks the same
+ * chat-completion contract without an SDK; what differs is listed there.
  */
 
 export interface OpenRouterTransport {
@@ -58,75 +61,9 @@ export function buildChatRequest(request: LlmRequest): ChatRequest {
   };
 }
 
-/**
- * Some models wrap the document in a Markdown fence even under a JSON response
- * format; the fence is presentation, not content, so it is stripped before
- * parsing. Anything else that is not JSON is a malformed reply — not retryable.
- */
-function extractJson(text: string): unknown {
-  const trimmed = text.trim();
-  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/u.exec(trimmed);
-  const body = fenced?.[1] ?? trimmed;
-  try {
-    return JSON.parse(body) as unknown;
-  } catch (error) {
-    throw new LlmError(
-      `model returned a non-JSON completion: ${body.slice(0, 200)}`,
-      undefined,
-      false,
-      { cause: error },
-    );
-  }
-}
-
-function contentText(content: unknown): string | undefined {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return undefined;
-  const parts: string[] = [];
-  for (const item of content) {
-    const text = (item as { text?: unknown } | null)?.text;
-    if (typeof text === "string") parts.push(text);
-  }
-  return parts.length === 0 ? undefined : parts.join("");
-}
-
-function usageOf(raw: unknown): LlmUsage | undefined {
-  if (raw === null || typeof raw !== "object") return undefined;
-  const usage = raw as { promptTokens?: unknown; completionTokens?: unknown; cost?: unknown };
-  if (typeof usage.promptTokens !== "number" || typeof usage.completionTokens !== "number") return undefined;
-  return {
-    promptTokens: usage.promptTokens,
-    completionTokens: usage.completionTokens,
-    ...(typeof usage.cost === "number" ? { cost: usage.cost } : {}),
-  };
-}
-
-/** The SDK result → our response. Throws a non-retryable `LlmError` on an empty or non-JSON reply. */
+/** The SDK result → our response (the shared chat-completion parser). */
 export function parseChatResult(result: unknown, requestedModel: string): LlmResponse {
-  const shaped = result as {
-    model?: unknown;
-    choices?: readonly { message?: { content?: unknown; refusal?: unknown } }[];
-    usage?: unknown;
-  } | null;
-  const first = shaped?.choices?.[0];
-  const text = contentText(first?.message?.content);
-  if (text === undefined || text.trim() === "") {
-    const refusal = first?.message?.refusal;
-    throw new LlmError(
-      typeof refusal === "string" && refusal !== ""
-        ? `model refused: ${refusal}`
-        : "model returned an empty completion",
-      undefined,
-      false,
-    );
-  }
-  const usage = usageOf(shaped?.usage);
-  return {
-    json: extractJson(text),
-    text,
-    model: typeof shaped?.model === "string" ? shaped.model : requestedModel,
-    ...(usage === undefined ? {} : { usage }),
-  };
+  return parseChatCompletion(result, requestedModel);
 }
 
 /**
@@ -160,16 +97,7 @@ export function toLlmError(error: unknown): LlmError {
   return new LlmError(message, undefined, false, { cause: error });
 }
 
-/** `Retry-After` as seconds or an HTTP date → milliseconds to wait; undefined when absent or unreadable. */
-export function retryAfterOf(headers: unknown): number | undefined {
-  const get = (headers as { get?: (name: string) => string | null } | null)?.get;
-  const raw = typeof get === "function" ? get.call(headers, "retry-after") : undefined;
-  if (raw === null || raw === undefined || raw === "") return undefined;
-  const seconds = Number(raw);
-  if (Number.isFinite(seconds)) return Math.max(0, Math.round(seconds * 1000));
-  const at = Date.parse(raw);
-  return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
-}
+export { retryAfterOf };
 
 function sdkTransport(apiKey: string, appTitle: string): OpenRouterTransport {
   const sdk = new OpenRouter({ apiKey });
