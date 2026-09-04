@@ -141,7 +141,9 @@ it needs no key. `--max-calls N` stops planning calls after N, so what runs is
 always a dependency-consistent prefix. `--scope IDS` restricts calls to units
 inside the named modules or types; dependencies outside scope are reused when
 already explained and never called. `--concurrency N` runs N calls in flight
-within a layer. `--model` and `--rollup-model` pick the leaf and the roll-up
+within a layer; a rate-limited account (OpenRouter allows new accounts 20
+requests a minute) is better served by `--concurrency 1`, and the client obeys
+the provider's `Retry-After` on a 429 before retrying. `--model` and `--rollup-model` pick the leaf and the roll-up
 model; a cheap model for operations and a stronger one for types and modules
 is the intended split.
 

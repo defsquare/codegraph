@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LlmError, type LlmRequest } from "../src/client.js";
-import { buildChatRequest, openRouterClient, parseChatResult, toLlmError, type OpenRouterTransport } from "../src/openrouter.js";
+import { buildChatRequest, openRouterClient, parseChatResult, retryAfterOf, toLlmError, type OpenRouterTransport } from "../src/openrouter.js";
 
 const KEY = "sk-or-v1-secret-test-key";
 
@@ -95,6 +95,22 @@ describe("parseChatResult", () => {
       expect((error as LlmError).retryable).toBe(false);
     }
     expect(() => parseChatResult(result(null, { choices: [] }), REQUEST.model)).toThrow(/empty completion/);
+  });
+});
+
+describe("retryAfterOf", () => {
+  it("reads seconds, an HTTP date, or nothing", () => {
+    const headers = (value: string | null) => ({ get: (name: string) => (name === "retry-after" ? value : null) });
+    expect(retryAfterOf(headers("7"))).toBe(7000);
+    expect(retryAfterOf(headers(new Date(Date.now() + 5000).toUTCString()))).toBeGreaterThan(3000);
+    expect(retryAfterOf(headers(null))).toBeUndefined();
+    expect(retryAfterOf(headers("soon"))).toBeUndefined();
+    expect(retryAfterOf(undefined)).toBeUndefined();
+  });
+
+  it("rides on the error a status-bearing failure becomes", () => {
+    const error = Object.assign(new StatusError(429), { headers: { get: () => "3" } });
+    expect(toLlmError(error)).toMatchObject({ status: 429, retryable: true, retryAfterMs: 3000 });
   });
 });
 

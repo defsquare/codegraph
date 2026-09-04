@@ -34,6 +34,21 @@ describe("withRetry", () => {
     expect([1, 2, 3, 4, 5].map((n) => backoffMs(n, { baseMs: 500, maxMs: 3000 }))).toEqual([
       500, 1000, 2000, 3000, 3000,
     ]);
+    expect([1, 2, 3, 4, 5, 6].map((n) => backoffMs(n))).toEqual([1000, 2000, 4000, 8000, 16000, 30000]);
+  });
+
+  it("waits at least what the provider asked for (Retry-After)", async () => {
+    const { sleep, delays } = recordingSleep();
+    let calls = 0;
+    await withRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) throw new LlmError("rate limited", 429, true, { retryAfterMs: 12_000 });
+        return "ok";
+      },
+      { sleep, baseMs: 100 },
+    );
+    expect(delays).toEqual([12_000]);
   });
 
   it("does not retry a 400", async () => {

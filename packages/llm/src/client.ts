@@ -56,12 +56,20 @@ export interface LlmClient {
 export class LlmError extends Error {
   readonly status: number | undefined;
   readonly retryable: boolean;
+  /** The provider's own wait (`Retry-After`), in milliseconds, when it sent one. */
+  readonly retryAfterMs: number | undefined;
 
-  constructor(message: string, status: number | undefined, retryable: boolean, options?: { cause?: unknown }) {
-    super(message, options);
+  constructor(
+    message: string,
+    status: number | undefined,
+    retryable: boolean,
+    options?: { cause?: unknown; retryAfterMs?: number },
+  ) {
+    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
     this.name = "LlmError";
     this.status = status;
     this.retryable = retryable;
+    this.retryAfterMs = options?.retryAfterMs;
   }
 }
 

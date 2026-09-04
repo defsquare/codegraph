@@ -137,7 +137,11 @@ export function parseChatResult(result: unknown, requestedModel: string): LlmRes
 export function toLlmError(error: unknown): LlmError {
   if (isLlmError(error)) return error;
   if (error instanceof OpenRouterError) {
-    return new LlmError(error.message, error.statusCode, isRetryableStatus(error.statusCode), { cause: error });
+    const retryAfterMs = retryAfterOf(error.headers);
+    return new LlmError(error.message, error.statusCode, isRetryableStatus(error.statusCode), {
+      cause: error,
+      ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+    });
   }
   if (error instanceof ConnectionError || error instanceof RequestTimeoutError) {
     return new LlmError(error.message, undefined, true, { cause: error });
@@ -146,10 +150,25 @@ export function toLlmError(error: unknown): LlmError {
   const status = (error as { statusCode?: unknown } | null)?.statusCode;
   if (typeof status === "number") {
     const message = error instanceof Error ? error.message : String(error);
-    return new LlmError(message, status, isRetryableStatus(status), { cause: error });
+    const retryAfterMs = retryAfterOf((error as { headers?: unknown }).headers);
+    return new LlmError(message, status, isRetryableStatus(status), {
+      cause: error,
+      ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+    });
   }
   const message = error instanceof Error ? error.message : String(error);
   return new LlmError(message, undefined, false, { cause: error });
+}
+
+/** `Retry-After` as seconds or an HTTP date → milliseconds to wait; undefined when absent or unreadable. */
+export function retryAfterOf(headers: unknown): number | undefined {
+  const get = (headers as { get?: (name: string) => string | null } | null)?.get;
+  const raw = typeof get === "function" ? get.call(headers, "retry-after") : undefined;
+  if (raw === null || raw === undefined || raw === "") return undefined;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.round(seconds * 1000));
+  const at = Date.parse(raw);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
 }
 
 function sdkTransport(apiKey: string, appTitle: string): OpenRouterTransport {
