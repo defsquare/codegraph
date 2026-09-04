@@ -1,7 +1,7 @@
 import { contextPackFor, type ContextEnv, type ContextPack } from "./context.js";
 import { fingerprintOf } from "./fingerprint.js";
 import type { Unit, WalkPlan } from "./order.js";
-import { estimateTokens, renderPrompts, type Prompt } from "./prompt.js";
+import { estimateCompletionTokens, estimateTokens, renderPrompts, type Prompt } from "./prompt.js";
 import type { InsightRecord, Level } from "./schema.js";
 import type { TemplateKind } from "./units.js";
 
@@ -34,13 +34,16 @@ export interface PlanStep {
   readonly template: TemplateKind | undefined;
   /** Model calls this step will make (0 unless `llm`). */
   readonly calls: number;
-  /** Estimated prompt tokens over those calls. */
+  /** Estimated prompt (input) tokens over those calls. */
   readonly promptTokens: number;
+  /** Estimated completion (output) tokens over those calls — one block per member asked for. */
+  readonly completionTokens: number;
 }
 
 export interface LevelEstimate {
   calls: number;
   promptTokens: number;
+  completionTokens: number;
   units: number;
 }
 
@@ -50,6 +53,7 @@ export interface RunPlan {
   readonly estimates: {
     readonly calls: number;
     readonly promptTokens: number;
+    readonly completionTokens: number;
     readonly byLevel: Readonly<Record<Level, LevelEstimate>>;
     readonly byStatus: Readonly<Record<StepStatus, number>>;
   };
@@ -114,9 +118,9 @@ export function planRun(
   const fingerprints = new Map<string, string>();
   const steps: PlanStep[] = [];
   const byLevel: Record<Level, LevelEstimate> = {
-    operation: { calls: 0, promptTokens: 0, units: 0 },
-    type: { calls: 0, promptTokens: 0, units: 0 },
-    module: { calls: 0, promptTokens: 0, units: 0 },
+    operation: { calls: 0, promptTokens: 0, completionTokens: 0, units: 0 },
+    type: { calls: 0, promptTokens: 0, completionTokens: 0, units: 0 },
+    module: { calls: 0, promptTokens: 0, completionTokens: 0, units: 0 },
   };
   const byStatus: Record<StepStatus, number> = { llm: 0, template: 0, reuse: 0, "skip-scope": 0, "skip-budget": 0 };
   let budget = options.maxCalls ?? Number.POSITIVE_INFINITY;
@@ -157,11 +161,13 @@ export function planRun(
       }
     }
     const promptTokens = prompts.reduce((sum, p) => sum + estimateTokens(p.system) + estimateTokens(p.user), 0);
+    const completionTokens = prompts.reduce((sum, p) => sum + estimateCompletionTokens(unit.level, p.memberIds.length), 0);
     statusOf.set(unit.id, status);
     byStatus[status] += 1;
     byLevel[unit.level].calls += prompts.length;
     byLevel[unit.level].promptTokens += promptTokens;
-    steps.push({ unit, status, model, fingerprint, template, calls: prompts.length, promptTokens });
+    byLevel[unit.level].completionTokens += completionTokens;
+    steps.push({ unit, status, model, fingerprint, template, calls: prompts.length, promptTokens, completionTokens });
   }
 
   return {
@@ -170,6 +176,7 @@ export function planRun(
     estimates: {
       calls: steps.reduce((n, s) => n + s.calls, 0),
       promptTokens: steps.reduce((n, s) => n + s.promptTokens, 0),
+      completionTokens: steps.reduce((n, s) => n + s.completionTokens, 0),
       byLevel,
       byStatus,
     },

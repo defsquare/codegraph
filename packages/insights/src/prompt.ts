@@ -32,6 +32,22 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+/**
+ * Completion tokens one block costs, per level — averages measured on real
+ * runs (gpt-5.6-luna, Java fixture and gson: ~450 per operation block, ~650
+ * per type block, ~900 per module block). A cycle prompt returns one block
+ * per member, so the estimate scales with the members asked for.
+ */
+export const COMPLETION_TOKENS_PER_BLOCK: Readonly<Record<Level, number>> = {
+  operation: 450,
+  type: 650,
+  module: 900,
+};
+
+export function estimateCompletionTokens(level: Level, blocks: number): number {
+  return COMPLETION_TOKENS_PER_BLOCK[level] * Math.max(1, blocks);
+}
+
 function fenced(text: string, language = ""): string {
   return `${FENCE}${language}\n${text.replace(/````/gu, "'''' ")}\n${FENCE}`;
 }

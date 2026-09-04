@@ -133,6 +133,10 @@ export async function explainCommand(
       errLine(io, `Run 'codegraph validate ${source.paths.join(" ")}' for the detail.`);
     }
 
+    if (options.estimate) {
+      printEstimate(plan, options, io);
+      return source.clean ? EXIT.OK : EXIT.FINDINGS;
+    }
     if (options.dryRun) {
       printPlan(plan, options, io);
       return source.clean ? EXIT.OK : EXIT.FINDINGS;
@@ -409,12 +413,83 @@ function printPlan(plan: RunPlan, options: ExplainOptions, io: IoSink): void {
   }
   lines.push(`  statuses: llm ${estimates.byStatus.llm}, template ${estimates.byStatus.template}, reuse ${estimates.byStatus.reuse}, skip-scope ${estimates.byStatus["skip-scope"]}, skip-budget ${estimates.byStatus["skip-budget"]}`);
   lines.push(`  models: ${options.model} (operations), ${options.rollupModel} (types, modules); depth ${options.depth}`);
-  lines.push(`  total: ${estimates.calls} calls, ~${estimates.promptTokens} prompt tokens`);
+  lines.push(`  total: ${estimates.calls} calls, ~${estimates.promptTokens} prompt tokens in, ~${estimates.completionTokens} completion tokens out`);
   lines.push("");
   for (const step of plan.steps) {
     const cycle = step.unit.members.length > 1 ? ` cycle(${step.unit.members.length})` : "";
     lines.push(`${step.status.padEnd(11)} L${step.unit.layer} ${step.unit.level.padEnd(9)} ${step.unit.id}${cycle}${step.calls === 0 ? "" : ` calls=${step.calls} ~${step.promptTokens}tok`}`);
   }
+  outLine(io, lines.join("\n"));
+}
+
+/** A thousands-grouped integer, locale-independent. */
+function grouped(n: number): string {
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/gu, " ");
+}
+
+/** Cost in USD from per-million prices; undefined until both prices are given. */
+export function estimatedCost(promptTokens: number, completionTokens: number, priceIn: number | undefined, priceOut: number | undefined): number | undefined {
+  if (priceIn === undefined || priceOut === undefined) return undefined;
+  return (promptTokens * priceIn + completionTokens * priceOut) / 1_000_000;
+}
+
+/**
+ * `--estimate`: the volume a run would move, before spending anything. Input
+ * is the rendered prompts at ~4 chars/token; output is one measured block
+ * average per block asked for. Repair re-asks and rate-limit retries are not
+ * included, and a run that reuses records sends less than a cold one.
+ */
+function printEstimate(plan: RunPlan, options: ExplainOptions, io: IoSink): void {
+  const { estimates } = plan;
+  const cost = estimatedCost(estimates.promptTokens, estimates.completionTokens, options.priceIn, options.priceOut);
+  const layers = (plan.steps[plan.steps.length - 1]?.unit.layer ?? -1) + 1;
+  if (options.json) {
+    outLine(
+      io,
+      JSON.stringify({
+        kind: "codegraph.explainEstimate/1",
+        models: { leaf: options.model, rollup: options.rollupModel },
+        depth: options.depth,
+        units: plan.steps.length,
+        layers,
+        calls: estimates.calls,
+        promptTokens: estimates.promptTokens,
+        completionTokens: estimates.completionTokens,
+        byLevel: estimates.byLevel,
+        byStatus: estimates.byStatus,
+        ...(options.priceIn === undefined ? {} : { priceIn: options.priceIn }),
+        ...(options.priceOut === undefined ? {} : { priceOut: options.priceOut }),
+        ...(cost === undefined ? {} : { cost }),
+        assumptions: {
+          promptTokens: "characters of the rendered prompts / 4",
+          completionTokens: "measured block averages: operation 450, type 650, module 900 tokens, per block asked for",
+          excluded: "repair re-asks, rate-limit retries",
+        },
+      }),
+    );
+    return;
+  }
+  const lines: string[] = [];
+  lines.push(`explain estimate: ${options.models.join(" ")}`);
+  const b = estimates.byLevel;
+  lines.push(`  units: ${plan.steps.length} (operation ${b.operation.units}, type ${b.type.units}, module ${b.module.units}) in ${layers} layers`);
+  lines.push(`  calls: ${estimates.calls} (template ${estimates.byStatus.template}, reuse ${estimates.byStatus.reuse}, skipped ${estimates.byStatus["skip-scope"] + estimates.byStatus["skip-budget"]})`);
+  lines.push(`  models: ${options.model} (operations), ${options.rollupModel} (types, modules); depth ${options.depth}`);
+  lines.push("");
+  lines.push(`  ${"level".padEnd(10)} ${"calls".padStart(7)} ${"input tokens".padStart(14)} ${"output tokens".padStart(14)}`);
+  for (const level of ["operation", "type", "module"] as const) {
+    const e = b[level];
+    lines.push(`  ${level.padEnd(10)} ${grouped(e.calls).padStart(7)} ${grouped(e.promptTokens).padStart(14)} ${grouped(e.completionTokens).padStart(14)}`);
+  }
+  lines.push(`  ${"total".padEnd(10)} ${grouped(estimates.calls).padStart(7)} ${grouped(estimates.promptTokens).padStart(14)} ${grouped(estimates.completionTokens).padStart(14)}`);
+  lines.push("");
+  if (cost !== undefined) {
+    lines.push(`  cost at $${options.priceIn}/M in, $${options.priceOut}/M out: $${cost.toFixed(4)}`);
+  } else {
+    lines.push("  cost: pass --price-in USD --price-out USD (per million tokens) for a figure");
+  }
+  lines.push("  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages (operation 450, type 650, module 900) per block asked for.");
+  lines.push("  not included: repair re-asks, rate-limit retries. Records already in the side-car are reused, not re-sent.");
   outLine(io, lines.join("\n"));
 }
 

@@ -151,7 +151,13 @@ once the callee exists.
 
 `--dry-run` prints the plan — every unit in walk order with its status, the
 calls it will make, the estimated prompt tokens per level — and makes no call;
-it needs no key. `--max-calls N` stops planning calls after N, so what runs is
+it needs no key. `--estimate` prints only the volume: calls, input and output
+tokens per level, and a cost when `--price-in`/`--price-out` (USD per million
+tokens) are given. Input is the rendered prompts at four characters per token;
+output is one measured block average per block asked for (operation 450, type
+650, module 900 tokens — averages from gpt-5.6-luna on the fixture and gson),
+so a cycle call counts once per member. Repair re-asks and rate-limit retries
+are not counted, and records already in the side-car are not re-sent. `--max-calls N` stops planning calls after N, so what runs is
 always a dependency-consistent prefix. `--scope IDS` restricts calls to units
 inside the named modules or types; dependencies outside scope are reused when
 already explained and never called. `--concurrency N` runs N calls in flight

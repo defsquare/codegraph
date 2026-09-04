@@ -186,6 +186,58 @@ describe("explain runs the walk against the model client", () => {
   });
 });
 
+describe("explain --estimate", () => {
+  it("reports input and output token volume per level on stdout, needs no key, and is byte-identical across runs", async () => {
+    const a = captureIo();
+    const b = captureIo();
+    expect(await explainCommand(options(["--estimate"]), a, seamWith({}).seam)).toBe(EXIT.OK);
+    expect(await explainCommand(options(["--estimate"]), b, seamWith({}).seam)).toBe(EXIT.OK);
+    expect(a.stdout()).toBe(b.stdout());
+    const text = a.stdout();
+    expect(text).toContain("explain estimate:");
+    expect(text).toMatch(/units: 77 \(operation 57, type 17, module 3\) in \d+ layers/u);
+    expect(text).toMatch(/calls: 68 \(template 9, reuse 0, skipped 0\)/u);
+    expect(text).toMatch(/operation\s+48\s+[\d ]+\s+[\d ]+/u);
+    expect(text).toMatch(/type\s+17\s+[\d ]+\s+[\d ]+/u);
+    expect(text).toMatch(/module\s+3\s+[\d ]+\s+[\d ]+/u);
+    expect(text).toMatch(/total\s+68\s+[\d ]+\s+[\d ]+/u);
+    expect(text).toContain("cost: pass --price-in USD --price-out USD");
+    expect(a.files().size).toBe(0);
+  });
+
+  it("prices the volume when both prices are given, in text and JSON", async () => {
+    const io = captureIo();
+    await explainCommand(options(["--estimate", "--price-in", "0.10", "--price-out", "0.60"]), io, seamWith({}).seam);
+    expect(io.stdout()).toMatch(/cost at \$0\.1\/M in, \$0\.6\/M out: \$\d+\.\d{4}/u);
+    const json = captureIo();
+    await explainCommand(options(["--estimate", "--json", "--price-in", "0.10", "--price-out", "0.60"]), json, seamWith({}).seam);
+    const report = JSON.parse(json.stdout()) as { kind: string; calls: number; promptTokens: number; completionTokens: number; cost: number; byLevel: Record<string, { completionTokens: number }> };
+    expect(report.kind).toBe("codegraph.explainEstimate/1");
+    expect(report.calls).toBe(68);
+    // Output = one measured block average per block asked for: a cycle call asks for several.
+    const per = { operation: 450, type: 650, module: 900 } as const;
+    const calls = { operation: 48, type: 17, module: 3 } as const;
+    let sum = 0;
+    for (const level of ["operation", "type", "module"] as const) {
+      const tokens = report.byLevel[level]?.completionTokens ?? 0;
+      expect(tokens % per[level]).toBe(0);
+      expect(tokens).toBeGreaterThanOrEqual(calls[level] * per[level]);
+      sum += tokens;
+    }
+    expect(report.completionTokens).toBe(sum);
+    expect(report.promptTokens).toBeGreaterThan(report.completionTokens);
+    expect(report.cost).toBeCloseTo((report.promptTokens * 0.1 + report.completionTokens * 0.6) / 1_000_000, 10);
+  });
+
+  it("goes through run() and rejects a malformed price at parse time", async () => {
+    const io = captureIo();
+    expect(await run(["explain", FIXTURE, "--src", SRC, "--estimate", "--json"], io)).toBe(EXIT.OK);
+    expect(io.stdout()).toContain("codegraph.explainEstimate/1");
+    expect(() => parseInvocation(["explain", FIXTURE, "--estimate", "--price-in", "cheap"])).toThrow(/--price-in must be a non-negative USD amount/u);
+    expect(() => parseInvocation(["explain", FIXTURE, "--estimate", "--price-out=-1"])).toThrow(/--price-out must be/u);
+  });
+});
+
 describe("explain picks its provider from the flag or the environment", () => {
   it("auto routes through Cloudflare AI Gateway when only its variables are set, and records it in the header", async () => {
     const { seam, providers, disk } = seamWith(CF_ENV);

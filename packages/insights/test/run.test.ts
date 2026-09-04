@@ -104,6 +104,9 @@ describe("planRun", () => {
     expect(plan.estimates.calls).toBe(5);
     expect(plan.estimates.byStatus).toEqual({ llm: 5, template: 1, reuse: 0, "skip-scope": 0, "skip-budget": 0 });
     expect(plan.estimates.promptTokens).toBeGreaterThan(0);
+    expect(plan.estimates.completionTokens).toBe(3 * 450 + 650 + 900);
+    expect(plan.estimates.byLevel.operation.completionTokens).toBe(3 * 450);
+    expect(plan.steps.find((s) => s.unit.id === m("getTotal"))?.completionTokens).toBe(0);
     expect(plan.steps.find((s) => s.unit.id === m("h"))?.model).toBe("leaf-model");
     expect(plan.steps.find((s) => s.unit.id === T)?.model).toBe("rollup-model");
     for (const step of plan.steps) expect(step.fingerprint).toMatch(/^[0-9a-f]{64}$/);
@@ -203,6 +206,8 @@ describe("executeRun", () => {
     const result = await executeRun(plan, env, new Map(), completer, { maxScc: 12, depth: 1, maxLines: 100 }, { concurrency: 1 });
     const cycle = plan.steps.find((s) => s.unit.members.length === 3);
     expect(cycle?.calls).toBe(1);
+    // One call, three blocks asked for: the output estimate scales with the members.
+    expect(cycle?.completionTokens).toBe(3 * 450);
     for (const id of [m("f"), m("g"), m("h")]) {
       const rec = result.records.find((r) => r.id === id);
       expect(rec?.scc).toEqual([m("f"), m("g"), m("h")]);

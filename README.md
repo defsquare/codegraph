@@ -99,6 +99,7 @@ codegraph domain-facts [model.jsonl] [--framework spring] [--out FILE]
                    # a domain-extraction consumer — see "Domain facts" below
 
 codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
+                   [--estimate [--price-in USD --price-out USD]]
                    [--provider auto|openrouter|cloudflare]
                    [--model SLUG] [--rollup-model SLUG] [--depth N]
                    [--max-calls N] [--scope IDS] [--concurrency N]

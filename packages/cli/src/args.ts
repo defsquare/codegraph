@@ -545,6 +545,25 @@ export const EXPLAIN_SPEC: CommandSpec = {
       describe: "Print the plan — units, order, statuses, estimated tokens — and make no call.",
     },
     {
+      name: "estimate",
+      type: "boolean",
+      describe:
+        "Print the token volume this run would send and receive (input and output, per level) " +
+        "and make no call. Add --price-in/--price-out for a cost.",
+    },
+    {
+      name: "price-in",
+      type: "string",
+      describe: "Input price in USD per million tokens, for --estimate's cost line.",
+      placeholder: "USD",
+    },
+    {
+      name: "price-out",
+      type: "string",
+      describe: "Output price in USD per million tokens, for --estimate's cost line.",
+      placeholder: "USD",
+    },
+    {
       name: "force",
       type: "boolean",
       describe: "Re-explain every unit, ignoring records whose fingerprint still matches.",
@@ -983,6 +1002,11 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly scope: readonly string[];
   readonly framework: string | undefined;
   readonly dryRun: boolean;
+  /** `--estimate`: the token-volume report, no call. */
+  readonly estimate: boolean;
+  /** `--price-in` / `--price-out`, USD per million tokens; undefined = no cost line. */
+  readonly priceIn: number | undefined;
+  readonly priceOut: number | undefined;
   readonly force: boolean;
   readonly json: boolean;
 }
@@ -1254,6 +1278,17 @@ function validateValues(spec: CommandSpec, values: ParsedValues): void {
 function integerOf(values: ParsedValues, name: string): number | undefined {
   const value = stringOf(values, name);
   return value === undefined ? undefined : Number(value);
+}
+
+/** `--price-in 0.10`: a non-negative USD amount per million tokens. */
+function priceOf(values: ParsedValues, name: string): number | undefined {
+  const raw = stringOf(values, name);
+  if (raw === undefined) return undefined;
+  const price = Number(raw);
+  if (!Number.isFinite(price) || price < 0) {
+    throw new UsageError(`--${name} must be a non-negative USD amount per million tokens, got '${raw}'`, "Example: --price-in 0.10 --price-out 0.60");
+  }
+  return price;
 }
 
 function levelOf(values: ParsedValues): FoldLevel {
@@ -1564,6 +1599,9 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           ...viewOf(values),
           noCache: flagOf(values, "no-cache"),
           dryRun: flagOf(values, "dry-run"),
+          estimate: flagOf(values, "estimate"),
+          priceIn: priceOf(values, "price-in"),
+          priceOut: priceOf(values, "price-out"),
           force: flagOf(values, "force"),
           json: flagOf(values, "json"),
         },

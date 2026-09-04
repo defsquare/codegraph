@@ -113,6 +113,7 @@ java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 ./bin/codegraph navigator model.jsonl --serve      # navigator at http://localhost:4178
 #   both bind EVERY interface by default; --host 127.0.0.1 keeps them local
 ./bin/codegraph explain model.jsonl --src DIR --dry-run   # the walk plan, no call
+./bin/codegraph explain model.jsonl --src DIR --estimate --price-in 0.10 --price-out 0.60   # tokens in/out + cost, no call
 OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-calls N]
 #   or CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… [--provider cloudflare]
 #   → model.insights.jsonl beside the model; re-runs redo only what changed
