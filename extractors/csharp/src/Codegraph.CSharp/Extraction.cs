@@ -35,8 +35,9 @@ public static class Extraction
         var corpus = CorpusLoader.Load(options.Sources, options.BaseDirectory, progress);
         var whitelist = CorpusWhitelist.Build(corpus, progress);
         var registry = new TypeRegistry();
-        var entities = new EntityExtractor(whitelist, registry).Extract(corpus, progress);
-        var edges = new EdgeExtractor(whitelist, registry, stats).Extract(corpus, progress);
+        var declarations = new EntityExtractor(whitelist, registry).Extract(corpus, progress);
+        var entities = declarations.Entities;
+        var edges = new EdgeExtractor(whitelist, declarations, registry, stats).Extract(corpus, progress);
         var stubs = StubSynthesizer.Synthesize(entities, edges, registry, progress);
 
         var model = new ExtractedModel

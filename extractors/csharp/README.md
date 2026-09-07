@@ -113,14 +113,47 @@ RESOLUTION SUMMARY
 - **self-edges dropped** — `from == to` is not representable (METAMODEL §4);
   `using Acme;` inside `namespace Acme` is the common case.
 
-## What M12a extracts
+## What is extracted (M12b)
 
-Namespaces (modules; a nested block declaration gets a lexical parent),
-every type kind (class, interface, struct, enum with its underlying type,
-record, delegate with its parameters and signature), XML doc comments,
-`import` / `inheritance` / `interfaceImplementation` edges, and stubs.
-Members, invocations, accesses, references, attributes, throw sites and
-measures are M12b (PLAN.md §13.9).
+**Entities.** Namespaces (modules; a nested block declaration gets a lexical
+parent); every type kind (class, interface, struct, enum with its underlying
+type, record, delegate); methods, constructors (the implicit parameterless one
+included, anchored at the type's header line, so `new Basket()` does not
+dangle; a record's primary constructor anchored at its parameter list),
+operators (`op_Addition`), conversions, finalizers (`Finalize`), properties and
+indexers (`Item(System.Int32)`), fields, `const` and enum members with their
+constant as `TWithValue`, events, parameters with their written defaults,
+locals, lambdas and anonymous methods (`Type#file:line:column`), local
+functions (`Method(…)#fn:Name(…)`). XML doc comments as `TComment`; `sloc` and
+`cyclomatic` as `TMetrics` on every type and invocable.
+
+**Not entities, on purpose.** Members Roslyn synthesizes and nobody wrote — a
+record's `Equals`/`GetHashCode`/`Deconstruct`/copy constructor, backing fields,
+an enum's `value__` — and accessors, whose bodies charge to their property.
+A call to such a member folds to its containing type: `money == other` is a
+dependency on `Money`.
+
+**Edges.** `import` (every `using` form, folded to a namespace), `inheritance`,
+`interfaceImplementation`, `invocation` (methods, constructors, `: this()` /
+`: base()`, user-defined operators, delegate invocations folded to the delegate
+type, extension methods resolved to the static method), `access` (fields,
+properties, events, indexers, with `isRead`/`isWrite`; `+=`, `++` and `ref`
+are both), `reference` (every written type usage, from the narrowest declared
+owner — a parameter's type comes from the parameter; a method group used as a
+value is a reference to the method), `throws` (per `throw` statement, a
+rethrow resolving to the catch's type), `annotationUse` (attributes, with
+positional arguments named after the bound constructor's parameters and values
+as written: constants folded, enum members by name, `typeof` as a type, arrays
+as arrays, anything else `unevaluated`).
+
+**Ids of locals carry line AND column** (`#local:name:line:column`) — two
+declarations of one name on one line are legal (`for … for …`), and a column is
+a source fact where an ordinal would depend on walk order.
+
+**Dropped and counted.** A `dynamic` call site (no symbol to bind), a `using`
+in a file declaring no corpus module, a self-edge (`using Acme;` inside
+`namespace Acme`), and an attribute on the assembly (nothing declared to hang
+it on).
 
 ## Fixture and snapshot
 

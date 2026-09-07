@@ -32,7 +32,12 @@ public static class Ids
         var definition = (type.TupleUnderlyingType ?? type).OriginalDefinition;
         if (definition.IsAnonymousType) return null;
         if (definition.TypeKind == TypeKind.Error)
-            return new NaturalKey(NaturalKey.UnresolvedModule, TypePath(definition));
+        {
+            // An error type with no name (`base.X` on an unresolved base) names
+            // nothing a stub could carry — it must not collapse into the module key.
+            var path = TypePath(definition);
+            return path.Length == 0 || path.StartsWith('.') || path.EndsWith('.') ? null : new NaturalKey(NaturalKey.UnresolvedModule, path);
+        }
         return new NaturalKey(ModuleOf(definition.ContainingNamespace), TypePath(definition));
     }
 
@@ -60,8 +65,9 @@ public static class Ids
     public static NaturalKey Member(NaturalKey type, string memberSymbol) =>
         new(type.Module, type.Symbol + "." + memberSymbol);
 
+    /// <summary>Below the owner's own disambiguator when it has one (a lambda's position, a local function's `fn:`), so two lambdas' `x` never collide.</summary>
     public static NaturalKey Parameter(NaturalKey owner, string name) =>
-        new(owner.Module, owner.Symbol, "param:" + name);
+        new(owner.Module, owner.Symbol, owner.Disambiguator is null ? "param:" + name : owner.Disambiguator + "#param:" + name);
 }
 
 /// <summary>
@@ -81,6 +87,8 @@ public static class Signatures
             MethodKind.StaticConstructor => "<cctor>",
             _ => method.MetadataName,
         });
+        // A generic method's arity is part of its signature, as a type's is of its symbol.
+        if (method.Arity > 0) sb.Append('`').Append(method.Arity);
         AppendParameters(sb, method.Parameters);
         return sb.ToString();
     }
@@ -90,6 +98,14 @@ public static class Signatures
     {
         var sb = new StringBuilder(type.MetadataName);
         AppendParameters(sb, type.DelegateInvokeMethod?.Parameters ?? []);
+        return sb.ToString();
+    }
+
+    /// <summary>`(T1,T2)` — a lambda's whole signature, an indexer's symbol suffix.</summary>
+    public static string ParameterList(IEnumerable<IParameterSymbol> parameters)
+    {
+        var sb = new StringBuilder();
+        AppendParameters(sb, parameters);
         return sb.ToString();
     }
 
