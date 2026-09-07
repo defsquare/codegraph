@@ -20,6 +20,19 @@ export function javaGraph(): CodeGraph {
   return buildGraph(loadModels(javaFixture(), { sources: ["fixtures/java"] }).union);
 }
 
+/** The committed M12 snapshot: real Roslyn output over `fixtures/csharp/src`. */
+const CSHARP_FIXTURE = fileURLToPath(
+  new URL("../../../fixtures/csharp/expected/model.jsonl", import.meta.url),
+);
+
+export function csharpFixture(): Model {
+  return readModelFileSync(CSHARP_FIXTURE);
+}
+
+export function csharpGraph(): CodeGraph {
+  return buildGraph(loadModels(csharpFixture(), { sources: ["fixtures/csharp"] }).union);
+}
+
 /** A minimal hand-built model, for shapes the fixture does not contain. */
 export function toyModel(
   entities: readonly Entity[],

@@ -16,6 +16,16 @@ export function javaGraph(): CodeGraph {
   return buildGraph(loadModels(model, { sources: ["fixtures/java"] }).union);
 }
 
+/** The committed M12 snapshot: real Roslyn output over `fixtures/csharp/src`. */
+const CSHARP_FIXTURE = fileURLToPath(
+  new URL("../../../fixtures/csharp/expected/model.jsonl", import.meta.url),
+);
+
+export function csharpGraph(): CodeGraph {
+  const model = readModelFileSync(CSHARP_FIXTURE);
+  return buildGraph(loadModels(model, { sources: ["fixtures/csharp"] }).union);
+}
+
 export function graphOf(entities: readonly Entity[], edges: readonly Edge[] = []): CodeGraph {
   const model: Model = {
     schemaVersion: "1.0.0",
