@@ -1745,11 +1745,15 @@ stub type       csharp:<Ns>/<TypeMetadataName>                    same shape as 
   here would merge three legal declarations into one entity — the M2 overload
   collision one level up. Roslyn's `MetadataName` (`Foo`1`) is a source fact,
   not an invention, and the backtick is not a reserved id character.
-- Parameter types in signatures are erased fully-qualified metadata names
-  (`System.Collections.Generic.List`1`), arrays as `T[]`, `ref`/`out`/`in`
-  dropped (they cannot overload by themselves), nullable annotations dropped
-  (`string?` and `string` are one type), `Nullable<T>` kept as `System.Nullable`1`,
-  tuples as `System.ValueTuple`n`, pointers as `T*`, type parameters as their
+- Parameter types in signatures are fully-qualified metadata names WITH their
+  type arguments (`System.Collections.Generic.List`1<Acme.Order.Order>`) —
+  **corrected in the M12c audit**: the plan first said "erased", and Humanizer
+  overloads `Humanize<T>` on `Func<T,string>` versus `Func<T,object>`, which C#
+  allows and Java's erasure never could; erasing merged the two into one key.
+  Arrays as `T[]`, `ref`/`out`/`in` dropped (they cannot overload by
+  themselves), nullable annotations dropped (`string?` and `string` are one
+  type), `Nullable<T>` as `System.Nullable`1<T>`, tuples as
+  `System.ValueTuple`n<…>`, pointers as `T*`, type parameters as their
   ordinal `!0`/`!!0` (ECMA-335's form — type-level vs method-level — computed
   from `ITypeParameterSymbol.Ordinal`; a type parameter's *name* is not part
   of the signature in C#, and two overloads differing only in `T`'s name would
@@ -1891,14 +1895,54 @@ Red-green, in this order, each step a commit:
       fixture joined the per-fixture suites: analyzer `conformance-csharp`
       (the acceptance gate, clean), city and navigator `csharp-fixture`, and
       the CLI `validate` suite.
-- [ ] **Real-corpus audit**, the §5.3 exercise: a self-contained library
-      (Humanizer or MediatR — the commons-lang analogue, expected near-100%),
-      a DI-heavy app (`dotnet/eShop` — the petclinic analogue, a structural
-      floor from missing packages), and one large corpus for scale
-      (OrchardCore or nopCommerce — the fineract analogue). Report counts,
-      resolution rates categorised by cause, `diagnose` clean, wall clock; city
-      and navigator screenshots reviewed at user-facing angles. Numbers go into
-      the profile `notes`, as Java's did.
+- [x] **Real-corpus audit (M12c, 2026-09-07)** — Humanizer (`src/Humanizer`,
+      the commons-lang analogue), `dotnet/eShop` (`src`, the petclinic
+      analogue) and OrchardCore (`src`, the fineract analogue), extracted with
+      the published `linux-x64` binary, every model `validate`-clean:
+
+      | corpus | files | entities (stubs) | edges | resolution | wall clock |
+      |---|---|---|---|---|---|
+      | Humanizer | 212 | 12 146 (148) | 27 234 | 97.3 % | 6.2 s |
+      | dotnet/eShop | 498 | 7 396 (789) | 13 223 | 63.5 % | 12.2 s |
+      | OrchardCore | 5 193 | 88 007 (2 175) | 225 184 | 93.4 % | 53.5 s |
+
+      **The first run aborted on all three**, each with a duplicate natural
+      key — the audit's whole purpose. Humanizer overloads `Humanize<T>` on
+      `Func<T,string>` versus `Func<T,object>`, which C# allows and erasure
+      merged: signatures now carry type arguments. eShop's ten services each
+      declare `static class Extensions` and a top-level `Program.cs`: one
+      compilation makes them one type with ten `<Main>$`, and "first wins"
+      would have erased nine services' DI wiring — every duplicate is now
+      kept, re-keyed by its file. OrchardCore's `JsonDynamicValue` has 37
+      `explicit operator`s differing only in return type (now part of a
+      conversion's signature) and a `(_, _) =>` lambda whose two parameters
+      share a name (the second carries its ordinal). Humanizer then failed
+      `validate` on an empty `name`: C# 14 `extension(T t) { … }` blocks,
+      which Roslyn models as nameless nested types — their members are now
+      members of the enclosing static class, attached to the receiver.
+
+      **Resolution, categorised.** Before the audit OrchardCore stood at
+      62.7 % and its most-referenced "unresolved" names were `Task`, `Task<T>`,
+      `IEnumerable<T>`, `List<T>`: not missing packages but the SDK's
+      *implicit global usings*, which live in the generated `obj/` file the
+      extractor skips as build output. Adding Microsoft.NET.Sdk's seven by
+      default (`--implicit-usings sdk`; `web` opt-in — the Web SDK's
+      additions made OrchardCore's own `StartupBase` ambiguous with
+      `Microsoft.AspNetCore.Hosting.StartupBase` 345 times) and embedding the
+      ASP.NET Core reference pack beside the BCL's took OrchardCore to
+      93.4 %, its edges from 178 k to 225 k, and Humanizer to 97.3 %. What is
+      left is exactly the dependency surface §5.3 predicts: third-party
+      packages (eShop: EF Core, Npgsql, MAUI, CommunityToolkit.Mvvm;
+      OrchardCore: Fluid, YesSql, GraphQL, OpenIddict), generated code whose
+      output is not under the roots (Humanizer's source generators), and one
+      honest limit of a single compilation — two corpus types with one simple
+      name whose projects each `global using` their own namespace (eShop's
+      two `CatalogItem`) are ambiguous once merged. eShop's 63.5 % is that
+      floor: the corpus mixes ASP.NET Core, MAUI and Aspire projects that
+      never compile together.
+
+      Screenshots of the eShop city and navigator reviewed at user-facing
+      angles (§13.9). Numbers and causes recorded in the profile `notes`.
 
 No second C# extractor exists, so the cross-validation oracle rule does not
 apply; the resolution-rate categorisation and the BCL-stub namespace check are
@@ -2006,9 +2050,15 @@ Wiring into the repo's scripts and CI:
 - **M12b — the model** ✅ (2026-09-07): members, all edge kinds, stubs,
   measures, literals, the full fixture and its snapshot, stub-discipline and
   determinism tests, CLI e2e, and the fixture in every per-fixture suite.
-- **M12c — distribution + audit**: publish matrix, CI job, published-binary
-  smoke test, READMEs, three-corpus audit with screenshots, profile `notes`
-  rewritten from measurements.
+- **M12c — distribution + audit** ✅ (2026-09-07): five-RID publish matrix
+  (cross-published from one Linux host in 287 s, each artifact a native
+  executable of its target), GitHub Actions gate with the per-OS smoke test
+  and tagged releases, the three-corpus audit (five defects fixed, resolution
+  causes measured, implicit usings and the ASP.NET Core pack added), eShop
+  city (187 districts, 1 176 buildings, 3 738 arrows) and navigator (4 493
+  nodes, 10 751 rows, 7 cycles) reviewed as screenshots, profile `notes`
+  rewritten from measurements, `docs/csharp-extractor.md` for running it
+  with the SDK, the runtime, or nothing.
 
 Definition of done: `fixtures/csharp/expected/model.jsonl` byte-identical to
 core's encoder and profile-valid with zero issues; the same bytes from the
@@ -2040,7 +2090,7 @@ fixture in every per-fixture suite.
 | M11 | Insights walk | ✅ `codegraph explain`: `@codegraph/insights` (pure) + `@codegraph/llm` (the one SDK importer); units = operations → types → modules; one SCC-condensed dependency graph (calls, type deps, imports, downward containment) so mutually dependent packages/types/methods are ONE unit, Kahn-layered; context packs with dependency explanations at `--depth`; Specy-vocabulary blocks validated by Zod and sent as strict JSON Schema; Merkle fingerprints (inputs + dependency fingerprints + missing deps, never explanation text) make re-runs incremental; `--dry-run`/`--max-calls`/`--scope`/`--concurrency`/`--max-scc`; journal + sorted side-car `<model>.insights.jsonl`; cycle suite pinned to the analyzer's cycle report (opt-in real-corpus run via `CODEGRAPH_CORPUS_MODEL`; Fineract: 53 207 units, 18 package tangles, largest 509). Verified live on the Java fixture with gpt-5.6-luna: 77 units, 68 calls, $0.06 all-in, blocks in the Specy vocabulary (Order → entity with identity, StockGuard.ensure → precondition + error event, com.acme.order → APIs/SPI `Ledger`); the `specy:domain-extract-from-code` skill consumes the side-car (`heuristics/codegraph.md`). Design record: `docs/insights.md` |
 | M12a | C# extractor — skeleton | ✅ `extractors/csharp/` (Roslyn 5.9 on .NET 10, no MSBuild, BCL ref pack embedded — §13); csharp profile v2 in core; walking skeleton (namespaces, every type kind, delegates + parameters, doc comments, import/inheritance/implements, stubs) → `fixtures/csharp/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; 51 .NET tests (per-line schema + sequence rules, stub discipline, determinism incl. CRLF and walk order, id scheme, CLI) + 13 core gate tests; `codegraph validate` OK; `codegraph snapshots --extractor` (jar or binary); extractor CLI contract as `schemas/README.md §8`; `build.sh --csharp [--publish-all]` / `test.sh --csharp` with the published-binary `cmp` |
 | M12b | C# extractor — model | ✅ members (incl. implicit and primary constructors, operators, indexers, events, locals, lambdas, local functions), every profile edge kind incl. `annotationUse` with written values and `throws`, extension `attachedTo`, `sloc` + `cyclomatic`; synthesized record members fold to their type; stub discipline (BCL stubs in real namespaces, error types in `<unresolved>`, unbound receivers referenced by name); snapshot 244 entities / 285 edges, byte-identical to core's encoder; 76 .NET tests + 20 core gate tests; the fixture in the analyzer, city, navigator and CLI suites; every CLI command verified on it |
-| M12c | C# extractor — binaries + audit | `dotnet publish` matrix (linux-x64/arm64, osx-x64/arm64, win-x64) from one Linux CI job; published-binary smoke test = `cmp` against the snapshot; build.sh/test.sh/CI wired; three-corpus audit (self-contained lib, DI-heavy app, large corpus) with screenshots and numbers in the profile notes |
+| M12c | C# extractor — binaries + audit | ✅ five-RID `dotnet publish` matrix cross-published from one Linux host (287 s; ELF x64/aarch64, Mach-O x64/arm64, PE32+); GitHub Actions gate (`verify`, `java`, `csharp-test`, `csharp-publish` ×5, `csharp-smoke` on Ubuntu x64/arm64, macOS arm64/Intel and Windows — each binary must reproduce the snapshot byte for byte — and tagged releases with SHA256SUMS); three-corpus audit: Humanizer 97.3 % / 12 146 entities / 6 s, dotnet/eShop 63.5 % / 7 396 / 12 s, OrchardCore 93.4 % / 88 007 entities / 225 184 edges / 54 s, every model `validate`-clean; five defects found and fixed (signatures carry type arguments, conversion operators their return type, duplicate parameter names their ordinal, same-keyed declarations across projects kept and re-keyed by file, C# 14 extension blocks); resolution causes measured — the SDK's implicit usings and the ASP.NET Core reference pack now in — and the residue named in the profile notes; eShop city and navigator screenshots reviewed; `docs/csharp-extractor.md` |
 
 ## 15. Decisions made in this plan (deltas vs. the design doc)
 
@@ -2081,4 +2131,9 @@ fixture in every per-fixture suite.
 | C# BCL references (M12) | `Microsoft.NETCore.App.Ref` embedded as resources, loaded via `CreateFromImage`; never `Assembly.Location` | `Location` is empty inside a single-file bundle, so the tutorial approach binds nothing in the shipped binary while passing under `dotnet run` |
 | C# distribution (M12) | self-contained single-file + ReadyToRun per RID, cross-published from Linux; NativeAOT and trimming deferred | Roslyn is not AOT/trim-clean, and NativeAOT needs each target OS's native toolchain; single-file needs only one runner for all five RIDs |
 | Extractor CLI contract (M12) | one flag shape and exit-code set for every extractor, written in `schemas/README.md`; `snapshots --extractor` (jar → `java -jar`, else run directly) | the Node side must stay language-blind: it orchestrates a process, not a language |
-| Cross-OS acceptance (M12) | `cmp` of the published binary's output against the committed snapshot | byte-determinism (§6 of the contract) makes "works on macOS/Windows" a one-line check a human can run where CI has no runner |
+| Cross-OS acceptance (M12) | `cmp` of the published binary's output against the committed snapshot — run in CI on a runner of each OS since the move to GitHub Actions | byte-determinism (§6 of the contract) makes "works on macOS/Windows" a one-line check; GitHub's hosted macOS and Windows runners make it a gate rather than a laptop ritual |
+| C# signatures carry type arguments (M12c) | `System.Func`2<!!0,System.String>`, not the erased `System.Func`2`; conversion operators append their return type | C# overloads on type arguments alone (Humanizer) and conversions on the return type alone (OrchardCore, 37 on one type); erasure merged written methods into one key and aborted the extraction |
+| Same-keyed declarations across projects (M12c) | every one kept: the first in ordinal file order owns the plain key, each later one is re-keyed `#in:<file>`, each re-keying named on stderr | a corpus is not a compilation unit (eShop's ten `Program.<Main>$`, its per-service `Extensions`); the JDT "first wins" rule the Java profile documents would erase nine services' DI wiring, and a file is a source fact like a lambda's position |
+| Implicit usings (M12c) | Microsoft.NET.Sdk's seven `global using`s added as a synthetic tree by default; the Web SDK's opt-in (`--implicit-usings web`); none write an import edge | they live in the generated obj/ file the extractor skips as build output; without them `Task`/`List<T>` were OrchardCore's top unresolved names (62.7 % → 93.4 %); the Web set on a mixed corpus makes names ambiguous (OrchardCore's own `StartupBase`, 345 times) |
+| Reference packs (M12c) | the ASP.NET Core shared framework's pack embedded beside the BCL's when the building SDK has it | `ILogger<T>`, `IServiceCollection`, `WebApplication` topped eShop's and OrchardCore's unresolved lists; a shared framework is not a NuGet package and ships with every SDK |
+| C# 14 extension blocks (M12c) | members of `extension(T t) { … }` are members of the enclosing static class with `TAttachedTo` → the receiver; the block itself is no entity | Roslyn models the block as a nameless nested type, which failed `validate` on an empty name (Humanizer); the block names no type the source can reference |

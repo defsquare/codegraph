@@ -269,7 +269,7 @@ about known code shows up as a diff.
 | 3D code city and the model navigator | done |
 | Measures, literal values, Spring framework semantics | done |
 | LLM explanations (`explain`) | done |
-| Second language extractor (C#, Roslyn) — members, every edge kind, measures, values; every CLI command verified on the C# model | done |
+| Second language extractor (C#, Roslyn): one self-contained binary per OS, byte-identity smoke tests in CI on five platforms, audited on Humanizer, dotnet/eShop and OrchardCore | done |
 | Clojure extractor (clj-kondo) | next |
 | Published releases (npm, extractor jar) | planned |
 | Project website and documentation site | planned, see [`WEBSITE.md`](WEBSITE.md) |

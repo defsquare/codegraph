@@ -143,6 +143,7 @@ codegraph-csharp [--src <dir>]… [--out <file>] [--progress auto|plain|none] [-
 | `--out <file>` | where to write; default `<current-dir>-codegraph.jsonl` |
 | `--progress` | `auto` (one line per phase when stderr is a terminal, nothing when piped), `plain`, `none` |
 | `--repo-remote`, `--repo-commit`, `--repo-root`, `--repo-provider` | repository facts copied verbatim into the header, so the city and navigator can link a building to its line on the host. `codegraph snapshots` passes them. |
+| `--implicit-usings <mode>` | the global usings a project with `ImplicitUsings` enabled gets from a generated file in `obj/` (build output, skipped). `sdk` (default): `System`, `System.Collections.Generic`, `System.IO`, `System.Linq`, `System.Net.Http`, `System.Threading`, `System.Threading.Tasks` — without them `Task` and `List<T>` in a file with no `using` of its own bind to nothing. `web`: adds the Web SDK's `Microsoft.AspNetCore.*` and `Microsoft.Extensions.*`, for a corpus that is all Web-SDK projects (on a mixed one they make names ambiguous: OrchardCore's own `StartupBase` collided with `Microsoft.AspNetCore.Hosting.StartupBase`). `none`: nothing added. They write no import edge. |
 
 Exit codes: `0` success · `1` failure · `2` bad usage · `3` an extraction
 pass not implemented yet. `stdout` carries nothing but `--help`/`--version`;
@@ -195,6 +196,24 @@ wrote model.jsonl
 - **dropped and counted**: a `dynamic` call site (no symbol to bind), a
   `using` in a file that declares no corpus type, and a self-edge (`using
   Acme;` inside `namespace Acme`).
+- **duplicates** — a corpus is not one compilation unit. Two projects that
+  never see each other may both declare `static class Extensions` with the
+  same member, and every service has its own top-level `Program.cs`; the
+  extractor keeps them all, the first in file order under the plain key and
+  each later one re-keyed by its file (`…#in:Catalog.API/Program.cs`), and
+  names every re-keying on stderr.
+
+The base class library and the ASP.NET Core shared framework both resolve
+(both reference packs travel inside the binary). What stays unresolved,
+measured: third-party packages — on dotnet/eShop, EF Core and Npgsql
+(`DbContext`, `DeleteBehavior`), .NET MAUI (`BindableProperty`, `Preferences`)
+and CommunityToolkit.Mvvm (`RelayCommand`); on OrchardCore, Fluid
+(`FluidValue`, `TemplateContext`), GraphQL (`FieldType`, `StringValue`) and
+OpenIddict — plus generated code whose output is not under the roots (on
+Humanizer, the source generators' `*RegistryRegistrations`), and one honest
+limit of a single compilation: two corpus types with one simple name whose
+projects each `global using` their own namespace (eShop's two `CatalogItem`)
+are ambiguous once those usings merge, and an ambiguous name is unresolved.
 
 ## 6. Feeding the result to codegraph
 
