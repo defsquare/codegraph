@@ -7,8 +7,10 @@ import { encodeModelToString, renderId, type Entity, type Model } from "@codegra
 import { cacheStatus, openCache } from "../src/store/cache.js";
 import { hydrateModel, openStore } from "../src/store/import.js";
 import { loadSqlite } from "../src/store/sqlite.js";
-import { STORE_OPEN_OPTIONS } from "../src/store/schema.js";
+import { SCHEMA_TABLES_SQL, STORE_OPEN_OPTIONS } from "../src/store/schema.js";
 import {
+  FLAT_TABLES,
+  TEMPORAL_TABLES,
   TemporalStoreError,
   importModelAt,
   listRevisions,
@@ -348,5 +350,46 @@ describe("the cache never destroys a temporal store", () => {
     const jsonl = jsonlOf("fresh", REVISIONS[0]!.model);
     importModelAt(jsonl, dbPath, { sha: SHA.a, time: 1000 });
     expect(cacheStatus(jsonl, dbPath).state).toBe("fresh");
+  });
+});
+
+describe("flat tables across revisions", () => {
+  // Regression: `entity_metric` (M10b) was missing from the flat-table list, so
+  // the second `import --at` of any model carrying measures died on the
+  // table's UNIQUE constraint — `codegraph snapshots` could hold one revision.
+  it("re-imports a model carrying measures at a second revision", () => {
+    const measured = (loc: number, cyclomatic: number): Entity =>
+      ({
+        ...type("A", loc),
+        traits: ["TNamed", "TType", "TSourceAnchor", "TMetrics"],
+        metrics: { cyclomatic, sloc: loc },
+      }) as unknown as Entity;
+    const dbPath = join(scratch, "measured.db");
+    importModelAt(jsonlOf("measured-r0", model([appModule(), measured(20, 3)], [])), dbPath, {
+      sha: SHA.a,
+      time: 1000,
+    });
+    expect(() =>
+      importModelAt(jsonlOf("measured-r1", model([appModule(), measured(25, 5)], [])), dbPath, {
+        sha: SHA.b,
+        time: 2000,
+      }),
+    ).not.toThrow();
+    const db = openStore(dbPath);
+    try {
+      const latest = hydrateModel(db).entities.find((entity) => entity.traits.includes("TMetrics"));
+      expect((latest as unknown as { metrics: unknown }).metrics).toEqual({ cyclomatic: 5, sloc: 25 });
+    } finally {
+      db.close();
+    }
+  });
+
+  // The durable property: every table the schema creates is either flat
+  // (cleared and rewritten per import) or temporal (accumulates) — a table
+  // that is neither is the bug above waiting to recur.
+  it("classifies every schema table as flat or temporal", () => {
+    const declared = [...SCHEMA_TABLES_SQL.matchAll(/CREATE TABLE (\w+)/g)].map((m) => m[1]).sort();
+    expect([...FLAT_TABLES, ...TEMPORAL_TABLES].sort()).toEqual(declared);
+    expect(FLAT_TABLES).toContain("entity_metric");
   });
 });

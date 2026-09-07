@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readModelRecordsSync, type Repository } from "@codegraph/core";
 
 import { importModel, writeModelRows } from "./import.js";
-import { DB_VERSION, STORE_OPEN_OPTIONS } from "./schema.js";
+import { DB_VERSION, SCHEMA_TABLES_SQL, STORE_OPEN_OPTIONS } from "./schema.js";
 import { loadSqlite, type SqliteDatabase } from "./sqlite.js";
 
 /**
@@ -134,24 +134,18 @@ export function importModelAt(
   }
 }
 
-/** Every table the single-model import fills — the temporal tables excluded. */
-const FLAT_TABLES = [
-  "meta",
-  "kind",
-  "trait",
-  "edge_kind",
-  "provenance",
-  "file",
-  "trait_set",
-  "trait_set_member",
-  "entity",
-  "entity_comment",
-  "entity_defined_in",
-  "entity_parameter",
-  "entity_local_variable",
-  "edge",
-  "edge_candidate",
-] as const;
+/** The tables that ACCUMULATE across revisions; every other table is flat. */
+export const TEMPORAL_TABLES = ["revision", "entity_key", "entity_version", "edge_version"] as const;
+
+/**
+ * Every table the single-model import fills — cleared and rewritten per
+ * import. Derived from the schema rather than listed by hand: a hand-kept
+ * list silently missed `entity_metric` when M10b added it, and the second
+ * `import --at` of any model carrying measures died on its UNIQUE constraint.
+ */
+export const FLAT_TABLES: readonly string[] = [...SCHEMA_TABLES_SQL.matchAll(/CREATE TABLE (\w+)/g)]
+  .map((match) => match[1] as string)
+  .filter((table) => !(TEMPORAL_TABLES as readonly string[]).includes(table));
 
 function metaOf(db: SqliteDatabase, key: string): string | undefined {
   const row = db.prepare("SELECT value FROM meta WHERE key = ?").get(key);
