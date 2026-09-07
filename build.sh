@@ -5,6 +5,9 @@
 #   TypeScript : pnpm -r build   -> packages/*/dist (incl. the viz bundle
 #                                   `codegraph city --serve` looks for)
 #   Java       : ./mvnw package  -> extractors/java/target/codegraph-java.jar
+#   C#         : dotnet publish  -> extractors/csharp/dist/<rid>/codegraph-csharp
+#                                   (self-contained single file; --publish-all
+#                                   builds the five-RID matrix from this host)
 #
 # Wraps both with the toolchain checks that a bare `pnpm`/`mvnw` invocation
 # skips: Node's floor, the pinned pnpm, and a JDK that non-interactive shells
@@ -18,6 +21,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts/lib.sh"
 trap on_error ERR
 
 CLEAN="no"
+PUBLISH_ALL="no"
 
 usage() {
   cat <<'USAGE'
@@ -28,7 +32,10 @@ Usage: ./build.sh [options]
 Options:
   --ts, --ts-only      only packages/* (pnpm -r build)
   --java, --java-only  only extractors/java (./mvnw package)
-  --all                both (default)
+  --csharp, --csharp-only
+                       only extractors/csharp (dotnet publish, host RID)
+  --publish-all        C#: publish linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64
+  --all                everything (default)
   --clean              discard previous output first (dist/, target/)
   --skip-install       do not run pnpm install (requires an existing node_modules)
   --no-frozen          allow pnpm install to update pnpm-lock.yaml
@@ -46,6 +53,7 @@ while [ $# -gt 0 ]; do
   if parse_common_flag "$1"; then shift; continue; fi
   case "$1" in
     --clean)    CLEAN="yes" ;;
+    --publish-all) PUBLISH_ALL="yes" ;;
     -h|--help)  usage; exit 0 ;;
     *)          usage_error "unknown option: $1" ;;
   esac
@@ -58,9 +66,14 @@ printf '%scodegraph build%s  %s(%s)%s\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$ROOT" "
 
 step "toolchain"
 if wants_ts; then check_node; ensure_pnpm; fi
+SKIP_JAVA="no"; SKIP_CSHARP="no"
 if wants_java; then
   if have_java_extractor; then ensure_jdk; ensure_mvnw
-  else warn "no extractors/java in this checkout — skipping the Java build"; TARGET="ts"; fi
+  else warn "no extractors/java in this checkout — skipping the Java build"; SKIP_JAVA="yes"; fi
+fi
+if wants_csharp; then
+  if have_csharp_extractor; then ensure_dotnet
+  else warn "no extractors/csharp in this checkout — skipping the C# build"; SKIP_CSHARP="yes"; fi
 fi
 step_done
 
@@ -82,11 +95,44 @@ fi
 
 # ------------------------------------------------------------------ java ----
 
-if wants_java; then
+if wants_java && [ "$SKIP_JAVA" = "no" ]; then
   step "build java extractor (./mvnw package)"
   # -B: batch mode, no ANSI progress spam in logs. Tests belong to test.sh.
   ( cd "$JAVA_DIR" && run ./mvnw -B -DskipTests package )
   step_done
+fi
+
+# ---------------------------------------------------------------- csharp ----
+
+# One self-contained single-file binary per RID (PLAN.md §13.7): the runtime,
+# Roslyn and the embedded BCL reference pack travel inside it, so the machine
+# that runs it needs no SDK. ReadyToRun for startup; never trimmed (Roslyn is
+# not trim-clean). Every RID cross-publishes from any host.
+publish_csharp() {
+  local rid="$1"
+  ( cd "$CSHARP_DIR" && run dotnet publish src/Codegraph.CSharp -c Release -r "$rid" --self-contained \
+      -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=true \
+      -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none \
+      -o "dist/$rid" --nologo -v quiet )
+}
+
+if wants_csharp && [ "$SKIP_CSHARP" = "no" ]; then
+  if [ "$CLEAN" = "yes" ]; then
+    step "clean (csharp)"
+    run rm -rf "$CSHARP_DIR/dist" "$CSHARP_DIR"/src/*/bin "$CSHARP_DIR"/src/*/obj "$CSHARP_DIR"/tests/*/bin "$CSHARP_DIR"/tests/*/obj
+    step_done
+  fi
+  if [ "$PUBLISH_ALL" = "yes" ]; then
+    for rid in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64; do
+      step "publish csharp extractor ($rid)"
+      publish_csharp "$rid"
+      step_done
+    done
+  else
+    step "publish csharp extractor ($(host_rid))"
+    publish_csharp "$(host_rid)"
+    step_done
+  fi
 fi
 
 # -------------------------------------------------------------- artifacts ---
@@ -108,7 +154,18 @@ if wants_ts; then
   report "$ROOT/packages/viz/dist/index.html"
   report "$ROOT/packages/navigator-ui/dist/index.html"
 fi
-if wants_java; then report "$JAVA_DIR/target/codegraph-java.jar"; fi
+if wants_java && [ "$SKIP_JAVA" = "no" ]; then report "$JAVA_DIR/target/codegraph-java.jar"; fi
+if wants_csharp && [ "$SKIP_CSHARP" = "no" ]; then
+  if [ "$PUBLISH_ALL" = "yes" ]; then
+    for rid in linux-x64 linux-arm64 osx-x64 osx-arm64; do report "$CSHARP_DIR/dist/$rid/codegraph-csharp"; done
+    report "$CSHARP_DIR/dist/win-x64/codegraph-csharp.exe"
+  else
+    case "$(host_rid)" in
+      win-*) report "$CSHARP_DIR/dist/$(host_rid)/codegraph-csharp.exe" ;;
+      *)     report "$CSHARP_DIR/dist/$(host_rid)/codegraph-csharp" ;;
+    esac
+  fi
+fi
 [ "$missing" -eq 0 ] || die "$missing expected artifact(s) missing — the build did not produce a usable tree"
 step_done
 

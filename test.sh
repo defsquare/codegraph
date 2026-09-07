@@ -8,6 +8,10 @@
 #   schemas    pnpm run gen:schemas must be a NO-OP — schemas/ is a committed
 #              artifact and the cross-language contract; drift there is a bug
 #   java       ./mvnw test
+#   csharp     dotnet test, then the PUBLISHED binary (if build.sh made one)
+#              re-extracts fixtures/csharp/src and must reproduce the committed
+#              snapshot byte for byte — the only test that sees the single-file
+#              code path (embedded BCL, no Assembly.Location)
 #
 # No build is required first: packages/cli/vitest.config.ts aliases the
 # workspace packages to their SOURCE, and the CLI e2e suite builds its own dist
@@ -35,7 +39,9 @@ Usage: ./test.sh [options]
 Options:
   --ts, --ts-only      only packages/* (typecheck, vitest, schema drift)
   --java, --java-only  only extractors/java (./mvnw test)
-  --all                both (default)
+  --csharp, --csharp-only
+                       only extractors/csharp (dotnet test + published-binary smoke test)
+  --all                everything (default)
   --lint               also run eslint (not part of CI's gate)
   --no-typecheck       skip pnpm -r typecheck
   --no-schemas         skip the schemas/ drift check
@@ -104,9 +110,14 @@ printf '%scodegraph test%s  %s(%s)%s\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$ROOT" "$
 
 step "toolchain"
 if wants_ts; then check_node; ensure_pnpm; fi
+SKIP_JAVA="no"; SKIP_CSHARP="no"
 if wants_java; then
   if have_java_extractor; then ensure_jdk; ensure_mvnw
-  else warn "no extractors/java in this checkout — skipping the Java tests"; TARGET="ts"; fi
+  else warn "no extractors/java in this checkout — skipping the Java tests"; SKIP_JAVA="yes"; fi
+fi
+if wants_csharp; then
+  if have_csharp_extractor; then ensure_dotnet
+  else warn "no extractors/csharp in this checkout — skipping the C# tests"; SKIP_CSHARP="yes"; fi
 fi
 step_done
 
@@ -142,9 +153,29 @@ fi
 
 # ------------------------------------------------------------------ java ----
 
-if wants_java; then
+if wants_java && [ "$SKIP_JAVA" = "no" ]; then
   phase "java extractor tests (./mvnw test)" \
     sh -c "cd '$JAVA_DIR' && ./mvnw -B test"
+fi
+
+# ---------------------------------------------------------------- csharp ----
+
+if wants_csharp && [ "$SKIP_CSHARP" = "no" ]; then
+  phase "csharp extractor tests (dotnet test)" \
+    sh -c "cd '$CSHARP_DIR' && dotnet test -c Release --nologo -v quiet"
+
+  # The cross-OS acceptance check (PLAN.md §13 principle 3): the published
+  # artifact, not `dotnet run`, must reproduce the snapshot exactly. Run from
+  # the repo root with the SAME relative --src the snapshot was made with: the
+  # typed path is the header's `root`, so an absolute one differs at byte 138.
+  bin="$CSHARP_DIR/dist/$(host_rid)/codegraph-csharp"
+  [ -x "$bin" ] || bin="$bin.exe"
+  if [ -x "$bin" ]; then
+    phase "published csharp binary reproduces the snapshot" \
+      sh -c "cd '$ROOT' && out=\$(mktemp) && '$bin' --src fixtures/csharp/src --out \"\$out\" --progress none >/dev/null 2>&1 && cmp \"\$out\" fixtures/csharp/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
+  else
+    warn "no published binary at $CSHARP_DIR/dist/$(host_rid) — run ./build.sh --csharp for the smoke test"
+  fi
 fi
 
 # The ERR trap must not fire here: `verdict` reporting failures IS the result.

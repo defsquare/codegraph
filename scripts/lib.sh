@@ -15,6 +15,7 @@ set -euo pipefail
 # `~/codegraph/build.sh` and a symlinked checkout all reach their own tree.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JAVA_DIR="$ROOT/extractors/java"
+CSHARP_DIR="$ROOT/extractors/csharp"
 
 # ---------------------------------------------------------------- output ----
 
@@ -273,19 +274,83 @@ ensure_mvnw() {
   ok "maven wrapper $(sed -n 's/.*apache-maven-\([0-9.]*\)-bin\.zip/\1/p' "$JAVA_DIR/.mvn/wrapper/maven-wrapper.properties" 2>/dev/null | head -1)"
 }
 
+# ------------------------------------------------------ dotnet toolchain -----
+
+have_csharp_extractor() { [ -f "$CSHARP_DIR/global.json" ]; }
+
+# "10.0.100" from global.json -> 10
+req_dotnet_major() {
+  local v
+  v="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9]*\)\..*/\1/p' "$CSHARP_DIR/global.json" | head -1)"
+  [ -n "$v" ] || die "cannot read sdk.version from $CSHARP_DIR/global.json"
+  printf '%s' "$v"
+}
+
+# The host RID `dotnet publish` targets by default — the artifact build.sh reports.
+host_rid() {
+  local os arch
+  case "$(uname -s)" in
+    Darwin) os="osx" ;;
+    Linux)  os="linux" ;;
+    MINGW*|MSYS*|CYGWIN*) os="win" ;;
+    *) os="linux" ;;
+  esac
+  case "$(uname -m)" in
+    arm64|aarch64) arch="arm64" ;;
+    *)             arch="x64" ;;
+  esac
+  printf '%s-%s' "$os" "$arch"
+}
+
+# Resolve a .NET SDK >= global.json's band and EXPORT DOTNET_ROOT / PATH.
+#
+# Search order: `dotnet` on PATH, then an explicit DOTNET_ROOT, then the
+# user-local install the dotnet-install script writes (~/.dotnet — the sdkman
+# of .NET, and what non-interactive shells cannot see). Never installed
+# automatically: the one-liner is printed instead. Telemetry and first-run
+# chatter are switched off for every dotnet call the scripts make.
+ensure_dotnet() {
+  local want candidate bin="" have
+  want="$(req_dotnet_major)"
+  export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+
+  set -- "$(command -v dotnet 2>/dev/null || true)" "${DOTNET_ROOT:-}/dotnet" "$HOME/.dotnet/dotnet"
+  for candidate in "$@"; do
+    [ -n "$candidate" ] && [ -x "$candidate" ] || continue
+    bin="$candidate"; break
+  done
+  [ -n "$bin" ] || die \
+    "no .NET SDK found — the C# extractor needs SDK >= $want (extractors/csharp/global.json)" \
+    "user-local: curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel $want.0 --install-dir ~/.dotnet" \
+    "homebrew:   brew install --cask dotnet-sdk" \
+    "or skip it entirely: $SCRIPT_NAME --ts"
+
+  have="$("$bin" --version 2>/dev/null | head -1)"
+  [ -n "$have" ] || die "$bin --version printed nothing — is this a runtime-only install?" \
+    "install the SDK: curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel $want.0 --install-dir ~/.dotnet"
+  [ "${have%%.*}" -ge "$want" ] || die \
+    "dotnet SDK $have is too old — the extractor needs >= $want (global.json)" \
+    "curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel $want.0 --install-dir ~/.dotnet"
+
+  export DOTNET_ROOT="$(cd "$(dirname "$bin")" && pwd)"
+  case ":$PATH:" in *":$DOTNET_ROOT:"*) ;; *) export PATH="$DOTNET_ROOT:$PATH" ;; esac
+  ok "dotnet sdk $have (DOTNET_ROOT=$DOTNET_ROOT)"
+}
+
 # ------------------------------------------------------- shared parsing -----
 
 # Defaults every script shares; each script may add its own flags on top.
 SKIP_INSTALL="no"
 FROZEN="yes"
 AUTO_INSTALL="yes"
-TARGET="all"      # all | ts | java
+TARGET="all"      # all | ts | java | csharp
 
 # Returns 0 if it consumed the argument, 1 if the caller should handle it.
 parse_common_flag() {
   case "$1" in
     --ts|--ts-only)     TARGET="ts" ;;
     --java|--java-only) TARGET="java" ;;
+    --csharp|--csharp-only) TARGET="csharp" ;;
     --all)              TARGET="all" ;;
     --skip-install)     SKIP_INSTALL="yes" ;;
     --no-frozen)        FROZEN="no" ;;
@@ -295,5 +360,6 @@ parse_common_flag() {
   return 0
 }
 
-wants_ts()   { [ "$TARGET" = "all" ] || [ "$TARGET" = "ts" ]; }
-wants_java() { [ "$TARGET" = "all" ] || [ "$TARGET" = "java" ]; }
+wants_ts()     { [ "$TARGET" = "all" ] || [ "$TARGET" = "ts" ]; }
+wants_java()   { [ "$TARGET" = "all" ] || [ "$TARGET" = "java" ]; }
+wants_csharp() { [ "$TARGET" = "all" ] || [ "$TARGET" = "csharp" ]; }
