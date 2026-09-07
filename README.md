@@ -1,377 +1,290 @@
 # Codegraph
 
-Extract dependencies between code entities — classes, functions, modules — from
-multi-language corpora, **including non-compilable legacy code**, into a
-trait-based metamodel, and analyze the result: dependency graphs, coupling,
-cycles, architecture, and a browsable **3D "code city"** — modules as districts
-(nested like the packages they are), types as buildings sized by real metrics,
-dependencies as roof-to-roof arcs.
+**See the structure of a codebase you did not write — even one that no longer
+compiles.**
+
+Codegraph turns source code into a dependency model you can query, draw as a
+3D city, browse dependency by dependency, replay through its git history, and
+have a language model explain bottom-up. It does this without building the
+code: the Java extractor runs on sources alone, no classpath, no jars, so it
+works on the legacy that nobody can compile any more.
+
+Four questions, four commands:
+
+| Question | Command | What you get |
+|---|---|---|
+| What does this codebase look like? | `codegraph city --serve` | a 3D city: packages are districts, classes are buildings sized by real metrics, dependencies are arcs |
+| What exactly depends on what? | `codegraph navigator --serve` | a browsable tree with every incoming and outgoing dependency, the member that carries it, and the source line that proves it |
+| How did it get this way? | `codegraph scm` / `replay` | churn, hotspots, ownership, co-change, and a city whose timeline scrubs the years |
+| What does it mean? | `codegraph explain` | one plain-language explanation per method, class and package, written leaves-first so every summary rests on already-explained parts |
+
+Plus the plumbing you need to trust the answers: `validate` for the model,
+`analyze` for coupling and cycles, `export` for DOT, CSV, JSON and PlantUML.
+
+## Quick start
+
+You need **Node 22+**, **pnpm** (`corepack enable pnpm`) and a **JDK 17+** on
+`PATH`. Codegraph is not on npm yet; you run it from a clone.
+
+```bash
+git clone https://gitlab.com/jgrodziski/codegraph.git && cd codegraph
+pnpm install && pnpm -r build
+(cd extractors/java && ./mvnw -B package)        # the wrapper; no local Maven needed
+ln -s "$PWD/bin/codegraph" ~/.local/bin/codegraph   # optional, works from a symlink
+```
+
+Now point it at some Java. Any tree of `.java` files works; it does not have
+to build.
+
+```bash
+# 1. extract: sources in, one model file out (no compilation)
+java -jar extractors/java/target/codegraph-java.jar --src ~/src/gson/gson/src/main/java --out gson.jsonl
+
+# 2. is the model sound?
+codegraph validate gson.jsonl
+
+# 3. look at it
+codegraph city gson.jsonl --serve --host 127.0.0.1        # http://localhost:4177
+codegraph navigator gson.jsonl --serve --host 127.0.0.1   # http://localhost:4178
+```
+
+On google/gson (about 3,600 entities) extraction takes seconds and every
+report runs well under a second. On apache/fineract (a 127 MB model) each
+command completes in about twelve seconds.
+
+`--host 127.0.0.1` keeps the pages on your machine. Without it the servers
+bind every interface, which is convenient on a LAN and wrong for a sensitive
+codebase.
+
+## Usage
+
+### Ask the analyzer
+
+```bash
+codegraph analyze gson.jsonl --report coupling --top 20      # most depended-upon packages
+codegraph analyze gson.jsonl --report cycles                  # tangles + the cheapest edges to cut; exit 3 if any
+codegraph analyze gson.jsonl --report deps --level type       # class-level dependency list
+codegraph export  gson.jsonl --format plantuml --level module > modules.puml
+codegraph export  gson.jsonl --format dot > graph.dot
+```
+
+Two switches change every answer, and every answer says which were on:
+`--internal-only` drops everything outside the corpus, `--declared-only`
+drops every inference and keeps only what the source literally says.
+
+### Build the city you want
+
+Height and footprint are metrics you choose. The defaults are lines of code
+and member count; the extractor also emits cyclomatic complexity:
+
+```bash
+codegraph city gson.jsonl --serve --height sum:cyclomatic --footprint loc
+codegraph city petclinic.jsonl --serve --framework spring     # color by Spring role
+```
+
+Arcs appear when you select something: orange for fan-in, blue for fan-out,
+desaturated when the dependency is an inference rather than a declared fact,
+and red for the edges whose cut would break a cycle. Hover a building for
+its raw numbers. Unmeasured metrics are drawn at the minimum and labelled as
+unmeasured rather than faked.
+
+### Mine the history
+
+```bash
+codegraph scm ~/src/gson --out gson-history.jsonl
+codegraph history gson-history.jsonl --report hotspots --top 20
+codegraph history gson-history.jsonl --report hidden --model gson.jsonl
+#   ^ files that change together though no declared dependency links them
+codegraph history gson-history.jsonl --report deadweight --model gson.jsonl
+#   ^ declared dependencies that history never exercised together
+```
+
+To watch the structure evolve, sample the repository at its tags into a
+temporal store and replay it:
+
+```bash
+codegraph snapshots ~/src/gson --jar extractors/java/target/codegraph-java.jar --tags --src gson/src/main/java --store gson.db
+codegraph timeline java:com.google.gson/Gson --store gson.db
+codegraph replay --store gson.db --history gson-history.jsonl --serve
+```
+
+`snapshots` is resumable; rerunning it skips the revisions already held.
+
+### Let a model explain it
+
+```bash
+codegraph explain gson.jsonl --src ~/src/gson/gson/src/main/java --dry-run   # the plan, no call
+codegraph explain gson.jsonl --src ... --estimate --price-in 0.10 --price-out 0.60   # tokens and cost, no call
+OPENROUTER_API_KEY=… codegraph explain gson.jsonl --src ... --max-calls 50
+```
+
+Explanations go to `gson.insights.jsonl` beside the model and never into it.
+Re-running redoes only the units whose inputs changed. On the reference
+fixture a full run was 68 calls and about six cents. Cloudflare AI Gateway is
+the other supported provider.
+
+### Feed it to something else
+
+`codegraph export --format json|csv` gives you the folded graph;
+`codegraph import gson.jsonl` gives you `gson.db`, a SQLite file you can query
+directly (see the [SQL cookbook](docs/sql-cookbook.md));
+`codegraph domain-facts` gives one pre-joined dossier per class for
+domain-model extraction. Every artifact is deterministic, so it diffs cleanly
+in a repository or a CI job.
+
+The complete option list for every command is in
+[`docs/cli.md`](docs/cli.md) and in `codegraph <command> --help`.
+
+## Why codegraph
+
+Plenty of tools draw dependency graphs. Codegraph exists because most of them
+demand a build, and because the ones that don't tend to guess quietly. Its
+design bets are:
+
+- **Facts and inferences never mix.** Every edge carries a provenance:
+  `declared`, `derived`, `dynamic-candidate` or `generated`. A dependency
+  the extractor resolved from the source is a different thing from one it
+  inferred from a framework annotation, and every report, picture and
+  export keeps the two visibly apart. You can always ask for facts only.
+- **Every claim points at a line.** Entities and edges carry a source anchor.
+  If the navigator says class A depends on class B through method `m`, it
+  shows you the file and span where that happens.
+- **Legacy is the target, not the exception.** The Java extractor runs Spoon
+  without a classpath. What cannot be resolved becomes an explicit stub whose
+  edges are kept, and stubs are decided by a whitelist of what the corpus
+  declares, never by guessing from a package name.
+- **One model, many languages.** Extractors emit a versioned line-based JSON
+  file against a published JSON Schema and know nothing about the metamodel.
+  Everything clever, from validation to metrics to the city, lives once, in
+  TypeScript, so adding a language is writing a producer for one contract.
+  Entities are trait compositions rather than a class hierarchy, which is what
+  lets a Clojure function var, a Go method with a receiver, and a Java class
+  live in one graph.
+- **Pictures mean something.** In the city every visual channel maps to a
+  documented metric and colour is never decorative. The renderer draws the
+  model and nothing the model does not contain.
+- **Time is part of the structure.** History mining, temporal snapshots and
+  replay are built in, because who changed what together is a dependency the
+  source cannot show you.
+- **Boring outputs on purpose.** stdout is the artifact and stderr is for
+  humans; no colour codes; byte-identical output for identical input; exit
+  codes that separate a bug in codegraph from a finding about your code.
+
+## Limitations
+
+Read these before you commit an afternoon.
+
+- **Java only, today.** The metamodel and the language profiles cover nine
+  languages on paper, but the only shipped extractor is Java (JVM sources).
+  A second language is the next milestone; a Clojure adapter is designed.
+- **No build means imperfect resolution.** Without a classpath Spoon cannot
+  resolve every reference; on the reference corpus resolution is around
+  94%, and the rest are stubs. A stub is honest, but it is still a gap.
+- **Keep one package to one source root per run.** `--src` is repeatable,
+  but the same package declared under several roots at once (main and test
+  sources, or one package split across modules) confuses noClasspath
+  resolution; pass such roots in separate runs.
+- **`explain` costs money and needs a network.** It is the only command that
+  does. `--dry-run` and `--estimate` tell you what it would do first, and
+  `--max-calls` caps it.
+- **Not a linter.** Codegraph reports structure, coupling and cycles; it does
+  not judge style or find bugs.
+- **Runs from a clone.** There is no npm package or binary release yet.
+- **Big models want memory.** A 100 MB model loads in the navigator in about
+  a second, but the extractor and the analyzer are single-process Node and
+  JVM tools; a monorepo of millions of lines is untested.
+
+## How it works
 
 ```
-┌──────────────────┐    ┌───────────────────┐    ┌──────────────────────┐
-│ Extractors       │    │ JSON interchange  │    │ TypeScript analyzer  │
-│ (native tooling) │ ─▶ │ model.jsonl       │ ─▶ │ validate → graph →   │
-│ Java: Spoon      │    │ (versioned schema)│    │ queries → exports    │
-└──────────────────┘    └───────────────────┘    └──────────────────────┘
+   sources ──▶  extractor  ──▶  model.jsonl  ──▶  analyzer  ──▶  reports, exports
+  (any state)  (Java/Spoon)   (the contract)      (TypeScript)      city.json ──▶ 3D city
+                                   │                                navigator.json ──▶ navigator
+                              schemas/*.json                        model.db ──▶ SQL, time
+                            (published JSON Schema)                 *.insights.jsonl ──▶ explanations
 ```
 
-Extractors are **federated behind one contract**: each uses the best native tool
-for its language and only has to emit conforming JSON. Every bit of intelligence
-about the metamodel — traits, profiles, validation, derived indexes, analyses —
-lives once, in TypeScript.
+The model is a graph of entities and edges. An entity is `{id, kind, traits}`
+plus the attributes its traits contribute; an edge is `{from, to, kind,
+provenance, anchor}`. Identity is a structured natural key
+(`lang, module, symbol, disambiguator`), never a parsed string. Inverse
+indexes (who calls me, who imports me) are derived in memory and never stored,
+so a model file has one direction of truth. The full reference is
+[`METAMODEL.md`](METAMODEL.md).
 
-## Why trait-based
-
-There is no entity class hierarchy. An entity is `{ id, kind, traits[] }` plus
-whatever attributes its traits contribute. The case that motivates the design: a
-Clojure var holding a function is simultaneously named, a value holder, and
-invocable — `[TNamed, TStructural, TInvocable]`. No tree can place it;
-composition expresses it directly.
-
-Four rules make the model trustworthy rather than merely rich:
-
-- **Provenance on every edge** — `declared | derived | dynamic-candidate |
-  generated`. Facts and inferences are never mixed; a facts-only analysis
-  filters on `declared`.
-- **Evidence everywhere** — entities *and* edges carry `anchor { file, span }`,
-  so every dependency claim is auditable back to a source line.
-- **Containment ≠ attachment** — where code is *written* (`TChildOf` /
-  `TWithChildren`) and what it semantically *belongs to* (`TAttachedTo`, e.g. a
-  Go receiver) are distinct relations, both kept.
-- **Stub discipline** — types outside the corpus become degraded `isStub` nodes,
-  decided by a whitelist of corpus-declared ids, never by name prefix.
-
-## Layout
-
-| Path | Contents |
+| Package | Role |
 |---|---|
-| `packages/core` | `@codegraph/core` — traits, edges, language profiles, Zod validation, JSON Schema export |
-| `packages/analyzer` | `@codegraph/analyzer` — graph construction, derived indexes, queries, metrics |
-| `packages/city` | `@codegraph/city` — the city **model**: districts, buildings, arrows, layout; no rendering |
-| `packages/scm` | `@codegraph/scm` — the SCM miner: git history → deterministic `history.jsonl`, plus churn/hotspot/authorship reports |
-| `packages/cli` | `@codegraph/cli` — the `codegraph` command |
-| `packages/viz` | `@codegraph/viz` — the Three.js code city renderer — the only package allowed to depend on `three` |
-| `extractors/java` | Maven/Spoon extractor (noClasspath), emits `model.jsonl` |
-| `schemas/` | Generated JSON Schema — the committed cross-language contract |
-| `fixtures/` | Reference corpora + expected `model.jsonl` snapshots |
-
-## Getting started
-
-Requires **Node ≥ 22** and **pnpm** (`corepack enable pnpm`).
-
-```bash
-pnpm install
-pnpm -r build          # build all TypeScript packages
-pnpm -r test           # unit + property tests
-pnpm run ci            # build + typecheck + test, what CI runs
-pnpm run gen:schemas   # regenerate schemas/*.schema.json (commit the result)
-```
-
-Java extractor:
-
-```bash
-cd extractors/java && ./mvnw -B package   # the wrapper; no local Maven needed
-java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
-java -jar target/codegraph-java.jar          # both default: the current
-                                             # directory, into
-                                             # <current-dir>-codegraph.jsonl
-```
-
-Analysis — the `codegraph` CLI. Every command takes one or more `model.jsonl`
-paths and loads them as a single union, so multi-language analysis is just a
-longer argument list. `analyze` and `city` may take none at all: standing in a
-directory the extractor has run on, they read its `<current-dir>-codegraph.jsonl`.
-
-```bash
-codegraph validate model.jsonl [--json]
-
-codegraph analyze  [model.jsonl] [--report deps|cycles|coupling]   # default: deps
-                   [--level module|type] [--internal-only] [--declared-only]
-                   [--json] [--top N]
-
-codegraph export   model.jsonl --format dot|json|csv|plantuml
-                   [--level module|type] [--internal-only] [--declared-only]
-                   [--out FILE]
-
-codegraph domain-facts [model.jsonl] [--framework spring] [--out FILE]
-                   [--internal-only] [--declared-only]
-                   # one dossier per corpus type, every fact pre-joined for
-                   # a domain-extraction consumer — see "Domain facts" below
-
-codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
-                   [--estimate [--price-in USD --price-out USD]]
-                   [--provider auto|openrouter|cloudflare]
-                   [--model SLUG] [--rollup-model SLUG] [--depth N]
-                   [--max-calls N] [--scope IDS] [--concurrency N]
-                   [--max-lines N] [--max-scc N] [--force] [--json]
-                   [--framework spring] [--internal-only] [--declared-only]
-                   # bottom-up LLM explanations into <model>.insights.jsonl —
-                   # needs OPENROUTER_API_KEY, or CLOUDFLARE_API_TOKEN +
-                   # CLOUDFLARE_ACCOUNT_ID [+ CLOUDFLARE_AI_GATEWAY_ID] for
-                   # Cloudflare AI Gateway, unless --dry-run; see docs/insights.md
-
-codegraph city     [model.jsonl] [--serve [--port N] [--host ADDR]] [--layout] [--out FILE]
-                   [--height METRIC] [--footprint METRIC] [--carry M1,M2]
-                   [--internal-only] [--declared-only]
-
-codegraph import   model.jsonl --at SHA [--time T] [--out FILE]
-                   # append a snapshot to the TEMPORAL store: revisions
-                   # accumulate, keyed by the natural key across time
-
-codegraph timeline java:com.acme/Basket [--store FILE] [--json]
-                   # an entity's life across the store's revisions:
-                   # appeared, last seen, LOC series (derived, never stored)
-
-codegraph scm      [repo] [--since DATE] [--out FILE] [--json]
-                   # mine git history -> <repo>-history.jsonl (deterministic)
-
-codegraph snapshots [repo] --jar FILE (--every N | --tags)
-                   [--store FILE] [--src DIR] [--json]
-                   # extract the repo at sampled revisions (each in a
-                   # throwaway git worktree) into the temporal store;
-                   # resumable — revisions already held are skipped
-
-codegraph history  [history.jsonl] [--top N] [--json]
-                   [--report summary|hotspots|authors|coupling|hidden|deadweight]
-                   [--min-support N] [--min-confidence PCT] [--model FILE]
-                   # hidden/deadweight join history with a MODEL: co-change
-                   # the declared graph cannot explain, and declared
-                   # dependencies history never exercised
-                   [--serve [--port N] [--host ADDR]] [--city FILE]
-                   # --serve: the file-level city REPLAY — buildings are
-                   # files, a timeline scrubs the commits (Gource-style)
-
-codegraph replay   [--store FILE] [--name STR] [--history FILE] [--out FILE]
-                   [--serve [--port N] [--host ADDR]]
-                   # the temporal store as ONE laid-out city whose
-                   # timeline scrubs the sampled revisions: frozen
-                   # union layout, buildings rise at birth, sink at death;
-                   # time colors (change heat + age) ride the scrub, and
-                   # --history joins ownership (color mode) + co-change arcs
-
-codegraph profiles [--lang java] [--json]
-```
-
-Evolution facts are a **third artifact**: `history.jsonl` sits beside
-`model.jsonl` — repo-scoped, language-agnostic, mined from one `git log` pass
-with rename chains resolved so one surrogate names one file lineage. Author
-identity is the `Name <email>` pair (`.mailmap` applies when the repo has
-one); a path recreated after a deletion continues the same lineage.
-
-After `pnpm -r build`, run it from the clone as `./bin/codegraph …` — an
-executable that finds its own `dist/`, so it works from a worktree and from a
-symlink on your `PATH`:
-
-```bash
-ln -s "$PWD/bin/codegraph" ~/.local/bin/codegraph
-```
-
-`pnpm --filter @codegraph/cli exec codegraph …` works too.
-
-```bash
-# is this extractor output conformant?
-codegraph validate model.jsonl
-
-# which packages are most coupled?
-codegraph analyze model.jsonl --report coupling --top 20
-
-# a picture, and nothing but the picture, in graph.dot
-codegraph export model.jsonl --format dot > graph.dot
-
-# the package dependencies, as a PlantUML package diagram
-codegraph export model.jsonl --format plantuml --level module > modules.puml
-```
-
-### PlantUML: the element follows the fold level
-
-`--format plantuml` renders **what the node is**, because the node's nature
-differs by level:
-
-| `--level` | Element | Why |
-|---|---|---|
-| `module` | `package` | every node carries `TModule` — it *is* a package |
-| `type` | `class` | every node carries `TType` |
-
-So a module-level diagram contains **no `class` statement at all**: its boxes
-are PlantUML packages, and they are exactly the modules the fold selected —
-walking `TChildOf` to the nearest `TModule` ancestor, never splitting a name or
-an id (invariant 7).
-
-```plantuml
-title codegraph — module-level dependencies, view all
-package "com.acme.order" as java_com_acme_order {
-}
-package "java.util" as java_java_util <<stub>> #line.dashed {
-}
-java_com_acme_order --> java_java_util : 15
-java_com_acme_order ..> java_com_megacorp_ledger : 6
-```
-
-Every channel is a documented fact and nothing else: a solid `-->` means all
-aggregated base edges are `declared`, a dashed `..>` means at least one is an
-inference, the label is how many base edges were folded, `<<stub>>` plus a
-dashed outline is an entity the corpus does not declare, and the title carries
-the level and the view — an analysis picture without its view is not a fact. A
-stereotype that would only repeat the element (`package "x" <<package>>`) is
-dropped, and the legend describes only the encodings the diagram actually drew.
-
-### Domain facts: the dossier a domain-extraction consumer reads
-
-`codegraph domain-facts` writes one JSON artifact
-(`codegraph.domainFacts/1`) with **one dossier per corpus type**, every fact
-the model holds about it pre-joined — so a consumer deciding "is this
-operation a command handler?", "is this field a status?", "what does this
-service reject?" reads one record instead of chasing edges:
-
-```bash
-codegraph domain-facts model.jsonl --framework spring --out domain-facts.json
-```
-
-Each dossier carries the type's **annotations with their exact written
-arguments**, its **fields** joined to their declared types (name, kind —
-an `enum`-kinded field is a state-machine candidate — and constant values),
-and its **operations** with their outgoing **invocations** (target joined to
-its containing type and framework stereotype), **accesses** (read/write per
-field, joined to the owning type), and **throw sites** — the `throws` edges
-the Java extractor emits per written `throw` statement, anchored at the
-statement, which is the evidence a guard clause (`if (x) throw new E(...)`)
-leaves in the model. External targets are flagged, never dropped, and
-provenance rides on every joined fact.
-
-`--framework spring` adds the one inference layer, labelled as such:
-stereotype classification (`service`, `repository`, `controller`…), framework
-entry points (the reason a controller method looks dead to a static call
-graph), and per-consumer injection points with their corpus DI candidates —
-`deriveFrameworkWiring`'s output attached to the dossiers it concerns. Without
-the flag the artifact interprets nothing: the written annotations are still
-there, their meaning is not guessed.
-
-The artifact also summarizes each **module** (its types, its imports with
-external flags) — the bounded-context candidate layer — and is deterministic:
-two runs over one model are byte-identical.
-
-### The code city: from a model file to the browser
-
-One command serves the 3D city for any `model.jsonl`:
-
-```bash
-codegraph city model.jsonl --serve                   # → http://localhost:4177, Ctrl-C stops
-codegraph city model.jsonl --serve --port 0          # any free port, printed on stderr
-codegraph city model.jsonl --serve --host 127.0.0.1  # this machine only
-```
-
-`--serve` binds **all interfaces** (`0.0.0.0`) so the city is reachable from
-the network — narrow it with `--host 127.0.0.1` when the model is sensitive. It
-implies
-`--layout`, and needs the built visualizer — `pnpm -r build` covers it. In the
-city: **modules are districts** (nested when the model declares package
-containment), **types are buildings** whose height and footprint follow
-configurable metrics (`--height loc --footprint members` are the defaults;
-`--height sum:cyclomatic --footprint loc` builds the complexity city from the
-measures the extractor emitted), and **type
-dependencies are roof-to-roof arcs** — green when every base edge is declared,
-red when any is inferred. Hover a building for its raw metrics; click a
-district for its module-level **fan-in/fan-out** arcs (amber in, blue out, each
-toggleable); the `buildings` toggle (or `?landscape=1`) turns the city into a
-pure module landscape. Orbit, zoom and pan are the mouse.
-
-The picture never claims more than the model: unmeasured metrics are drawn at
-the channel minimum and *labeled* unmeasured, stubs are visibly darker, and the
-on-screen legend is generated from the artifact's own bindings.
-
-Two-step alternative — write the artifact, view it anywhere: the artifact is
-plain JSON, so it travels, diffs, and re-renders without the model:
-
-```bash
-codegraph city model.jsonl --layout --out city.json
-CITY_JSON=$PWD/city.json pnpm --filter @codegraph/viz dev   # or drag city.json
-                                                            # onto the viewer
-```
-
-**stdout is the artifact; stderr is everything human.** Warnings, fold
-diagnostics and summaries never touch stdout, so a redirect always yields a
-clean file. There is no ANSI colour, and identical inputs give byte-identical
-output.
-
-**Exit codes** distinguish a broken tool from a broken model — `0` success,
-`1` an internal bug in codegraph, `2` a usage error, `3` findings (the tool
-worked; the input did not). A CI job gating on model quality checks for `3`.
-
-## Status
-
-| # | Milestone | State |
-|---|---|---|
-| M0 | Bootstrap — workspace builds, CI green | ✅ |
-| M1 | Core metamodel — traits, 9 profiles, validation, JSON Schema | ✅ |
-| M2 | Java extractor — fixture corpus → schema- and profile-valid model | ✅ |
-| M3 | Analyzer — import graph, type deps, cycles, coupling, exports | ✅ |
-| M4 | CLI — `validate`, `analyze`, `export`, `profiles` + conformance gate | ✅ |
-| M5 | Metamodel v2 — structured identity, canonical order, memoized validation | ✅ |
-| M6 | JSONL interchange — streaming, surrogate references, per-record schemas | ✅ |
-| M7 | SQLite analysis store — `codegraph import`, DB-backed analyzer | ⬜ |
-| M8 | 2nd language — clj-kondo adapter, cross-language import graph | ⬜ |
-
-The extractor's output over the reference corpus is committed as
-[`fixtures/java/expected/model.jsonl`](fixtures/java/expected/model.jsonl) — 166
-entities (26 stubs) and 173 edges, one record per line in canonical order, so
-that any change to what the extractor claims about known code shows up as a
-reviewable diff.
-
-M6 replaced the single-JSON-document interchange with JSONL: identity travels as
-the natural key `(module, symbol, disambiguator)` and every reference as a
-file-scoped integer, so no rendered id string appears in a model file and
-neither writer nor reader ever holds the whole document. apache/fineract went
-from a 559.5MB `model.json` that Node could not read at all — one JSON document
-is one JavaScript string, and that is past the ~512MB ceiling — to a 127.4MB
-`model.jsonl` on which every command completes in about twelve seconds.
-
-M3 runs that snapshot through the whole pipeline in the test suite, and was
-verified against two real corpora extracted with the M2 extractor: google/gson
-(3 624 entities / 8 834 edges) and apache/commons-lang (15 338 / 24 631). On
-commons-lang the analyzer stages take ~190 ms end to end and the most
-depended-upon types come out as `StringUtils` (Ca 39), `ArrayUtils` (33),
-`ToStringStyle` and `ObjectUtils` (19) — which is the answer a human would give.
-
-M4 puts that behind the CLI and adds the **conformance gate**: `checkConformance`
-lives in the analyzer — so the CLI, the property suite and CI all ask the same
-question — and checks closure, self-reference, provenance, the `candidates`
-rule, profile validity, anchors and conflicting redeclaration. The suite stands
-at **1 007 TypeScript tests** (plus 146 Java), including an end-to-end suite that
-spawns the real binary and asserts on exit code, stdout and stderr separately.
-
-Verified end to end on apache/commons-lang (15 338 entities / 24 631 edges):
-`validate` returns clean in 0.7 s, and every report runs in under a second.
-`analyze --report coupling` puts `org.apache.commons.lang3` first (Ca 13 / Ce 27)
-ahead of `lang3.builder`, and flags `lang3.time`, `lang3.concurrent` and
-`lang3.event` as maximally unstable leaf consumers — which is the answer a human
-who knows the library would give. `--report cycles` finds the genuine 13-package
-mutually-recursive core (`lang3` ↔ `builder` ↔ `math` ↔ `exception` …) and exits
-`3`, because a dependency cycle is a finding about the architecture. Each cycle
-also carries its Structure101-style tangle score and minimum feedback set — the
-`[feedback]`-marked edges are the cheapest cut that would leave the graph
-acyclic, and the 3D city draws them in red behind the "Tangles" toggle.
-
-Every number the analyzer reports carries the **fold level** and the **view** it
-was computed under. `internalOnly` drops stubs, `declaredOnly` drops inferences;
-neither is the "true" answer, and a coupling number without its view is not a
-fact. Renderings keep the distinction visible: in DOT a solid edge is a declared
-fact and a dashed one contains an inference, and stub nodes are dashed and grey.
+| `extractors/java` | Spoon-based extractor; emits `model.jsonl` |
+| `schemas/` | the generated JSON Schema every extractor must satisfy |
+| `packages/core` | traits, edges, language profiles, validation |
+| `packages/analyzer` | graph, views, folding, cycles, coupling, exports, SQLite store |
+| `packages/scm` | git history miner |
+| `packages/city`, `packages/viz` | city model, Three.js renderer |
+| `packages/navigator`, `packages/navigator-ui` | navigator model, React browser |
+| `packages/insights`, `packages/llm` | the explanation walk, the provider clients |
+| `packages/cli` | the `codegraph` command |
 
 ## Documentation
 
-- [`PLAN.md`](PLAN.md) — implementation plan, phases, milestones, locked decisions
-- [`METAMODEL.md`](METAMODEL.md) — conceptual reference: every concept, its attributes and relations
-- [`CLAUDE.md`](CLAUDE.md) — architecture boundaries and metamodel invariants
-- [`docs/analyzer.md`](docs/analyzer.md) — the analyzer's design: the pipeline,
-  its data structures, algorithms and costs, entry points, and the rules behind them
-- [`docs/model-encoding.md`](docs/model-encoding.md) — the two physical
-  encodings: the JSONL interchange (the contract) and the SQLite analysis store
-  (the workbench), and why the split
-- [`docs/sql-cookbook.md`](docs/sql-cookbook.md) — querying `model.db`
-  yourself: fan-in, facts-only views, reachability, cycles, and the four rules
-  a query must respect
-- [`docs/city-model.md`](docs/city-model.md) — the city model's design: data
-  structures, metric sources, algorithms, entry points, and what layout will consume
-- [`docs/city-render.md`](docs/city-render.md) — the renderer's design: the
-  artifact boundary, the pure scene model, semantic channels, the landscape
-  interactions, and `--serve`
+- [`docs/cli.md`](docs/cli.md) — every command and option
+- [`METAMODEL.md`](METAMODEL.md) — every concept, attribute and relation in the model
+- [`docs/analyzer.md`](docs/analyzer.md) — the analysis pipeline, its algorithms and costs
+- [`docs/model-encoding.md`](docs/model-encoding.md) — the JSONL interchange and the SQLite store
+- [`docs/sql-cookbook.md`](docs/sql-cookbook.md) — querying `model.db` yourself
+- [`docs/city-model.md`](docs/city-model.md), [`docs/city-render.md`](docs/city-render.md) — how the city is built and drawn
+- [`docs/navigator.md`](docs/navigator.md) — the navigator's design
+- [`docs/insights.md`](docs/insights.md) — the explanation walk's design
+- [`PLAN.md`](PLAN.md) — milestones, decisions and their rationale
+- [`CLAUDE.md`](CLAUDE.md) — architecture boundaries and the metamodel invariants
+
+## Status
+
+Codegraph is pre-1.0 and is developed against real corpora
+(google/gson, apache/commons-lang, apache/fineract, spring-petclinic). The
+interchange format is versioned and the Java extractor's output over the
+reference corpus is committed as a fixture, so any change in what it claims
+about known code shows up as a diff.
+
+| Milestone | State |
+|---|---|
+| Core metamodel, language profiles, JSON Schema | done |
+| Java extractor (Spoon, no classpath) | done |
+| Analyzer: dependencies, cycles, coupling, exports | done |
+| CLI with conformance gate and property suite | done |
+| JSONL interchange, SQLite analysis store | done |
+| Git history mining, temporal store, city replay | done |
+| 3D code city and the model navigator | done |
+| Measures, literal values, Spring framework semantics | done |
+| LLM explanations (`explain`) | done |
+| Second language extractor (Clojure) | next |
+| Published releases (npm, extractor jar) | planned |
+| Project website and documentation site | planned, see [`WEBSITE.md`](WEBSITE.md) |
+
+## Contributing
+
+Bug fixes start with a failing test. The property suite, which checks graph
+closure, provenance, determinism and profile validity over every extractor
+output, is the acceptance gate for any new extractor. `pnpm run ci` runs what
+the pipeline runs. Commits follow Conventional Commits with a package scope
+(`feat(analyzer): …`). The architecture boundaries in
+[`CLAUDE.md`](CLAUDE.md) are not negotiable; the open questions at the end of
+each design doc are.
+
+## Prior art and credits
+
+- **Moose / FamixNG** (Pharo) — the trait-based metamodel is FamixNG's idea,
+  reimplemented as data in TypeScript.
+- **Spoon** (INRIA) — the Java source model that makes classpath-free
+  extraction possible.
+- **CodeCity** (Wettel & Lanza) — the city metaphor; codegraph adds
+  provenance-aware arcs and time.
+- **Structure101** — the tangle and feedback-set reports follow its
+  "offending dependencies" idea.
+- **Gource** and Adam Tornhill's *Your Code as a Crime Scene* — the history
+  replay and the hotspot, ownership and co-change analyses.
+- **Specy** — the domain vocabulary the explanations are written in.
+
+## License
+
+Not yet chosen. Until a `LICENSE` file lands in this repository, the code is
+all rights reserved; open an issue if you need to use it before then.
