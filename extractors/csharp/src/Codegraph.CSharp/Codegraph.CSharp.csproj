@@ -31,6 +31,18 @@
   <ItemGroup>
     <EmbeddedResource Include="$(CodegraphRefPackDir)/*.dll" LogicalName="ref/%(Filename)%(Extension)" />
   </ItemGroup>
+  <!--
+    The ASP.NET Core shared framework's reference pack too, when the SDK has it
+    (it ships beside the BCL pack): ILogger<T>, IServiceCollection,
+    WebApplication… were the most-referenced unresolved names on dotnet/eShop
+    and OrchardCore. Optional — a BCL-only SDK still builds a working extractor.
+  -->
+  <PropertyGroup>
+    <CodegraphAspNetRefPackDir>$(NetCoreTargetingPackRoot)/Microsoft.AspNetCore.App.Ref/$(BundledNETCoreAppPackageVersion)/ref/$(TargetFramework)</CodegraphAspNetRefPackDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(CodegraphAspNetRefPackDir)/*.dll" LogicalName="refasp/%(Filename)%(Extension)" />
+  </ItemGroup>
   <Target Name="VerifyReferencePack" BeforeTargets="CoreCompile">
     <ItemGroup>
       <_CodegraphRefDll Include="@(EmbeddedResource)" Condition="$([System.String]::Copy('%(EmbeddedResource.LogicalName)').StartsWith('ref/'))" />

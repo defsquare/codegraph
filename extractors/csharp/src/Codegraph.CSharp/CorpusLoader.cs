@@ -4,6 +4,9 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace Codegraph.CSharp;
 
+/// <summary>Which implicit global usings the compilation gets: none, Microsoft.NET.Sdk's, or those plus the Web SDK's.</summary>
+public enum ImplicitUsings { None, Sdk, Web }
+
 /// <summary>Pass 0's result: one compilation over every `.cs` file under the roots, plus how the roots were named.</summary>
 public sealed record Corpus(
     CSharpCompilation Compilation,
@@ -22,7 +25,44 @@ public static class CorpusLoader
 {
     private static readonly string[] SkippedDirectories = ["bin", "obj"];
 
-    public static Corpus Load(IReadOnlyList<string> sourcesAsTyped, string baseDirectory, Progress progress)
+    /// <summary>The path of the synthetic implicit-usings tree; never a corpus file, never anchored, never walked for edges.</summary>
+    public const string ImplicitUsingsPath = "<implicit-usings>";
+
+    /// <summary>
+    /// What `&lt;ImplicitUsings&gt;enable&lt;/ImplicitUsings&gt;` makes the SDK
+    /// generate into obj/ (skipped, being build output) for every modern
+    /// project. Without them `Task`, `List&lt;T&gt;` and `CancellationToken` in a
+    /// file with no `using` of its own bind to nothing: measured on OrchardCore,
+    /// they were the four most-referenced "unresolved" names. An import edge is
+    /// never written for them — no file wrote them.
+    ///
+    /// The DEFAULT is Microsoft.NET.Sdk's seven. The Web SDK's additions are
+    /// opt-in (`--implicit-usings web`): one compilation cannot apply them per
+    /// project, and on a corpus that is not all Web-SDK they make names
+    /// ambiguous — OrchardCore's own `StartupBase` collided 345 times with
+    /// `Microsoft.AspNetCore.Hosting.StartupBase` before this was measured.
+    /// </summary>
+    public static readonly string[] SdkImplicitUsings =
+    [
+        "System", "System.Collections.Generic", "System.IO", "System.Linq", "System.Net.Http", "System.Threading", "System.Threading.Tasks",
+    ];
+
+    public static readonly string[] WebSdkImplicitUsings =
+    [
+        "System.Net.Http.Json", "Microsoft.AspNetCore.Builder", "Microsoft.AspNetCore.Hosting", "Microsoft.AspNetCore.Http", "Microsoft.AspNetCore.Routing",
+        "Microsoft.Extensions.Configuration", "Microsoft.Extensions.DependencyInjection", "Microsoft.Extensions.Hosting", "Microsoft.Extensions.Logging",
+    ];
+
+    public static IReadOnlyList<string> ImplicitUsingsFor(ImplicitUsings mode) =>
+        mode switch
+        {
+            ImplicitUsings.None => [],
+            ImplicitUsings.Sdk => SdkImplicitUsings,
+            ImplicitUsings.Web => [.. SdkImplicitUsings, .. WebSdkImplicitUsings],
+            _ => throw new ArgumentOutOfRangeException(nameof(mode)),
+        };
+
+    public static Corpus Load(IReadOnlyList<string> sourcesAsTyped, string baseDirectory, Progress progress, ImplicitUsings implicitUsings = ImplicitUsings.Sdk)
     {
         if (sourcesAsTyped.Count == 0) throw new ArgumentException("at least one --src is required", nameof(sourcesAsTyped));
 
@@ -52,14 +92,20 @@ public static class CorpusLoader
         var parseOptions = new CSharpParseOptions(LanguageVersion.Latest, DocumentationMode.Parse);
         var trees = progress.Phase("parse", () =>
         {
-            var parsed = new List<SyntaxTree>(files.Count);
+            var parsed = new List<SyntaxTree>(files.Count + 1);
             foreach (var (relative, full) in files)
             {
                 var text = File.ReadAllText(full);
                 parsed.Add(CSharpSyntaxTree.ParseText(text, parseOptions, path: relative));
             }
+            var usings = ImplicitUsingsFor(implicitUsings);
+            if (usings.Count > 0)
+            {
+                var source = string.Concat(usings.Select(ns => $"global using {ns};\n"));
+                parsed.Add(CSharpSyntaxTree.ParseText(source, parseOptions, path: ImplicitUsingsPath));
+            }
             return parsed;
-        }, list => $"{list.Count:N0} files");
+        }, list => $"{list.Count(t => t.FilePath != ImplicitUsingsPath):N0} files");
 
         var compilation = progress.Phase("bind", () =>
             CSharpCompilation.Create(

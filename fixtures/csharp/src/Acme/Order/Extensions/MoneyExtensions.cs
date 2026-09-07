@@ -12,4 +12,12 @@ public static class MoneyExtensions
     {
         return priceable.Price().Cents == 0;
     }
+
+    /// <summary>A C# 14 extension block: no type of its own; its members belong to this class, attached to Money.</summary>
+    extension(Money money)
+    {
+        public bool IsZero => money.Cents == 0;
+
+        public Money Halved() => money.Times(1) with { Cents = money.Cents / 2 };
+    }
 }

@@ -22,20 +22,26 @@ public static class ReferenceAssemblies
     private static ImmutableArray<MetadataReference> Load()
     {
         var assembly = typeof(ReferenceAssemblies).Assembly;
+        // `ref/` is the BCL pack (required); `refasp/` the ASP.NET Core shared
+        // framework's (present when the building SDK had it). An assembly in
+        // both (the Microsoft.Extensions.* facades) is taken from the BCL pack.
         var names = assembly.GetManifestResourceNames()
-            .Where(n => n.StartsWith("ref/", StringComparison.Ordinal))
+            .Where(n => n.StartsWith("ref/", StringComparison.Ordinal) || n.StartsWith("refasp/", StringComparison.Ordinal))
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
-        if (names.Count == 0)
+        if (!names.Any(n => n.StartsWith("ref/", StringComparison.Ordinal)))
             throw new InvalidOperationException("no embedded BCL reference assemblies — the build did not embed the targeting pack");
         var references = ImmutableArray.CreateBuilder<MetadataReference>(names.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in names)
         {
+            var file = name[(name.IndexOf('/') + 1)..];
+            if (!seen.Add(file)) continue;
             using var stream = assembly.GetManifestResourceStream(name)
                 ?? throw new InvalidOperationException($"embedded resource vanished: {name}");
             using var buffer = new MemoryStream();
             stream.CopyTo(buffer);
-            references.Add(MetadataReference.CreateFromImage(buffer.ToArray(), filePath: name["ref/".Length..]));
+            references.Add(MetadataReference.CreateFromImage(buffer.ToArray(), filePath: file));
         }
         return references.ToImmutable();
     }

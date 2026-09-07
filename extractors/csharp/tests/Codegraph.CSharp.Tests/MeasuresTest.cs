@@ -32,7 +32,7 @@ public class MeasuresTest
               }
             }
             """)).Model;
-        Assert.Equal(1 + 3 + 1 + 1 + 1 + 1 + 3 + 2 + 2 + 1 + 1, Measure(model, "csharp:N/A.Run(System.Int32,System.Nullable`1,System.Object)", "cyclomatic"));
+        Assert.Equal(1 + 3 + 1 + 1 + 1 + 1 + 3 + 2 + 2 + 1 + 1, Measure(model, "csharp:N/A.Run(System.Int32,System.Nullable`1<System.Int32>,System.Object)", "cyclomatic"));
     }
 
     [Fact]
@@ -84,9 +84,9 @@ public class MeasuresTest
     {
         var model = Harness.FixtureModel;
         // Reporting.Max: foreach + `if (best == null || …)` → 1 + 1 + 1 + 1.
-        Assert.Equal(4, Measure(model, "csharp:Acme.Order/Reporting.Max`1(System.Collections.Generic.List`1)", "cyclomatic"));
+        Assert.Equal(4, Measure(model, "csharp:Acme.Order/Reporting.Max`1(System.Collections.Generic.List`1<!!0>)", "cyclomatic"));
         Assert.Equal(2, Measure(model, "csharp:Acme.Order/Reporting.Join(System.String[])", "cyclomatic"));
-        Assert.Equal(2, Measure(model, "csharp:Acme.Order/Reporting.First`1(System.Collections.Generic.List`1)", "cyclomatic"));
+        Assert.Equal(2, Measure(model, "csharp:Acme.Order/Reporting.First`1(System.Collections.Generic.List`1<!!0>)", "cyclomatic"));
         Assert.Equal(1, Measure(model, "csharp:Acme.Order/Reporting.Today()", "cyclomatic"));
         // Describe: a switch expression with two non-discard arms.
         Assert.Equal(3, Measure(model, "csharp:Acme.Order/Reporting.Describe(Acme.Order.Channel)", "cyclomatic"));

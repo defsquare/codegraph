@@ -28,6 +28,7 @@ public sealed class EdgeExtractor(CorpusWhitelist whitelist, Declarations declar
             edges = [];
             foreach (var tree in corpus.Trees)
             {
+                if (tree.FilePath == CorpusLoader.ImplicitUsingsPath) continue; // nobody wrote it: no edge
                 model = corpus.Compilation.GetSemanticModel(tree);
                 Imports(tree);
                 foreach (var node in tree.GetRoot().DescendantNodes()) Visit(node);

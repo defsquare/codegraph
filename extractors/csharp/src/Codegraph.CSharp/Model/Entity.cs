@@ -19,7 +19,8 @@ public sealed record SourceAnchor(string File, int StartLine, int EndLine)
 /// </summary>
 public sealed class Entity
 {
-    public required NaturalKey Key { get; init; }
+    /// <summary>Settable once: a duplicate declaration is re-keyed by its file at declaration time (Declarations).</summary>
+    public required NaturalKey Key { get; set; }
     public required string Kind { get; init; }
     public SortedSet<string> Traits { get; } = new(Model.Traits.Order);
 

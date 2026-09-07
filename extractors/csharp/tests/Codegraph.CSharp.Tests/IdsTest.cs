@@ -78,7 +78,7 @@ public class IdsTest
             }
             """)).Model;
         var pick = Harness.EntityOf(model, "csharp:N/Pick`2");
-        Assert.Equal("Pick`2(System.Collections.Generic.List`1,!1[,],System.Nullable`1,System.ValueTuple`2,System.Object,!0*)", pick.Signature);
+        Assert.Equal("Pick`2(System.Collections.Generic.List`1<!0>,!1[,],System.Nullable`1<System.Int32>,System.ValueTuple`2<System.Int32,System.String>,System.Object,!0*)", pick.Signature);
         // A type parameter is not an entity: the return type leaves declaredType absent.
         Assert.Null(pick.DeclaredType);
         Assert.True(pick.Has(Traits.TTypedEntity));

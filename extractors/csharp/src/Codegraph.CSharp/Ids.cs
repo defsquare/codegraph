@@ -31,6 +31,8 @@ public static class Ids
         // A tuple without element names IS its ValueTuple; with names, the underlying one is.
         var definition = (type.TupleUnderlyingType ?? type).OriginalDefinition;
         if (definition.IsAnonymousType) return null;
+        // A C# 14 extension block's members belong to the enclosing static class.
+        if (definition.IsExtension) return definition.ContainingType is { } host ? Type(host) : null;
         if (definition.TypeKind == TypeKind.Error)
         {
             // An error type with no name (`base.X` on an unresolved base) names
@@ -71,10 +73,14 @@ public static class Ids
 }
 
 /// <summary>
-/// Signatures for ids: erased, fully-qualified metadata names, so overloads that
-/// differ only in a namespace or an arity get distinct keys. Type parameters
-/// are ECMA-335 ordinals (`!0` type-level, `!!0` method-level): a parameter's
-/// NAME is not part of a C# signature.
+/// Signatures for ids: fully-qualified metadata names WITH type arguments —
+/// `System.Func`2<!!0,System.String>` — so overloads that differ only in a
+/// namespace, an arity or a type argument get distinct keys. C# can overload
+/// on type arguments alone (`Humanize(Func<T,string>)` beside
+/// `Humanize(Func<T,object>)`, found on Humanizer), which Java's erasure could
+/// not; erasing here would merge two written methods into one entity. What IS
+/// erased: nullable annotations, `ref`/`out`/`in`, parameter names. Type
+/// parameters are ECMA-335 ordinals (`!0` type-level, `!!0` method-level).
 /// </summary>
 public static class Signatures
 {
@@ -90,6 +96,9 @@ public static class Signatures
         // A generic method's arity is part of its signature, as a type's is of its symbol.
         if (method.Arity > 0) sb.Append('`').Append(method.Arity);
         AppendParameters(sb, method.Parameters);
+        // Conversion operators overload on their RETURN type alone — 37 of them
+        // on one OrchardCore type — so it is part of their signature and of no other's.
+        if (method.MethodKind == MethodKind.Conversion) sb.Append(':').Append(Erased(method.ReturnType));
         return sb.ToString();
     }
 
@@ -138,11 +147,23 @@ public static class Signatures
                 return "delegate*";
             case INamedTypeSymbol named:
             {
-                var definition = (named.TupleUnderlyingType ?? named).OriginalDefinition;
-                if (definition.TypeKind == TypeKind.Error || definition.IsAnonymousType) return Ids.TypePath(definition);
-                var ns = definition.ContainingNamespace;
-                var path = Ids.TypePath(definition);
-                return ns.IsGlobalNamespace ? path : ns.ToDisplayString() + "." + path;
+                var actual = named.TupleUnderlyingType ?? named;
+                var definition = actual.OriginalDefinition;
+                string head;
+                if (definition.TypeKind == TypeKind.Error || definition.IsAnonymousType) head = Ids.TypePath(definition);
+                else
+                {
+                    var ns = definition.ContainingNamespace;
+                    var path = Ids.TypePath(definition);
+                    head = ns.IsGlobalNamespace ? path : ns.ToDisplayString() + "." + path;
+                }
+                // Type arguments of the whole nesting chain, outermost first,
+                // omitted when the type is its own definition (an open generic).
+                var arguments = new List<string>();
+                for (INamedTypeSymbol? t = actual; t is not null; t = t.ContainingType)
+                    if (!t.IsUnboundGenericType) arguments.InsertRange(0, t.TypeArguments.Select(Erased));
+                var isOpen = SymbolEqualityComparer.Default.Equals(actual, definition);
+                return arguments.Count == 0 || isOpen ? head : head + "<" + string.Join(',', arguments) + ">";
             }
             default:
                 return type.ToDisplayString();

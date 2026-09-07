@@ -39,12 +39,16 @@ public static class Program
         try
         {
             var progress = new Progress(options.Progress, stderr);
-            var result = Extraction.Run(new ExtractOptions(options.Sources, cwd, options.Repository), progress);
+            var result = Extraction.Run(new ExtractOptions(options.Sources, cwd, options.Repository, options.ImplicitUsings), progress);
             progress.Phase("write", () =>
             {
                 JsonlWriter.WriteFile(result.Model, options.Out);
                 return JsonlWriter.PlannedRecords(result.Model);
             }, n => $"{n:N0} records");
+            // Every dropped duplicate is named: a model of a multi-project corpus
+            // can legitimately be missing a member its sources contain.
+            foreach (var duplicate in result.Stats.DuplicateDeclarations)
+                stderr.WriteLine($"duplicate declaration re-keyed by file: {duplicate}");
             stderr.Write(result.Stats.Summary(result.Model.Entities.Count, result.Stubs, result.Model.Edges.Count));
             stderr.WriteLine($"wrote {options.Out}");
             return ExitOk;
@@ -85,6 +89,10 @@ public static class Program
           --repo-commit <sha>   the sha this tree is at — a permalink, not a branch
           --repo-root <path>    repo-relative path of the analyzed root ("" at the repo root)
           --repo-provider <p>   github or gitlab, only when the hostname does not say
+          --implicit-usings <m> the global usings obj/ would carry for a project with
+                                ImplicitUsings enabled: sdk (default: System, System.Linq,
+                                System.Threading.Tasks…), web (adds Microsoft.AspNetCore.* and
+                                Microsoft.Extensions.*, for an all-Web-SDK corpus), or none
           --version             print the extractor version
           --help                this text
 
@@ -101,7 +109,8 @@ public sealed record Options(
     ProgressMode Progress,
     Repository? Repository,
     bool Help,
-    bool Version)
+    bool Version,
+    ImplicitUsings ImplicitUsings = ImplicitUsings.Sdk)
 {
     public static Options Parse(string[] args, string cwd)
     {
@@ -111,6 +120,7 @@ public sealed record Options(
         string? remote = null, commit = null, root = null, provider = null;
         var help = false;
         var version = false;
+        var implicitUsings = ImplicitUsings.Sdk;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -140,6 +150,15 @@ public sealed record Options(
                 case "--repo-provider": provider = Value(); break;
                 case "--help" or "-h": help = true; break;
                 case "--version": version = true; break;
+                case "--implicit-usings":
+                    implicitUsings = Value() switch
+                    {
+                        "none" => ImplicitUsings.None,
+                        "sdk" => ImplicitUsings.Sdk,
+                        "web" => ImplicitUsings.Web,
+                        var other => throw new UsageException($"--implicit-usings must be none, sdk or web, got: {other}"),
+                    };
+                    break;
                 default: throw new UsageException($"unknown option: {arg}");
             }
         }
@@ -154,6 +173,6 @@ public sealed record Options(
 
         if (sources.Count == 0) sources.Add(".");
         outPath ??= Path.GetFileName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(cwd))) + "-codegraph.jsonl";
-        return new Options(sources, outPath, progress, repository, help, version);
+        return new Options(sources, outPath, progress, repository, help, version, implicitUsings);
     }
 }

@@ -6,7 +6,8 @@ namespace Codegraph.CSharp;
 public sealed record ExtractOptions(
     IReadOnlyList<string> Sources,
     string BaseDirectory,
-    Repository? Repository = null);
+    Repository? Repository = null,
+    ImplicitUsings ImplicitUsings = ImplicitUsings.Sdk);
 
 public sealed record ExtractionResult(ExtractedModel Model, ResolutionStats Stats, int Stubs);
 
@@ -32,11 +33,12 @@ public static class Extraction
     public static ExtractionResult Run(ExtractOptions options, Progress progress)
     {
         var stats = new ResolutionStats();
-        var corpus = CorpusLoader.Load(options.Sources, options.BaseDirectory, progress);
+        var corpus = CorpusLoader.Load(options.Sources, options.BaseDirectory, progress, options.ImplicitUsings);
         var whitelist = CorpusWhitelist.Build(corpus, progress);
         var registry = new TypeRegistry();
         var declarations = new EntityExtractor(whitelist, registry).Extract(corpus, progress);
         var entities = declarations.Entities;
+        stats.DuplicateDeclarations = declarations.Duplicates;
         var edges = new EdgeExtractor(whitelist, declarations, registry, stats).Extract(corpus, progress);
         var stubs = StubSynthesizer.Synthesize(entities, edges, registry, progress);
 

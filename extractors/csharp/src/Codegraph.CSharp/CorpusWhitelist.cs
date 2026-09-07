@@ -64,6 +64,7 @@ public sealed class CorpusWhitelist
                 {
                     if (node is not (BaseTypeDeclarationSyntax or DelegateDeclarationSyntax)) continue;
                     if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol symbol) continue;
+                    if (symbol.IsExtension) continue; // a C# 14 extension block is no type the source names
                     whitelist.Add(symbol, node, model);
                 }
             }

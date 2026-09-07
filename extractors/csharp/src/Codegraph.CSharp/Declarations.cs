@@ -1,6 +1,5 @@
 using Codegraph.CSharp.Model;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Codegraph.CSharp;
 
@@ -9,6 +8,17 @@ namespace Codegraph.CSharp;
 /// symbol → key, so an edge target names the entity actually emitted, and
 /// declaration node → key, so an edge's source is the nearest ancestor the
 /// corpus declares (the Java extractor's `ownerOf`, mirrored).
+///
+/// A corpus is not a compilation unit. Two projects that never see each other
+/// may both declare `static class Extensions { AddApplicationServices(…) }`
+/// in the global namespace, and ten services each have a top-level
+/// `Program.cs` (found on dotnet/eShop); in ONE compilation they are one type
+/// with several same-keyed members. Every one is KEPT: the first declaration
+/// in ordinal file order owns the plain key, each later one is re-keyed by
+/// the file it is written in (`…#in:Catalog.API/Program.cs`) — a source fact,
+/// like a lambda's position — and the re-keying is named on stderr. Dropping
+/// the later ones (the JDT rule the Java profile documents) would erase the
+/// DI wiring of nine services out of ten.
 /// </summary>
 public sealed class Declarations
 {
@@ -17,13 +27,30 @@ public sealed class Declarations
     public Dictionary<SyntaxNode, NaturalKey> KeyOfNode { get; } = [];
     /// <summary>Keys of the declared TYPES — what a member's or lambda's symbol path is cut back to.</summary>
     public HashSet<NaturalKey> TypeKeys { get; } = [];
+    /// <summary>Every same-keyed declaration re-keyed, as `key -> key#in:file`, in the order met.</summary>
+    public List<string> Duplicates { get; } = [];
 
-    public void Declare(Entity entity, ISymbol? symbol, params SyntaxNode?[] nodes)
+    private readonly HashSet<NaturalKey> keys = [];
+
+    /// <summary>Adds the entity, re-keying it by file when its key is already declared; returns the key it carries.</summary>
+    public NaturalKey Declare(Entity entity, ISymbol? symbol, params SyntaxNode?[] nodes)
     {
+        if (!keys.Add(entity.Key))
+        {
+            var where = nodes.FirstOrDefault(n => n is not null);
+            var file = where?.SyntaxTree.FilePath ?? entity.Anchor?.File ?? "?";
+            var original = entity.Key;
+            var tail = "in:" + file;
+            entity.Key = new NaturalKey(original.Module, original.Symbol, original.Disambiguator is null ? tail : original.Disambiguator + "#" + tail);
+            if (!keys.Add(entity.Key))
+                throw new InvalidOperationException($"two declarations of {original} in one file: {file}");
+            Duplicates.Add($"{original.Render()} -> {entity.Key.Render()}");
+        }
         Entities.Add(entity);
         if (entity.Has(Traits.TType)) TypeKeys.Add(entity.Key);
         if (symbol is not null) KeyOfSymbol.TryAdd(symbol, entity.Key);
         foreach (var node in nodes) if (node is not null) KeyOfNode.TryAdd(node, entity.Key);
+        return entity.Key;
     }
 
     /// <summary>The key of the nearest declared ancestor (or self) of a syntax node, if any.</summary>

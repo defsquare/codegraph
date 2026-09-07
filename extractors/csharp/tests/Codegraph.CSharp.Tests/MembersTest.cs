@@ -32,8 +32,8 @@ public class MembersTest
         Assert.Equal("event", Harness.EntityOf(model, "csharp:N/A.E").Kind);
         Assert.Equal("constructor", Harness.EntityOf(model, "csharp:N/A.<init>()").Kind);
         Assert.Equal("method", Harness.EntityOf(model, "csharp:N/A.op_Addition(N.A,N.A)").Kind);
-        Assert.Equal("method", Harness.EntityOf(model, "csharp:N/A.op_Implicit(N.A)").Kind);
-        Assert.Equal("M`1(!!0,System.Collections.Generic.List`1)", Harness.EntityOf(model, "csharp:N/A.M`1(!!0,System.Collections.Generic.List`1)").Signature);
+        Assert.Equal("method", Harness.EntityOf(model, "csharp:N/A.op_Implicit(N.A):System.Int32").Kind);
+        Assert.Equal("M`1(!!0,System.Collections.Generic.List`1<!!0>)", Harness.EntityOf(model, "csharp:N/A.M`1(!!0,System.Collections.Generic.List`1<!!0>)").Signature);
         Assert.Equal("method", Harness.EntityOf(model, "csharp:N/A.Finalize()").Kind);
     }
 

@@ -74,6 +74,7 @@ codegraph-csharp
 | `--progress <mode>` | `auto` (default: one line per phase when stderr is a terminal, nothing when piped), `plain` or `none` |
 | `--no-progress` | same as `--progress none` |
 | `--repo-remote`, `--repo-commit`, `--repo-root`, `--repo-provider` | repository facts copied verbatim into the header (`codegraph snapshots` passes them) |
+| `--implicit-usings <mode>` | `sdk` (default), `web`, or `none`: the global usings `obj/` would carry (see below) |
 | `--version`, `--help` | |
 
 Exit codes: `0` success, `1` failure, `2` bad usage, `3` an extraction pass
@@ -157,6 +158,26 @@ a source fact where an ordinal would depend on walk order.
 in a file declaring no corpus module, a self-edge (`using Acme;` inside
 `namespace Acme`), and an attribute on the assembly (nothing declared to hang
 it on).
+
+**What real corpora taught it (the M12c audit — Humanizer, dotnet/eShop,
+OrchardCore).** Signatures carry type arguments, because C# overloads on them
+(`Humanize(Func<T,string>)` beside `Humanize(Func<T,object>)`); conversion
+operators carry their return type, the only thing 37 `explicit operator`s on
+one type differ in; two parameters may share a name (`(_, _) => …`), so the
+second carries its ordinal. A corpus is not a compilation unit: same-keyed
+members declared in two projects — every service's `static class Extensions`,
+every service's top-level `Program.cs` — are all kept, the first in file
+order under the plain key and each later one re-keyed by its file
+(`…#in:Catalog.API/Program.cs`), each re-keying named on stderr. Members of a
+C# 14 `extension(T t) { … }` block are members of the enclosing static class,
+attached to the receiver; the block itself is no entity. And Microsoft.NET.Sdk's
+seven implicit global usings are added by default (`--implicit-usings sdk`):
+without them `Task` and `List<T>` in any file relying on `<ImplicitUsings>`
+bound to nothing, and were the most-referenced "unresolved" names on
+OrchardCore. The Web SDK's additions are opt-in (`web`): on a corpus that is
+not all Web-SDK projects they make names ambiguous — OrchardCore's own
+`StartupBase` collided 345 times with the ASP.NET Core one. The ASP.NET Core
+shared framework's reference pack is embedded beside the BCL's.
 
 ## Fixture and snapshot
 
