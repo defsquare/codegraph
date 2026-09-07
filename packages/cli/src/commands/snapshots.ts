@@ -17,13 +17,16 @@ import { errLine, outLines, type IoSink } from "../io.js";
 import { repositoryFacts } from "../repository.js";
 
 /**
- * `codegraph snapshots [repo] --jar FILE (--every N | --tags) [--store FILE]`.
+ * `codegraph snapshots [repo] --extractor FILE (--every N | --tags) [--store FILE]`.
  *
  * THE M9b ORCHESTRATION (PLAN §11.2): for each sampled revision, check the
  * commit out into a throwaway `git worktree` — the user's checkout is never
- * mutated — run the Java extractor there, and append the result to the
- * temporal store exactly as `import --at <sha> --time <t>` would. Spoon runs
- * noClasspath, so historic commits that no longer compile still extract.
+ * mutated — run the extractor there, and append the result to the temporal
+ * store exactly as `import --at <sha> --time <t>` would. Both extractors run
+ * without a build (Spoon noClasspath, Roslyn without MSBuild), so historic
+ * commits that no longer compile still extract. The extractor is any
+ * executable honouring the command-line contract (schemas/README.md §8); a
+ * `.jar` is run through `java -jar`, anything else directly.
  *
  * RESUMABLE BY DESIGN. Every frame costs a full extraction (minutes on a real
  * corpus), so a revision the store already holds is skipped, never re-imported:
@@ -43,9 +46,9 @@ import { repositoryFacts } from "../repository.js";
 export function snapshotsCommand(
   options: SnapshotsOptions,
   io: IoSink,
-  extract: Extract = javaExtract(options.jar),
+  extract: Extract = extractorFor(options.extractor),
 ): ExitCode {
-  requireReadableJar(options.jar);
+  requireReadableExtractor(options.extractor);
   const repoName = basename(resolve(options.repo));
   const store = options.store ?? `${repoName}-model.db`;
 
@@ -342,8 +345,16 @@ function originRemote(git: GitRunner): string | undefined {
   }
 }
 
-/** The real extractor: `java -jar <jar> --src <dir> --out <model>`. */
-function javaExtract(jar: string): Extract {
+/**
+ * The real extractor, under the command-line contract every extractor honours:
+ * `<extractor> --src <dir> --out <model> [--repo-* …]`. A `.jar` needs a JVM
+ * (`java -jar`); anything else — the self-contained codegraph-csharp binary —
+ * runs as it is. The CLI never learns a language here: it runs a process.
+ */
+export function extractorFor(extractor: string): Extract {
+  const isJar = extractor.toLowerCase().endsWith(".jar");
+  const command = isJar ? "java" : resolve(extractor);
+  const lead = isJar ? ["-jar", extractor] : [];
   return (srcDir, modelPath, repository) => {
     const repoFlags =
       repository === undefined
@@ -354,20 +365,28 @@ function javaExtract(jar: string): Extract {
             "--repo-root", repository.root,
           ];
     try {
-      execFileSync("java", ["-jar", jar, "--src", srcDir, "--out", modelPath, ...repoFlags], {
+      execFileSync(command, [...lead, "--src", srcDir, "--out", modelPath, ...repoFlags], {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
         maxBuffer: 1 << 28,
       });
     } catch (error) {
-      if ((error as { code?: string }).code === "ENOENT") {
+      const code = (error as { code?: string }).code;
+      if (code === "ENOENT" && isJar) {
         throw new UsageError(
           "java is not installed or not on PATH",
-          "codegraph snapshots runs the extractor with `java -jar`; install a JDK and retry.",
+          "a .jar extractor runs with `java -jar`; install a JDK and retry.",
           { cause: error },
         );
       }
-      // The jar spoke: keep its last words — they name the actual problem.
+      if (code === "ENOENT" || code === "EACCES") {
+        throw new UsageError(
+          `cannot run the extractor at ${extractor} (${code})`,
+          "It must be an executable file — on macOS/Linux, `chmod +x` a downloaded binary first.",
+          { cause: error },
+        );
+      }
+      // The extractor spoke: keep its last words — they name the actual problem.
       const stderr = (error as { stderr?: string }).stderr;
       const said = typeof stderr === "string" ? lastLines(stderr, 3) : "";
       throw new Error(
@@ -378,13 +397,14 @@ function javaExtract(jar: string): Extract {
   };
 }
 
-function requireReadableJar(jar: string): void {
+function requireReadableExtractor(extractor: string): void {
   try {
-    accessSync(jar, constants.R_OK);
+    accessSync(extractor, constants.R_OK);
   } catch (error) {
     throw new UsageError(
-      `cannot read the extractor jar at ${jar}`,
-      "Build it first: cd extractors/java && ./mvnw package -> target/codegraph-java.jar",
+      `cannot read the extractor at ${extractor}`,
+      "Build one first: cd extractors/java && ./mvnw package -> target/codegraph-java.jar, " +
+        "or ./build.sh --csharp -> extractors/csharp/dist/<rid>/codegraph-csharp",
       { cause: error },
     );
   }

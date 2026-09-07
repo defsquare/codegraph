@@ -166,7 +166,7 @@ function snapshots(
   const io = captureIo();
   const options: SnapshotsOptions = {
     repo,
-    jar,
+    extractor: jar,
     every: undefined,
     tags: false,
     store: undefined,
@@ -347,8 +347,16 @@ describe("codegraph snapshots usage errors", () => {
     expect(neither.io.stderr()).toContain("--tags");
   });
 
-  it("requires --jar, and requires it to be readable", () => {
-    expect(invoke(["snapshots", repo, "--every", "2"]).code).toBe(EXIT.USAGE);
+  it("requires --extractor, and requires it to be readable", () => {
+    const none = invoke(["snapshots", repo, "--every", "2"]);
+    expect(none.code).toBe(EXIT.USAGE);
+    expect(none.io.stderr()).toContain("--extractor");
+    const missing = invoke(["snapshots", repo, "--every", "2", "--extractor", join(scratch, "no.jar")]);
+    expect(missing.code).toBe(EXIT.USAGE);
+    expect(missing.io.stderr()).toContain("no.jar");
+  });
+
+  it("keeps --jar as an alias of --extractor", () => {
     const missing = invoke(["snapshots", repo, "--every", "2", "--jar", join(scratch, "no.jar")]);
     expect(missing.code).toBe(EXIT.USAGE);
     expect(missing.io.stderr()).toContain("no.jar");

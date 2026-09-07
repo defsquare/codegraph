@@ -690,11 +690,18 @@ export const SNAPSHOTS_SPEC: CommandSpec = {
   },
   options: [
     {
+      name: "extractor",
+      type: "string",
+      describe:
+        "The extractor run at every revision: a .jar (run with `java -jar`) or an executable " +
+        "such as codegraph-csharp. Both honour the extractor command-line contract (schemas/README.md §8).",
+      placeholder: "FILE",
+    },
+    {
       name: "jar",
       type: "string",
-      describe: "The codegraph-java extractor jar, run with `java -jar` at every revision.",
+      describe: "Alias of --extractor kept for the M9b form `--jar codegraph-java.jar`.",
       placeholder: "FILE",
-      required: true,
     },
     {
       name: "every",
@@ -1042,8 +1049,8 @@ export interface ScmOptions {
 export interface SnapshotsOptions {
   /** The repository to snapshot; `.` when nothing was typed. */
   readonly repo: string;
-  /** `--jar FILE`: the extractor jar run at every selected revision. */
-  readonly jar: string;
+  /** `--extractor FILE` (or `--jar FILE`): the extractor run at every selected revision. */
+  readonly extractor: string;
   /** `--every N`: stride over first-parent commits; exclusive with `tags`. */
   readonly every: number | undefined;
   /** `--tags`: the tagged commits are the keyframes; exclusive with `every`. */
@@ -1362,7 +1369,9 @@ function readableDefault(spec: CommandSpec, path: string): string {
   try {
     accessSync(path, constants.R_OK);
   } catch (error) {
-    const make = spec.positional?.missingHint ?? "Extract this directory first: java -jar codegraph-java.jar";
+    const make =
+      spec.positional?.missingHint ??
+      "Extract this directory first: java -jar codegraph-java.jar, or codegraph-csharp for a C# tree";
     throw new UsageError(
       `no ${spec.positional?.name ?? "path"} given, and the default '${path}' is not here`,
       `${make}\nor pass a path: ${usageLine(spec)}`,
@@ -1631,12 +1640,19 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           "Pick exactly one: --every N (stride over first-parent commits) or --tags.",
         );
       }
+      const extractor = stringOf(values, "extractor") ?? stringOf(values, "jar");
+      if (extractor === undefined) {
+        throw new UsageError(
+          "snapshots needs an extractor",
+          "Pass --extractor FILE: extractors/java/target/codegraph-java.jar, or a codegraph-csharp binary.",
+        );
+      }
       return {
         kind: "run",
         command: "snapshots",
         options: {
           repo: models[0] as string,
-          jar: stringOf(values, "jar") as string,
+          extractor,
           every,
           tags,
           store: stringOf(values, "store"),

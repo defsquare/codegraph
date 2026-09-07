@@ -205,7 +205,7 @@ function crossGraph(
   } catch (error) {
     throw new UsageError(
       `the ${options.report} report joins history with a model, and ${modelPath} cannot be loaded`,
-      "Extract one first (java -jar codegraph-java.jar) or name it with --model FILE.",
+      "Extract one first (java -jar codegraph-java.jar, or codegraph-csharp) or name it with --model FILE.",
       { cause: error },
     );
   }

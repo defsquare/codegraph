@@ -62,7 +62,7 @@ export function replayCommand(
   } catch (error) {
     throw new UsageError(
       `cannot open the store at ${storePath}`,
-      "Build a temporal store first: codegraph snapshots <repo> --jar <extractor.jar> --tags " +
+      "Build a temporal store first: codegraph snapshots <repo> --extractor <extractor> --tags " +
         `--store ${storePath}`,
       { cause: error },
     );
@@ -73,7 +73,7 @@ export function replayCommand(
     if (listRevisions(db).length === 0) {
       throw new UsageError(
         `${storePath} holds no revisions — it is a plain single-model cache`,
-        "Append snapshots with: codegraph snapshots <repo> --jar <extractor.jar> --tags " +
+        "Append snapshots with: codegraph snapshots <repo> --extractor <extractor> --tags " +
           `--store ${storePath}`,
       );
     }
