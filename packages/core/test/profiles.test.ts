@@ -220,6 +220,53 @@ describe("structural claims that must not silently regress", () => {
     expect(validateModel(model, clojureProfile)).toEqual([]);
   });
 
+  /**
+   * C# profile v2 (PLAN §13.2): the corrections M12 forces on a profile that
+   * predates M6 (executable containment) and M10 (measures, values,
+   * annotation usage, throw sites). Each claim below is one the extractor
+   * emits against, so relaxing any of them silently un-licenses real output.
+   */
+  describe("C# profile v2 licenses what the Roslyn extractor emits", () => {
+    const cs = PROFILES["csharp"]!;
+    const allowed = (kind: string): Set<string> =>
+      new Set([...(cs.kinds[kind]?.required ?? []), ...(cs.kinds[kind]?.optional ?? [])]);
+
+    it("licenses executable containment (M6): every kind holding parameters or locals is a container", () => {
+      for (const kind of ["method", "constructor", "lambda", "delegate", "property"]) {
+        expect(cs.kinds[kind]?.required, `csharp.${kind}`).toContain("TWithChildren");
+      }
+    });
+
+    it("carries measures on every type and invocable (M10b)", () => {
+      for (const kind of ["class", "interface", "struct", "record", "enum", "delegate", "method", "constructor", "lambda", "property"]) {
+        expect(allowed(kind), `csharp.${kind}`).toContain("TMetrics");
+      }
+    });
+
+    it("opens the value door on constants and defaults (M10c)", () => {
+      expect(allowed("field")).toContain("TWithValue");
+      expect(allowed("parameter")).toContain("TWithValue");
+    });
+
+    it("names attributes as annotationUse and throw sites as throws", () => {
+      expect(cs.edges).toContain("annotationUse");
+      expect(cs.edges).toContain("throws");
+    });
+
+    it("has an event kind: a value-shaped member with its own declaration site", () => {
+      expect([...(cs.kinds["event"]?.required ?? [])].sort()).toEqual(
+        ["TChildOf", "TNamed", "TSourceAnchor", "TStructural", "TTypedEntity"],
+      );
+    });
+
+    it("disambiguates nameless invocables by column, and drops dynamic call sites (notes)", () => {
+      const notes = cs.notes?.join("\n") ?? "";
+      expect(notes).toMatch(/column/);
+      expect(notes).toMatch(/dynamic/);
+      expect(notes).not.toMatch(/candidates list/);
+    });
+  });
+
   it("PHP is the only profile with fileInclude and traitUsage", () => {
     for (const [lang, profile] of profiles) {
       const expected = lang === "php";
