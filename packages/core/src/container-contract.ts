@@ -20,6 +20,7 @@ export function containerContract(): string {
     integrity(),
     determinism(),
     selfValidating(),
+    commandLine(),
   ].join("\n");
 }
 
@@ -209,5 +210,36 @@ function selfValidating(): string {
 Steps 1 and 3–5 need nothing but this directory. That is the bar for an
 extractor in any language: emit conforming lines, and nothing else is asked of
 you — no metamodel intelligence, no library, just JSON.
+`;
+}
+
+function commandLine(): string {
+  return `
+## 8. The extractor command line
+
+\`codegraph snapshots --extractor FILE\` drives an extractor as a process, once per
+sampled revision, and never learns its language. Every extractor therefore
+honours one flag shape and one exit-code set — the Java jar (\`java -jar\`) and
+the C# binary alike:
+
+\`\`\`
+<extractor> [--src <dir>]… [--out <file>] [--progress auto|plain|none] [--no-progress]
+            [--repo-remote <url>] [--repo-commit <sha>] [--repo-root <path>] [--repo-provider <p>]
+            [--version] [--help]
+\`\`\`
+
+- \`--src\` is repeatable and defaults to the current directory; with several
+  roots, anchors are relative to their deepest common ancestor, which becomes
+  the header's \`root\`. \`--out\` defaults to \`<current-dir>-codegraph.jsonl\`.
+- \`--repo-remote\`, \`--repo-commit\` and \`--repo-root\` go together and are copied
+  **verbatim** into the header's \`repository\` (METAMODEL.md §8a); the extractor
+  validates their shape and invents nothing. \`--repo-provider\` is optional and
+  only for a hostname that does not say.
+- \`stdout\` carries nothing but \`--help\`/\`--version\` output. Progress (only on a
+  terminal under \`auto\`) and the resolution summary go to \`stderr\`, so a
+  redirected run is byte-identical to a silent one.
+- Exit codes: \`0\` success, \`1\` failure, \`2\` bad usage, \`3\` an extraction pass
+  not implemented yet.
+- Two runs over one unchanged corpus write the same bytes (§6) — on every OS.
 `;
 }
