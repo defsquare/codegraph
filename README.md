@@ -244,6 +244,7 @@ so a model file has one direction of truth. The full reference is
 - [`docs/model-encoding.md`](docs/model-encoding.md) — the JSONL interchange and the SQLite store
 - [`docs/sql-cookbook.md`](docs/sql-cookbook.md) — querying `model.db` yourself
 - [`docs/city-model.md`](docs/city-model.md), [`docs/city-render.md`](docs/city-render.md) — how the city is built and drawn
+- [`docs/csharp-extractor.md`](docs/csharp-extractor.md) — running the C# extractor: the self-contained binary, the .NET runtime alone, or the SDK from source
 - [`docs/navigator.md`](docs/navigator.md) — the navigator's design
 - [`docs/insights.md`](docs/insights.md) — the explanation walk's design
 - [`PLAN.md`](PLAN.md) — milestones, decisions and their rationale

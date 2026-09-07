@@ -116,6 +116,7 @@ cd extractors/csharp && dotnet test -c Release   # needs the .NET 10 SDK (see ex
 ./build.sh --csharp --publish-all                # linux-x64/arm64, osx-x64/arm64, win-x64 — all from this host
 ./test.sh --csharp                               # dotnet test + the published binary must reproduce the snapshot
 extractors/csharp/dist/linux-x64/codegraph-csharp --src <dir> --out model.jsonl
+#   runtime-only or SDK forms (dotnet <dll>, dotnet run): docs/csharp-extractor.md
 
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
 ./bin/codegraph city model.jsonl --serve           # 3D city at http://localhost:4177

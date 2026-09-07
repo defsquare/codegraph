@@ -10,6 +10,9 @@ to write bytes. Traits, profiles and validation live once, in
 `@codegraph/core`; the cross-language gate is
 `packages/core/test/fixtures-csharp.test.ts`.
 
+For running it — with nothing installed, with the .NET runtime alone, or
+with the SDK from source — see [`docs/csharp-extractor.md`](../../docs/csharp-extractor.md).
+
 ## Build
 
 ```bash
