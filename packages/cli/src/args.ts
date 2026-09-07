@@ -1201,7 +1201,7 @@ export function renderHelp(spec: CommandSpec | undefined): string {
       const describe =
         fallback === undefined
           ? spec.positional.describe
-          : spec.positional.missingHint === undefined
+          : spec.positional.missingHint === undefined && spec.positional.name === "model.jsonl"
             ? `${spec.positional.describe} (default: ${fallback()}, what the extractor writes here)`
             : `${spec.positional.describe} (default: ${fallback()})`;
       lines.push(`  ${name}   ${describe}`);
