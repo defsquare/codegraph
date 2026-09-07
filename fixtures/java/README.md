@@ -2,13 +2,13 @@
 
 A small, plausible order-management corpus (13 files, ~250 lines) that exercises
 every extraction hazard PLAN.md §5.3 names. It is the acceptance corpus for
-`extractors/java`: the snapshot `model.json` the integration test compares
+`extractors/java`: the snapshot `model.jsonl` the integration test compares
 against is produced from **this** tree, and every row of the table below is a
 behaviour a reviewer can check by eye.
 
 ```bash
 cd extractors/java && ./mvnw -B package
-java -jar target/codegraph-java.jar --src ../../fixtures/java/src --out model.json
+java -jar target/codegraph-java.jar --src ../../fixtures/java/src --out model.jsonl
 ```
 
 `--src fixtures/java/src` is the analysis root, so `anchor.file` values read
@@ -59,7 +59,7 @@ other file compiles — if `javac` ever reports an error outside
 These were not defects in the fixture. They are decisions the extractor could
 not avoid making, and this corpus is what made each one visible instead of
 latent. **All five are now decided**; the answers are recorded inline below and
-pinned by `fixtures/java/expected/model.json`.
+pinned by `fixtures/java/expected/model.jsonl`.
 
 1. **Two lambdas on one line collide.** `Notifications.java:11` starts two
    lambdas, so the `(file, startLine)` disambiguator produces the *same* id
