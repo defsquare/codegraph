@@ -1,0 +1,12 @@
+{
+  "name": "@codegraph/website-doc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Codegraph website: Hugo + Hextra. Builds when the hugo binary is on PATH; skips (with a notice) otherwise, so Node-only environments stay green.",
+  "scripts": {
+    "build": "if command -v hugo >/dev/null 2>&1; then hugo --minify --gc; else echo 'hugo not installed: website build skipped' >&2; fi",
+    "dev": "hugo server -D",
+    "typecheck": "true",
+    "test": "true"
+  }
+}
