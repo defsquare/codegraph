@@ -23,3 +23,19 @@ verify:
     # schemas/ is a committed artifact: regenerating must be a no-op.
     - pnpm run gen:schemas
     - git diff --exit-code schemas/ || (echo "schemas/ is stale — run pnpm run gen:schemas and commit" && exit 1)
+
+# The two websites — the landing page and the documentation (Hugo + Hextra,
+# a git submodule) — built with the same pinned Hugo version a developer runs
+# locally. Independent of the Node toolchain.
+website:
+  stage: check
+  image: hugomods/hugo:exts-0.165.0
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
+    GIT_SUBMODULE_DEPTH: 1
+  script:
+    - cd website/landing && hugo --minify --gc
+    - cd ../doc && hugo --minify --gc
+  artifacts:
+    paths: [website/landing/public, website/doc/public]
+    expire_in: 1 week
