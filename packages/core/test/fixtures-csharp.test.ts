@@ -162,14 +162,14 @@ describe("fixtures/csharp/expected/model.jsonl", () => {
       expect(entity?.traits, id).toContain("TMetrics");
       return ((entity as Record<string, unknown>)["metrics"] as Record<string, number>)[key];
     };
-    expect(measure("csharp:Acme.Order/Reporting.Max`1(System.Collections.Generic.List`1)", "cyclomatic")).toBe(4);
+    expect(measure("csharp:Acme.Order/Reporting.Max`1(System.Collections.Generic.List`1<!!0>)", "cyclomatic")).toBe(4);
     expect(measure("csharp:Acme.Order/Reporting.Join(System.String[])", "cyclomatic")).toBe(2);
-    expect(measure("csharp:Acme.Order/Reporting.First`1(System.Collections.Generic.List`1)", "cyclomatic")).toBe(2);
+    expect(measure("csharp:Acme.Order/Reporting.First`1(System.Collections.Generic.List`1<!!0>)", "cyclomatic")).toBe(2);
     expect(measure("csharp:Acme.Order/Reporting.Today()", "cyclomatic")).toBe(1);
     expect(measure("csharp:Acme.Order/Reporting.Describe(Acme.Order.Channel)", "cyclomatic")).toBe(3);
     expect(measure("csharp:Acme.Order/StockGuard.Ensure(System.Int32)", "cyclomatic")).toBe(3);
     // `Max` spans lines 26–39 of Reporting.cs, every one of them code.
-    expect(measure("csharp:Acme.Order/Reporting.Max`1(System.Collections.Generic.List`1)", "sloc")).toBe(14);
+    expect(measure("csharp:Acme.Order/Reporting.Max`1(System.Collections.Generic.List`1<!!0>)", "sloc")).toBe(14);
   });
 
   it("keeps every measure finite, non-negative, and sloc within its span", () => {
@@ -228,7 +228,7 @@ describe("fixtures/csharp/expected/model.jsonl", () => {
       expect(use, `${from} -> ${to}`).toBeDefined();
       return (use as unknown as { arguments: unknown[] }).arguments;
     };
-    expect(argumentsOf("csharp:Acme.Order/Reporting.Max`1(System.Collections.Generic.List`1)", "csharp:Acme.Order/AuditedAttribute"))
+    expect(argumentsOf("csharp:Acme.Order/Reporting.Max`1(System.Collections.Generic.List`1<!!0>)", "csharp:Acme.Order/AuditedAttribute"))
       .toEqual([{ name: "tag", value: { k: "string", v: "monthly" } }]);
     expect(argumentsOf("csharp:Acme.Order/Order.Discount(System.Int32)", "csharp:Acme.Order/AuditedAttribute")).toEqual([
       { name: "tag", value: { k: "unevaluated", source: "LedgerClient.AuditTag" } },
