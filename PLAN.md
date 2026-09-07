@@ -1839,7 +1839,7 @@ Red-green, in this order, each step a commit:
       --report deps` folds the import layer to 10 namespaces / 6 dependencies.
       The JSON writer, ordering and the id scheme were proven against core's
       encoder before a single member existed — which was the point.
-- [ ] **Fixture corpus** `fixtures/csharp/src` (`Acme.Order`, the Java corpus
+- [x] **Fixture corpus** `fixtures/csharp/src` (`Acme.Order`, the Java corpus
       translated, plus what C# adds): a partial class across two files; a
       file-scoped and a block namespace; nested types; `Foo`/`Foo<T>` in one
       namespace; overloads differing by generic arity; an extension method;
@@ -1850,26 +1850,47 @@ Red-green, in this order, each step a commit:
       with real namespaces); an unresolvable external (`Newtonsoft.Json`);
       `throw`, rethrow and a guard clause; attributes with positional, named
       and `typeof` arguments; a `dynamic` call site (dropped + counted).
-- [ ] **Members and edges** — methods, constructors, properties, fields,
-      events, parameters, locals, lambdas; `invocation`, `access`, `reference`,
-      `throws`, `annotationUse` with `Literal` arguments; extension
-      `attachedTo`; measures. Each construct lands with its own failing test
-      first (`EdgeExtractorTest.extensionMethodCallSiteIsAnInvocationOfTheStaticMethod`, …).
-- [ ] **Stub discipline tests**: a corpus type declared in namespace `System.Acme`
+- [x] **Members and edges (M12b, 2026-09-07)** — methods, constructors (the
+      implicit parameterless one included; a record's primary constructor at
+      its parameter list), operators, properties and indexers, fields, events,
+      parameters with defaults, locals (`#local:name:line:column`), lambdas
+      (`#file:line:column`), local functions (`#fn:`); `invocation` (calls,
+      `new`, `: this()`/`: base()`, user-defined operators, delegate
+      invocations folded to the delegate type, extension calls resolved to
+      the static method), `access` with `isRead`/`isWrite`, `reference` from
+      the narrowest declared owner, `throws` (rethrow → the catch's type),
+      `annotationUse` with `Literal` arguments named after the bound
+      constructor's parameters; extension `attachedTo`; `sloc` + `cyclomatic`.
+      Members Roslyn synthesizes (record `Equals`, accessors, backing fields)
+      are not entities — a call to one folds to its type. 25 new .NET tests
+      (`MembersTest`, `EdgesTest`, `MeasuresTest`); the snapshot went from
+      88 to 570 lines (244 entities, 285 edges) and stayed byte-identical to
+      core's encoder. Review of the first full snapshot caught five defects
+      before they were committed: attribute arguments leaking as accesses, a
+      lambda parameter keyed without its lambda's position, `base.Post` on an
+      unresolved base collapsing into the module key, an unbound receiver
+      (`JsonConvert`) producing no edge, and a `foreach` local owning its
+      whole loop body.
+- [x] **Stub discipline tests**: a corpus type declared in namespace `System.Acme`
       stays internal (no prefix test); `Newtonsoft.Json.JsonConvert` lands in
-      `<unresolved>`; `string` lands in `System`; every nameless entity on a
-      shared line gets its own id; no entity is its own parent.
-- [ ] **Determinism**: two runs byte-identical; file walk order ordinal;
+      `<unresolved>` as a reference from its call site; `string` lands in
+      `System`; every nameless entity on a shared line gets its own id, and so
+      does each of their parameters; no entity is its own parent.
+- [x] **Determinism**: two runs byte-identical; file walk order ordinal;
       `\r\n` sources give the same lines as `\n` sources (Windows checkouts with
       `core.autocrlf`); `Utf8JsonWriter` with
       `JavaScriptEncoder.UnsafeRelaxedJsonEscaping` matched against core's
       `JSON.stringify` on the `fixtures/unicode` characters — the byte-identity
       test in core is what catches an escaping mismatch, so the unicode
       identifiers go into the C# fixture too.
-- [ ] **CLI e2e** on the C# fixture: `validate`, `analyze --report deps`,
-      `import` + `diagnose`, `city`, `navigator`, `domain-facts`, `explain
-      --dry-run` — the property suite already runs per fixture; the C# snapshot
-      joins its list.
+- [x] **CLI e2e** on the C# fixture: `validate` OK, `analyze --report deps`
+      (55 type nodes / 114 dependencies), `coupling`, `cycles` (three module
+      self-dependencies, no tangle), `city` (9 districts, 55 buildings, 98
+      arrows), `navigator` (181 nodes, 219 rows), `domain-facts` (26 type
+      dossiers, 69 operations), `explain --dry-run` (an L8 walk plan). The
+      fixture joined the per-fixture suites: analyzer `conformance-csharp`
+      (the acceptance gate, clean), city and navigator `csharp-fixture`, and
+      the CLI `validate` suite.
 - [ ] **Real-corpus audit**, the §5.3 exercise: a self-contained library
       (Humanizer or MediatR — the commons-lang analogue, expected near-100%),
       a DI-heavy app (`dotnet/eShop` — the petclinic analogue, a structural
@@ -1963,9 +1984,9 @@ Wiring into the repo's scripts and CI:
   (§13.6 first bullet), `snapshots --extractor` (a `.jar` runs under `java
   -jar`, anything else directly; `--jar` kept as an alias), and the extractor
   command-line contract as `schemas/README.md §8`, generated from core.
-- **M12b — the model**: members, all edge kinds, stubs, measures, literals,
-  the full fixture and its snapshot, stub-discipline and determinism tests,
-  CLI e2e.
+- **M12b — the model** ✅ (2026-09-07): members, all edge kinds, stubs,
+  measures, literals, the full fixture and its snapshot, stub-discipline and
+  determinism tests, CLI e2e, and the fixture in every per-fixture suite.
 - **M12c — distribution + audit**: publish matrix, CI job, published-binary
   smoke test, READMEs, three-corpus audit with screenshots, profile `notes`
   rewritten from measurements.
@@ -1999,7 +2020,7 @@ fixture in every per-fixture suite.
 | M10d | Framework semantics | ✅ data-driven Spring/Jakarta framework profile (5 roles, matching on name + module, stub-tolerant); derived DI `dynamic-candidate` wiring with @Primary/@Qualifier narrowing that states what it narrowed from; `analyze --report wiring` + `city --framework` role channel with its legend; hand-verified on spring-petclinic (`a6e81a5`: 5 injections → the one corpus impl, 4 → honest empty; HEAD: 6 implicit constructor injections), `declared` view byte-identical before and after |
 | M11 | Insights walk | ✅ `codegraph explain`: `@codegraph/insights` (pure) + `@codegraph/llm` (the one SDK importer); units = operations → types → modules; one SCC-condensed dependency graph (calls, type deps, imports, downward containment) so mutually dependent packages/types/methods are ONE unit, Kahn-layered; context packs with dependency explanations at `--depth`; Specy-vocabulary blocks validated by Zod and sent as strict JSON Schema; Merkle fingerprints (inputs + dependency fingerprints + missing deps, never explanation text) make re-runs incremental; `--dry-run`/`--max-calls`/`--scope`/`--concurrency`/`--max-scc`; journal + sorted side-car `<model>.insights.jsonl`; cycle suite pinned to the analyzer's cycle report (opt-in real-corpus run via `CODEGRAPH_CORPUS_MODEL`; Fineract: 53 207 units, 18 package tangles, largest 509). Verified live on the Java fixture with gpt-5.6-luna: 77 units, 68 calls, $0.06 all-in, blocks in the Specy vocabulary (Order → entity with identity, StockGuard.ensure → precondition + error event, com.acme.order → APIs/SPI `Ledger`); the `specy:domain-extract-from-code` skill consumes the side-car (`heuristics/codegraph.md`). Design record: `docs/insights.md` |
 | M12a | C# extractor — skeleton | ✅ `extractors/csharp/` (Roslyn 5.9 on .NET 10, no MSBuild, BCL ref pack embedded — §13); csharp profile v2 in core; walking skeleton (namespaces, every type kind, delegates + parameters, doc comments, import/inheritance/implements, stubs) → `fixtures/csharp/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; 51 .NET tests (per-line schema + sequence rules, stub discipline, determinism incl. CRLF and walk order, id scheme, CLI) + 13 core gate tests; `codegraph validate` OK; `codegraph snapshots --extractor` (jar or binary); extractor CLI contract as `schemas/README.md §8`; `build.sh --csharp [--publish-all]` / `test.sh --csharp` with the published-binary `cmp` |
-| M12b | C# extractor — model | members, every profile edge kind incl. `annotationUse` + `throws`, stub discipline (BCL stubs in real namespaces, error types in `<unresolved>`), measures, literals; full fixture corpus; stub/determinism/e2e suites green |
+| M12b | C# extractor — model | ✅ members (incl. implicit and primary constructors, operators, indexers, events, locals, lambdas, local functions), every profile edge kind incl. `annotationUse` with written values and `throws`, extension `attachedTo`, `sloc` + `cyclomatic`; synthesized record members fold to their type; stub discipline (BCL stubs in real namespaces, error types in `<unresolved>`, unbound receivers referenced by name); snapshot 244 entities / 285 edges, byte-identical to core's encoder; 76 .NET tests + 20 core gate tests; the fixture in the analyzer, city, navigator and CLI suites; every CLI command verified on it |
 | M12c | C# extractor — binaries + audit | `dotnet publish` matrix (linux-x64/arm64, osx-x64/arm64, win-x64) from one Linux CI job; published-binary smoke test = `cmp` against the snapshot; build.sh/test.sh/CI wired; three-corpus audit (self-contained lib, DI-heavy app, large corpus) with screenshots and numbers in the profile notes |
 
 ## 15. Decisions made in this plan (deltas vs. the design doc)
