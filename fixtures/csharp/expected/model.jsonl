@@ -1,0 +1,88 @@
+{"t":"header","schemaVersion":"1.0.0","lang":"csharp","extractor":{"name":"codegraph-roslyn","version":"0.1.0","noMsBuild":true},"root":"fixtures/csharp/src","dict":{"kinds":["class","delegate","enum","interface","namespace","parameter","record","struct"],"traits":["TChildOf","TComment","TInvocable","TModule","TNamed","TSourceAnchor","TStructural","TType","TTypedEntity","TWithChildren","TWithImplements","TWithInheritances","TWithParameters"],"edges":["import","inheritance","interfaceImplementation"],"provenance":["declared"]}}
+{"t":"f","i":0,"path":"Acme/Order/AbstractOrder.cs"}
+{"t":"f","i":1,"path":"Acme/Order/Adapter/LedgerAdapter.cs"}
+{"t":"f","i":2,"path":"Acme/Order/AuditedAttribute.cs"}
+{"t":"f","i":3,"path":"Acme/Order/Basket.cs"}
+{"t":"f","i":4,"path":"Acme/Order/Batch.cs"}
+{"t":"f","i":5,"path":"Acme/Order/Channel.cs"}
+{"t":"f","i":6,"path":"Acme/Order/EmptyBasketException.cs"}
+{"t":"f","i":7,"path":"Acme/Order/Extensions/MoneyExtensions.cs"}
+{"t":"f","i":8,"path":"Acme/Order/GlobalUsings.cs"}
+{"t":"f","i":9,"path":"Acme/Order/IDiscountable.cs"}
+{"t":"f","i":10,"path":"Acme/Order/Legacy/List.cs"}
+{"t":"f","i":11,"path":"Acme/Order/Money.cs"}
+{"t":"f","i":12,"path":"Acme/Order/Notifications.cs"}
+{"t":"f","i":13,"path":"Acme/Order/Order.Audit.cs"}
+{"t":"f","i":14,"path":"Acme/Order/Order.cs"}
+{"t":"f","i":15,"path":"Acme/Order/OrderService.cs"}
+{"t":"f","i":16,"path":"Acme/Order/Reporting.cs"}
+{"t":"f","i":17,"path":"Acme/Order/Repository.cs"}
+{"t":"f","i":18,"path":"Acme/Order/Résumé.cs"}
+{"t":"f","i":19,"path":"Acme/Order/StockGuard.cs"}
+{"t":"e","i":0,"k":4,"tr":[4,9,3],"m":0,"s":"<unresolved>","name":"<unresolved>","isStub":true,"definedIn":[]}
+{"t":"e","i":1,"k":0,"tr":[4,0,7],"m":0,"s":"JsonConverter","name":"JsonConverter","isStub":true,"parent":0}
+{"t":"e","i":2,"k":0,"tr":[4,0,7],"m":0,"s":"LedgerClient","name":"LedgerClient","isStub":true,"parent":0}
+{"t":"e","i":3,"k":4,"tr":[4,9,3],"m":3,"s":"Acme.Order","name":"Acme.Order","isStub":false,"definedIn":[0,2,3,4,5,6,8,9,11,12,13,14,15,16,17,18,19]}
+{"t":"e","i":4,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"AbstractOrder","name":"AbstractOrder","isStub":false,"parent":3,"comments":["Shared state for every kind of order."],"anchor":[0,4,25]}
+{"t":"e","i":5,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"AuditedAttribute","name":"AuditedAttribute","isStub":false,"parent":3,"comments":["Marks a method whose calls must reach the audit log."],"anchor":[2,6,18]}
+{"t":"e","i":6,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Basket","name":"Basket","isStub":false,"parent":3,"comments":["A basket being filled. Declares no constructor of its own."],"anchor":[3,6,67]}
+{"t":"e","i":7,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Basket.Cursor","name":"Cursor","isStub":false,"parent":6,"comments":["Reads the enclosing basket's lines through an explicit reference."],"anchor":[3,51,66]}
+{"t":"e","i":8,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Basket.Line","name":"Line","isStub":false,"parent":6,"comments":["Nested type; C# nesting is always static."],"anchor":[3,31,48]}
+{"t":"e","i":9,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Basket.Line.Discount","name":"Discount","isStub":false,"parent":8,"comments":["Nested inside a nested type."],"anchor":[3,41,47]}
+{"t":"e","i":10,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Batch","name":"Batch","isStub":false,"parent":3,"comments":["Array members: `counts.Length` binds to `System.Array.Length`, never to a\nmember of the element type, so no phantom `int` class can be invented here."],"anchor":[4,9,44]}
+{"t":"e","i":11,"k":2,"tr":[4,5,1,9,0,7,8],"m":3,"s":"Channel","name":"Channel","declaredType":38,"isStub":false,"parent":3,"comments":["Where an order came from. The underlying type is the enum's declared type."],"anchor":[5,4,9]}
+{"t":"e","i":12,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"EmptyBasketException","name":"EmptyBasketException","isStub":false,"parent":3,"comments":["The corpus-declared exception the throw-site case targets."],"anchor":[6,6,12]}
+{"t":"e","i":13,"k":3,"tr":[4,5,1,9,0,7,11],"m":3,"s":"IDiscountable","name":"IDiscountable","isStub":false,"parent":3,"comments":["An order that can be marked down. Extends another corpus interface."],"anchor":[9,4,7]}
+{"t":"e","i":14,"k":3,"tr":[4,5,1,9,0,7,11],"m":3,"s":"IPriceable","name":"IPriceable","isStub":false,"parent":3,"comments":["Anything the pricing engine can put a number on."],"anchor":[8,9,12]}
+{"t":"e","i":15,"k":6,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Money","name":"Money","isStub":false,"parent":3,"comments":["Minor units only; this fixture has no currencies. A positional record struct."],"anchor":[11,4,26]}
+{"t":"e","i":16,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Notifications","name":"Notifications","isStub":false,"parent":3,"comments":["Delivery hooks. Nothing invocable in here has a name of its own — except the local function."],"anchor":[12,9,66]}
+{"t":"e","i":17,"k":0,"tr":[4,5,9,0,7,11,10],"m":3,"s":"Notifications.Free","name":"Free","isStub":false,"parent":16,"anchor":[12,55,65]}
+{"t":"e","i":18,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Order","name":"Order","isStub":false,"parent":3,"comments":["The second declaration part of Order: same entity, its own file.","A customer order. Partial: the audited half lives in Order.Audit.cs."],"anchor":[13,6,14]}
+{"t":"e","i":19,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"OrderService","name":"OrderService","isStub":false,"parent":3,"comments":["Billing and archival. Both Archive overloads take a parameter whose simple\nname is `List`; only their namespaces differ — and one is generic."],"anchor":[15,9,41]}
+{"t":"e","i":20,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Reporting","name":"Reporting","isStub":false,"parent":3,"comments":["Monthly reporting helpers: LINQ, a using alias, `using static`, generics."],"anchor":[16,9,72]}
+{"t":"e","i":21,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Repository","name":"Repository","isStub":false,"parent":3,"comments":["Non-generic `Repository`: legally coexists with `Repository&lt;T&gt;` below."],"anchor":[17,4,9]}
+{"t":"e","i":22,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Repository`1","name":"Repository","isStub":false,"parent":3,"comments":["Generic arity is part of the symbol: `Repository`1`, never merged with the one above."],"anchor":[17,12,33]}
+{"t":"e","i":23,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"Résumé","name":"Résumé","isStub":false,"parent":3,"comments":["Non-ASCII identifiers and text: the JSON writer must leave them unescaped, as JSON.stringify does — «naïve» — and a tab\\tin a comment must be escaped."],"anchor":[18,4,7]}
+{"t":"e","i":24,"k":1,"tr":[4,5,1,9,0,7,8,2,12],"m":3,"s":"ShipmentHandler","name":"ShipmentHandler","signature":"ShipmentHandler(Acme.Order.Order)","isStub":false,"parent":3,"parameters":[25],"comments":["A delegate: a type that is also invocable."],"anchor":[12,6,6]}
+{"t":"e","i":25,"k":5,"tr":[4,5,0,8,6],"m":3,"s":"ShipmentHandler","d":"param:order","name":"order","declaredType":18,"parent":24,"anchor":[12,6,6]}
+{"t":"e","i":26,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":3,"s":"StockGuard","name":"StockGuard","isStub":false,"parent":3,"comments":["Throw-site case: a guard clause and a rethrow must each emit a `throws`\nedge anchored at its own statement."],"anchor":[19,7,28]}
+{"t":"e","i":27,"k":4,"tr":[4,9,3],"m":27,"s":"Acme.Order.Adapter","name":"Acme.Order.Adapter","isStub":false,"definedIn":[1]}
+{"t":"e","i":28,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":27,"s":"LedgerAdapter","name":"LedgerAdapter","isStub":false,"parent":27,"comments":["Posts to the ledger and keeps a local trail. `MegaCorp.Ledger` and\n`Newtonsoft.Json` are referenced by nothing under the source roots, so\n`LedgerClient`, `AuditTrail` and `JsonConverter` are error types: stubs\nin the reserved `&lt;unresolved&gt;` module, named as written."],"anchor":[1,12,26]}
+{"t":"e","i":29,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":27,"s":"TrailConverter","name":"TrailConverter","isStub":false,"parent":27,"comments":["An unresolved base type in a nested, block-scoped namespace declaration."],"anchor":[1,29,31]}
+{"t":"e","i":30,"k":4,"tr":[4,9,3],"m":30,"s":"Acme.Order.Extensions","name":"Acme.Order.Extensions","isStub":false,"definedIn":[7]}
+{"t":"e","i":31,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":30,"s":"MoneyExtensions","name":"MoneyExtensions","isStub":false,"parent":30,"comments":["Extension methods: children of this static class, attached to the extended type."],"anchor":[7,4,15]}
+{"t":"e","i":32,"k":4,"tr":[4,9,0,3],"m":32,"s":"Acme.Order.Legacy","name":"Acme.Order.Legacy","isStub":false,"parent":3,"definedIn":[10]}
+{"t":"e","i":33,"k":0,"tr":[4,5,1,9,0,7,11,10],"m":32,"s":"List","name":"List","isStub":false,"parent":32,"comments":["A hand-rolled cons list from before System.Collections was allowed here."],"anchor":[10,8,26]}
+{"t":"e","i":34,"k":4,"tr":[4,9,3],"m":34,"s":"MegaCorp.Ledger","name":"MegaCorp.Ledger","isStub":true,"definedIn":[]}
+{"t":"e","i":35,"k":4,"tr":[4,9,3],"m":35,"s":"Newtonsoft.Json","name":"Newtonsoft.Json","isStub":true,"definedIn":[]}
+{"t":"e","i":36,"k":4,"tr":[4,9,3],"m":36,"s":"System","name":"System","isStub":true,"definedIn":[]}
+{"t":"e","i":37,"k":0,"tr":[4,0,7],"m":36,"s":"Attribute","name":"Attribute","isStub":true,"parent":36}
+{"t":"e","i":38,"k":7,"tr":[4,0,7],"m":36,"s":"Byte","name":"Byte","isStub":true,"parent":36}
+{"t":"e","i":39,"k":0,"tr":[4,0,7],"m":36,"s":"Exception","name":"Exception","isStub":true,"parent":36}
+{"t":"e","i":40,"k":4,"tr":[4,9,3],"m":40,"s":"System.Collections.Generic","name":"System.Collections.Generic","isStub":true,"definedIn":[]}
+{"t":"e","i":41,"k":4,"tr":[4,9,3],"m":41,"s":"System.Linq","name":"System.Linq","isStub":true,"definedIn":[]}
+{"t":"x","k":0,"f":3,"o":34,"p":0,"anchor":[13,1,1]}
+{"t":"x","k":0,"f":3,"o":34,"p":0,"anchor":[14,1,1]}
+{"t":"x","k":0,"f":3,"o":34,"p":0,"anchor":[15,1,1]}
+{"t":"x","k":0,"f":3,"o":36,"p":0,"anchor":[2,1,1]}
+{"t":"x","k":0,"f":3,"o":36,"p":0,"anchor":[4,1,1]}
+{"t":"x","k":0,"f":3,"o":36,"p":0,"anchor":[6,1,1]}
+{"t":"x","k":0,"f":3,"o":36,"p":0,"anchor":[12,1,1]}
+{"t":"x","k":0,"f":3,"o":36,"p":0,"anchor":[16,1,1]}
+{"t":"x","k":0,"f":3,"o":36,"p":0,"anchor":[16,3,3]}
+{"t":"x","k":0,"f":3,"o":40,"p":0,"anchor":[8,4,4]}
+{"t":"x","k":0,"f":3,"o":40,"p":0,"anchor":[16,4,4]}
+{"t":"x","k":0,"f":3,"o":41,"p":0,"anchor":[3,1,1]}
+{"t":"x","k":0,"f":3,"o":41,"p":0,"anchor":[16,2,2]}
+{"t":"x","k":2,"f":4,"o":13,"p":0,"anchor":[0,4,4]}
+{"t":"x","k":1,"f":5,"o":37,"p":0,"anchor":[2,7,7]}
+{"t":"x","k":1,"f":12,"o":39,"p":0,"anchor":[6,6,6]}
+{"t":"x","k":1,"f":13,"o":14,"p":0,"anchor":[9,4,4]}
+{"t":"x","k":2,"f":15,"o":14,"p":0,"anchor":[11,4,4]}
+{"t":"x","k":2,"f":17,"o":14,"p":0,"anchor":[12,55,55]}
+{"t":"x","k":1,"f":18,"o":4,"p":0,"sourceFile":14,"anchor":[14,6,6]}
+{"t":"x","k":0,"f":27,"o":34,"p":0,"anchor":[1,1,1]}
+{"t":"x","k":0,"f":27,"o":35,"p":0,"anchor":[1,2,2]}
+{"t":"x","k":1,"f":28,"o":2,"p":0,"anchor":[1,12,12]}
+{"t":"x","k":1,"f":29,"o":1,"p":0,"anchor":[1,29,29]}
+{"t":"eof","counts":{"files":20,"entities":42,"edges":24}}

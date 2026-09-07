@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Codegraph.CSharp/Codegraph.CSharp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Codegraph.CSharp.Tests/Codegraph.CSharp.Tests.csproj" />
+  </Folder>
+</Solution>

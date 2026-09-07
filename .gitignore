@@ -10,6 +10,11 @@ coverage/
 # Java extractor (Maven)
 extractors/java/target/
 
+# C# extractor (.NET SDK): build output and the publish matrix
+extractors/csharp/**/bin/
+extractors/csharp/**/obj/
+extractors/csharp/dist/
+
 .DS_Store
 .idea/
 .vscode/

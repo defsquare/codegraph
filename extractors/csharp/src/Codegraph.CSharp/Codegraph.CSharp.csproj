@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>codegraph-csharp</AssemblyName>
+    <RootNamespace>Codegraph.CSharp</RootNamespace>
+    <RollForward>LatestMajor</RollForward>
+    <!-- Never trimmed: Roslyn is not trim-clean (PLAN.md §13.7). -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Syntax + semantic model ONLY. Never Workspaces.MSBuild / Build.Locator:
+         the extractor reads no project graph (PLAN.md §13 principle 1). -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+  </ItemGroup>
+
+  <!--
+    THE BCL REFERENCE PACK, EMBEDDED. `typeof(object).Assembly.Location` — the
+    tutorial way to reference the BCL — is the empty string inside a single-file
+    bundle, so a binary built that way binds NOTHING in production while
+    passing under `dotnet run`. The SDK's own targeting pack is embedded at
+    build time instead and loaded as metadata images (ReferenceAssemblies.cs).
+    The glob is verified non-empty below, because an empty one would fail only
+    at the resolution rate, on a user's machine.
+  -->
+  <PropertyGroup>
+    <CodegraphRefPackDir>$(NetCoreTargetingPackRoot)/Microsoft.NETCore.App.Ref/$(BundledNETCoreAppPackageVersion)/ref/$(TargetFramework)</CodegraphRefPackDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(CodegraphRefPackDir)/*.dll" LogicalName="ref/%(Filename)%(Extension)" />
+  </ItemGroup>
+  <Target Name="VerifyReferencePack" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <_CodegraphRefDll Include="@(EmbeddedResource)" Condition="$([System.String]::Copy('%(EmbeddedResource.LogicalName)').StartsWith('ref/'))" />
+    </ItemGroup>
+    <Error Condition="'@(_CodegraphRefDll->Count())' == '0'"
+           Text="No BCL reference assemblies found at $(CodegraphRefPackDir) — the extractor would bind no System.* type. Is the Microsoft.NETCore.App.Ref targeting pack installed with this SDK?" />
+  </Target>
+
+</Project>

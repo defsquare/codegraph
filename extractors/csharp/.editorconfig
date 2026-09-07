@@ -1,0 +1,16 @@
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+
+# Culture-sensitive string operations are errors: canonical order is UTF-16
+# code-unit order on every OS (PLAN.md §13.8), and a Turkish locale must not
+# change a model's bytes.
+dotnet_diagnostic.CA1305.severity = error
+dotnet_diagnostic.CA1309.severity = error
+dotnet_diagnostic.CA1310.severity = error
+dotnet_diagnostic.CA1311.severity = error

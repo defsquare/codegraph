@@ -1,0 +1,27 @@
+<Project>
+  <!--
+    Shared by the extractor and its tests. Every OS-behaviour knob lives here
+    (PLAN.md §13.1/§13.8): invariant globalization removes the libicu runtime
+    dependency on minimal Linux and makes ordinal string behaviour identical on
+    every host; deterministic + CI build makes the binary reproducible from a
+    commit, the same property the model already has.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- One version, three readers: the assembly, `‑‑version`, and the model header. -->
+    <CodegraphExtractorVersion>0.1.0</CodegraphExtractorVersion>
+    <Version>$(CodegraphExtractorVersion)</Version>
+    <InformationalVersion>$(CodegraphExtractorVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>
