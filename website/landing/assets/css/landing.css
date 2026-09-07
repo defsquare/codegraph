@@ -1,0 +1,211 @@
+/* Codegraph landing — layout only. Colours, type, spacing, radii and shadows
+   come from colors_and_type.css, the Defsquare token layer, which is
+   concatenated ahead of this file by Hugo Pipes. */
+
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+img { max-width: 100%; height: auto; }
+
+/* Nav: scrolls with the page, wordmark left, links right (the site rule). */
+.nav {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-10);
+  padding-top: var(--space-6);
+  min-height: 3.75rem;
+}
+.nav__mark {
+  font-family: var(--font-title);
+  font-size: var(--text-3xl);
+  color: var(--color-primary-200);
+  letter-spacing: -0.01em;
+}
+.nav__mark:hover { color: var(--color-primary-200); }
+.nav__links { margin-left: auto; display: flex; gap: var(--space-10); }
+.nav__links a {
+  font-weight: var(--weight-medium);
+  font-size: var(--text-lg);
+  color: var(--color-primary-200);
+}
+.nav__links a:hover { color: var(--color-accent); }
+
+/* Intro. Not named `.hero`: the token layer binds that class to display type. */
+.intro {
+  margin-top: var(--space-16);
+  margin-bottom: var(--space-16);
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: var(--space-12) var(--space-16);
+  align-items: start;
+}
+.intro .corpora { grid-column: 1 / -1; }
+.intro__display {
+  font-family: var(--font-title);
+  font-weight: var(--weight-regular);
+  font-size: clamp(3.5rem, 8vw, 11rem);
+  line-height: var(--leading-display);
+  letter-spacing: -0.01em;
+  color: var(--color-primary-200);
+  margin: 0;
+  max-width: 12ch;
+}
+.intro__lead {
+  font-weight: var(--weight-semibold);
+  font-size: clamp(var(--text-xl), 1.9vw, var(--text-2xl));
+  line-height: var(--leading-snug);
+  max-width: 34ch;
+  margin: var(--space-10) 0 0;
+}
+.intro__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  margin-top: var(--space-10);
+}
+.intro__actions a:not(.btn) { font-size: var(--text-xl); font-weight: var(--weight-medium); }
+
+/* The city figure: the tool's own output, generated from a real city.json. */
+.city { margin: var(--space-4) 0 0; }
+.city__img { display: block; width: 100%; height: auto; }
+.city__caption {
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--color-fg-muted);
+  max-width: 70ch;
+  margin: var(--space-6) 0 0;
+}
+.city__caption b { color: var(--color-primary-200); font-weight: var(--weight-semibold); }
+.city__caption .red { color: var(--color-accent); font-weight: var(--weight-semibold); }
+
+/* Button — the design system's primary: blue at rest, red on hover. */
+.btn {
+  font-family: var(--font-body);
+  font-size: var(--text-xl);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  color: var(--color-bg);
+  background: var(--color-primary-500);
+  display: inline-flex;
+  align-items: center;
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--transition-fast);
+}
+.btn:hover { background: var(--color-accent-300); color: var(--color-bg); }
+.btn:active { background: var(--color-accent-200); }
+.btn .ic { width: 1.25rem; height: 1.25rem; margin: 0 var(--space-3) 0 calc(-1 * var(--space-1)); fill: currentColor; }
+
+/* Verified-on strip: the bordered row the design system uses for customer
+   logos; here the proof is the corpora the tool has run on. */
+.corpora {
+  margin-top: var(--space-8);
+  padding: var(--space-8) 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-4) var(--space-12);
+}
+.corpora__lead { font-size: var(--text-lg); color: var(--color-fg-muted); margin: 0; }
+.corpora__item { font-family: var(--font-mono); font-size: var(--text-lg); color: var(--color-primary-300); }
+.corpora__item small { font-family: var(--font-body); color: var(--color-fg-subtle); margin-left: var(--space-2); }
+
+/* Essay rows: the design system's asymmetric two-column split. */
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-8);
+  margin-top: var(--space-24);
+}
+.row__left { flex: 0 0 33%; }
+.row__right { flex: 0 0 55%; padding-top: var(--space-2); }
+.row__h2 {
+  font-family: var(--font-title);
+  font-weight: var(--weight-regular);
+  font-size: clamp(var(--text-4xl), 4.5vw, var(--text-7xl));
+  line-height: 1;
+  margin: 0 0 var(--space-6);
+}
+.row__lead { font-size: var(--text-2xl); line-height: 1.2; margin: 0; }
+.row__lead b, .row__lead strong { font-weight: var(--weight-bold); }
+
+/* The command a row is about: quiet, so the dark quick-start block below
+   stays the page's one loud code moment. */
+.row__cmd {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  color: var(--color-primary-400);
+  background: var(--color-bg-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-4);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.row__right h3 {
+  font-family: var(--font-body);
+  font-weight: var(--weight-medium);
+  font-size: var(--text-2xl);
+  margin: var(--space-10) 0 var(--space-3);
+}
+.row__right > h3:first-child { margin-top: 0; }
+.row__right p { margin: 0 0 var(--space-3); }
+.row__right p:last-of-type { margin-bottom: 0; }
+.row__right pre { margin: 0 0 var(--space-6); font-size: var(--text-lg); }
+.row__more { display: inline-block; margin-top: var(--space-6); font-weight: var(--weight-medium); }
+
+/* Footer: navy, silent. */
+.footer { background: var(--color-navy); margin-top: var(--space-24); color: #d1d5db; }
+.footer__inner { padding: var(--space-16) 0 var(--space-6); }
+.footer__grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: var(--space-8); }
+.footer__about p { color: #d1d5db; font-size: var(--text-lg); max-width: 40ch; margin: var(--space-6) 0 0; }
+.footer__about img { height: 2rem; width: auto; display: block; }
+.footer__col h4 {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-fg-subtle);
+  margin: 0 0 var(--space-4);
+}
+.footer__col ul { list-style: none; padding: 0; margin: 0; }
+.footer__col li { margin-bottom: var(--space-3); font-size: var(--text-base); color: #d1d5db; }
+.footer__col a { color: #d1d5db; }
+.footer__col a:hover { color: var(--color-bg); }
+.footer__bottom {
+  border-top: 1px solid #374151;
+  margin-top: var(--space-12);
+  padding-top: var(--space-6);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  font-size: var(--text-base);
+  color: var(--color-fg-subtle);
+}
+.footer__bottom a { color: var(--color-fg-subtle); }
+.footer__bottom a:hover { color: var(--color-bg); }
+
+/* Responsive: the intro stacks, then the essay rows. */
+@media (max-width: 64rem) {
+  .intro { grid-template-columns: 1fr; }
+}
+@media (max-width: 56rem) {
+  .row { flex-direction: column; gap: var(--space-6); margin-top: var(--space-16); }
+  .row__left, .row__right { flex: 1 1 auto; width: 100%; }
+  .intro__lead { max-width: 100%; }
+  .footer__grid { grid-template-columns: 1fr; }
+  .nav { flex-wrap: wrap; gap: var(--space-4); }
+  .nav__links { margin-left: 0; gap: var(--space-6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
+}

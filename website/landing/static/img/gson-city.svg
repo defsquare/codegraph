@@ -1,0 +1,607 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-156.44 -37.88 266.4 190.76" role="img" aria-labelledby="t">
+<title id="t">The code city of gson: 9 packages, 113 classes, 30 cycle-breaking dependencies in red.</title>
+<polygon points="0,0 103.96,60.02 -46.48,146.88 -150.44,86.86" fill="#f0f5fc" stroke="#9BB2D9" stroke-width="0.4" stroke-linejoin="round"/>
+<polygon points="-54.62,84.12 -42.96,90.85 -58.44,99.79 -70.1,93.06" fill="#d9e3f1" stroke="#9BB2D9" stroke-width="0.4" stroke-linejoin="round"/>
+<polygon points="0,3 74.21,45.85 -21.62,101.17 -95.83,58.33" fill="#d9e3f1" stroke="#9BB2D9" stroke-width="0.4" stroke-linejoin="round"/>
+<polygon points="-70.52,74.94 -56.35,83.12 -70.52,91.3 -84.68,83.12" fill="#d9e3f1" stroke="#9BB2D9" stroke-width="0.4" stroke-linejoin="round"/>
+<polygon points="-97.56,59.33 -72.25,73.94 -106.91,93.96 -132.23,79.34" fill="#d9e3f1" stroke="#9BB2D9" stroke-width="0.4" stroke-linejoin="round"/>
+<polygon points="0,6 50.63,35.23 -8.95,69.63 -59.58,40.4" fill="#c3d2ea" stroke="#9BB2D9" stroke-width="0.4" stroke-linejoin="round"/>
+<polygon points="52.36,36.23 67.94,45.22 43.9,59.1 28.32,50.11" fill="#c3d2ea" stroke="#9BB2D9" stroke-width="0.4" stroke-linejoin="round"/>
+<polygon points="-61.31,41.4 -45.22,50.69 -61.31,59.98 -77.41,50.69" fill="#c3d2ea" stroke="#9BB2D9" stroke-width="0.4" stroke-linejoin="round"/>
+<polygon points="19.05,20 32.29,27.64 19.05,35.28 5.82,27.64" fill="#adc1e2" stroke="#9BB2D9" stroke-width="0.4" stroke-linejoin="round"/>
+<g><title>TypeAdapters — 1022 lines</title>
+<polygon points="-17.32,19 0,29 0,-1.88 -17.32,-11.88" fill="#1e416e"/>
+<polygon points="17.32,19 0,29 0,-1.88 17.32,-11.88" fill="#122843"/>
+<polygon points="0,-21.88 17.32,-11.88 0,-1.88 -17.32,-11.88" fill="#2a5a98"/>
+</g>
+<g><title>ReflectiveTypeAdapterFactory — 611 lines</title>
+<polygon points="-28.73,25.59 -19.05,31.17 -19.05,12.22 -28.73,6.63" fill="#1e416e"/>
+<polygon points="-9.38,25.59 -19.05,31.17 -19.05,12.22 -9.38,6.63" fill="#122843"/>
+<polygon points="-19.05,1.05 -9.38,6.63 -19.05,12.22 -28.73,6.63" fill="#2a5a98"/>
+</g>
+<g><title>ISO8601Utils — 348 lines</title>
+<polygon points="11.01,27.64 19.05,32.28 19.05,20.97 11.01,16.32" fill="#1e416e"/>
+<polygon points="27.09,27.64 19.05,32.28 19.05,20.97 27.09,16.32" fill="#122843"/>
+<polygon points="19.05,11.68 27.09,16.32 19.05,20.97 11.01,16.32" fill="#2a5a98"/>
+</g>
+<g><title>JsonTreeReader — 353 lines</title>
+<polygon points="-16.09,31.46 -7.65,36.34 -7.65,24.87 -16.09,20" fill="#1e416e"/>
+<polygon points="0.8,31.46 -7.65,36.34 -7.65,24.87 0.8,20" fill="#122843"/>
+<polygon points="-7.65,15.12 0.8,20 -7.65,24.87 -16.09,20" fill="#2a5a98"/>
+</g>
+<g><title>ObjectTypeAdapter — 147 lines</title>
+<polygon points="-36.51,30.08 -30.46,33.57 -30.46,28.08 -36.51,24.59" fill="#1e416e"/>
+<polygon points="-24.41,30.08 -30.46,33.57 -30.46,28.08 -24.41,24.59" fill="#122843"/>
+<polygon points="-30.46,21.1 -24.41,24.59 -30.46,28.08 -36.51,24.59" fill="#2a5a98"/>
+</g>
+<g><title>JavaTimeTypeAdapters — 406 lines</title>
+<polygon points="22.61,35.23 34.02,41.82 34.02,28.81 22.61,22.23" fill="#1e416e"/>
+<polygon points="45.43,35.23 34.02,41.82 34.02,28.81 45.43,22.23" fill="#122843"/>
+<polygon points="34.02,15.64 45.43,22.23 34.02,28.81 22.61,22.23" fill="#2a5a98"/>
+</g>
+<g><title>DefaultDateTypeAdapter — 144 lines</title>
+<polygon points="-28.51,34.44 -22.68,37.81 -22.68,32.41 -28.51,29.04" fill="#1e416e"/>
+<polygon points="-16.85,34.44 -22.68,37.81 -22.68,32.41 -16.85,29.04" fill="#122843"/>
+<polygon points="-22.68,25.68 -16.85,29.04 -22.68,32.41 -28.51,29.04" fill="#2a5a98"/>
+</g>
+<g><title>MapTypeAdapterFactory — 167 lines</title>
+<polygon points="-43.34,34.02 -38.24,36.97 -38.24,30.9 -43.34,27.95" fill="#1e416e"/>
+<polygon points="-33.14,34.02 -38.24,36.97 -38.24,30.9 -33.14,27.95" fill="#122843"/>
+<polygon points="-38.24,25.01 -33.14,27.95 -38.24,30.9 -43.34,27.95" fill="#2a5a98"/>
+</g>
+<g><title>JsonTreeWriter — 222 lines</title>
+<polygon points="-4.56,36.56 2.53,40.65 2.53,32.99 -4.56,28.9" fill="#1e416e"/>
+<polygon points="9.63,36.56 2.53,40.65 2.53,32.99 9.63,28.9" fill="#122843"/>
+<polygon points="2.53,24.8 9.63,28.9 2.53,32.99 -4.56,28.9" fill="#2a5a98"/>
+</g>
+<g><title>BoundField — 30 lines</title>
+<polygon points="-49.5,37.58 -45.07,40.14 -45.07,38.04 -49.5,35.49" fill="#1e416e"/>
+<polygon points="-40.64,37.58 -45.07,40.14 -45.07,38.04 -40.64,35.49" fill="#122843"/>
+<polygon points="-45.07,32.93 -40.64,35.49 -45.07,38.04 -49.5,35.49" fill="#2a5a98"/>
+</g>
+<g><title>RecordAdapter — 102 lines</title>
+<polygon points="-36.42,37.91 -31.41,40.81 -31.41,36.63 -36.42,33.73" fill="#1e416e"/>
+<polygon points="-26.4,37.91 -31.41,40.81 -31.41,36.63 -26.4,33.73" fill="#122843"/>
+<polygon points="-31.41,30.84 -26.4,33.73 -31.41,36.63 -36.42,33.73" fill="#2a5a98"/>
+</g>
+<g><title>EnumTypeAdapter — 95 lines</title>
+<polygon points="-20.95,38.81 -15.12,42.17 -15.12,38.2 -20.95,34.83" fill="#1e416e"/>
+<polygon points="-9.29,38.81 -15.12,42.17 -15.12,38.2 -9.29,34.83" fill="#122843"/>
+<polygon points="-15.12,31.47 -9.29,34.83 -15.12,38.2 -20.95,34.83" fill="#2a5a98"/>
+</g>
+<g><title>JsonAdapterAnnotationTypeAdapterFactory — 168 lines</title>
+<polygon points="4.7,41.4 11.36,45.25 11.36,39.15 4.7,35.31" fill="#1e416e"/>
+<polygon points="18.02,41.4 11.36,45.25 11.36,39.15 18.02,35.31" fill="#122843"/>
+<polygon points="11.36,31.46 18.02,35.31 11.36,39.15 4.7,35.31" fill="#2a5a98"/>
+</g>
+<g><title>CollectionTypeAdapterFactory — 72 lines</title>
+<polygon points="-43.12,41.01 -38.91,43.44 -38.91,40.13 -43.12,37.7" fill="#1e416e"/>
+<polygon points="-34.7,41.01 -38.91,43.44 -38.91,40.13 -34.7,37.7" fill="#122843"/>
+<polygon points="-38.91,35.27 -34.7,37.7 -38.91,40.13 -43.12,37.7" fill="#2a5a98"/>
+</g>
+<g><title>FieldsData — 13 lines</title>
+<polygon points="-54.39,40.4 -51.23,42.22 -51.23,40.62 -54.39,38.8" fill="#1e416e"/>
+<polygon points="-48.08,40.4 -51.23,42.22 -51.23,40.62 -48.08,38.8" fill="#122843"/>
+<polygon points="-51.23,36.98 -48.08,38.8 -51.23,40.62 -54.39,38.8" fill="#2a5a98"/>
+</g>
+<g><title>TypeAdapterRuntimeTypeWrapper — 77 lines</title>
+<polygon points="-29.59,41.75 -24.67,44.59 -24.67,41.14 -29.59,38.3" fill="#1e416e"/>
+<polygon points="-19.75,41.75 -24.67,44.59 -24.67,41.14 -19.75,38.3" fill="#122843"/>
+<polygon points="-24.67,35.46 -19.75,38.3 -24.67,41.14 -29.59,38.3" fill="#2a5a98"/>
+</g>
+<g><title>ReflectionHelper — 298 lines</title>
+<polygon points="45.63,43.11 52.36,46.99 52.36,37.13 45.63,33.24" fill="#1e416e"/>
+<polygon points="59.08,43.11 52.36,46.99 52.36,37.13 59.08,33.24" fill="#122843"/>
+<polygon points="52.36,29.36 59.08,33.24 52.36,37.13 45.63,33.24" fill="#2a5a98"/>
+</g>
+<g><title>Adapter — 120 lines</title>
+<polygon points="-13.38,43.17 -7.56,46.54 -7.56,41.84 -13.38,38.47" fill="#1e416e"/>
+<polygon points="-1.73,43.17 -7.56,46.54 -7.56,41.84 -1.73,38.47" fill="#122843"/>
+<polygon points="-7.56,35.11 -1.73,38.47 -7.56,41.84 -13.38,38.47" fill="#2a5a98"/>
+</g>
+<g><title>DummyTypeAdapterFactory — 6 lines</title>
+<polygon points="-49.15,43.02 -46.35,44.63 -46.35,43.24 -49.15,41.62" fill="#1e416e"/>
+<polygon points="-43.55,43.02 -46.35,44.63 -46.35,43.24 -43.55,41.62" fill="#122843"/>
+<polygon points="-46.35,40 -43.55,41.62 -46.35,43.24 -49.15,41.62" fill="#2a5a98"/>
+</g>
+<g><title>SingleTypeFactory — 37 lines</title>
+<polygon points="-37.18,44.44 -32.97,46.88 -32.97,44.58 -37.18,42.15" fill="#1e416e"/>
+<polygon points="-28.75,44.44 -32.97,46.88 -32.97,44.58 -28.75,42.15" fill="#122843"/>
+<polygon points="-32.97,39.72 -28.75,42.15 -32.97,44.58 -37.18,42.15" fill="#2a5a98"/>
+</g>
+<g><title>TreeTypeAdapter — 169 lines</title>
+<polygon points="13.29,46.14 19.75,49.87 19.75,43.74 13.29,40.01" fill="#1e416e"/>
+<polygon points="26.22,46.14 19.75,49.87 19.75,43.74 26.22,40.01" fill="#122843"/>
+<polygon points="19.75,36.28 26.22,40.01 19.75,43.74 13.29,40.01" fill="#2a5a98"/>
+</g>
+<g><title>NumberTypeAdapter — 51 lines</title>
+<polygon points="-22.84,45.54 -18.02,48.33 -18.02,45.63 -22.84,42.84" fill="#1e416e"/>
+<polygon points="-13.19,45.54 -18.02,48.33 -18.02,45.63 -13.19,42.84" fill="#122843"/>
+<polygon points="-18.02,40.05 -13.19,42.84 -18.02,45.63 -22.84,42.84" fill="#2a5a98"/>
+</g>
+<g><title>SerializationDelegatingTypeAdapter — 7 lines</title>
+<polygon points="-44.18,45.38 -41.82,46.75 -41.82,45.32 -44.18,43.96" fill="#1e416e"/>
+<polygon points="-39.45,45.38 -41.82,46.75 -41.82,45.32 -39.45,43.96" fill="#122843"/>
+<polygon points="-41.82,42.59 -39.45,43.96 -41.82,45.32 -44.18,43.96" fill="#2a5a98"/>
+</g>
+<g><title>RecordSupportedHelper — 65 lines</title>
+<polygon points="38.98,46.95 43.9,49.79 43.9,46.68 38.98,43.84" fill="#1e416e"/>
+<polygon points="48.82,46.95 43.9,49.79 43.9,46.68 48.82,43.84" fill="#122843"/>
+<polygon points="43.9,41 48.82,43.84 43.9,46.68 38.98,43.84" fill="#2a5a98"/>
+</g>
+<g><title>ArrayTypeAdapter — 79 lines</title>
+<polygon points="-5.67,47.45 0.01,50.73 0.01,47.21 -5.67,43.94" fill="#1e416e"/>
+<polygon points="5.68,47.45 0.01,50.73 0.01,47.21 5.68,43.94" fill="#122843"/>
+<polygon points="0.01,40.66 5.68,43.94 0.01,47.21 -5.67,43.94" fill="#2a5a98"/>
+</g>
+<g><title>SqlTypesSupport — 60 lines</title>
+<polygon points="-65.95,47.07 -61.31,49.75 -61.31,46.79 -65.95,44.11" fill="#1e416e"/>
+<polygon points="-56.68,47.07 -61.31,49.75 -61.31,46.79 -56.68,44.11" fill="#122843"/>
+<polygon points="-61.31,41.44 -56.68,44.11 -61.31,46.79 -65.95,44.11" fill="#2a5a98"/>
+</g>
+<g><title>Adapter — 41 lines</title>
+<polygon points="-31.12,47.81 -27.02,50.18 -27.02,47.77 -31.12,45.4" fill="#1e416e"/>
+<polygon points="-22.92,47.81 -27.02,50.18 -27.02,47.77 -22.92,45.4" fill="#122843"/>
+<polygon points="-27.02,43.03 -22.92,45.4 -27.02,47.77 -31.12,45.4" fill="#2a5a98"/>
+</g>
+<g><title>FactorySupplier — 3 lines</title>
+<polygon points="-39.81,47.59 -37.72,48.79 -37.72,47.49 -39.81,46.28" fill="#1e416e"/>
+<polygon points="-35.63,47.59 -37.72,48.79 -37.72,47.49 -35.63,46.28" fill="#122843"/>
+<polygon points="-37.72,45.07 -35.63,46.28 -37.72,47.49 -39.81,46.28" fill="#2a5a98"/>
+</g>
+<g><title>Adapter — 68 lines</title>
+<polygon points="-16.28,49.33 -11.46,52.11 -11.46,48.92 -16.28,46.13" fill="#1e416e"/>
+<polygon points="-6.63,49.33 -11.46,52.11 -11.46,48.92 -6.63,46.13" fill="#122843"/>
+<polygon points="-11.46,43.35 -6.63,46.13 -11.46,48.92 -16.28,46.13" fill="#2a5a98"/>
+</g>
+<g><title>RecordHelper — 9 lines</title>
+<polygon points="46.82,50.11 50.55,52.26 50.55,50.78 46.82,48.62" fill="#1e416e"/>
+<polygon points="54.29,50.11 50.55,52.26 50.55,50.78 54.29,48.62" fill="#122843"/>
+<polygon points="50.55,46.47 54.29,48.62 50.55,50.78 46.82,48.62" fill="#2a5a98"/>
+</g>
+<g><title>RecordNotSupportedHelper — 25 lines</title>
+<polygon points="33.52,50.11 37.25,52.26 37.25,50.32 33.52,48.16" fill="#1e416e"/>
+<polygon points="40.98,50.11 37.25,52.26 37.25,50.32 40.98,48.16" fill="#122843"/>
+<polygon points="37.25,46.01 40.98,48.16 37.25,50.32 33.52,48.16" fill="#2a5a98"/>
+</g>
+<g><title>SqlTimeTypeAdapter — 50 lines</title>
+<polygon points="-72.21,50.69 -67.68,53.31 -67.68,50.63 -72.21,48.02" fill="#1e416e"/>
+<polygon points="-63.15,50.69 -67.68,53.31 -67.68,50.63 -63.15,48.02" fill="#122843"/>
+<polygon points="-67.68,45.4 -63.15,48.02 -67.68,50.63 -72.21,48.02" fill="#2a5a98"/>
+</g>
+<g><title>SqlDateTypeAdapter — 50 lines</title>
+<polygon points="-59.48,50.69 -54.95,53.31 -54.95,50.63 -59.48,48.02" fill="#1e416e"/>
+<polygon points="-50.42,50.69 -54.95,53.31 -54.95,50.63 -50.42,48.02" fill="#122843"/>
+<polygon points="-54.95,45.4 -50.42,48.02 -54.95,50.63 -59.48,48.02" fill="#2a5a98"/>
+</g>
+<g><title>JsonElementTypeAdapter — 137 lines</title>
+<polygon points="2.31,51.4 7.41,54.34 7.41,49.14 2.31,46.2" fill="#1e416e"/>
+<polygon points="12.51,51.4 7.41,54.34 7.41,49.14 12.51,46.2" fill="#122843"/>
+<polygon points="7.41,43.26 12.51,46.2 7.41,49.14 2.31,46.2" fill="#2a5a98"/>
+</g>
+<g><title>IgnoreJRERequirement — 1 lines</title>
+<polygon points="-35.63,49.59 -33.9,50.59 -33.9,49.34 -35.63,48.34" fill="#1e416e"/>
+<polygon points="-32.17,49.59 -33.9,50.59 -33.9,49.34 -32.17,48.34" fill="#122843"/>
+<polygon points="-33.9,47.34 -32.17,48.34 -33.9,49.34 -35.63,48.34" fill="#2a5a98"/>
+</g>
+<g><title>FieldReflectionAdapter — 24 lines</title>
+<polygon points="-25.05,51.04 -21.19,53.27 -21.19,51.35 -25.05,49.12" fill="#1e416e"/>
+<polygon points="-17.33,51.04 -21.19,53.27 -21.19,51.35 -17.33,49.12" fill="#122843"/>
+<polygon points="-21.19,46.89 -17.33,49.12 -21.19,51.35 -25.05,49.12" fill="#2a5a98"/>
+</g>
+<g><title>DateType — 29 lines</title>
+<polygon points="-9.53,53 -4.9,55.68 -4.9,53.61 -9.53,50.94" fill="#1e416e"/>
+<polygon points="-0.27,53 -4.9,55.68 -4.9,53.61 -0.27,50.94" fill="#122843"/>
+<polygon points="-4.9,48.26 -0.27,50.94 -4.9,53.61 -9.53,50.94" fill="#2a5a98"/>
+</g>
+<g><title>SqlTimestampTypeAdapter — 32 lines</title>
+<polygon points="-65.84,54.25 -61.41,56.8 -61.41,54.65 -65.84,52.1" fill="#1e416e"/>
+<polygon points="-56.99,54.25 -61.41,56.8 -61.41,54.65 -56.99,52.1" fill="#122843"/>
+<polygon points="-61.41,49.54 -56.99,52.1 -61.41,54.65 -65.84,52.1" fill="#2a5a98"/>
+</g>
+<g><title>GsonTypes — 637 lines</title>
+<polygon points="-53.82,57.65 -43.49,63.62 -43.49,43.91 -53.82,37.95" fill="#1e416e"/>
+<polygon points="-33.16,57.65 -43.49,63.62 -43.49,43.91 -33.16,37.95" fill="#122843"/>
+<polygon points="-43.49,31.99 -33.16,37.95 -43.49,43.91 -53.82,37.95" fill="#2a5a98"/>
+</g>
+<g><title>Node — 92 lines</title>
+<polygon points="-85.04,55.1 -79.14,58.51 -79.14,54.62 -85.04,51.21" fill="#1e416e"/>
+<polygon points="-73.23,55.1 -79.14,58.51 -79.14,54.62 -73.23,51.21" fill="#122843"/>
+<polygon points="-79.14,47.8 -73.23,51.21 -79.14,54.62 -85.04,51.21" fill="#2a5a98"/>
+</g>
+<g><title>FloatAdapter — 32 lines</title>
+<polygon points="-19.33,54.19 -15.6,56.35 -15.6,54.2 -19.33,52.04" fill="#1e416e"/>
+<polygon points="-11.86,54.19 -15.6,56.35 -15.6,54.2 -11.86,52.04" fill="#122843"/>
+<polygon points="-15.6,49.89 -11.86,52.04 -15.6,54.2 -19.33,52.04" fill="#2a5a98"/>
+</g>
+<g><title>IntegerFieldsTypeAdapter — 47 lines</title>
+<polygon points="-3.07,56.62 1.46,59.23 1.46,56.65 -3.07,54.03" fill="#1e416e"/>
+<polygon points="6,56.62 1.46,59.23 1.46,56.65 6,54.03" fill="#122843"/>
+<polygon points="1.46,51.42 6,54.03 1.46,56.65 -3.07,54.03" fill="#2a5a98"/>
+</g>
+<g><title>GsonContextImpl — 18 lines</title>
+<polygon points="-13.73,57.27 -10.13,59.35 -10.13,57.61 -13.73,55.53" fill="#1e416e"/>
+<polygon points="-6.53,57.27 -10.13,59.35 -10.13,57.61 -6.53,55.53" fill="#122843"/>
+<polygon points="-10.13,53.45 -6.53,55.53 -10.13,57.61 -13.73,55.53" fill="#2a5a98"/>
+</g>
+<g><title>KeySet — 31 lines</title>
+<polygon points="-90.63,58.33 -86.77,60.56 -86.77,58.44 -90.63,56.21" fill="#1e416e"/>
+<polygon points="-82.91,58.33 -86.77,60.56 -86.77,58.44 -82.91,56.21" fill="#122843"/>
+<polygon points="-86.77,53.98 -82.91,56.21 -86.77,58.44 -90.63,56.21" fill="#2a5a98"/>
+</g>
+<g><title>UnsafeAllocator — 100 lines</title>
+<polygon points="-77.33,59.46 -71.5,62.83 -71.5,58.71 -77.33,55.34" fill="#1e416e"/>
+<polygon points="-65.67,59.46 -71.5,62.83 -71.5,58.71 -65.67,55.34" fill="#122843"/>
+<polygon points="-71.5,51.98 -65.67,55.34 -71.5,58.71 -77.33,55.34" fill="#2a5a98"/>
+</g>
+<g><title>DoubleAdapter — 29 lines</title>
+<polygon points="-8.4,60.35 -4.8,62.43 -4.8,60.37 -8.4,58.29" fill="#1e416e"/>
+<polygon points="-1.2,60.35 -4.8,62.43 -4.8,60.37 -1.2,58.29" fill="#122843"/>
+<polygon points="-4.8,56.21 -1.2,58.29 -4.8,60.37 -8.4,58.29" fill="#2a5a98"/>
+</g>
+<g><title>LinkedTreeMap — 644 lines</title>
+<polygon points="-41.35,64.38 -31.43,70.11 -31.43,50.2 -41.35,44.47" fill="#1e416e"/>
+<polygon points="-21.51,64.38 -31.43,70.11 -31.43,50.2 -21.51,44.47" fill="#122843"/>
+<polygon points="-31.43,38.74 -21.51,44.47 -31.43,50.2 -41.35,44.47" fill="#2a5a98"/>
+</g>
+<g><title>Streams — 133 lines</title>
+<polygon points="-84.91,61.48 -81.18,63.64 -81.18,58.56 -84.91,56.4" fill="#1e416e"/>
+<polygon points="-77.45,61.48 -81.18,63.64 -81.18,58.56 -77.45,56.4" fill="#122843"/>
+<polygon points="-81.18,54.25 -77.45,56.4 -81.18,58.56 -84.91,56.4" fill="#2a5a98"/>
+</g>
+<g><title>AppendableWriter — 91 lines</title>
+<polygon points="-68.95,63.36 -63.94,66.25 -63.94,62.39 -68.95,59.5" fill="#1e416e"/>
+<polygon points="-58.93,63.36 -63.94,66.25 -63.94,62.39 -58.93,59.5" fill="#122843"/>
+<polygon points="-63.94,56.6 -58.93,59.5 -63.94,62.39 -68.95,59.5" fill="#2a5a98"/>
+</g>
+<g><title>JsonReader — 1681 lines</title>
+<polygon points="-110.91,70.04 -97.56,77.75 -97.56,27.75 -110.91,20.04" fill="#1e416e"/>
+<polygon points="-84.21,70.04 -97.56,77.75 -97.56,27.75 -84.21,20.04" fill="#122843"/>
+<polygon points="-97.56,12.33 -84.21,20.04 -97.56,27.75 -110.91,20.04" fill="#2a5a98"/>
+</g>
+<g><title>NumberLimits — 27 lines</title>
+<polygon points="-79.32,64.56 -75.72,66.64 -75.72,64.63 -79.32,62.56" fill="#1e416e"/>
+<polygon points="-72.12,64.56 -75.72,66.64 -75.72,64.63 -72.12,62.56" fill="#122843"/>
+<polygon points="-75.72,60.48 -72.12,62.56 -75.72,64.63 -79.32,62.56" fill="#2a5a98"/>
+</g>
+<g><title>ParameterizedTypeImpl — 72 lines</title>
+<polygon points="-62.12,67.2 -57.2,70.04 -57.2,66.73 -62.12,63.89" fill="#1e416e"/>
+<polygon points="-52.28,67.2 -57.2,70.04 -57.2,66.73 -52.28,63.89" fill="#122843"/>
+<polygon points="-57.2,61.05 -52.28,63.89 -57.2,66.73 -62.12,63.89" fill="#2a5a98"/>
+</g>
+<g><title>Excluder — 209 lines</title>
+<polygon points="-27.66,69.93 -19.77,74.49 -19.77,67.2 -27.66,62.65" fill="#1e416e"/>
+<polygon points="-11.89,69.93 -19.77,74.49 -19.77,67.2 -11.89,62.65" fill="#122843"/>
+<polygon points="-19.77,58.1 -11.89,62.65 -19.77,67.2 -27.66,62.65" fill="#2a5a98"/>
+</g>
+<g><title>PreJava9DateFormatProvider — 42 lines</title>
+<polygon points="-73.99,67.64 -70.39,69.72 -70.39,67.28 -73.99,65.2" fill="#1e416e"/>
+<polygon points="-66.79,67.64 -70.39,69.72 -70.39,67.28 -66.79,65.2" fill="#122843"/>
+<polygon points="-70.39,63.12 -66.79,65.2 -70.39,67.28 -73.99,65.2" fill="#2a5a98"/>
+</g>
+<g><title>ReflectionAccessFilterHelper — 96 lines</title>
+<polygon points="-55.37,70.98 -50.55,73.77 -50.55,69.76 -55.37,66.98" fill="#1e416e"/>
+<polygon points="-45.72,70.98 -50.55,73.77 -50.55,69.76 -45.72,66.98" fill="#122843"/>
+<polygon points="-50.55,64.19 -45.72,66.98 -50.55,69.76 -55.37,66.98" fill="#2a5a98"/>
+</g>
+<g><title>Primitives — 74 lines</title>
+<polygon points="-68.65,70.72 -65.05,72.79 -65.05,69.43 -68.65,67.35" fill="#1e416e"/>
+<polygon points="-61.46,70.72 -65.05,72.79 -65.05,69.43 -61.46,67.35" fill="#122843"/>
+<polygon points="-65.05,65.27 -61.46,67.35 -65.05,69.43 -68.65,67.35" fill="#2a5a98"/>
+</g>
+<g><title>ConstructorConstructor — 421 lines</title>
+<polygon points="-17.99,75.46 -10.16,79.98 -10.16,66.54 -17.99,62.02" fill="#1e416e"/>
+<polygon points="-2.33,75.46 -10.16,79.98 -10.16,66.54 -2.33,62.02" fill="#122843"/>
+<polygon points="-10.16,57.5 -2.33,62.02 -10.16,66.54 -17.99,62.02" fill="#2a5a98"/>
+</g>
+<g><title>JsonWriter — 675 lines</title>
+<polygon points="-121.84,76.35 -112.65,81.65 -112.65,60.85 -121.84,55.54" fill="#1e416e"/>
+<polygon points="-103.45,76.35 -112.65,81.65 -112.65,60.85 -103.45,55.54" fill="#122843"/>
+<polygon points="-112.65,50.23 -103.45,55.54 -112.65,60.85 -121.84,55.54" fill="#2a5a98"/>
+</g>
+<g><title>GenericArrayTypeImpl — 28 lines</title>
+<polygon points="-63.18,73.71 -59.72,75.71 -59.72,73.68 -63.18,71.68" fill="#1e416e"/>
+<polygon points="-56.26,73.71 -59.72,75.71 -59.72,73.68 -56.26,71.68" fill="#122843"/>
+<polygon points="-59.72,69.68 -56.26,71.68 -59.72,73.68 -63.18,71.68" fill="#2a5a98"/>
+</g>
+<g><title>JavaVersion — 78 lines</title>
+<polygon points="-48.62,74.66 -43.99,77.33 -43.99,73.85 -48.62,71.17" fill="#1e416e"/>
+<polygon points="-39.36,74.66 -43.99,77.33 -43.99,73.85 -39.36,71.17" fill="#122843"/>
+<polygon points="-43.99,68.5 -39.36,71.17 -43.99,73.85 -48.62,71.17" fill="#2a5a98"/>
+</g>
+<g><title>LinkedTreeMapIterator — 37 lines</title>
+<polygon points="-57.99,76.71 -54.53,78.71 -54.53,76.41 -57.99,74.42" fill="#1e416e"/>
+<polygon points="-51.07,76.71 -54.53,78.71 -54.53,76.41 -51.07,74.42" fill="#122843"/>
+<polygon points="-54.53,72.42 -51.07,74.42 -54.53,76.41 -57.99,74.42" fill="#2a5a98"/>
+</g>
+<g><title>LazilyParsedNumber — 82 lines</title>
+<polygon points="-42.06,78.21 -37.63,80.77 -37.63,77.17 -42.06,74.61" fill="#1e416e"/>
+<polygon points="-33.2,78.21 -37.63,80.77 -37.63,77.17 -33.2,74.61" fill="#122843"/>
+<polygon points="-37.63,72.06 -33.2,74.61 -37.63,77.17 -42.06,74.61" fill="#2a5a98"/>
+</g>
+<g><title>NonNullElementWrapperList — 102 lines</title>
+<polygon points="-6.64,79.95 -0.59,83.44 -0.59,79.26 -6.64,75.77" fill="#1e416e"/>
+<polygon points="5.45,79.95 -0.59,83.44 -0.59,79.26 5.45,75.77" fill="#122843"/>
+<polygon points="-0.59,72.27 5.45,75.77 -0.59,79.26 -6.64,75.77" fill="#2a5a98"/>
+</g>
+<g><title>JsonToken — 52 lines</title>
+<polygon points="-105.58,79.57 -101.72,81.8 -101.72,79.07 -105.58,76.84" fill="#1e416e"/>
+<polygon points="-97.86,79.57 -101.72,81.8 -101.72,79.07 -97.86,76.84" fill="#122843"/>
+<polygon points="-101.72,74.62 -97.86,76.84 -101.72,79.07 -105.58,76.84" fill="#2a5a98"/>
+</g>
+<g><title>MalformedJsonException — 15 lines</title>
+<polygon points="-127.03,79.34 -123.57,81.34 -123.57,79.68 -127.03,77.69" fill="#1e416e"/>
+<polygon points="-120.12,79.34 -123.57,81.34 -123.57,79.68 -120.12,77.69" fill="#122843"/>
+<polygon points="-123.57,75.69 -120.12,77.69 -123.57,79.68 -127.03,77.69" fill="#2a5a98"/>
+</g>
+<g><title>InstanceCreatorConstructor — 14 lines</title>
+<polygon points="-52.49,79.53 -49.34,81.35 -49.34,79.72 -52.49,77.9" fill="#1e416e"/>
+<polygon points="-46.19,79.53 -49.34,81.35 -49.34,79.72 -46.19,77.9" fill="#122843"/>
+<polygon points="-49.34,76.08 -46.19,77.9 -49.34,79.72 -52.49,77.9" fill="#2a5a98"/>
+</g>
+<g><title>TypeToken — 399 lines</title>
+<polygon points="-79.48,83.12 -70.52,88.3 -70.52,75.5 -79.48,70.32" fill="#1e416e"/>
+<polygon points="-61.55,83.12 -70.52,88.3 -70.52,75.5 -61.55,70.32" fill="#122843"/>
+<polygon points="-70.52,65.14 -61.55,70.32 -70.52,75.5 -79.48,70.32" fill="#2a5a98"/>
+</g>
+<g><title>AccessChecker — 41 lines</title>
+<polygon points="-35.79,81.71 -31.47,84.21 -31.47,81.79 -35.79,79.3" fill="#1e416e"/>
+<polygon points="-27.14,81.71 -31.47,84.21 -31.47,81.79 -27.14,79.3" fill="#122843"/>
+<polygon points="-31.47,76.8 -27.14,79.3 -31.47,81.79 -35.79,79.3" fill="#2a5a98"/>
+</g>
+<g><title>JsonObject — 220 lines</title>
+<polygon points="-140.36,84.04 -133.96,87.73 -133.96,80.12 -140.36,76.43" fill="#1e416e"/>
+<polygon points="-127.56,84.04 -133.96,87.73 -133.96,80.12 -127.56,76.43" fill="#122843"/>
+<polygon points="-133.96,72.74 -127.56,76.43 -133.96,80.12 -140.36,76.43" fill="#2a5a98"/>
+</g>
+<g><title>ThrowingObjectConstructor — 16 lines</title>
+<polygon points="-47.26,82.15 -44.46,83.76 -44.46,82.08 -47.26,80.46" fill="#1e416e"/>
+<polygon points="-41.66,82.15 -44.46,83.76 -44.46,82.08 -41.66,80.46" fill="#122843"/>
+<polygon points="-44.46,78.85 -41.66,80.46 -44.46,82.08 -47.26,80.46" fill="#2a5a98"/>
+</g>
+<g><title>JsonScope — 27 lines</title>
+<polygon points="-99.73,82.65 -96.13,84.73 -96.13,82.73 -99.73,80.65" fill="#1e416e"/>
+<polygon points="-92.53,82.65 -96.13,84.73 -96.13,82.73 -92.53,80.65" fill="#122843"/>
+<polygon points="-96.13,78.57 -92.53,80.65 -96.13,82.73 -99.73,80.65" fill="#2a5a98"/>
+</g>
+<g><title>EntrySet — 40 lines</title>
+<polygon points="-29.39,85.01 -25.41,87.31 -25.41,84.93 -29.39,82.63" fill="#1e416e"/>
+<polygon points="-21.43,85.01 -25.41,87.31 -25.41,84.93 -21.43,82.63" fill="#122843"/>
+<polygon points="-25.41,80.33 -21.43,82.63 -25.41,84.93 -29.39,82.63" fill="#2a5a98"/>
+</g>
+<g><title>JsonReaderInternalAccess — 9 lines</title>
+<polygon points="-42.72,84.76 -39.93,86.38 -39.93,84.9 -42.72,83.28" fill="#1e416e"/>
+<polygon points="-37.13,84.76 -39.93,86.38 -39.93,84.9 -37.13,83.28" fill="#122843"/>
+<polygon points="-39.93,81.66 -37.13,83.28 -39.93,84.9 -42.72,83.28" fill="#2a5a98"/>
+</g>
+<g><title>JsonNull — 40 lines</title>
+<polygon points="-145.24,86.86 -142.09,88.68 -142.09,86.3 -145.24,84.48" fill="#1e416e"/>
+<polygon points="-138.94,86.86 -142.09,88.68 -142.09,86.3 -138.94,84.48" fill="#122843"/>
+<polygon points="-142.09,82.65 -138.94,84.48 -142.09,86.3 -145.24,84.48" fill="#2a5a98"/>
+</g>
+<g><title>JsonPrimitive — 294 lines</title>
+<polygon points="-132.02,88.61 -125.83,92.18 -125.83,82.43 -132.02,78.86" fill="#1e416e"/>
+<polygon points="-119.64,88.61 -125.83,92.18 -125.83,82.43 -119.64,78.86" fill="#122843"/>
+<polygon points="-125.83,75.28 -119.64,78.86 -125.83,82.43 -132.02,78.86" fill="#2a5a98"/>
+</g>
+<g><title>TroubleshootingGuide — 8 lines</title>
+<polygon points="-37.99,87.26 -35.39,88.76 -35.39,87.31 -37.99,85.81" fill="#1e416e"/>
+<polygon points="-32.8,87.26 -35.39,88.76 -35.39,87.31 -32.8,85.81" fill="#122843"/>
+<polygon points="-35.39,84.31 -32.8,85.81 -35.39,87.31 -37.99,85.81" fill="#2a5a98"/>
+</g>
+<g><title>CurrentWrite — 33 lines</title>
+<polygon points="-23.68,88.31 -19.7,90.61 -19.7,88.43 -23.68,86.13" fill="#1e416e"/>
+<polygon points="-15.71,88.31 -19.7,90.61 -19.7,88.43 -15.71,86.13" fill="#122843"/>
+<polygon points="-19.7,83.83 -15.71,86.13 -19.7,88.43 -23.68,86.13" fill="#2a5a98"/>
+</g>
+<g><title>Expose — 20 lines</title>
+<polygon points="-56.98,88.49 -54.62,89.85 -54.62,88.05 -56.98,86.68" fill="#1e416e"/>
+<polygon points="-52.25,88.49 -54.62,89.85 -54.62,88.05 -52.25,86.68" fill="#122843"/>
+<polygon points="-54.62,85.32 -52.25,86.68 -54.62,88.05 -56.98,86.68" fill="#2a5a98"/>
+</g>
+<g><title>JsonSerializationContext — 22 lines</title>
+<polygon points="-140.19,89.58 -137.21,91.3 -137.21,89.44 -140.19,87.72" fill="#1e416e"/>
+<polygon points="-134.22,89.58 -137.21,91.3 -137.21,89.44 -134.22,87.72" fill="#122843"/>
+<polygon points="-137.21,86 -134.22,87.72 -137.21,89.44 -140.19,87.72" fill="#2a5a98"/>
+</g>
+<g><title>ObjectConstructor — 5 lines</title>
+<polygon points="-33.16,89.47 -31.07,90.67 -31.07,89.31 -33.16,88.1" fill="#1e416e"/>
+<polygon points="-28.98,89.47 -31.07,90.67 -31.07,89.31 -28.98,88.1" fill="#122843"/>
+<polygon points="-31.07,86.9 -28.98,88.1 -31.07,89.31 -33.16,88.1" fill="#2a5a98"/>
+</g>
+<g><title>WildcardTypeImpl — 63 lines</title>
+<polygon points="-17.84,91.54 -13.98,93.76 -13.98,90.72 -17.84,88.49" fill="#1e416e"/>
+<polygon points="-10.12,91.54 -13.98,93.76 -13.98,90.72 -10.12,88.49" fill="#122843"/>
+<polygon points="-13.98,86.26 -10.12,88.49 -13.98,90.72 -17.84,88.49" fill="#2a5a98"/>
+</g>
+<g><title>JsonAdapter — 18 lines</title>
+<polygon points="-52.89,90.85 -50.52,92.22 -50.52,90.47 -52.89,89.11" fill="#1e416e"/>
+<polygon points="-48.16,90.85 -50.52,92.22 -50.52,90.47 -48.16,89.11" fill="#122843"/>
+<polygon points="-50.52,87.74 -48.16,89.11 -50.52,90.47 -52.89,89.11" fill="#2a5a98"/>
+</g>
+<g><title>SerializedName — 16 lines</title>
+<polygon points="-61.08,90.85 -58.71,92.22 -58.71,90.53 -61.08,89.17" fill="#1e416e"/>
+<polygon points="-56.35,90.85 -58.71,92.22 -58.71,90.53 -56.35,89.17" fill="#122843"/>
+<polygon points="-58.71,87.8 -56.35,89.17 -58.71,90.53 -61.08,89.17" fill="#2a5a98"/>
+</g>
+<g><title>ToNumberPolicy — 80 lines</title>
+<polygon points="-123.35,92.75 -117.91,95.89 -117.91,92.35 -123.35,89.21" fill="#1e416e"/>
+<polygon points="-112.47,92.75 -117.91,95.89 -117.91,92.35 -112.47,89.21" fill="#122843"/>
+<polygon points="-117.91,86.07 -112.47,89.21 -117.91,92.35 -123.35,89.21" fill="#2a5a98"/>
+</g>
+<g><title>FilterResult — 40 lines</title>
+<polygon points="-135.47,92.3 -132.49,94.02 -132.49,91.64 -135.47,89.92" fill="#1e416e"/>
+<polygon points="-129.51,92.3 -132.49,94.02 -132.49,91.64 -129.51,89.92" fill="#122843"/>
+<polygon points="-132.49,88.2 -129.51,89.92 -132.49,91.64 -135.47,89.92" fill="#2a5a98"/>
+</g>
+<g><title>Since — 7 lines</title>
+<polygon points="-56.71,93.06 -54.62,94.26 -54.62,92.84 -56.71,91.63" fill="#1e416e"/>
+<polygon points="-52.53,93.06 -54.62,94.26 -54.62,92.84 -52.53,91.63" fill="#122843"/>
+<polygon points="-54.62,90.43 -52.53,91.63 -54.62,92.84 -56.71,91.63" fill="#2a5a98"/>
+</g>
+<g><title>Until — 8 lines</title>
+<polygon points="-64.9,93.06 -62.81,94.26 -62.81,92.81 -64.9,91.6" fill="#1e416e"/>
+<polygon points="-60.72,93.06 -62.81,94.26 -62.81,92.81 -60.72,91.6" fill="#122843"/>
+<polygon points="-62.81,90.4 -60.72,91.6 -62.81,92.81 -64.9,91.6" fill="#2a5a98"/>
+</g>
+<g><title>Gson — 1131 lines</title>
+<polygon points="-52.53,98.38 -41.23,104.9 -41.23,70.86 -52.53,64.34" fill="#1e416e"/>
+<polygon points="-29.93,98.38 -41.23,104.9 -41.23,70.86 -29.93,64.34" fill="#122843"/>
+<polygon points="-41.23,57.81 -29.93,64.34 -41.23,70.86 -52.53,64.34" fill="#2a5a98"/>
+</g>
+<g><title>ExclusionStrategy — 18 lines</title>
+<polygon points="-130.57,94.92 -127.77,96.53 -127.77,94.79 -130.57,93.17" fill="#1e416e"/>
+<polygon points="-124.98,94.92 -127.77,96.53 -127.77,94.79 -124.98,93.17" fill="#122843"/>
+<polygon points="-127.77,91.56 -124.98,93.17 -127.77,94.79 -130.57,93.17" fill="#2a5a98"/>
+</g>
+<g><title>ReflectionAccessFilter — 184 lines</title>
+<polygon points="-116.09,96.84 -110.74,99.93 -110.74,93.37 -116.09,90.28" fill="#1e416e"/>
+<polygon points="-105.38,96.84 -110.74,99.93 -110.74,93.37 -105.38,90.28" fill="#122843"/>
+<polygon points="-110.74,87.19 -105.38,90.28 -110.74,93.37 -116.09,90.28" fill="#2a5a98"/>
+</g>
+<g><title>FieldNamingStrategy — 23 lines</title>
+<polygon points="-126.04,97.53 -123.24,99.15 -123.24,97.26 -126.04,95.64" fill="#1e416e"/>
+<polygon points="-120.44,97.53 -123.24,99.15 -123.24,97.26 -120.44,95.64" fill="#122843"/>
+<polygon points="-123.24,94.03 -120.44,95.64 -123.24,97.26 -126.04,95.64" fill="#2a5a98"/>
+</g>
+<g><title>JsonElement — 339 lines</title>
+<polygon points="-108.92,100.89 -103.65,103.93 -103.65,92.87 -108.92,89.83" fill="#1e416e"/>
+<polygon points="-98.38,100.89 -103.65,103.93 -103.65,92.87 -98.38,89.83" fill="#122843"/>
+<polygon points="-103.65,86.78 -98.38,89.83 -103.65,92.87 -108.92,89.83" fill="#2a5a98"/>
+</g>
+<g><title>JsonDeserializer — 20 lines</title>
+<polygon points="-121.51,100.15 -118.71,101.77 -118.71,99.96 -121.51,98.35" fill="#1e416e"/>
+<polygon points="-115.91,100.15 -118.71,101.77 -118.71,99.96 -115.91,98.35" fill="#122843"/>
+<polygon points="-118.71,96.73 -115.91,98.35 -118.71,99.96 -121.51,98.35" fill="#2a5a98"/>
+</g>
+<g><title>GsonBuilder — 985 lines</title>
+<polygon points="-38.6,105.38 -28.2,111.39 -28.2,81.59 -38.6,75.58" fill="#1e416e"/>
+<polygon points="-17.79,105.38 -28.2,111.39 -28.2,81.59 -17.79,75.58" fill="#122843"/>
+<polygon points="-28.2,69.57 -17.79,75.58 -28.2,81.59 -38.6,75.58" fill="#2a5a98"/>
+</g>
+<g><title>JsonSerializer — 18 lines</title>
+<polygon points="-116.98,102.77 -114.18,104.38 -114.18,102.64 -116.98,101.02" fill="#1e416e"/>
+<polygon points="-111.38,102.77 -114.18,104.38 -114.18,102.64 -111.38,101.02" fill="#122843"/>
+<polygon points="-114.18,99.41 -111.38,101.02 -114.18,102.64 -116.98,101.02" fill="#2a5a98"/>
+</g>
+<g><title>TypeAdapter — 202 lines</title>
+<polygon points="-101.92,104.93 -96.65,107.97 -96.65,100.89 -101.92,97.85" fill="#1e416e"/>
+<polygon points="-91.38,104.93 -96.65,107.97 -96.65,100.89 -91.38,97.85" fill="#122843"/>
+<polygon points="-96.65,94.8 -91.38,97.85 -96.65,100.89 -101.92,97.85" fill="#2a5a98"/>
+</g>
+<g><title>Strictness — 10 lines</title>
+<polygon points="-112.45,105.38 -109.65,107 -109.65,105.49 -112.45,103.87" fill="#1e416e"/>
+<polygon points="-106.85,105.38 -109.65,107 -109.65,105.49 -106.85,103.87" fill="#122843"/>
+<polygon points="-109.65,102.25 -106.85,103.87 -109.65,105.49 -112.45,103.87" fill="#2a5a98"/>
+</g>
+<g><title>FormattingStyle — 118 lines</title>
+<polygon points="-94.28,108.6 -89.64,111.28 -89.64,106.63 -94.28,103.96" fill="#1e416e"/>
+<polygon points="-85.01,108.6 -89.64,111.28 -89.64,106.63 -85.01,103.96" fill="#122843"/>
+<polygon points="-89.64,101.28 -85.01,103.96 -89.64,106.63 -94.28,103.96" fill="#2a5a98"/>
+</g>
+<g><title>JsonDeserializationContext — 17 lines</title>
+<polygon points="-107.71,107.88 -105.12,109.38 -105.12,107.66 -107.71,106.17" fill="#1e416e"/>
+<polygon points="-102.52,107.88 -105.12,109.38 -105.12,107.66 -102.52,106.17" fill="#122843"/>
+<polygon points="-105.12,104.67 -102.52,106.17 -105.12,107.66 -107.71,106.17" fill="#2a5a98"/>
+</g>
+<g><title>JsonArray — 395 lines</title>
+<polygon points="-23.15,110.48 -16.06,114.58 -16.06,101.89 -23.15,97.8" fill="#1e416e"/>
+<polygon points="-8.96,110.48 -16.06,114.58 -16.06,101.89 -8.96,97.8" fill="#122843"/>
+<polygon points="-16.06,93.7 -8.96,97.8 -16.06,101.89 -23.15,97.8" fill="#2a5a98"/>
+</g>
+<g><title>TypeAdapterFactory — 7 lines</title>
+<polygon points="-103.39,110.38 -100.79,111.88 -100.79,110.45 -103.39,108.95" fill="#1e416e"/>
+<polygon points="-98.2,110.38 -100.79,111.88 -100.79,110.45 -98.2,108.95" fill="#122843"/>
+<polygon points="-100.79,107.46 -98.2,108.95 -100.79,110.45 -103.39,108.95" fill="#2a5a98"/>
+</g>
+<g><title>JsonParser — 106 lines</title>
+<polygon points="-87.71,112.16 -83.28,114.72 -83.28,110.42 -87.71,107.86" fill="#1e416e"/>
+<polygon points="-78.85,112.16 -83.28,114.72 -83.28,110.42 -78.85,107.86" fill="#122843"/>
+<polygon points="-83.28,105.31 -78.85,107.86 -83.28,110.42 -87.71,107.86" fill="#2a5a98"/>
+</g>
+<g><title>InstanceCreator — 14 lines</title>
+<polygon points="-98.83,112.74 -96.46,114.11 -96.46,112.48 -98.83,111.12" fill="#1e416e"/>
+<polygon points="-94.1,112.74 -96.46,114.11 -96.46,112.48 -94.1,111.12" fill="#122843"/>
+<polygon points="-96.46,109.75 -94.1,111.12 -96.46,112.48 -98.83,111.12" fill="#2a5a98"/>
+</g>
+<g><title>FieldNamingPolicy — 183 lines</title>
+<polygon points="-14.2,115.51 -7.23,119.53 -7.23,113 -14.2,108.98" fill="#1e416e"/>
+<polygon points="-0.26,115.51 -7.23,119.53 -7.23,113 -0.26,108.98" fill="#122843"/>
+<polygon points="-7.23,104.95 -0.26,108.98 -7.23,113 -14.2,108.98" fill="#2a5a98"/>
+</g>
+<g><title>LongSerializationPolicy — 56 lines</title>
+<polygon points="-81.55,115.72 -77.12,118.27 -77.12,115.43 -81.55,112.87" fill="#1e416e"/>
+<polygon points="-72.69,115.72 -77.12,118.27 -77.12,115.43 -72.69,112.87" fill="#122843"/>
+<polygon points="-77.12,110.31 -72.69,112.87 -77.12,115.43 -81.55,112.87" fill="#2a5a98"/>
+</g>
+<g><title>ToNumberStrategy — 11 lines</title>
+<polygon points="-94.73,115.11 -92.37,116.47 -92.37,114.93 -94.73,113.57" fill="#1e416e"/>
+<polygon points="-90,115.11 -92.37,116.47 -92.37,114.93 -90,113.57" fill="#122843"/>
+<polygon points="-92.37,112.2 -90,113.57 -92.37,114.93 -94.73,113.57" fill="#2a5a98"/>
+</g>
+<g><title>FieldAttributes — 115 lines</title>
+<polygon points="-75.06,119.08 -70.96,121.45 -70.96,116.89 -75.06,114.53" fill="#1e416e"/>
+<polygon points="-66.86,119.08 -70.96,121.45 -70.96,116.89 -66.86,114.53" fill="#122843"/>
+<polygon points="-70.96,112.16 -66.86,114.53 -70.96,116.89 -75.06,114.53" fill="#2a5a98"/>
+</g>
+<g><title>FutureTypeAdapter — 38 lines</title>
+<polygon points="-69.11,122.38 -65.13,124.68 -65.13,122.36 -69.11,120.06" fill="#1e416e"/>
+<polygon points="-61.14,122.38 -65.13,124.68 -65.13,122.36 -61.14,120.06" fill="#122843"/>
+<polygon points="-65.13,117.76 -61.14,120.06 -65.13,122.36 -69.11,120.06" fill="#2a5a98"/>
+</g>
+<g><title>JsonStreamParser — 75 lines</title>
+<polygon points="-63.01,125.46 -59.41,127.54 -59.41,124.14 -63.01,122.06" fill="#1e416e"/>
+<polygon points="-55.81,125.46 -59.41,127.54 -59.41,124.14 -55.81,122.06" fill="#122843"/>
+<polygon points="-59.41,119.99 -55.81,122.06 -59.41,124.14 -63.01,122.06" fill="#2a5a98"/>
+</g>
+<g><title>JsonIOException — 21 lines</title>
+<polygon points="-57.54,128.46 -54.08,130.46 -54.08,128.63 -57.54,126.63" fill="#1e416e"/>
+<polygon points="-50.62,128.46 -54.08,130.46 -54.08,128.63 -50.62,126.63" fill="#122843"/>
+<polygon points="-54.08,124.63 -50.62,126.63 -54.08,128.63 -57.54,126.63" fill="#2a5a98"/>
+</g>
+<g><title>JsonParseException — 33 lines</title>
+<polygon points="-52.35,131.46 -48.89,133.45 -48.89,131.27 -52.35,129.28" fill="#1e416e"/>
+<polygon points="-45.43,131.46 -48.89,133.45 -48.89,131.27 -45.43,129.28" fill="#122843"/>
+<polygon points="-48.89,127.28 -45.43,129.28 -48.89,131.27 -52.35,129.28" fill="#2a5a98"/>
+</g>
+<g><title>JsonSyntaxException — 22 lines</title>
+<polygon points="-47.16,134.45 -43.7,136.45 -43.7,134.59 -47.16,132.59" fill="#1e416e"/>
+<polygon points="-40.24,134.45 -43.7,136.45 -43.7,134.59 -40.24,132.59" fill="#122843"/>
+<polygon points="-43.7,130.6 -40.24,132.59 -43.7,134.59 -47.16,132.59" fill="#2a5a98"/>
+</g>
+<g><title>NullSafeTypeAdapter — 24 lines</title>
+<polygon points="-41.82,137.36 -38.51,139.28 -38.51,137.36 -41.82,135.45" fill="#1e416e"/>
+<polygon points="-35.2,137.36 -38.51,139.28 -38.51,137.36 -35.2,135.45" fill="#122843"/>
+<polygon points="-38.51,133.53 -35.2,135.45 -38.51,137.36 -41.82,135.45" fill="#2a5a98"/>
+</g>
+<path d="M-4.9,50.94 Q-13.79,22.66 -22.68,29.04" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-7.56,38.47 Q-22.9,21.06 -38.24,27.95" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-31.41,33.73 Q-25.23,0.06 -19.05,6.63" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-10.13,55.53 Q4.81,32.97 19.75,40.01" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-32.97,42.15 Q-6.61,30.68 19.75,40.01" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-24.67,38.3 Q-21.86,-0.22 -19.05,6.63" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-4.8,58.29 Q-2.4,-23.32 0,-11.88" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-15.6,52.04 Q-7.8,-22.77 0,-11.88" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M52.36,33.24 Q48.13,28.62 43.9,43.84" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-19.77,62.65 Q-30.5,57.07 -41.23,64.34" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-43.49,37.95 Q-51.61,30.46 -59.72,71.68" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-43.49,37.95 Q-50.34,31.43 -57.2,63.89" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-43.49,37.95 Q-28.74,27.93 -13.98,88.49" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-39.93,83.28 Q-68.74,6.77 -97.56,20.04" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-31.43,44.47 Q-28.42,36.84 -25.41,82.63" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-31.43,44.47 Q-59.1,34.69 -86.77,56.21" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-50.55,66.98 Q-80.64,56.23 -110.74,90.28" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-81.18,56.4 Q-36.88,32.5 7.41,46.2" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-81.18,56.4 Q-92.42,48.57 -103.65,89.83" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-71.5,55.34 Q-40.83,44.94 -10.16,62.02" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-97.56,20.04 Q-52.6,6.21 -7.65,20" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-41.23,64.34 Q-14.94,25.1 11.36,35.31" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-41.23,64.34 Q-34.71,59.27 -28.2,75.58" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-103.65,89.83 Q-59.85,76.27 -16.06,97.8" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-103.65,89.83 Q-118.81,69.45 -133.96,76.43" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-142.09,84.48 Q-122.87,76.82 -103.65,89.83" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-125.83,78.86 Q-114.74,72.89 -103.65,89.83" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-77.12,112.87 Q-38.56,-32.48 0,-11.88" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-96.65,97.85 Q-67.58,86.54 -38.51,135.45" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+<path d="M-100.79,108.95 Q-71.01,52.41 -41.23,64.34" fill="none" stroke="#f65e5e" stroke-width="0.55" stroke-linecap="round" opacity="0.8"/>
+</svg>
