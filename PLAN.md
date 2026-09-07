@@ -1952,12 +1952,31 @@ Wiring into the repo's scripts and CI:
   *published* artifact, not `dotnet run`, is the point — it is the only test
   that sees the embedded-ref-pack path (§13.1) and the single-file `Location`
   trap.
-- `.gitlab-ci.yml`: a second job `csharp` on `mcr.microsoft.com/dotnet/sdk:10.0`
-  — `dotnet test`, the five-RID publish, the smoke test on `linux-x64`,
-  artifacts kept for a week; the `verify` job gains the C# fixture through the
-  core gate automatically. macOS/Windows have no runner here, so their check is
-  the manual `cmp` (§13 principle 3), stated in the README as the release
-  checklist: download, run on the fixture, `cmp`, done.
+- **CI moved to GitHub Actions with the repository (M12c, 2026-09-07)** —
+  `.github/workflows/ci.yml` replaces `.gitlab-ci.yml`, and GitHub's hosted
+  macOS and Windows runners turn the cross-OS check from a laptop ritual into
+  a gate:
+  - `verify` (the TypeScript workspace: build, typecheck, tests, `schemas/`
+    drift) and `java` (`./mvnw test`) — the old gate, ported;
+  - `csharp-test` — `dotnet test` on the SDK pinned by `global.json`;
+  - `csharp-publish` — a five-job matrix, one RID each, every job calling
+    `./build.sh --csharp --rid <rid>` so CI and a developer's machine share
+    one definition of the publish flags; each binary is uploaded as an
+    artifact (14 days);
+  - `csharp-smoke` — a second matrix downloading each artifact onto a runner
+    of ITS OWN OS (`ubuntu-latest`, `ubuntu-24.04-arm`, `macos-latest` for
+    Apple silicon, `macos-15-intel`, `windows-latest`), running it on
+    `fixtures/csharp/src` from the repo root with the relative `--src`, and
+    `cmp`-ing the output with the committed snapshot. Nothing is installed on
+    those runners for the extractor: the binary carries the runtime. A
+    `.gitattributes` (`* text=auto eol=lf`, `*.jsonl -text`) plus
+    `core.autocrlf false` keep the snapshot's bytes intact on Windows;
+  - `release` — on a `v*` tag, the five binaries renamed after their RID plus
+    a `SHA256SUMS` are attached to a GitHub Release.
+  Measured locally first: the five-RID matrix cross-publishes from one Linux
+  host in 287 s (57 s per RID, ReadyToRun included), and `file` confirms each
+  artifact is a native executable of its target (ELF x86-64/aarch64, Mach-O
+  x86_64/arm64, PE32+).
 - `README.md` + `CLAUDE.md` architecture block gain `extractors/csharp/`;
   `extractors/csharp/README.md` mirrors the Java one (build, run, progress,
   the stderr summary, the toolchain gotchas above).

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# test.sh — run the acceptance gate: exactly what .gitlab-ci.yml verifies, on
-# your machine, with the toolchain checks CI gets for free from its image.
+# test.sh — run the acceptance gate: what .github/workflows/ci.yml verifies,
+# on your machine, with the toolchain checks CI gets from its runner images.
 #
 #   typecheck  pnpm -r typecheck
 #   unit       pnpm -r test            (vitest + fast-check property suites)

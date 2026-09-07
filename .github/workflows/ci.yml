@@ -1,0 +1,182 @@
+# The acceptance gate, on GitHub Actions (PLAN.md §13.7, M12c).
+#
+#   verify          the TypeScript workspace: build, typecheck, tests, schemas/ drift
+#   java            the Spoon extractor's own suite
+#   csharp-test     the Roslyn extractor's own suite (per-line schema validation included)
+#   csharp-publish  one self-contained single-file binary per RID, from ONE Linux host
+#   csharp-smoke    each binary runs on a runner of ITS OWN OS and must reproduce
+#                   the committed fixture snapshot byte for byte — the cross-OS gate
+#                   the plan could only delegate to a laptop under GitLab
+#   release         on a v* tag, the five binaries attached to a GitHub Release
+#
+# `test.sh` and `build.sh` are the same gate on a developer machine; CI calls
+# them where it can so the two cannot disagree about what "green" means.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+
+jobs:
+  verify:
+    name: typescript workspace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+      # schemas/ is a committed artifact: regenerating must be a no-op.
+      - run: pnpm run gen:schemas
+      - run: git diff --exit-code schemas/ || (echo "schemas/ is stale — run pnpm run gen:schemas and commit" && exit 1)
+
+  # The two websites — the landing page and the documentation (Hugo + Hextra,
+  # a git submodule) — built with the same pinned Hugo version a developer
+  # runs locally. Independent of the Node toolchain.
+  website:
+    name: websites (hugo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: "0.165.0"
+          extended: true
+      - run: cd website/landing && hugo --minify --gc
+      - run: cd website/doc && hugo --minify --gc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: websites
+          path: |
+            website/landing/public
+            website/doc/public
+          retention-days: 7
+
+  java:
+    name: java extractor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - run: cd extractors/java && ./mvnw -B test
+
+  csharp-test:
+    name: csharp extractor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: extractors/csharp/global.json
+      - run: cd extractors/csharp && dotnet test -c Release --nologo
+
+  csharp-publish:
+    name: publish ${{ matrix.rid }}
+    needs: csharp-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: extractors/csharp/global.json
+      # The same flags a developer's `./build.sh --csharp` uses — one definition.
+      - run: ./build.sh --csharp --rid ${{ matrix.rid }} --skip-install --no-auto-install
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codegraph-csharp-${{ matrix.rid }}
+          path: extractors/csharp/dist/${{ matrix.rid }}/
+          if-no-files-found: error
+          retention-days: 14
+
+  csharp-smoke:
+    name: smoke ${{ matrix.rid }} on ${{ matrix.os }}
+    needs: csharp-publish
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    rid: linux-x64,   exe: codegraph-csharp }
+          - { os: ubuntu-24.04-arm, rid: linux-arm64, exe: codegraph-csharp }
+          - { os: macos-latest,     rid: osx-arm64,   exe: codegraph-csharp }
+          - { os: macos-15-intel,   rid: osx-x64,     exe: codegraph-csharp }
+          - { os: windows-latest,   rid: win-x64,     exe: codegraph-csharp.exe }
+    steps:
+      # The snapshot is compared byte for byte: a Windows checkout must not
+      # rewrite its line endings (.gitattributes says so too — belt and braces).
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: codegraph-csharp-${{ matrix.rid }}
+          path: bin
+      # Nothing is installed on this runner for the extractor: the binary
+      # carries the runtime, Roslyn and the BCL. Run from the repo root with
+      # the RELATIVE --src the snapshot was made with (the typed path is the
+      # header's `root`).
+      - shell: bash
+        run: |
+          chmod +x "bin/${{ matrix.exe }}"
+          "bin/${{ matrix.exe }}" --version
+          "bin/${{ matrix.exe }}" --src fixtures/csharp/src --out out.jsonl --progress plain
+          cmp out.jsonl fixtures/csharp/expected/model.jsonl
+          echo "byte-identical on ${{ matrix.os }}"
+
+  release:
+    name: github release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [verify, java, csharp-smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: codegraph-csharp-*
+          path: artifacts
+      - name: name each binary after its RID and attach it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          for dir in artifacts/codegraph-csharp-*; do
+            rid="${dir#artifacts/codegraph-csharp-}"
+            for f in "$dir"/codegraph-csharp*; do
+              case "$f" in *.exe) cp "$f" "release/codegraph-csharp-$rid.exe" ;; *) cp "$f" "release/codegraph-csharp-$rid" ;; esac
+            done
+          done
+          (cd release && sha256sum * > SHA256SUMS)
+          gh release create "${GITHUB_REF_NAME}" --generate-notes --title "codegraph ${GITHUB_REF_NAME}" release/* \
+            || gh release upload "${GITHUB_REF_NAME}" release/* --clobber

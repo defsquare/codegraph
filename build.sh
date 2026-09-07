@@ -22,6 +22,7 @@ trap on_error ERR
 
 CLEAN="no"
 PUBLISH_ALL="no"
+PUBLISH_RID=""
 
 usage() {
   cat <<'USAGE'
@@ -35,6 +36,7 @@ Options:
   --csharp, --csharp-only
                        only extractors/csharp (dotnet publish, host RID)
   --publish-all        C#: publish linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64
+  --rid <rid>          C#: publish exactly this RID (what the CI matrix calls, one per job)
   --all                everything (default)
   --clean              discard previous output first (dist/, target/)
   --skip-install       do not run pnpm install (requires an existing node_modules)
@@ -54,6 +56,9 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --clean)    CLEAN="yes" ;;
     --publish-all) PUBLISH_ALL="yes" ;;
+    --rid)
+      [ $# -ge 2 ] || usage_error "--rid needs a value"
+      PUBLISH_RID="$2"; shift ;;
     -h|--help)  usage; exit 0 ;;
     *)          usage_error "unknown option: $1" ;;
   esac
@@ -122,7 +127,11 @@ if wants_csharp && [ "$SKIP_CSHARP" = "no" ]; then
     run rm -rf "$CSHARP_DIR/dist" "$CSHARP_DIR"/src/*/bin "$CSHARP_DIR"/src/*/obj "$CSHARP_DIR"/tests/*/bin "$CSHARP_DIR"/tests/*/obj
     step_done
   fi
-  if [ "$PUBLISH_ALL" = "yes" ]; then
+  if [ -n "$PUBLISH_RID" ]; then
+    step "publish csharp extractor ($PUBLISH_RID)"
+    publish_csharp "$PUBLISH_RID"
+    step_done
+  elif [ "$PUBLISH_ALL" = "yes" ]; then
     for rid in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64; do
       step "publish csharp extractor ($rid)"
       publish_csharp "$rid"
@@ -155,16 +164,17 @@ if wants_ts; then
   report "$ROOT/packages/navigator-ui/dist/index.html"
 fi
 if wants_java && [ "$SKIP_JAVA" = "no" ]; then report "$JAVA_DIR/target/codegraph-java.jar"; fi
+report_rid() {
+  case "$1" in
+    win-*) report "$CSHARP_DIR/dist/$1/codegraph-csharp.exe" ;;
+    *)     report "$CSHARP_DIR/dist/$1/codegraph-csharp" ;;
+  esac
+}
 if wants_csharp && [ "$SKIP_CSHARP" = "no" ]; then
-  if [ "$PUBLISH_ALL" = "yes" ]; then
-    for rid in linux-x64 linux-arm64 osx-x64 osx-arm64; do report "$CSHARP_DIR/dist/$rid/codegraph-csharp"; done
-    report "$CSHARP_DIR/dist/win-x64/codegraph-csharp.exe"
-  else
-    case "$(host_rid)" in
-      win-*) report "$CSHARP_DIR/dist/$(host_rid)/codegraph-csharp.exe" ;;
-      *)     report "$CSHARP_DIR/dist/$(host_rid)/codegraph-csharp" ;;
-    esac
-  fi
+  if [ -n "$PUBLISH_RID" ]; then report_rid "$PUBLISH_RID"
+  elif [ "$PUBLISH_ALL" = "yes" ]; then
+    for rid in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64; do report_rid "$rid"; done
+  else report_rid "$(host_rid)"; fi
 fi
 [ "$missing" -eq 0 ] || die "$missing expected artifact(s) missing — the build did not produce a usable tree"
 step_done

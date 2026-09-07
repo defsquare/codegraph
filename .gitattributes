@@ -1,0 +1,12 @@
+# Line endings are LF in the repository AND in every checkout. Two committed
+# artifacts are compared byte for byte — the fixture snapshots (model.jsonl)
+# and the schemas — and a Windows checkout that rewrote them to CRLF would
+# fail the CI smoke test for a reason that has nothing to do with the code.
+# The extractors themselves are indifferent (a CRLF source gives the same
+# model; DeterminismTest pins it), so this is about the committed bytes only.
+* text=auto eol=lf
+
+# Never normalized, never diffed as text by accident.
+*.jsonl -text
+*.png binary
+*.jar binary
