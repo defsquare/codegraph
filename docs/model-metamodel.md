@@ -109,7 +109,7 @@ decides how order manifests physically.
       makes v1's rendered-id uniqueness a *consequence* of it.
 - [x] Property suite: natural-key uniqueness, injectivity, and canonical order
       as a total order, generatively (`packages/core/test/properties.test.ts`).
-- [x] PLAN.md §9.1/§13/§14 (milestones/decisions): decisions recorded.
+- [x] PLAN.md §9.1/§14/§15 (milestones/decisions): decisions recorded.
 
 Done in M6 (PLAN.md §9.2), as planned: the `children` key is gone from `Entity`,
 the `TRAITS` table and the wire — the trait declaration stays — and closure,

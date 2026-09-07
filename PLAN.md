@@ -1183,6 +1183,8 @@ that it cannot be detected by construction.
 
 ## 10. Phase 7+ — Next languages (deferred, contract-ready from day 1)
 
+0. **C# via Roslyn** — planned in full as Phase 10 (§13, M12): the second
+   real extractor, first-class on Linux/macOS, shipped as one binary per OS.
 1. **Clojure** via `clj-kondo --analysis` → thin JSON adapter (near-free; first
    cross-language test on the Import layer; exercises the fn-var case for real).
 2. **TypeScript** via the TS compiler API (self-hosting: run codegraph on
@@ -1574,7 +1576,407 @@ Four principles, locked up front:
   which has no `@Autowired` at all: 6 implicit sole-constructor injection
   points found by the profile's own rule.
 
-## 13. Milestones
+## 13. Phase 10 — C# extractor (Roslyn) and native distribution (M12)
+
+Motivation: the second *real* extractor is the first test of the claim
+CLAUDE.md makes on every page — that an extractor in any language can conform
+using nothing but `schemas/` and the container contract. C# is the right second
+language: the `csharp` profile has existed as data since M1 without an
+implementation (invariant 8 says that must be possible; M12 is where it is
+checked), Roslyn gives Spoon-grade semantic binding (symbols, overload
+resolution, extension-method binding), and the .NET ecosystem's legacy corpora
+(Framework 4.x, WebForms, `packages.config`) are exactly the non-compilable
+kind the pipeline exists for. The extractor must run on Linux and macOS as
+first-class hosts and ship as ONE self-contained binary per OS, so a user needs
+no SDK on the machine that runs it.
+
+Three principles, locked up front:
+
+1. **Roslyn without MSBuild — the noClasspath of .NET.** The extractor never
+   opens a `.sln`/`.csproj` and never calls `MSBuildWorkspace`: it walks
+   `--src` for `*.cs`, parses each file, and binds one `CSharpCompilation`
+   against the BCL reference assemblies it carries inside itself. A missing
+   NuGet package is a stub, not a build failure — the same degraded-honesty
+   contract as Spoon's noClasspath (§5.2). `MSBuildWorkspace` needs an installed
+   SDK, a restore, and an evaluable project graph: three things a legacy corpus
+   does not offer and a self-contained binary cannot assume. A project-aware
+   mode (`--references`) is an optional later enrichment, never the baseline.
+2. **The extractor holds no metamodel intelligence** — the Java rule, mirrored.
+   It knows the C# id scheme, the kind→traits table, and how to write bytes.
+   Trait vocabulary, profile validation and closure live in `core`; the
+   cross-language gate (`packages/core/test/fixtures-csharp.test.ts`, the twin
+   of the Java one) is where the two halves meet.
+3. **Byte-identity is the cross-OS contract.** Two runs on one unchanged corpus
+   produce the same bytes (contract §6) — *on any of the three OSes*. That
+   single property turns "does it work on macOS/Windows?" into `cmp` against the
+   committed fixture snapshot, which is the only cross-OS test the Linux-only CI
+   can delegate to a human with a laptop.
+
+### 13.1 Toolchain and repository layout
+
+```
+extractors/csharp/
+  global.json                       pins the SDK band (10.0.x, LTS, roll-forward latestPatch)
+  Directory.Build.props             Deterministic, ContinuousIntegrationBuild, InvariantGlobalization,
+                                    Nullable=enable, TreatWarningsAsErrors, LangVersion latest
+  Codegraph.CSharp.sln
+  src/Codegraph.CSharp/             console project → `codegraph-csharp`
+    Program.cs                      CLI: same flags and exit codes as the Java jar (§13.5)
+    CorpusLoader.cs                 pass 0: file walk (ordinal order) + parse + one compilation
+    ReferenceAssemblies.cs          the embedded BCL ref pack → MetadataReference.CreateFromImage
+    CorpusWhitelist.cs              pass 1: the declared-type set (INamedTypeSymbol from source)
+    EntityIds.cs                    THE C# id scheme (§13.3)
+    EntityExtractor.cs              pass 2
+    EdgeExtractor.cs                pass 3
+    StubSynthesizer.cs              pass 4
+    Measures.cs                     sloc (trivia-based) + cyclomatic (syntax-based)
+    Literals.cs                     attribute arguments / const initializers → Literal (M10c shape)
+    Model/                          Entity, Edge, NaturalKey, JsonlWriter (Utf8JsonWriter), Progress
+  tests/Codegraph.CSharp.Tests/     xUnit; the same test names as extractors/java where the property
+                                    is the same (SnapshotTest, DeterminismTest, StubDisciplineTest,
+                                    ModelSchemaValidationTest, EntityTraitConformanceTest, …)
+fixtures/csharp/src/                the reference corpus (§13.6) — `Acme.Order`, the Java corpus's twin
+fixtures/csharp/expected/model.jsonl
+```
+
+Toolchain facts that bite first, mirroring `extractors/java/README.md`:
+
+- **`dotnet` is not installed on the dev box** (checked 2026-09-07). Install
+  user-locally, sdkman-style: `curl -sSL https://dot.net/v1/dotnet-install.sh |
+  bash -s -- --channel 10.0 --install-dir ~/.dotnet`, then
+  `DOTNET_ROOT=~/.dotnet` and `~/.dotnet` on `PATH`. `scripts/lib.sh` gains
+  `ensure_dotnet` beside `ensure_jdk`: PATH first, then `~/.dotnet/dotnet`,
+  then a `die` that prints the one-liner. Same script on macOS.
+- `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `DOTNET_NOLOGO=1`,
+  `DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1` exported by the scripts so a first build
+  is not a telemetry conversation.
+- `InvariantGlobalization=true`: the extractor does no culture-sensitive work,
+  and the flag removes the `libicu` runtime dependency that makes a .NET binary
+  fail on a minimal Linux (`Couldn't find a valid ICU package`) — the single
+  most common "works on my Mac, dies in the container" failure. It also makes
+  ordinal string behaviour identical on all three OSes, which §13.4 needs.
+- Roslyn packages: `Microsoft.CodeAnalysis.CSharp` (syntax + semantics) only.
+  NOT `Microsoft.CodeAnalysis.Workspaces.MSBuild`, NOT `Microsoft.Build.Locator`
+  (principle 1; both are also incompatible with single-file publishing).
+- BCL reference assemblies: the `Microsoft.NETCore.App.Ref` pack's
+  `ref/net10.0/*.dll` are embedded as resources at build time and loaded with
+  `MetadataReference.CreateFromImage`. Why not `typeof(object).Assembly.Location`
+  like every Roslyn tutorial: in a single-file bundle `Assembly.Location` is the
+  empty string, so the "obvious" approach works in `dotnet run` and silently
+  binds *nothing* in the shipped binary — every `string` would become an
+  unresolved stub and the resolution rate would collapse only in production.
+  `ReferenceAssembliesTest` pins that `System.String` resolves to a stub in
+  module `System`, not `<unresolved>`, and runs against the *published* binary
+  in CI (§13.7).
+
+### 13.2 Mapping table (C# profile) — and the profile corrections M12 forces
+
+The profile (`packages/core/src/profiles/csharp.ts`) predates M6 and M10; the
+first M12 commit is `feat(core): csharp profile v2`, a data change with the
+same justification each Java change had:
+
+| Change | Why |
+|---|---|
+| `TWithChildren` added to `method`, `constructor`, `lambda`, `delegate`, `property` | M6's executable-containment decision (§9.2): parameters and locals carry `parent`, so the container must be licensed too, or the model states a containment its own profile forbids. `property` because accessor bodies hold locals and lambdas. |
+| `TMetrics` optional on every type and invocable | M10b: `sloc` + `cyclomatic`, the same two measures Java emits, so the city's `--height sum:cyclomatic` works on a C# corpus unchanged. |
+| `TWithValue` optional on `field` (`const`, enum members) and `parameter` (default values) | M10c, the value door. An enum member is a `field` whose value is its constant, exactly the Java shape. |
+| edges `annotationUse` and `throws` added | Attributes ARE annotation usage (M10c's edge kind, with `arguments`); `throw` statements are M10d-era evidence the insights walk consumes. |
+| kind `event` added: `TNamed, TStructural, TTypedEntity, TChildOf, TSourceAnchor` | An event is a value-shaped member with its own declaration site; folding it into `field` would lie about the kind and into `property` about accessors. |
+| lambda disambiguator note: `(file, line, column)` | The M7 lesson (§5.3): two nameless entities on one line — `Chain(() => a, () => b)`, or a lambda inside an anonymous method — collide on `(file, line)`. A column is a source fact. |
+| the `dynamic` note reworded: a `dynamic` call site is dropped and COUNTED, not emitted as `dynamic-candidate` | The M10d decision moved candidate generation to the analyzer, which alone has whole-corpus implementor knowledge. An extractor inventing a candidates list from the file's `using`s would be the prefix-filter sin at the edge level. |
+
+Construct → kind, on top of the profile's table:
+
+| C# construct | kind | notes |
+|---|---|---|
+| `namespace` (block or file-scoped), global namespace | `namespace` | module; global namespace is `csharp:<global>`; block-nested namespaces get `TChildOf` |
+| `class`, `interface`, `struct`, `record`, `record struct`, `enum`, `delegate` | as named; `record struct` → `record` | `static class` is a `class`; `partial` merges by id (§13.3) |
+| method, `operator`, conversion, finalizer, local function | `method` | operators use the metadata name (`op_Addition`, `op_Implicit`); a local function's parent is the enclosing invocable |
+| constructor, static constructor, primary constructor (records, C# 12 classes) | `constructor` | primary constructor: anchor = the parameter list; a positional record's synthesized `Deconstruct`/`Equals` are NOT emitted (never written) |
+| property, indexer (`this[]`), auto-property | `property` | indexer symbol `Item(params)`; accessor bodies contribute edges FROM the property |
+| field, `const`, enum member | `field` | `TWithValue` for `const` and enum members |
+| event | `event` | `+=` / `-=` are `access` edges with `isWrite` |
+| parameter, local (incl. `out var`, pattern variables, `foreach` variables) | `parameter` / `localVariable` | `var` → `TTypedEntity` present, `declaredType` absent when Roslyn's inferred type is anonymous/error |
+| lambda, anonymous method, local function *expression* | `lambda` | `#file:line:column` |
+| extension method | `method` + `TAttachedTo` → extended type | the profile's existing rule |
+| attribute usage | `annotationUse` edge with `arguments` | attribute *classes* are ordinary `class` entities |
+| `using X;`, `global using`, `using static X.Y`, `using A = X.Y` | `import` → module `X` (resp. `X`, the containing namespace of `Y`) | folded to namespace level, never a type |
+| `: Base`, interface `: IOther` | `inheritance` | |
+| `: IFoo` on class/struct/record | `interfaceImplementation` | |
+| calls, `new`, delegate `Invoke`, `nameof`-free | `invocation` | virtual/interface dispatch → the declared member (profile note); `dynamic` receiver → dropped + counted |
+| field/property/event reads and writes | `access` (`isRead`/`isWrite`) | property access is modelled as access, not invocation — the source writes a member access, and the accessor is not an entity |
+| type usages: declared types, generic arguments, casts, `is`/`switch` patterns, `typeof`, `default(T)`, base lists' generic args | `reference` | erased per §13.3 |
+| `throw` statements | `throws` | static type of the thrown expression; rethrow → the caught variable's static type |
+
+Explicitly NOT extracted in M12, stated in the profile `notes`: source
+generators (their output is not in `--src`), `InternalsVisibleTo`, XAML/Razor
+code-behind partials (the `.cs` half is extracted; the generated half is
+absent), `#if` branches the default symbol set excludes (Roslyn parses ONE
+configuration — `--define` is a later flag), and cross-assembly DI wiring
+(the analyzer's M10d framework table can gain an ASP.NET Core profile later;
+the extractor stays framework-blind).
+
+### 13.3 The C# id scheme (`EntityIds.cs`)
+
+Same shape as Java's (`extractors/java/.../EntityIds.java`), with the
+differences C# forces:
+
+```
+namespace       csharp:<Ns.Path>                                  csharp:Acme.Order
+global ns       csharp:<global>
+unresolved ns   csharp:<unresolved>                               (§13.4)
+type            csharp:<Ns>/<TypeMetadataName>                    csharp:Acme.Order/OrderService
+generic type    csharp:<Ns>/<Name>`<arity>                        csharp:Acme.Order/Repository`1
+nested type     csharp:<Ns>/<Outer>.<Inner>                       csharp:Acme.Order/OrderService.Line
+method          csharp:<Ns>/<Type>.<name>[`<arity>](<erasedFqnParams>)   csharp:Acme.Order/OrderService.Bill(Acme.Order.Order)
+constructor     csharp:<Ns>/<Type>.<init>(<params>)               static ctor: .<cctor>()
+indexer         csharp:<Ns>/<Type>.Item(<params>)
+operator        csharp:<Ns>/<Type>.op_Addition(<params>)
+lambda / anon   csharp:<Ns>/<Type>#<file>:<line>:<column>
+field/prop/evt  csharp:<Ns>/<Type>.<name>
+parameter       csharp:<Ns>/<Type>.<methodSig>#param:<name>
+local           csharp:<Ns>/<Type>.<methodSig>#local:<name>:<startLine>
+local function  csharp:<Ns>/<Type>.<methodSig>#fn:<name>(<params>)
+stub type       csharp:<Ns>/<TypeMetadataName>                    same shape as a declared type, on purpose
+```
+
+- **Arity is part of the symbol, because C# lets `Foo`, `Foo<T>` and `Foo<T,U>`
+  coexist in one namespace.** Java erases generics to the raw name; doing so
+  here would merge three legal declarations into one entity — the M2 overload
+  collision one level up. Roslyn's `MetadataName` (`Foo`1`) is a source fact,
+  not an invention, and the backtick is not a reserved id character.
+- Parameter types in signatures are erased fully-qualified metadata names
+  (`System.Collections.Generic.List`1`), arrays as `T[]`, `ref`/`out`/`in`
+  dropped (they cannot overload by themselves), nullable annotations dropped
+  (`string?` and `string` are one type), `Nullable<T>` kept as `System.Nullable`1`,
+  tuples as `System.ValueTuple`n`, pointers as `T*`, type parameters as their
+  ordinal `!0`/`!!0` (ECMA-335's form — type-level vs method-level — computed
+  from `ITypeParameterSymbol.Ordinal`; a type parameter's *name* is not part
+  of the signature in C#, and two overloads differing only in `T`'s name would
+  otherwise get two ids).
+- **Partial types and partial methods are ONE entity.** The anchor is the
+  declaration that sorts first by `(file path, start line)` — ordinal order,
+  so the choice is stable across OSes — and every edge carries the
+  `sourceFile` of the declaration part that produced it (the profile's own
+  note). `PartialTypesTest` asserts one id, one entity, both files' edges.
+- Paths in anchors and `definedIn` use `/` on every OS and are relativized
+  against the deepest common ancestor of the `--src` roots, as Java does.
+
+### 13.4 Stub discipline, Roslyn edition
+
+Roslyn does not invent FQNs — but it has its own way of lying, and the
+discipline is the same: **membership is the whitelist of corpus-declared type
+symbols built in pass 1, never a name-prefix test.**
+
+- **Whitelist** = every `INamedTypeSymbol` whose `DeclaringSyntaxReferences`
+  are in the compilation's own trees (`compilation.Assembly.GlobalNamespace`
+  walked, or the `TypeDeclarationSyntax` set — the test asserts both agree).
+- **Metadata-resolved external types** (the BCL from the embedded ref pack;
+  later, `--references` DLLs) are stubs with their real namespace:
+  `csharp:System/String` `{kind: class, traits: [TNamed, TType], isStub: true}`,
+  `parent` → the stub namespace `csharp:System` `{definedIn: [], isStub: true}`.
+  The M3 stub-containment decision applies unchanged.
+- **Error types** (`IErrorTypeSymbol`, a name Roslyn could not bind — a missing
+  NuGet package, a typo, generated code) are stubs in the reserved module
+  `csharp:<unresolved>`, named as written (`csharp:<unresolved>/JsonConvert`).
+  This is the honest form: the corpus wrote a type of that name, and nothing
+  says where it lives. Guessing a namespace from the file's `using` directives
+  would be inventing an FQN, which is the one thing the Java extractor exists
+  to be defended against. The `import` edge to `csharp:Newtonsoft.Json` from
+  the `using` directive still says what was imported.
+- **Roslyn's equivalent of Spoon's receiver promotion**: an unbound member
+  access `foo.Bar()` where `foo` itself is unbound gives an error type named
+  `foo`. It lands in `<unresolved>` like any other — and, like the Java note
+  says, a stub count is not a count of external types.
+- **Not entities**: primitives are BCL types in C# (`int` IS `System.Int32`),
+  so unlike Java they DO resolve — to stubs in `csharp:System`. `void`,
+  `dynamic`, anonymous types, tuples' element names, pointer/function-pointer
+  types, `null`/error *values* and type parameters are not entities;
+  `declaredType` is omitted for them. Arrays fold to the element type ONLY for
+  the written type reference, never for members (`xs.Length` is an access on
+  `System.Array`'s `Length` — Roslyn binds it there, so the phantom the Java
+  extractor had to fight does not arise, and the test that pins it is kept
+  anyway).
+- **Resolution summary** on stderr, in the Java format: type references,
+  resolved / unresolved (`IErrorTypeSymbol`), rate; entities (stubs); edges
+  (self-edges dropped; `dynamic` call sites dropped). Type parameters and error
+  *values* excluded from the denominator, for the reasons §5.3 records.
+
+### 13.5 The extractor command-line contract (both extractors)
+
+`codegraph snapshots` orchestrates extraction with a fixed argument shape; M12
+writes that shape down as the contract every extractor must honour, in
+`schemas/README.md §8`, and the C# extractor implements it verbatim:
+
+```
+<extractor> [--src <dir>]… [--out <file>] [--progress auto|plain|none] [--no-progress]
+            [--repo-remote <url>] [--repo-commit <sha>] [--repo-root <path>] [--help]
+exit codes: 0 ok · 1 failure · 2 usage · 3 unimplemented
+stdout: nothing but `--help`; stderr: progress (tty only under auto) + the summary
+```
+
+CLI change: `--jar FILE` becomes `--extractor FILE` (`--jar` kept as an alias).
+A `.jar` runs as `java -jar FILE …`; anything else runs directly. The seam is
+already an injected `Extract` function in `snapshots.ts`, so the change is one
+dispatcher plus its ENOENT messages naming the right runtime. `replay`/`history`
+usage strings follow. `codegraph` itself stays extractor-agnostic — there is no
+`codegraph extract`, by design: the Node side never learns a language.
+
+### 13.6 Validation (the M2 gate, replayed)
+
+Red-green, in this order, each step a commit:
+
+- [x] **Walking skeleton (M12a, 2026-09-07)** — `header`/`f`/`eof`, namespaces
+      and every type kind (delegates with their parameters), doc comments,
+      `import` + `inheritance` + `interfaceImplementation` edges, stubs;
+      schema-validated per line (`JsonSchema.Net`, draft 2020-12) plus the
+      sequence rules in the extractor's own suite (51 tests); snapshot at
+      `fixtures/csharp/expected/model.jsonl` (20 files, 42 entities of which 11
+      stubs, 24 edges); the core gate `fixtures-csharp.test.ts` (13 tests:
+      parse → `validateModel(csharpProfile)` zero issues → **byte-identical to
+      `encodeModelToString`** on the first run → closure → no self-reference →
+      the stub evidence). `./bin/codegraph validate` reports OK and `analyze
+      --report deps` folds the import layer to 10 namespaces / 6 dependencies.
+      The JSON writer, ordering and the id scheme were proven against core's
+      encoder before a single member existed — which was the point.
+- [ ] **Fixture corpus** `fixtures/csharp/src` (`Acme.Order`, the Java corpus
+      translated, plus what C# adds): a partial class across two files; a
+      file-scoped and a block namespace; nested types; `Foo`/`Foo<T>` in one
+      namespace; overloads differing by generic arity; an extension method;
+      a lambda and a local function starting on the same line; `record`,
+      `record struct`, `struct`, `enum : byte`, `delegate`, `event`, indexer,
+      `operator +`, `const` + enum members, a primary constructor, `using
+      static`, `global using`, an alias `using`; async/LINQ over the BCL (stubs
+      with real namespaces); an unresolvable external (`Newtonsoft.Json`);
+      `throw`, rethrow and a guard clause; attributes with positional, named
+      and `typeof` arguments; a `dynamic` call site (dropped + counted).
+- [ ] **Members and edges** — methods, constructors, properties, fields,
+      events, parameters, locals, lambdas; `invocation`, `access`, `reference`,
+      `throws`, `annotationUse` with `Literal` arguments; extension
+      `attachedTo`; measures. Each construct lands with its own failing test
+      first (`EdgeExtractorTest.extensionMethodCallSiteIsAnInvocationOfTheStaticMethod`, …).
+- [ ] **Stub discipline tests**: a corpus type declared in namespace `System.Acme`
+      stays internal (no prefix test); `Newtonsoft.Json.JsonConvert` lands in
+      `<unresolved>`; `string` lands in `System`; every nameless entity on a
+      shared line gets its own id; no entity is its own parent.
+- [ ] **Determinism**: two runs byte-identical; file walk order ordinal;
+      `\r\n` sources give the same lines as `\n` sources (Windows checkouts with
+      `core.autocrlf`); `Utf8JsonWriter` with
+      `JavaScriptEncoder.UnsafeRelaxedJsonEscaping` matched against core's
+      `JSON.stringify` on the `fixtures/unicode` characters — the byte-identity
+      test in core is what catches an escaping mismatch, so the unicode
+      identifiers go into the C# fixture too.
+- [ ] **CLI e2e** on the C# fixture: `validate`, `analyze --report deps`,
+      `import` + `diagnose`, `city`, `navigator`, `domain-facts`, `explain
+      --dry-run` — the property suite already runs per fixture; the C# snapshot
+      joins its list.
+- [ ] **Real-corpus audit**, the §5.3 exercise: a self-contained library
+      (Humanizer or MediatR — the commons-lang analogue, expected near-100%),
+      a DI-heavy app (`dotnet/eShop` — the petclinic analogue, a structural
+      floor from missing packages), and one large corpus for scale
+      (OrchardCore or nopCommerce — the fineract analogue). Report counts,
+      resolution rates categorised by cause, `diagnose` clean, wall clock; city
+      and navigator screenshots reviewed at user-facing angles. Numbers go into
+      the profile `notes`, as Java's did.
+
+No second C# extractor exists, so the cross-validation oracle rule does not
+apply; the resolution-rate categorisation and the BCL-stub namespace check are
+the substitutes.
+
+### 13.7 Distribution: one binary per OS, built from Linux
+
+**Yes — dedicated binaries for macOS, Linux and Windows are one `dotnet
+publish` matrix, and all of it cross-compiles from a single Linux job.**
+
+| RID | artifact | notes |
+|---|---|---|
+| `linux-x64` | `codegraph-csharp-linux-x64` | the dev box and CI; `InvariantGlobalization` means no `libicu` needed |
+| `linux-arm64` | `codegraph-csharp-linux-arm64` | Graviton / Pi / Docker on Apple silicon |
+| `osx-arm64` | `codegraph-csharp-osx-arm64` | Apple silicon; `chmod +x` after download; unsigned ⇒ Gatekeeper quarantine (`xattr -d com.apple.quarantine`) — documented, notarization is a later decision |
+| `osx-x64` | `codegraph-csharp-osx-x64` | Intel Macs; also runs under Rosetta on arm64 |
+| `win-x64` | `codegraph-csharp-win-x64.exe` | unsigned; SmartScreen warns once |
+
+Publish shape, decided:
+
+```
+dotnet publish src/Codegraph.CSharp -c Release -r <rid> --self-contained \
+  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true \
+  -p:PublishReadyToRun=true -p:IncludeNativeLibrariesForSelfExtract=true \
+  -p:DebugType=none -o dist/<rid>
+```
+
+- **Single-file self-contained, not NativeAOT.** Roslyn is not AOT-clean
+  (`Microsoft.CodeAnalysis` emits trim/AOT warnings and relies on reflection
+  for its own services), and NativeAOT needs the *target* OS's native
+  toolchain, so macOS and Windows binaries would each need their own runner.
+  Single-file bundles the runtime (~30 MB compressed) plus Roslyn and the ref
+  pack; ~70–90 MB per RID, ~1 s cold start with ReadyToRun. Trimming stays OFF
+  (`PublishTrimmed=false`) for the same Roslyn reason; revisit both when
+  Roslyn ships AOT annotations — that is a build-flag change, not a code change.
+- **Deterministic builds** (`Deterministic`, `ContinuousIntegrationBuild`,
+  `PathMap`) so the binary, like the model, is reproducible from a commit.
+- **Version** = `extractor.version` in the header = the assembly's informational
+  version, set from one property in `Directory.Build.props`; `--version` prints
+  it; `HeaderTest` pins that the three agree.
+
+Wiring into the repo's scripts and CI:
+
+- `build.sh --csharp` (and `--all` includes it when `extractors/csharp/`
+  exists — `have_csharp_extractor`, `ensure_dotnet`); artifact report lists
+  `extractors/csharp/dist/<host-rid>/codegraph-csharp`. `build.sh --csharp
+  --publish-all` runs the five-RID matrix.
+- `test.sh --csharp` → `dotnet test`, plus the **published-binary smoke test**:
+  run `dist/<host-rid>/codegraph-csharp --src fixtures/csharp/src --out $tmp`
+  and `cmp` against the committed snapshot. That the smoke test runs the
+  *published* artifact, not `dotnet run`, is the point — it is the only test
+  that sees the embedded-ref-pack path (§13.1) and the single-file `Location`
+  trap.
+- `.gitlab-ci.yml`: a second job `csharp` on `mcr.microsoft.com/dotnet/sdk:10.0`
+  — `dotnet test`, the five-RID publish, the smoke test on `linux-x64`,
+  artifacts kept for a week; the `verify` job gains the C# fixture through the
+  core gate automatically. macOS/Windows have no runner here, so their check is
+  the manual `cmp` (§13 principle 3), stated in the README as the release
+  checklist: download, run on the fixture, `cmp`, done.
+- `README.md` + `CLAUDE.md` architecture block gain `extractors/csharp/`;
+  `extractors/csharp/README.md` mirrors the Java one (build, run, progress,
+  the stderr summary, the toolchain gotchas above).
+
+### 13.8 OS-specific hazards, each with the test that pins it
+
+| Hazard | Where it shows | Guard |
+|---|---|---|
+| `Assembly.Location == ""` in single-file bundles | published binary binds no BCL; `dotnet run` is fine | embedded ref pack + smoke test on the published artifact |
+| `libicu` missing | Linux containers, Alpine | `InvariantGlobalization=true`; the CI image test |
+| Case-insensitive file systems | macOS, Windows: `Foo.cs` and `foo.cs` cannot coexist, and enumeration order differs | ordinal sort of the walked paths before parsing; `DeterminismTest` |
+| `\` path separators | Windows anchors and `definedIn` | always emit `/`; `PathsTest` on a `\`-joined input |
+| `\r\n` sources | Windows checkouts | Roslyn line map handles it; `sloc` scanner test with both endings |
+| Culture-sensitive `string.Compare`/`ToUpper` | wrong canonical order on a Turkish locale | `StringComparer.Ordinal` everywhere; an analyzer rule (`CA1309`) as an error |
+| `Utf8JsonWriter` escaping `<`, `>`, `&`, non-ASCII by default | `<global>`, `<init>`, unicode names | `UnsafeRelaxedJsonEscaping` + the core byte-identity gate |
+| Gatekeeper quarantine | first run on macOS after a download | documented; not a code problem |
+| Long paths | Windows `MAX_PATH` on deep corpora | `\\?\` not needed on .NET 10 with long-path awareness; `--src` a deep fixture in the Windows manual check |
+
+### 13.9 Milestone split
+
+- **M12a — skeleton + contract** ✅ (2026-09-07): profile v2 (core), toolchain
+  scripts (`ensure_dotnet`, `build.sh --csharp [--publish-all]`, `test.sh
+  --csharp` with the published-binary `cmp`), walking skeleton end to end
+  (§13.6 first bullet), `snapshots --extractor` (a `.jar` runs under `java
+  -jar`, anything else directly; `--jar` kept as an alias), and the extractor
+  command-line contract as `schemas/README.md §8`, generated from core.
+- **M12b — the model**: members, all edge kinds, stubs, measures, literals,
+  the full fixture and its snapshot, stub-discipline and determinism tests,
+  CLI e2e.
+- **M12c — distribution + audit**: publish matrix, CI job, published-binary
+  smoke test, READMEs, three-corpus audit with screenshots, profile `notes`
+  rewritten from measurements.
+
+Definition of done: `fixtures/csharp/expected/model.jsonl` byte-identical to
+core's encoder and profile-valid with zero issues; the same bytes from the
+published `linux-x64`, `osx-arm64` and `win-x64` binaries on their hosts; the
+audit numbers in the profile notes; `./test.sh` and CI green with the C#
+fixture in every per-fixture suite.
+
+## 14. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -1596,8 +1998,11 @@ Four principles, locked up front:
 | M10c | Literal values | ✅ `Literal` + `TWithValue` + `annotationUse` in core, `schemas/` (a named `$defs/Literal`) and the store (JSON columns, DB_VERSION 4); Java extractor carries annotation arguments, constant initializers and element defaults, `unevaluated` where it cannot fold; closure reaches inside values by ENCODING; fixture asserts the four `Audited`/`MAX_LINES` cases; gson and commons-lang diagnose clean |
 | M10d | Framework semantics | ✅ data-driven Spring/Jakarta framework profile (5 roles, matching on name + module, stub-tolerant); derived DI `dynamic-candidate` wiring with @Primary/@Qualifier narrowing that states what it narrowed from; `analyze --report wiring` + `city --framework` role channel with its legend; hand-verified on spring-petclinic (`a6e81a5`: 5 injections → the one corpus impl, 4 → honest empty; HEAD: 6 implicit constructor injections), `declared` view byte-identical before and after |
 | M11 | Insights walk | ✅ `codegraph explain`: `@codegraph/insights` (pure) + `@codegraph/llm` (the one SDK importer); units = operations → types → modules; one SCC-condensed dependency graph (calls, type deps, imports, downward containment) so mutually dependent packages/types/methods are ONE unit, Kahn-layered; context packs with dependency explanations at `--depth`; Specy-vocabulary blocks validated by Zod and sent as strict JSON Schema; Merkle fingerprints (inputs + dependency fingerprints + missing deps, never explanation text) make re-runs incremental; `--dry-run`/`--max-calls`/`--scope`/`--concurrency`/`--max-scc`; journal + sorted side-car `<model>.insights.jsonl`; cycle suite pinned to the analyzer's cycle report (opt-in real-corpus run via `CODEGRAPH_CORPUS_MODEL`; Fineract: 53 207 units, 18 package tangles, largest 509). Verified live on the Java fixture with gpt-5.6-luna: 77 units, 68 calls, $0.06 all-in, blocks in the Specy vocabulary (Order → entity with identity, StockGuard.ensure → precondition + error event, com.acme.order → APIs/SPI `Ledger`); the `specy:domain-extract-from-code` skill consumes the side-car (`heuristics/codegraph.md`). Design record: `docs/insights.md` |
+| M12a | C# extractor — skeleton | ✅ `extractors/csharp/` (Roslyn 5.9 on .NET 10, no MSBuild, BCL ref pack embedded — §13); csharp profile v2 in core; walking skeleton (namespaces, every type kind, delegates + parameters, doc comments, import/inheritance/implements, stubs) → `fixtures/csharp/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; 51 .NET tests (per-line schema + sequence rules, stub discipline, determinism incl. CRLF and walk order, id scheme, CLI) + 13 core gate tests; `codegraph validate` OK; `codegraph snapshots --extractor` (jar or binary); extractor CLI contract as `schemas/README.md §8`; `build.sh --csharp [--publish-all]` / `test.sh --csharp` with the published-binary `cmp` |
+| M12b | C# extractor — model | members, every profile edge kind incl. `annotationUse` + `throws`, stub discipline (BCL stubs in real namespaces, error types in `<unresolved>`), measures, literals; full fixture corpus; stub/determinism/e2e suites green |
+| M12c | C# extractor — binaries + audit | `dotnet publish` matrix (linux-x64/arm64, osx-x64/arm64, win-x64) from one Linux CI job; published-binary smoke test = `cmp` against the snapshot; build.sh/test.sh/CI wired; three-corpus audit (self-contained lib, DI-heavy app, large corpus) with screenshots and numbers in the profile notes |
 
-## 14. Decisions made in this plan (deltas vs. the design doc)
+## 15. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -1630,3 +2035,10 @@ Four principles, locked up front:
 | DI wiring (Phase 9) | derived by the analyzer from declared facts + a framework data table; `dynamic-candidate` provenance, in-memory only, matched by entity name — never id parsing | the extractor stays framework-blind; the candidate set needs whole-corpus implementor knowledge only the analyzer holds; Spring dispatch is §1.3's `dynamic-candidate` definition verbatim |
 | Literal values (Phase 9) | tagged-union `Literal`: numbers as canonical decimal text, enum values as type id + simple name, unfoldable constant expressions kept as `unevaluated` source text; ids inside values obey closure | a JSON number loses a Java `long`; a fabricated enum-member stub is the one thing §6 forbids; dropping an unfoldable expression erases a written fact — degraded honesty over silent loss, the stub discipline applied to values |
 | Annotation usage (Phase 9) | dedicated `annotationUse` edge kind carrying `arguments`, replacing the plain `reference` — in-place clean break, fixtures regenerated | overloading `reference` would make `arguments` meaningful on one disguised subset of a kind; consumers cannot select annotation usages today without guessing from the target's kind, which a stub target cannot answer |
+| C# corpus loading (M12) | Roslyn syntax + semantic model over a hand-built `CSharpCompilation`; never `MSBuildWorkspace`/`Build.Locator` | the noClasspath contract: legacy corpora have no restorable project graph; MSBuild needs an installed SDK and breaks single-file publishing; a missing package must be a stub, not a build failure |
+| C# unresolved types (M12) | `IErrorTypeSymbol` → stub in the reserved module `csharp:<unresolved>`, named as written; BCL/metadata types → stubs in their real namespace | guessing a namespace from `using` directives would invent an FQN — the exact fabrication the whitelist rule exists to refuse; the `using` itself still yields the import edge |
+| C# type identity (M12) | symbol carries generic arity via Roslyn `MetadataName` (`Foo`1`); signatures use erased FQ metadata names with type parameters as ordinals | `Foo`, `Foo<T>`, `Foo<T,U>` legally coexist in one namespace — Java-style erasure would merge three declarations into one entity (the M2 overload collision one level up) |
+| C# BCL references (M12) | `Microsoft.NETCore.App.Ref` embedded as resources, loaded via `CreateFromImage`; never `Assembly.Location` | `Location` is empty inside a single-file bundle, so the tutorial approach binds nothing in the shipped binary while passing under `dotnet run` |
+| C# distribution (M12) | self-contained single-file + ReadyToRun per RID, cross-published from Linux; NativeAOT and trimming deferred | Roslyn is not AOT/trim-clean, and NativeAOT needs each target OS's native toolchain; single-file needs only one runner for all five RIDs |
+| Extractor CLI contract (M12) | one flag shape and exit-code set for every extractor, written in `schemas/README.md`; `snapshots --extractor` (jar → `java -jar`, else run directly) | the Node side must stay language-blind: it orchestrates a process, not a language |
+| Cross-OS acceptance (M12) | `cmp` of the published binary's output against the committed snapshot | byte-determinism (§6 of the contract) makes "works on macOS/Windows" a one-line check a human can run where CI has no runner |

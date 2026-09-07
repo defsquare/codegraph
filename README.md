@@ -56,6 +56,17 @@ command completes in about twelve seconds.
 bind every interface, which is convenient on a LAN and wrong for a sensitive
 codebase.
 
+For C#, the extractor is a self-contained binary — nothing to install on the
+machine that runs it. Building it needs the .NET 10 SDK:
+
+```bash
+./build.sh --csharp                                       # → extractors/csharp/dist/<rid>/codegraph-csharp
+extractors/csharp/dist/linux-x64/codegraph-csharp --src ~/src/eShop/src --out eshop.jsonl
+```
+
+Both extractors take the same flags and exit codes (`schemas/README.md` §8),
+so every command below works on either model.
+
 ## Usage
 
 ### Ask the analyzer
@@ -103,7 +114,7 @@ To watch the structure evolve, sample the repository at its tags into a
 temporal store and replay it:
 
 ```bash
-codegraph snapshots ~/src/gson --jar extractors/java/target/codegraph-java.jar --tags --src gson/src/main/java --store gson.db
+codegraph snapshots ~/src/gson --extractor extractors/java/target/codegraph-java.jar --tags --src gson/src/main/java --store gson.db
 codegraph timeline java:com.google.gson/Gson --store gson.db
 codegraph replay --store gson.db --history gson-history.jsonl --serve
 ```
@@ -215,6 +226,7 @@ so a model file has one direction of truth. The full reference is
 | Package | Role |
 |---|---|
 | `extractors/java` | Spoon-based extractor; emits `model.jsonl` |
+| `extractors/csharp` | Roslyn-based extractor (no MSBuild, BCL embedded); one self-contained binary per OS |
 | `schemas/` | the generated JSON Schema every extractor must satisfy |
 | `packages/core` | traits, edges, language profiles, validation |
 | `packages/analyzer` | graph, views, folding, cycles, coupling, exports, SQLite store |
@@ -256,7 +268,8 @@ about known code shows up as a diff.
 | 3D code city and the model navigator | done |
 | Measures, literal values, Spring framework semantics | done |
 | LLM explanations (`explain`) | done |
-| Second language extractor (Clojure) | next |
+| Second language extractor (C#, Roslyn) — skeleton, snapshot byte-identical to core's encoder | done |
+| Clojure extractor (clj-kondo) | next |
 | Published releases (npm, extractor jar) | planned |
 | Project website and documentation site | planned, see [`WEBSITE.md`](WEBSITE.md) |
 

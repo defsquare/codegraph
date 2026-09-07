@@ -18,6 +18,9 @@ relations is `METAMODEL.md` — read them before structural changes.
 
 ```
 extractors/java/     Maven project (Spoon, noClasspath) → emits model.jsonl. JVM code only.
+extractors/csharp/   .NET 10 project (Roslyn, NO MSBuild: one compilation over
+                     every *.cs, BCL reference pack embedded) → emits
+                     model.jsonl. Published as one self-contained binary per OS.
 schemas/             Generated per-record JSON Schemas + the container contract
                      (README.md) — THE cross-language contract, committed.
 packages/core/       @codegraph/core — traits, edges, language profiles (data),
@@ -107,6 +110,12 @@ cd extractors/java && ./mvnw package    # Maven Wrapper — `mvn` is NOT install
 java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 # needs a JDK on PATH; non-interactive shells do not source sdkman:
 #   export JAVA_HOME="$HOME/.sdkman/candidates/java/25.0.4-tem"
+
+cd extractors/csharp && dotnet test -c Release   # needs the .NET 10 SDK (see extractors/csharp/README.md)
+./build.sh --csharp                              # publish the host binary → extractors/csharp/dist/<rid>/codegraph-csharp
+./build.sh --csharp --publish-all                # linux-x64/arm64, osx-x64/arm64, win-x64 — all from this host
+./test.sh --csharp                               # dotnet test + the published binary must reproduce the snapshot
+extractors/csharp/dist/linux-x64/codegraph-csharp --src <dir> --out model.jsonl
 
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
 ./bin/codegraph city model.jsonl --serve           # 3D city at http://localhost:4177
