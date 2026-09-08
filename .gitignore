@@ -28,3 +28,5 @@ extractors/csharp/dist/
 # the .jsonl is the contract, and a binary next to it in git would be a
 # second, undiffable answer to the same question.
 *.db
+
+books
