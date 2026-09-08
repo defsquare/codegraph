@@ -267,6 +267,71 @@ describe("structural claims that must not silently regress", () => {
     });
   });
 
+  /**
+   * TypeScript profile v2 (PLAN §14.2): the corrections M13 forces on a
+   * profile that predates M6, M10 and M12. Each claim is one the compiler-API
+   * extractor emits against, so relaxing any of them un-licenses real output.
+   */
+  describe("TypeScript profile v2 licenses what the compiler-API extractor emits", () => {
+    const ts = typescriptProfile;
+    const allowed = (kind: string): Set<string> =>
+      new Set([...(ts.kinds[kind]?.required ?? []), ...(ts.kinds[kind]?.optional ?? [])]);
+
+    it("has a constructor kind: invocable, a container, unnamed and untyped", () => {
+      const ctor = ts.kinds["constructor"];
+      expect(ctor).toBeDefined();
+      expect(ctor?.required).toContain("TInvocable");
+      expect(ctor?.required).toContain("TWithChildren");
+      expect(allowed("constructor")).not.toContain("TNamed");
+      expect(allowed("constructor")).not.toContain("TTypedEntity");
+      expect(ts.space?.["constructor"]).toEqual(["value"]);
+    });
+
+    it("licenses executable containment (M6): every kind holding parameters or locals is a container", () => {
+      for (const kind of ["function", "method", "constructor", "arrowFunction"]) {
+        expect(ts.kinds[kind]?.required, `ts.${kind}`).toContain("TWithChildren");
+        expect(ts.kinds[kind]?.required, `ts.${kind}`).toContain("TWithLocalVariables");
+      }
+    });
+
+    it("lets a module body invoke, access and hold locals: top-level statements are code", () => {
+      for (const trait of ["TWithInvocations", "TWithAccesses", "TWithLocalVariables"]) {
+        expect(allowed("module"), trait).toContain(trait);
+      }
+    });
+
+    it("carries measures on every type and invocable (M10b)", () => {
+      for (const kind of ["class", "abstractClass", "interface", "typeAlias", "enum", "function", "method", "constructor", "arrowFunction", "module", "namespace"]) {
+        expect(allowed(kind), `ts.${kind}`).toContain("TMetrics");
+      }
+    });
+
+    it("opens the value door on constants, members and defaults (M10c)", () => {
+      expect(allowed("variable")).toContain("TWithValue");
+      expect(allowed("property")).toContain("TWithValue");
+      expect(allowed("parameter")).toContain("TWithValue");
+    });
+
+    it("names decorators as annotationUse and throw sites as throws", () => {
+      expect(ts.edges).toContain("annotationUse");
+      expect(ts.edges).toContain("throws");
+    });
+
+    it("keeps a namespace a child entity, never a module of its own", () => {
+      expect(allowed("namespace")).not.toContain("TModule");
+      expect(ts.kinds["namespace"]?.required).toContain("TChildOf");
+    });
+
+    it("documents the id scheme: percent-encoded keys, per-file merging, column disambiguators, dropped any-receivers", () => {
+      const notes = ts.notes?.join("\n") ?? "";
+      expect(notes).toMatch(/%2F/);
+      expect(notes).toMatch(/PER DECLARING FILE/);
+      expect(notes).toMatch(/line:column/);
+      expect(notes).toMatch(/dropped and COUNTED/);
+      expect(notes).not.toMatch(/one namespace id may span files/);
+    });
+  });
+
   it("PHP is the only profile with fileInclude and traitUsage", () => {
     for (const [lang, profile] of profiles) {
       const expected = lang === "php";
