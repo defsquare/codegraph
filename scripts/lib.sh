@@ -281,25 +281,44 @@ ensure_mvnw() {
 # macOS, a Windows binary on Windows. That is why the Java matrix is one CI job
 # per operating system while the C# matrix is five RIDs on one Linux job.
 #
-# Search order mirrors ensure_jdk: an explicit GRAALVM_HOME, then JAVA_HOME, then
-# PATH, then sdkman's GraalVM candidates (which a non-interactive shell cannot
-# see). Never installed automatically — that is a multi-hundred-MB decision.
+# Search order mirrors ensure_jdk: an explicit GRAALVM_HOME, then JAVA_HOME (set
+# by ensure_jdk, which always runs first), then sdkman's GraalVM candidates
+# (which a non-interactive shell cannot see), then PATH. Never installed
+# automatically — that is a multi-hundred-MB decision.
 ensure_native_image() {
-  local candidate
+  local dir name candidate
 
   set --
-  if [ -n "${GRAALVM_HOME:-}" ]; then set -- "$GRAALVM_HOME/bin/native-image"; fi
-  if [ -n "${JAVA_HOME:-}" ]; then set -- "$@" "$JAVA_HOME/bin/native-image"; fi
-  set -- "$@" "$(command -v native-image 2>/dev/null || true)"
-  for candidate in "$HOME"/.sdkman/candidates/java/*graal*/bin/native-image; do
-    if [ -x "$candidate" ]; then set -- "$@" "$candidate"; fi
+  if [ -n "${GRAALVM_HOME:-}" ]; then set -- "$GRAALVM_HOME/bin"; fi
+  if [ -n "${JAVA_HOME:-}" ]; then set -- "$@" "$JAVA_HOME/bin"; fi
+  for dir in "$HOME"/.sdkman/candidates/java/*graal*/bin; do
+    if [ -d "$dir" ]; then set -- "$@" "$dir"; fi
   done
 
+  # GraalVM ships `native-image` on Unix and `native-image.cmd` on Windows, and
+  # Git Bash's `command -v` resolves .exe but not .cmd — so a bare-name probe
+  # misses a perfectly good GraalVM twice over. That is exactly how the win-x64
+  # job failed while printing `jdk 25 (JAVA_HOME=…graalvm-community…)` above it.
   NATIVE_IMAGE=""
-  for candidate in "$@"; do
-    [ -n "$candidate" ] && [ -x "$candidate" ] || continue
-    NATIVE_IMAGE="$candidate"; break
+  for dir in "$@"; do
+    for name in native-image native-image.cmd native-image.exe; do
+      candidate="$dir/$name"
+      # Windows has no meaningful execute bit: for those two names existence is
+      # the only test that means anything.
+      if [ -x "$candidate" ]; then NATIVE_IMAGE="$candidate"; break; fi
+      if [ "$name" != "native-image" ] && [ -f "$candidate" ]; then
+        NATIVE_IMAGE="$candidate"; break
+      fi
+    done
+    if [ -n "$NATIVE_IMAGE" ]; then break; fi
   done
+
+  if [ -z "$NATIVE_IMAGE" ]; then
+    for name in native-image native-image.cmd native-image.exe; do
+      candidate="$(command -v "$name" 2>/dev/null || true)"
+      if [ -n "$candidate" ]; then NATIVE_IMAGE="$candidate"; break; fi
+    done
+  fi
 
   [ -n "$NATIVE_IMAGE" ] || die \
     "no native-image found — the Java extractor's native build needs GraalVM" \
@@ -308,7 +327,7 @@ ensure_native_image() {
     "or point GRAALVM_HOME at an existing install" \
     "or build the jar only: $SCRIPT_NAME --java"
   export NATIVE_IMAGE
-  ok "native-image $("$NATIVE_IMAGE" --version 2>/dev/null | head -1 | cut -d" " -f2)"
+  ok "native-image $("$NATIVE_IMAGE" --version 2>/dev/null | head -1 | cut -d" " -f2) ($NATIVE_IMAGE)"
 }
 
 # ------------------------------------------------------ dotnet toolchain -----
