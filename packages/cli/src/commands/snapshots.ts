@@ -23,10 +23,11 @@ import { repositoryFacts } from "../repository.js";
  * commit out into a throwaway `git worktree` — the user's checkout is never
  * mutated — run the extractor there, and append the result to the temporal
  * store exactly as `import --at <sha> --time <t>` would. Both extractors run
- * without a build (Spoon noClasspath, Roslyn without MSBuild), so historic
- * commits that no longer compile still extract. The extractor is any
- * executable honouring the command-line contract (schemas/README.md §8); a
- * `.jar` is run through `java -jar`, anything else directly.
+ * without a build (Spoon noClasspath, Roslyn without MSBuild, the TypeScript
+ * checker without tsc), so historic commits that no longer compile still
+ * extract. The extractor is any executable honouring the command-line
+ * contract (schemas/README.md §8); a `.jar` is run through `java -jar`, a
+ * `.js` through `node`, anything else directly.
  *
  * RESUMABLE BY DESIGN. Every frame costs a full extraction (minutes on a real
  * corpus), so a revision the store already holds is skipped, never re-imported:
@@ -348,13 +349,17 @@ function originRemote(git: GitRunner): string | undefined {
 /**
  * The real extractor, under the command-line contract every extractor honours:
  * `<extractor> --src <dir> --out <model> [--repo-* …]`. A `.jar` needs a JVM
- * (`java -jar`); anything else — the self-contained codegraph-csharp binary —
- * runs as it is. The CLI never learns a language here: it runs a process.
+ * (`java -jar`) and a `.js`/`.mjs`/`.cjs` file needs Node (the bundled
+ * codegraph-typescript); anything else — the self-contained codegraph-csharp
+ * binary, the `bin/` launchers — runs as it is. The CLI never learns a
+ * language here: it runs a process.
  */
 export function extractorFor(extractor: string): Extract {
-  const isJar = extractor.toLowerCase().endsWith(".jar");
-  const command = isJar ? "java" : resolve(extractor);
-  const lead = isJar ? ["-jar", extractor] : [];
+  const lower = extractor.toLowerCase();
+  const isJar = lower.endsWith(".jar");
+  const isScript = /\.(m|c)?js$/.test(lower);
+  const command = isJar ? "java" : isScript ? process.execPath : resolve(extractor);
+  const lead = isJar ? ["-jar", extractor] : isScript ? [resolve(extractor)] : [];
   return (srcDir, modelPath, repository) => {
     const repoFlags =
       repository === undefined
@@ -404,7 +409,8 @@ function requireReadableExtractor(extractor: string): void {
     throw new UsageError(
       `cannot read the extractor at ${extractor}`,
       "Build one first: cd extractors/java && ./mvnw package -> target/codegraph-java.jar, " +
-        "or ./build.sh --csharp -> extractors/csharp/dist/<rid>/codegraph-csharp",
+        "./build.sh --csharp -> extractors/csharp/dist/<rid>/codegraph-csharp, " +
+        "or pnpm -r build -> bin/codegraph-typescript",
       { cause: error },
     );
   }

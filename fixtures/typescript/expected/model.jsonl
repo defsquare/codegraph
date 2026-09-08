@@ -1,0 +1,108 @@
+{"t":"header","schemaVersion":"1.0.0","lang":"ts","extractor":{"name":"codegraph-typescript","version":"0.1.0","typescript":"5.9.3"},"root":"fixtures/typescript/src","dict":{"kinds":["abstractClass","class","enum","interface","module","namespace","typeAlias"],"traits":["TChildOf","TComment","TModule","TNamed","TSourceAnchor","TType","TWithChildren","TWithImplements","TWithInheritances"],"edges":["import","inheritance","interfaceImplementation"],"provenance":["declared"]}}
+{"t":"f","i":0,"path":"legacy/acme-report.ts"}
+{"t":"f","i":1,"path":"legacy/acme.ts"}
+{"t":"f","i":2,"path":"packages/order/src/abstract-order.ts"}
+{"t":"f","i":3,"path":"packages/order/src/ambient.d.ts"}
+{"t":"f","i":4,"path":"packages/order/src/augment.ts"}
+{"t":"f","i":5,"path":"packages/order/src/basket.ts"}
+{"t":"f","i":6,"path":"packages/order/src/channel.ts"}
+{"t":"f","i":7,"path":"packages/order/src/decorators.ts"}
+{"t":"f","i":8,"path":"packages/order/src/discountable.ts"}
+{"t":"f","i":9,"path":"packages/order/src/handler.ts"}
+{"t":"f","i":10,"path":"packages/order/src/index.ts"}
+{"t":"f","i":11,"path":"packages/order/src/lazy.ts"}
+{"t":"f","i":12,"path":"packages/order/src/ledger-adapter.ts"}
+{"t":"f","i":13,"path":"packages/order/src/legacy/list.ts"}
+{"t":"f","i":14,"path":"packages/order/src/money.ts"}
+{"t":"f","i":15,"path":"packages/order/src/notifications.ts"}
+{"t":"f","i":16,"path":"packages/order/src/order.ts"}
+{"t":"f","i":17,"path":"packages/order/src/priceable.ts"}
+{"t":"f","i":18,"path":"packages/order/src/promo#2024.ts"}
+{"t":"f","i":19,"path":"packages/order/src/reporting.ts"}
+{"t":"f","i":20,"path":"packages/order/src/résumé.ts"}
+{"t":"f","i":21,"path":"packages/order/src/ui/order-table.tsx"}
+{"t":"f","i":22,"path":"packages/pricing/src/index.ts"}
+{"t":"e","i":0,"k":4,"tr":[3,2,6],"m":0,"s":"<lib>","name":"<lib>","isStub":true,"definedIn":[]}
+{"t":"e","i":1,"k":3,"tr":[3,5,0],"m":0,"s":"Error","name":"Error","isStub":true,"parent":0,"space":["type"]}
+{"t":"e","i":2,"k":4,"tr":[3,2,6],"m":2,"s":"<unresolved>","name":"<unresolved>","isStub":true,"definedIn":[]}
+{"t":"e","i":3,"k":1,"tr":[3,5,0],"m":2,"s":"LedgerClient","name":"LedgerClient","isStub":true,"parent":2}
+{"t":"e","i":4,"k":4,"tr":[3,2,6],"m":4,"s":"@megacorp%2Fledger","name":"@megacorp/ledger","isStub":true,"definedIn":[]}
+{"t":"e","i":5,"k":4,"tr":[3,2,6,4],"m":5,"s":"legacy%2Facme-report.ts","name":"legacy/acme-report.ts","isStub":false,"definedIn":[0],"space":["value"],"anchor":[0,1,12]}
+{"t":"e","i":6,"k":5,"tr":[3,6,0,4,1],"m":5,"s":"Acme","name":"Acme","parent":5,"comments":["The same namespace merged ACROSS files: a second entity, in this file; `Registry` resolves into acme.ts."],"space":["type","value"],"anchor":[0,4,12]}
+{"t":"e","i":7,"k":5,"tr":[3,6,0,4],"m":5,"s":"Acme.Order","name":"Order","parent":6,"space":["type","value"],"anchor":[0,4,12]}
+{"t":"e","i":8,"k":6,"tr":[3,5,0,4],"m":5,"s":"Acme.Order.Line","name":"Line","isStub":false,"parent":7,"space":["type"],"anchor":[0,11,11]}
+{"t":"e","i":9,"k":1,"tr":[3,5,8,7,6,0,4],"m":5,"s":"Acme.Order.Report","name":"Report","isStub":false,"parent":7,"space":["type","value"],"anchor":[0,5,9]}
+{"t":"e","i":10,"k":4,"tr":[3,2,6,4],"m":10,"s":"legacy%2Facme.ts","name":"legacy/acme.ts","isStub":false,"definedIn":[1],"space":["value"],"anchor":[1,1,6]}
+{"t":"e","i":11,"k":5,"tr":[3,6,0,4,1],"m":10,"s":"Acme","name":"Acme","parent":10,"comments":["A SCRIPT file (no import/export): its namespace is global, and a child of this file."],"space":["type","value"],"anchor":[1,2,6]}
+{"t":"e","i":12,"k":5,"tr":[3,6,0,4],"m":10,"s":"Acme.Order","name":"Order","parent":11,"space":["type","value"],"anchor":[1,2,6]}
+{"t":"e","i":13,"k":1,"tr":[3,5,8,7,6,0,4],"m":10,"s":"Acme.Order.Registry","name":"Registry","isStub":false,"parent":12,"space":["type","value"],"anchor":[1,3,5]}
+{"t":"e","i":14,"k":4,"tr":[3,2,6,4,1],"m":14,"s":"legacy-lib","name":"legacy-lib","isStub":false,"definedIn":[3,4],"comments":["An ambient module the corpus DECLARES (this file is a script, so the block declares rather than augments): a module entity, not a stub."],"space":["value"],"anchor":[3,2,8]}
+{"t":"e","i":15,"k":1,"tr":[3,5,8,7,6,0,4],"m":14,"s":"Thing","name":"Thing","isStub":false,"parent":14,"space":["type","value"],"anchor":[3,3,6]}
+{"t":"e","i":16,"k":4,"tr":[3,2,6,4],"m":16,"s":"packages%2Forder%2Fsrc%2Fabstract-order.ts","name":"packages/order/src/abstract-order.ts","isStub":false,"definedIn":[2],"space":["value"],"anchor":[2,1,14]}
+{"t":"e","i":17,"k":0,"tr":[3,5,8,7,6,0,4,1],"m":16,"s":"AbstractOrder","name":"AbstractOrder","isStub":false,"parent":16,"comments":["Shared state for every kind of order."],"space":["type","value"],"anchor":[2,4,14]}
+{"t":"e","i":18,"k":4,"tr":[3,2,6,4],"m":18,"s":"packages%2Forder%2Fsrc%2Fambient.d.ts","name":"packages/order/src/ambient.d.ts","isStub":false,"definedIn":[3],"space":["value"],"anchor":[3,1,8]}
+{"t":"e","i":19,"k":4,"tr":[3,2,6,4],"m":19,"s":"packages%2Forder%2Fsrc%2Faugment.ts","name":"packages/order/src/augment.ts","isStub":false,"definedIn":[4],"space":["value"],"anchor":[4,1,23]}
+{"t":"e","i":20,"k":3,"tr":[3,5,8,6,0,4,1],"m":19,"s":"AcmeWindow","name":"AcmeWindow","isStub":false,"parent":19,"comments":["Lives in the global scope, is written in this file: a child of this file."],"space":["type"],"anchor":[4,12,14]}
+{"t":"e","i":21,"k":1,"tr":[3,5,8,7,6,0,4],"m":19,"s":"Wrapper","name":"Wrapper","isStub":false,"parent":19,"space":["type","value"],"anchor":[4,17,23]}
+{"t":"e","i":22,"k":4,"tr":[3,2,6,4],"m":22,"s":"packages%2Forder%2Fsrc%2Fbasket.ts","name":"packages/order/src/basket.ts","isStub":false,"definedIn":[5],"space":["value"],"anchor":[5,1,29]}
+{"t":"e","i":23,"k":1,"tr":[3,5,8,7,6,0,4,1],"m":22,"s":"Basket","name":"Basket","isStub":false,"parent":22,"comments":["A basket being filled."],"space":["type","value"],"anchor":[5,2,14]}
+{"t":"e","i":24,"k":1,"tr":[3,5,8,7,6,0,4],"m":22,"s":"Line","name":"Line","isStub":false,"parent":22,"space":["type","value"],"anchor":[5,16,18]}
+{"t":"e","i":25,"k":4,"tr":[3,2,6,4],"m":25,"s":"packages%2Forder%2Fsrc%2Fchannel.ts","name":"packages/order/src/channel.ts","isStub":false,"definedIn":[6],"space":["value"],"anchor":[6,1,12]}
+{"t":"e","i":26,"k":2,"tr":[3,5,6,0,4,1],"m":25,"s":"Channel","name":"Channel","isStub":false,"parent":25,"comments":["A plain enum occupies both spaces; its members are properties with values."],"space":["type","value"],"anchor":[6,2,6]}
+{"t":"e","i":27,"k":2,"tr":[3,5,6,0,4,1],"m":25,"s":"Priority","name":"Priority","isStub":false,"parent":25,"comments":["A const enum is inlined at emit: type space only."],"space":["type"],"anchor":[6,9,12]}
+{"t":"e","i":28,"k":4,"tr":[3,2,6,4],"m":28,"s":"packages%2Forder%2Fsrc%2Fdecorators.ts","name":"packages/order/src/decorators.ts","isStub":false,"definedIn":[7],"space":["value"],"anchor":[7,1,19]}
+{"t":"e","i":29,"k":1,"tr":[3,5,8,7,6,0,4],"m":28,"s":"Report","name":"Report","isStub":false,"parent":28,"space":["type","value"],"anchor":[7,9,19]}
+{"t":"e","i":30,"k":4,"tr":[3,2,6,4],"m":30,"s":"packages%2Forder%2Fsrc%2Fdiscountable.ts","name":"packages/order/src/discountable.ts","isStub":false,"definedIn":[8],"space":["value"],"anchor":[8,1,11]}
+{"t":"e","i":31,"k":3,"tr":[3,5,8,6,0,4,1],"m":30,"s":"Discountable","name":"Discountable","isStub":false,"parent":30,"comments":["`interface extends interface` is inheritance, not implementation."],"space":["type"],"anchor":[8,4,6]}
+{"t":"e","i":32,"k":4,"tr":[3,2,6,4],"m":32,"s":"packages%2Forder%2Fsrc%2Fhandler.ts","name":"packages/order/src/handler.ts","isStub":false,"definedIn":[9],"space":["value"],"anchor":[9,1,7]}
+{"t":"e","i":33,"k":4,"tr":[3,2,6,4],"m":33,"s":"packages%2Forder%2Fsrc%2Findex.ts","name":"packages/order/src/index.ts","isStub":false,"definedIn":[10],"space":["value"],"anchor":[10,1,3]}
+{"t":"e","i":34,"k":4,"tr":[3,2,6,4],"m":34,"s":"packages%2Forder%2Fsrc%2Flazy.ts","name":"packages/order/src/lazy.ts","isStub":false,"definedIn":[11],"space":["value"],"anchor":[11,1,6]}
+{"t":"e","i":35,"k":4,"tr":[3,2,6,4],"m":35,"s":"packages%2Forder%2Fsrc%2Fledger-adapter.ts","name":"packages/order/src/ledger-adapter.ts","isStub":false,"definedIn":[12],"space":["value"],"anchor":[12,1,13]}
+{"t":"e","i":36,"k":1,"tr":[3,5,8,7,6,0,4,1],"m":35,"s":"LedgerAdapter","name":"LedgerAdapter","isStub":false,"parent":35,"comments":["Extends a type from a package that is NOT installed: the base is a stub in\n`<unresolved>`, and every call through the `any` it leaves behind is\ndropped and counted — never guessed."],"space":["type","value"],"anchor":[12,9,13]}
+{"t":"e","i":37,"k":4,"tr":[3,2,6,4],"m":37,"s":"packages%2Forder%2Fsrc%2Flegacy%2Flist.ts","name":"packages/order/src/legacy/list.ts","isStub":false,"definedIn":[13],"space":["value"],"anchor":[13,1,9]}
+{"t":"e","i":38,"k":1,"tr":[3,5,8,7,6,0,4,1],"m":37,"s":"List","name":"List","isStub":false,"parent":37,"comments":["Recursion: `length` calls `tail.length` — a self-edge, dropped at the source."],"space":["type","value"],"anchor":[13,2,9]}
+{"t":"e","i":39,"k":4,"tr":[3,2,6,4],"m":39,"s":"packages%2Forder%2Fsrc%2Fmoney.ts","name":"packages/order/src/money.ts","isStub":false,"definedIn":[14],"space":["value"],"anchor":[14,1,32]}
+{"t":"e","i":40,"k":6,"tr":[3,5,0,4,1],"m":39,"s":"Cents","name":"Cents","isStub":false,"parent":39,"comments":["A type alias: type space only; its constituent is a reference."],"space":["type"],"anchor":[14,4,4]}
+{"t":"e","i":41,"k":1,"tr":[3,5,8,7,6,0,4,1],"m":39,"s":"Money","name":"Money","isStub":false,"parent":39,"comments":["A value type implementing a corpus interface, with accessors, a static and a #private."],"space":["type","value"],"anchor":[14,7,32]}
+{"t":"e","i":42,"k":4,"tr":[3,2,6,4],"m":42,"s":"packages%2Forder%2Fsrc%2Fnotifications.ts","name":"packages/order/src/notifications.ts","isStub":false,"definedIn":[15],"space":["value"],"anchor":[15,1,29]}
+{"t":"e","i":43,"k":4,"tr":[3,2,6,4],"m":43,"s":"packages%2Forder%2Fsrc%2Forder.ts","name":"packages/order/src/order.ts","isStub":false,"definedIn":[16],"space":["value"],"anchor":[16,1,35]}
+{"t":"e","i":44,"k":1,"tr":[3,5,8,7,6,0,4,1],"m":43,"s":"Order","name":"Order","isStub":false,"parent":43,"comments":["A customer order."],"space":["type","value"],"anchor":[16,7,35]}
+{"t":"e","i":45,"k":4,"tr":[3,2,6,4],"m":45,"s":"packages%2Forder%2Fsrc%2Fpriceable.ts","name":"packages/order/src/priceable.ts","isStub":false,"definedIn":[17],"space":["value"],"anchor":[17,1,4]}
+{"t":"e","i":46,"k":3,"tr":[3,5,8,6,0,4,1],"m":45,"s":"Priceable","name":"Priceable","isStub":false,"parent":45,"comments":["Anything with a price."],"space":["type"],"anchor":[17,2,4]}
+{"t":"e","i":47,"k":4,"tr":[3,2,6,4],"m":47,"s":"packages%2Forder%2Fsrc%2Fpromo%232024.ts","name":"packages/order/src/promo#2024.ts","isStub":false,"definedIn":[18],"space":["value"],"anchor":[18,1,2]}
+{"t":"e","i":48,"k":4,"tr":[3,2,6,4],"m":48,"s":"packages%2Forder%2Fsrc%2Freporting.ts","name":"packages/order/src/reporting.ts","isStub":false,"definedIn":[19],"space":["value"],"anchor":[19,1,30]}
+{"t":"e","i":49,"k":1,"tr":[3,5,8,7,6,0,4,1],"m":48,"s":"OrderError","name":"OrderError","isStub":false,"parent":48,"comments":["A corpus exception, extending a lib type."],"space":["type","value"],"anchor":[19,4,8]}
+{"t":"e","i":50,"k":4,"tr":[3,2,6,4],"m":50,"s":"packages%2Forder%2Fsrc%2Frésumé.ts","name":"packages/order/src/résumé.ts","isStub":false,"definedIn":[20],"space":["value"],"anchor":[20,1,4]}
+{"t":"e","i":51,"k":1,"tr":[3,5,8,7,6,0,4,1],"m":50,"s":"Résumé","name":"Résumé","isStub":false,"parent":50,"comments":["Non-ASCII identifiers and text, written unescaped."],"space":["type","value"],"anchor":[20,2,4]}
+{"t":"e","i":52,"k":4,"tr":[3,2,6,4],"m":52,"s":"packages%2Forder%2Fsrc%2Fui%2Forder-table.tsx","name":"packages/order/src/ui/order-table.tsx","isStub":false,"definedIn":[21],"space":["value"],"anchor":[21,1,20]}
+{"t":"e","i":53,"k":4,"tr":[3,2,6,4],"m":53,"s":"packages%2Fpricing%2Fsrc%2Findex.ts","name":"packages/pricing/src/index.ts","isStub":false,"definedIn":[22],"space":["value"],"anchor":[22,1,10]}
+{"t":"e","i":54,"k":3,"tr":[3,5,8,6,0,4],"m":53,"s":"Priced","name":"Priced","isStub":false,"parent":53,"space":["type"],"anchor":[22,4,6]}
+{"t":"x","k":0,"f":5,"o":10,"p":0,"anchor":[0,1,1]}
+{"t":"x","k":1,"f":9,"o":13,"p":0,"anchor":[0,5,5]}
+{"t":"x","k":0,"f":16,"o":30,"p":0,"anchor":[2,1,1]}
+{"t":"x","k":2,"f":17,"o":31,"p":0,"anchor":[2,4,4]}
+{"t":"x","k":0,"f":19,"o":14,"p":0,"anchor":[4,1,1]}
+{"t":"x","k":1,"f":21,"o":15,"p":0,"anchor":[4,17,17]}
+{"t":"x","k":0,"f":30,"o":45,"p":0,"anchor":[8,1,1]}
+{"t":"x","k":1,"f":31,"o":46,"p":0,"anchor":[8,4,4]}
+{"t":"x","k":0,"f":32,"o":43,"p":0,"anchor":[9,1,1]}
+{"t":"x","k":0,"f":32,"o":47,"p":0,"anchor":[9,2,2]}
+{"t":"x","k":0,"f":33,"o":30,"p":0,"anchor":[10,3,3]}
+{"t":"x","k":0,"f":33,"o":39,"p":0,"anchor":[10,2,2]}
+{"t":"x","k":0,"f":33,"o":43,"p":0,"anchor":[10,1,1]}
+{"t":"x","k":0,"f":34,"o":48,"p":0,"anchor":[11,3,3]}
+{"t":"x","k":0,"f":35,"o":4,"p":0,"anchor":[12,1,1]}
+{"t":"x","k":0,"f":35,"o":43,"p":0,"anchor":[12,2,2]}
+{"t":"x","k":1,"f":36,"o":3,"p":0,"anchor":[12,9,9]}
+{"t":"x","k":0,"f":39,"o":45,"p":0,"anchor":[14,1,1]}
+{"t":"x","k":2,"f":41,"o":46,"p":0,"anchor":[14,7,7]}
+{"t":"x","k":0,"f":42,"o":43,"p":0,"anchor":[15,1,1]}
+{"t":"x","k":0,"f":43,"o":16,"p":0,"anchor":[16,3,3]}
+{"t":"x","k":0,"f":43,"o":25,"p":0,"anchor":[16,2,2]}
+{"t":"x","k":0,"f":43,"o":39,"p":0,"anchor":[16,4,4]}
+{"t":"x","k":0,"f":43,"o":53,"p":0,"anchor":[16,1,1]}
+{"t":"x","k":1,"f":44,"o":17,"p":0,"anchor":[16,7,7]}
+{"t":"x","k":0,"f":48,"o":43,"p":0,"anchor":[19,1,1]}
+{"t":"x","k":1,"f":49,"o":1,"p":0,"anchor":[19,4,4]}
+{"t":"x","k":0,"f":52,"o":43,"p":0,"anchor":[21,1,1]}
+{"t":"eof","counts":{"files":23,"entities":55,"edges":28}}

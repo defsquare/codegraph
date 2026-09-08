@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { encodeModelToString, renderId, type Entity, type Model } from "@codegraph/core";
 
 import type { SnapshotsOptions } from "../src/args.js";
-import { snapshotsCommand, type Extract } from "../src/commands/snapshots.js";
+import { extractorFor, snapshotsCommand, type Extract } from "../src/commands/snapshots.js";
 import { EXIT } from "../src/exit.js";
 import { captureIo, type CapturedIo } from "../src/io.js";
 import { runSync } from "../src/main.js";
@@ -334,6 +334,20 @@ describe("codegraph snapshots repository facts", () => {
     expect(code).toBe(EXIT.OK);
     expect(seen.every((facts) => facts === undefined)).toBe(true);
     expect(io.stderr()).toContain("no https-projectable `origin` remote");
+  });
+});
+
+describe("codegraph snapshots launches an extractor by its file kind", () => {
+  it("runs a .mjs extractor under node, with the contract's flags", () => {
+    const script = join(scratch, "fake-extractor.mjs");
+    const out = join(scratch, "fake-extractor.out.jsonl");
+    writeFileSync(
+      script,
+      "import { writeFileSync } from 'node:fs';\n" +
+        "writeFileSync(process.argv[process.argv.indexOf('--out') + 1], JSON.stringify(process.argv.slice(2)) + '\\n');\n",
+    );
+    extractorFor(script)(repo, out, undefined);
+    expect(JSON.parse(readFileSync(out, "utf8")) as string[]).toEqual(["--src", repo, "--out", out]);
   });
 });
 

@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+// The TypeScript extractor as a program: `./bin/codegraph-typescript --src DIR --out model.jsonl`.
+//
+// Extensionless on purpose — the name IS the command — and ESM by syntax
+// (`import.meta`), so it loads the same wherever it is copied. It resolves the
+// built bundle relative to ITSELF, so a git worktree or a moved checkout runs
+// its own `dist/` and not another tree's. `typescript` stays outside the
+// bundle (the compiler finds its lib files beside itself), so the bundle
+// resolves it from the workspace install.
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const cli = new URL("../extractors/typescript/dist/cli.js", import.meta.url);
+const root = fileURLToPath(new URL("..", import.meta.url));
+
+if (existsSync(fileURLToPath(cli))) {
+  await import(cli.href);
+} else {
+  process.stderr.write(
+    `codegraph-typescript: extractors/typescript/dist/cli.js is missing\n` +
+      `Run \`pnpm install && pnpm -r build\` in ${root} and try again.\n`,
+  );
+  process.exitCode = 1;
+}

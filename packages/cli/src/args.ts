@@ -693,8 +693,9 @@ export const SNAPSHOTS_SPEC: CommandSpec = {
       name: "extractor",
       type: "string",
       describe:
-        "The extractor run at every revision: a .jar (run with `java -jar`) or an executable " +
-        "such as codegraph-csharp. Both honour the extractor command-line contract (schemas/README.md §8).",
+        "The extractor run at every revision: a .jar (run with `java -jar`), a .js (run with `node`) " +
+        "or an executable such as codegraph-csharp or bin/codegraph-typescript. All honour the extractor " +
+        "command-line contract (schemas/README.md §8).",
       placeholder: "FILE",
     },
     {

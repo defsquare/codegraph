@@ -134,6 +134,17 @@ if wants_ts; then
 
   phase "unit + property tests" pnpm --dir "$ROOT" -r test
 
+  # The TypeScript extractor's BUILT bundle (if build.sh made one) must
+  # reproduce the committed fixture snapshot byte for byte — the one path
+  # vitest's source aliasing cannot see: the bundle leaves `typescript`
+  # external so the compiler finds its lib files beside itself.
+  if [ -f "$ROOT/extractors/typescript/dist/cli.js" ]; then
+    phase "built typescript extractor reproduces the snapshot" \
+      sh -c "cd '$ROOT' && out=\$(mktemp) && node extractors/typescript/dist/cli.js --src fixtures/typescript/src --out \"\$out\" --progress none >/dev/null 2>&1 && cmp \"\$out\" fixtures/typescript/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
+  else
+    warn "extractors/typescript/dist/cli.js not built — skipping the built-bundle snapshot check (./build.sh --ts)"
+  fi
+
   # Regenerating a committed artifact must change nothing. Only meaningful
   # against a clean working tree: if schemas/ is already edited, the diff would
   # blame this run for the user's own in-progress change.

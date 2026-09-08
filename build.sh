@@ -3,7 +3,8 @@
 # build.sh — build every artifact a working codegraph install needs.
 #
 #   TypeScript : pnpm -r build   -> packages/*/dist (incl. the viz bundle
-#                                   `codegraph city --serve` looks for)
+#                                   `codegraph city --serve` looks for) and
+#                                   extractors/typescript/dist/cli.js (bin/codegraph-typescript)
 #   Java       : ./mvnw package  -> extractors/java/target/codegraph-java.jar
 #                --native        -> extractors/java/dist/<rid>/codegraph-java
 #                                   (GraalVM native image; HOST platform only —
@@ -203,6 +204,8 @@ if wants_ts; then
   # HTML the CLI serves. Their absence is what breaks `--serve`, so name them.
   report "$ROOT/packages/viz/dist/index.html"
   report "$ROOT/packages/navigator-ui/dist/index.html"
+  # The TypeScript extractor is a workspace package: built by the same pnpm -r build.
+  report "$ROOT/extractors/typescript/dist/cli.js"
 fi
 if wants_java && [ "$SKIP_JAVA" = "no" ]; then
   report "$JAVA_DIR/target/codegraph-java.jar"
