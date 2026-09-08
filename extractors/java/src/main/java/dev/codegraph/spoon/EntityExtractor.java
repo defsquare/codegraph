@@ -719,8 +719,26 @@ public final class EntityExtractor {
   private static void comments(Entity.Builder builder, CtElement element) {
     String doc = element.getDocComment();
     if (doc != null && !doc.isBlank()) {
-      builder.commented(List.of(doc.strip()));
+      builder.commented(List.of(lineEndingsNormalised(doc.strip())));
     }
+  }
+
+  /**
+   * Comment text joined with LF, never the platform's separator.
+   *
+   * <p>Spoon reassembles a javadoc with {@code System.lineSeparator()}, so the
+   * SAME source yields {@code \n} on Linux and {@code \r\n} on Windows — the
+   * model would then differ by the machine that produced it, which is the one
+   * thing the interchange may never do (the same rule {@link Anchors#relativize}
+   * enforces for paths). Source line endings are not the issue: Spoon already
+   * normalises a CRLF file to LF.
+   */
+  static String lineEndingsNormalised(String text) {
+    // Overwhelmingly the common case, and comment text is not small.
+    if (text.indexOf('\r') < 0) {
+      return text;
+    }
+    return text.replace("\r\n", "\n").replace('\r', '\n');
   }
 
   private static boolean isAnonymous(CtType<?> type) {

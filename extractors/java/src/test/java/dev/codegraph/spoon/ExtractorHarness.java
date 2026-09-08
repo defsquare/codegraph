@@ -122,8 +122,19 @@ final class ExtractorHarness {
   }
 
   static Run run(Path corpus, Path outFile, String... extraArgs) {
+    return runWith(List.of(), corpus, outFile, extraArgs);
+  }
+
+  /**
+   * The same run with extra JVM options. The extractor forks a real JVM, which
+   * is what makes a PLATFORM behaviour reachable from a test: {@code
+   * -Dline.separator} reproduces on Linux the CRLF a Windows runner would
+   * produce, and the model must not notice either way.
+   */
+  static Run runWith(List<String> jvmOptions, Path corpus, Path outFile, String... extraArgs) {
     List<String> command = new ArrayList<>();
     command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+    command.addAll(jvmOptions);
     command.add("-cp");
     command.add(System.getProperty("java.class.path"));
     command.add(Main.class.getName());

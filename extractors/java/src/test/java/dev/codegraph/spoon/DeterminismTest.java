@@ -2,6 +2,7 @@ package dev.codegraph.spoon;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,6 +45,38 @@ class DeterminismTest {
     // Text first: on failure the diff is readable, rather than "arrays differ at [4711]".
     assertEquals(first.json(), second.json(), "model.jsonl is not reproducible across runs");
     assertArrayEquals(first.bytes(), second.bytes(), "model.jsonl differs in bytes but not in text");
+  }
+
+  /**
+   * The model must not differ by the MACHINE that produced it, only by the corpus.
+   *
+   * <p>Spoon reassembles a javadoc with {@code System.lineSeparator()}, so the
+   * same fixture emitted {@code \r\n} inside every comment on a Windows runner
+   * and {@code \n} here — 18 escapes' worth, and the cross-OS gate went red on
+   * "char 8026, line 49" with nothing wrong in the code. Source line endings were
+   * never the cause: Spoon normalises a CRLF file to LF, and .gitattributes
+   * checks the fixtures out as LF everywhere.
+   *
+   * <p>Forking with {@code -Dline.separator} is what makes that reachable from a
+   * Linux test at all: {@code System.lineSeparator()} is fixed when the JVM
+   * starts, so no in-process test can move it.
+   */
+  @Test
+  void thePlatformLineSeparatorNeverReachesTheModel() {
+    ExtractorHarness.Run windowsLike =
+        ExtractorHarness.runWith(
+                List.of("-Dline.separator=\r\n"),
+                ExtractorHarness.fixtureCorpus(),
+                outputDirectory.resolve("crlf.json"))
+            .succeeded();
+
+    assertFalse(
+        windowsLike.json().contains("\\r"),
+        "a carriage return reached the model — it would differ on Windows only");
+    assertEquals(
+        first.json(),
+        windowsLike.json(),
+        "the model changed with the platform's line separator");
   }
 
   /**
