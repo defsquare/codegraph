@@ -7,7 +7,10 @@
 #   unit       pnpm -r test            (vitest + fast-check property suites)
 #   schemas    pnpm run gen:schemas must be a NO-OP — schemas/ is a committed
 #              artifact and the cross-language contract; drift there is a bug
-#   java       ./mvnw test
+#   java       ./mvnw test, then the NATIVE binary (if build.sh made one)
+#              re-extracts fixtures/java/src and must reproduce the committed
+#              snapshot — the only test that sees the image's own code path: no
+#              java.home, no VM class library, the embedded ct.sym reference
 #   csharp     dotnet test, then the PUBLISHED binary (if build.sh made one)
 #              re-extracts fixtures/csharp/src and must reproduce the committed
 #              snapshot byte for byte — the only test that sees the single-file
@@ -156,6 +159,26 @@ fi
 if wants_java && [ "$SKIP_JAVA" = "no" ]; then
   phase "java extractor tests (./mvnw test)" \
     sh -c "cd '$JAVA_DIR' && ./mvnw -B test"
+
+  # The same acceptance check the C# binary gets, and for the same reason: a
+  # native image is a different runtime, not a repackaging. It has no java.home,
+  # so ECJ finds no platform library and falls back to the ct.sym reference the
+  # build embedded — a path NO jvm test can exercise. If that reference were
+  # missing or wrong the model would still be produced, just quietly worse
+  # (types the corpus never declared, ~10 points of resolution), which is exactly
+  # the kind of regression a snapshot catches and a summary line does not.
+  #
+  # Unlike C#, the model's `root` is the ABSOLUTE path the run was pointed at, so
+  # the comparison normalises it the way SnapshotTest does — and nothing else.
+  bin="$JAVA_DIR/dist/$(host_rid)/codegraph-java"
+  [ -x "$bin" ] || bin="$bin.exe"
+  if [ -x "$bin" ]; then
+    corpus="$(cd "$ROOT/fixtures/java/src" && pwd -P)"
+    phase "native java binary reproduces the snapshot" \
+      sh -c "cd '$ROOT' && out=\$(mktemp) && '$bin' --src fixtures/java/src --out \"\$out\" --progress none >/dev/null 2>&1 && sed 's|\"$corpus\"|\"fixtures/java/src\"|' \"\$out\" | cmp - fixtures/java/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
+  else
+    warn "no native binary at $JAVA_DIR/dist/$(host_rid) — run ./build.sh --java --native for the smoke test"
+  fi
 fi
 
 # ---------------------------------------------------------------- csharp ----

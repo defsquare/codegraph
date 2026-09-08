@@ -2066,6 +2066,96 @@ published `linux-x64`, `osx-arm64` and `win-x64` binaries on their hosts; the
 audit numbers in the profile notes; `./test.sh` and CI green with the C#
 fixture in every per-fixture suite.
 
+### 13.10 The Java extractor's native distribution (GraalVM)
+
+The Spoon extractor ships the same way: one executable per platform, no runtime
+to install. The mechanism is not the same, and the difference is not cosmetic.
+
+**native-image cannot cross-compile.** `dotnet publish -r osx-arm64` works from
+Linux because .NET ships prebuilt per-RID runtimes and the app stays portable IL.
+GraalVM instead runs an AOT compiler *and the host's native linker*, so a macOS
+binary is built on macOS. The C# matrix is five RIDs in one Linux job plus five
+smoke jobs; the Java matrix is **five jobs, each building and proving its own
+RID** (`java-native` in `.github/workflows/ci.yml`).
+
+| RID | runner | artifact |
+|---|---|---|
+| `linux-x64` | `ubuntu-latest` | `codegraph-java-linux-x64` |
+| `linux-arm64` | `ubuntu-24.04-arm` | `codegraph-java-linux-arm64` |
+| `osx-arm64` | `macos-latest` | `codegraph-java-osx-arm64` |
+| `osx-x64` | `macos-15-intel` | `codegraph-java-osx-x64` |
+| `win-x64` | `windows-latest` | `codegraph-java-win-x64.exe` |
+
+Build shape, decided:
+
+```
+native-image -jar target/codegraph-java.jar -o dist/<rid>/codegraph-java \
+  --no-fallback -march=compatibility
+```
+
+- **From the shaded jar**, deliberately: the binary and `java -jar` are then the
+  same artifact compiled two ways, and cannot drift. Reachability metadata and
+  the platform reference travel inside that jar.
+- **`--no-fallback`** — a missing reflection entry must fail the BUILD, never
+  produce an image that silently needs a JVM.
+- **`-march=compatibility`** — the baseline ISA, not the builder's CPU. A
+  released binary runs on the machine that downloads it.
+- ~42 MB, ~3 ms startup, and **13× faster than the jar** on the fixture corpus
+  (0.13 s vs 1.78 s) — no JIT warm-up on a process that exits in a second.
+
+**The hard part was not the compiler: it was the platform library.** ECJ, given
+no `-bootclasspath`, resolves `java.*` against the class library of the JVM it
+runs inside. A native image has no JVM, no `java.home`, and no boot classpath —
+and Spoon's noClasspath mode does not degrade gracefully when `java.lang` is
+absent, it INVENTS: `System.out.println(…)` yields a type named `out`, a type
+variable `T` becomes an entity. Measured on `fixtures/java/src`: 84.9%
+resolution and 40 stubs, against 94.5% and 27.
+
+So the binary carries its own, exactly as the C# extractor embeds the BCL
+reference pack (§13.1). Two build outputs, both generated from the build JDK's
+`lib/ct.sym` by `PlatformReferenceJar` and both landing inside the shaded jar:
+
+1. **`java-api.jar`** — the Java 17 public API as signature-only class files,
+   4,721 classes / 2.6 MB (a JDK image is ~130 MB). Handed to Spoon as the
+   *source classpath*, which ECJ searches LAST — bootclasspath, extdirs,
+   sourcepath, classpath. On a JVM the VM's own library still wins, so `java
+   -jar` behaviour is untouched and the committed snapshot did not move.
+2. **A reachability-metadata file naming `java.base`'s 1,352 types.** Spoon
+   resolves an *import* through the runtime classloader, not through ECJ —
+   proved by running the jar under `--limit-modules java.base`, which flips
+   exactly the `java.sql.*` imports from `declared` to `derived` while ECJ still
+   sees them. `java.base` only: registering the rest pulls AWT, fontmanager and
+   sound natives into the image and the single file becomes a directory of
+   shared objects.
+
+Two smaller obstacles, both recorded because they are invisible until they bite:
+ECJ's `handleExtdirs` dereferences `getJavaHome()` unconditionally, so the image
+NPEs before parsing a single file unless `java.ext.dirs` is set (empty is the
+truth — extension directories are a JDK 8 relic); and the reflection metadata for
+Spoon/ECJ itself is agent-traced over three corpora and **committed** under
+`src/main/resources/META-INF/native-image/`, because a trace of one corpus misses
+what another needs.
+
+**The residual, stated exactly.** On `fixtures/java/src` the binary reproduces
+the committed snapshot byte for byte. On gson (86 files, 3,635 entities, 9,260
+edges) the entity table is byte-identical to the jar's and **3 of 9,260 edges**
+differ: imports of `java.sql.*` carry `derived` instead of `declared`. The
+package they point at is unchanged, no entity is affected, and it is the same
+answer a JVM limited to `java.base` gives. That is provenance doing its job —
+the metamodel has a word for "inferred, not read" precisely so this can be
+reported rather than hidden.
+
+Wiring, mirroring the C# story so the two cannot disagree:
+
+- `./build.sh --java --native` → `extractors/java/dist/<host-rid>/codegraph-java`;
+  `ensure_native_image` finds GraalVM (GRAALVM_HOME, JAVA_HOME, PATH, sdkman).
+- `./test.sh --java` runs `./mvnw test` and then, if a binary exists, the
+  **native smoke test**: the binary re-extracts the fixture corpus and must
+  reproduce the snapshot. It is the only test that sees the image's
+  platform-library path, and `--no-fallback` cannot catch a wrong one.
+- CI builds and smoke-tests all five RIDs and attaches them to a `v*` release
+  beside the C# binaries.
+
 ## 14. Milestones
 
 | # | Milestone | Definition of done |

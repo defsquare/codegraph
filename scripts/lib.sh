@@ -274,6 +274,43 @@ ensure_mvnw() {
   ok "maven wrapper $(sed -n 's/.*apache-maven-\([0-9.]*\)-bin\.zip/\1/p' "$JAVA_DIR/.mvn/wrapper/maven-wrapper.properties" 2>/dev/null | head -1)"
 }
 
+# Resolve GraalVM's `native-image` and EXPORT NATIVE_IMAGE.
+#
+# native-image is an AOT compiler that drives the HOST's linker, so — unlike
+# `dotnet publish -r <rid>` — it cannot cross-compile: a macOS binary is built on
+# macOS, a Windows binary on Windows. That is why the Java matrix is one CI job
+# per operating system while the C# matrix is five RIDs on one Linux job.
+#
+# Search order mirrors ensure_jdk: an explicit GRAALVM_HOME, then JAVA_HOME, then
+# PATH, then sdkman's GraalVM candidates (which a non-interactive shell cannot
+# see). Never installed automatically — that is a multi-hundred-MB decision.
+ensure_native_image() {
+  local candidate
+
+  set --
+  if [ -n "${GRAALVM_HOME:-}" ]; then set -- "$GRAALVM_HOME/bin/native-image"; fi
+  if [ -n "${JAVA_HOME:-}" ]; then set -- "$@" "$JAVA_HOME/bin/native-image"; fi
+  set -- "$@" "$(command -v native-image 2>/dev/null || true)"
+  for candidate in "$HOME"/.sdkman/candidates/java/*graal*/bin/native-image; do
+    if [ -x "$candidate" ]; then set -- "$@" "$candidate"; fi
+  done
+
+  NATIVE_IMAGE=""
+  for candidate in "$@"; do
+    [ -n "$candidate" ] && [ -x "$candidate" ] || continue
+    NATIVE_IMAGE="$candidate"; break
+  done
+
+  [ -n "$NATIVE_IMAGE" ] || die \
+    "no native-image found — the Java extractor's native build needs GraalVM" \
+    "sdkman:   sdk install java 25.3.4+1.r25-graalce" \
+    "homebrew: brew install --cask graalvm-jdk" \
+    "or point GRAALVM_HOME at an existing install" \
+    "or build the jar only: $SCRIPT_NAME --java"
+  export NATIVE_IMAGE
+  ok "native-image $("$NATIVE_IMAGE" --version 2>/dev/null | head -1 | cut -d" " -f2)"
+}
+
 # ------------------------------------------------------ dotnet toolchain -----
 
 have_csharp_extractor() { [ -f "$CSHARP_DIR/global.json" ]; }

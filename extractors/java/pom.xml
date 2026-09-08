@@ -24,6 +24,7 @@
     <jackson.version>2.22.2</jackson.version>
     <junit.version>5.14.4</junit.version>
     <jsonschema.version>3.0.6</jsonschema.version>
+    <exec.plugin.version>3.6.1</exec.plugin.version>
   </properties>
 
   <dependencies>
@@ -81,6 +82,40 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.6</version>
+      </plugin>
+      <!-- The platform reference library, distilled from the build JDK's ct.sym.
+           ECJ resolves java.* against the JVM it runs inside; a GraalVM native
+           image has no JVM, so the binary has to carry the API with it (the same
+           call the C# extractor makes about the BCL reference pack, PLAN.md
+           §13.1). maven.compiler.release is the single source of truth for which
+           release: the corpus is parsed at that level, so it is resolved at that
+           level too. Lands in target/classes, hence inside the shaded jar and
+           inside the image. Emits TWO files: the jar ECJ resolves against, and a
+           SECOND reachability-metadata.json naming java.base's types — Spoon
+           resolves imports through the runtime classloader, which in an image
+           answers only for what was compiled into it. It sits under its own
+           artifact directory so the agent-traced metadata next to it stays a
+           committed, hand-reviewable file. -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>${exec.plugin.version}</version>
+        <executions>
+          <execution>
+            <id>platform-reference-jar</id>
+            <phase>process-classes</phase>
+            <goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>dev.codegraph.spoon.build.PlatformReferenceJar</mainClass>
+              <classpathScope>compile</classpathScope>
+              <arguments>
+                <argument>${maven.compiler.release}</argument>
+                <argument>${project.build.outputDirectory}/dev/codegraph/spoon/java-api.jar</argument>
+                <argument>${project.build.outputDirectory}/META-INF/native-image/dev.codegraph/codegraph-java-platform/reachability-metadata.json</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

@@ -5,6 +5,11 @@
 #   TypeScript : pnpm -r build   -> packages/*/dist (incl. the viz bundle
 #                                   `codegraph city --serve` looks for)
 #   Java       : ./mvnw package  -> extractors/java/target/codegraph-java.jar
+#                --native        -> extractors/java/dist/<rid>/codegraph-java
+#                                   (GraalVM native image; HOST platform only —
+#                                   native-image drives the host linker and
+#                                   cannot cross-compile, so the per-OS matrix
+#                                   is one CI job per runner, not one job)
 #   C#         : dotnet publish  -> extractors/csharp/dist/<rid>/codegraph-csharp
 #                                   (self-contained single file; --publish-all
 #                                   builds the five-RID matrix from this host)
@@ -21,6 +26,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts/lib.sh"
 trap on_error ERR
 
 CLEAN="no"
+NATIVE="no"
 PUBLISH_ALL="no"
 PUBLISH_RID=""
 
@@ -35,6 +41,8 @@ Options:
   --java, --java-only  only extractors/java (./mvnw package)
   --csharp, --csharp-only
                        only extractors/csharp (dotnet publish, host RID)
+  --native             Java: also build the GraalVM native binary for THIS
+                       platform (extractors/java/dist/<rid>/codegraph-java)
   --publish-all        C#: publish linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64
   --rid <rid>          C#: publish exactly this RID (what the CI matrix calls, one per job)
   --all                everything (default)
@@ -48,6 +56,7 @@ Examples:
   ./build.sh                    # everything, lockfile frozen
   ./build.sh --ts --skip-install
   ./build.sh --java --clean
+  ./build.sh --java --native    # jar + the native binary for this OS/arch
 USAGE
 }
 
@@ -55,6 +64,7 @@ while [ $# -gt 0 ]; do
   if parse_common_flag "$1"; then shift; continue; fi
   case "$1" in
     --clean)    CLEAN="yes" ;;
+    --native)   NATIVE="yes" ;;
     --publish-all) PUBLISH_ALL="yes" ;;
     --rid)
       [ $# -ge 2 ] || usage_error "--rid needs a value"
@@ -73,7 +83,9 @@ step "toolchain"
 if wants_ts; then check_node; ensure_pnpm; fi
 SKIP_JAVA="no"; SKIP_CSHARP="no"
 if wants_java; then
-  if have_java_extractor; then ensure_jdk; ensure_mvnw
+  if have_java_extractor; then
+    ensure_jdk; ensure_mvnw
+    if [ "$NATIVE" = "yes" ]; then ensure_native_image; fi
   else warn "no extractors/java in this checkout — skipping the Java build"; SKIP_JAVA="yes"; fi
 fi
 if wants_csharp; then
@@ -101,10 +113,39 @@ fi
 # ------------------------------------------------------------------ java ----
 
 if wants_java && [ "$SKIP_JAVA" = "no" ]; then
+  if [ "$CLEAN" = "yes" ] && [ "$NATIVE" = "yes" ]; then
+    step "clean (java native)"
+    run rm -rf "$JAVA_DIR/dist"
+    step_done
+  fi
+
   step "build java extractor (./mvnw package)"
   # -B: batch mode, no ANSI progress spam in logs. Tests belong to test.sh.
   ( cd "$JAVA_DIR" && run ./mvnw -B -DskipTests package )
   step_done
+
+  # One native executable for the HOST platform, ahead-of-time compiled from the
+  # shaded jar — which is deliberately the same artifact `java -jar` runs, so the
+  # two cannot drift apart. Reachability metadata travels inside that jar
+  # (META-INF/native-image/…), as does the embedded Java API reference the image
+  # resolves java.* against, since a native image has no JVM to borrow one from.
+  #
+  #   --no-fallback         refuse to emit an image that secretly needs a JVM;
+  #                         a missing reflection entry must fail the BUILD
+  #   -march=compatibility  target the baseline ISA, not this builder's CPU —
+  #                         a released binary must run on the machine that
+  #                         downloads it, not only on the one that built it
+  if [ "$NATIVE" = "yes" ]; then
+    rid="$(host_rid)"
+    step "build java native image ($rid)"
+    run mkdir -p "$JAVA_DIR/dist/$rid"
+    ( cd "$JAVA_DIR" && run "$NATIVE_IMAGE" \
+        -jar target/codegraph-java.jar \
+        -o "dist/$rid/codegraph-java" \
+        --no-fallback \
+        -march=compatibility )
+    step_done
+  fi
 fi
 
 # ---------------------------------------------------------------- csharp ----
@@ -163,7 +204,15 @@ if wants_ts; then
   report "$ROOT/packages/viz/dist/index.html"
   report "$ROOT/packages/navigator-ui/dist/index.html"
 fi
-if wants_java && [ "$SKIP_JAVA" = "no" ]; then report "$JAVA_DIR/target/codegraph-java.jar"; fi
+if wants_java && [ "$SKIP_JAVA" = "no" ]; then
+  report "$JAVA_DIR/target/codegraph-java.jar"
+  if [ "$NATIVE" = "yes" ]; then
+    case "$(host_rid)" in
+      win-*) report "$JAVA_DIR/dist/$(host_rid)/codegraph-java.exe" ;;
+      *)     report "$JAVA_DIR/dist/$(host_rid)/codegraph-java" ;;
+    esac
+  fi
+fi
 report_rid() {
   case "$1" in
     win-*) report "$CSHARP_DIR/dist/$1/codegraph-csharp.exe" ;;

@@ -17,7 +17,10 @@ relations is `METAMODEL.md` — read them before structural changes.
 ## Architecture
 
 ```
-extractors/java/     Maven project (Spoon, noClasspath) → emits model.jsonl. JVM code only.
+extractors/java/     Maven project (Spoon, noClasspath) → emits model.jsonl. JVM code
+                     only. Also builds a GraalVM native binary per platform, which
+                     embeds the Java API distilled from ct.sym (an image has no JVM
+                     class library for ECJ to borrow).
 extractors/csharp/   .NET 10 project (Roslyn, NO MSBuild: one compilation over
                      every *.cs, BCL reference pack embedded) → emits
                      model.jsonl. Published as one self-contained binary per OS.
@@ -108,8 +111,13 @@ pnpm run gen:schemas          # regenerate schemas/*.schema.json from core (comm
 
 cd extractors/java && ./mvnw package    # Maven Wrapper — `mvn` is NOT installed
 java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
-# needs a JDK on PATH; non-interactive shells do not source sdkman:
+# the jar needs a JDK on PATH; non-interactive shells do not source sdkman:
 #   export JAVA_HOME="$HOME/.sdkman/candidates/java/25.0.4-tem"
+./build.sh --java --native             # GraalVM binary for THIS platform only —
+                                       # native-image cannot cross-compile, so CI
+                                       # builds one RID per runner
+extractors/java/dist/<rid>/codegraph-java --src <dir> --out model.jsonl
+#   needs nothing installed: it carries the Java API distilled from ct.sym
 
 cd extractors/csharp && dotnet test -c Release   # needs the .NET 10 SDK (see extractors/csharp/README.md)
 ./build.sh --csharp                              # publish the host binary → extractors/csharp/dist/<rid>/codegraph-csharp

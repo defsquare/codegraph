@@ -2,6 +2,10 @@
 #
 #   verify          the TypeScript workspace: build, typecheck, tests, schemas/ drift
 #   java            the Spoon extractor's own suite
+#   java-native     the GraalVM binary — ONE JOB PER OS, because native-image
+#                   drives the host linker and cannot cross-compile the way
+#                   `dotnet publish -r <rid>` can. Each job builds AND smoke-tests
+#                   on its own runner, so the matrix is five jobs, not 5+5
 #   csharp-test     the Roslyn extractor's own suite (per-line schema validation included)
 #   csharp-publish  one self-contained single-file binary per RID, from ONE Linux host
 #   csharp-smoke    each binary runs on a runner of ITS OWN OS and must reproduce
@@ -86,6 +90,60 @@ jobs:
           cache: maven
       - run: cd extractors/java && ./mvnw -B test
 
+  # native-image is an AOT compiler plus the host's linker: a macOS binary needs a
+  # macOS runner. That is the whole reason this matrix is shaped differently from
+  # csharp-publish/csharp-smoke — there is no build-once-ship-five here, so each
+  # job builds its own RID and immediately proves it on the OS it was built for.
+  java-native:
+    name: java native ${{ matrix.rid }}
+    needs: java
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    rid: linux-x64,   exe: codegraph-java }
+          - { os: ubuntu-24.04-arm, rid: linux-arm64, exe: codegraph-java }
+          - { os: macos-latest,     rid: osx-arm64,   exe: codegraph-java }
+          - { os: macos-15-intel,   rid: osx-x64,     exe: codegraph-java }
+          - { os: windows-latest,   rid: win-x64,     exe: codegraph-java.exe }
+    steps:
+      # The snapshot is compared byte for byte, so a Windows checkout must not
+      # rewrite line endings.
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      # Brings native-image AND, on Windows, the MSVC toolchain it links with.
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "25"
+          distribution: graalvm-community
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: maven
+      # The same flags a developer's `./build.sh --java --native` uses — one
+      # definition of what a released binary is.
+      - shell: bash
+        run: ./build.sh --java --native --skip-install --no-auto-install
+      # The gate: the BINARY, not `java -jar`, re-extracts the fixture corpus and
+      # must reproduce the committed snapshot. Only `root` is normalised (the
+      # extractor writes the absolute path it was pointed at); nothing else may
+      # move. This is the only check that exercises the image's platform-library
+      # path — no java.home, no VM class library, the embedded ct.sym reference.
+      - shell: bash
+        run: |
+          bin="extractors/java/dist/${{ matrix.rid }}/${{ matrix.exe }}"
+          chmod +x "$bin"
+          "$bin" --help > /dev/null
+          corpus="$(cd fixtures/java/src && pwd -P)"
+          "$bin" --src fixtures/java/src --out out.jsonl --progress plain
+          sed "s|\"$corpus\"|\"fixtures/java/src\"|" out.jsonl | cmp - fixtures/java/expected/model.jsonl
+          echo "the native binary reproduces the snapshot on ${{ matrix.os }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codegraph-java-${{ matrix.rid }}
+          path: extractors/java/dist/${{ matrix.rid }}/
+          if-no-files-found: error
+          retention-days: 14
+
   csharp-test:
     name: csharp extractor
     runs-on: ubuntu-latest
@@ -155,7 +213,7 @@ jobs:
   release:
     name: github release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [verify, java, csharp-smoke]
+    needs: [verify, java, java-native, csharp-smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -163,7 +221,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: codegraph-csharp-*
+          pattern: codegraph-*
           path: artifacts
       - name: name each binary after its RID and attach it
         env:
@@ -171,10 +229,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          for dir in artifacts/codegraph-csharp-*; do
-            rid="${dir#artifacts/codegraph-csharp-}"
-            for f in "$dir"/codegraph-csharp*; do
-              case "$f" in *.exe) cp "$f" "release/codegraph-csharp-$rid.exe" ;; *) cp "$f" "release/codegraph-csharp-$rid" ;; esac
+          for extractor in csharp java; do
+            for dir in artifacts/codegraph-$extractor-*; do
+              rid="${dir#artifacts/codegraph-$extractor-}"
+              for f in "$dir"/codegraph-$extractor*; do
+                case "$f" in
+                  *.exe) cp "$f" "release/codegraph-$extractor-$rid.exe" ;;
+                  *)     cp "$f" "release/codegraph-$extractor-$rid" ;;
+                esac
+              done
             done
           done
           (cd release && sha256sum * > SHA256SUMS)

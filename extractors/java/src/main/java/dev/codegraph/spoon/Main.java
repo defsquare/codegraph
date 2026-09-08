@@ -45,7 +45,8 @@ public final class Main {
 
   private static final String NAME = "codegraph-spoon";
   private static final String VERSION = "0.2.0";
-  private static final int COMPLIANCE_LEVEL = 17;
+  /** Also the release the embedded platform reference is distilled for (see the pom). */
+  static final int COMPLIANCE_LEVEL = 17;
 
   private static final int EXIT_USAGE = 2;
   private static final int EXIT_UNIMPLEMENTED = 3;
@@ -98,6 +99,14 @@ public final class Main {
     launcher.getEnvironment().setNoClasspath(true);
     launcher.getEnvironment().setComplianceLevel(COMPLIANCE_LEVEL);
     launcher.getEnvironment().setCommentEnabled(true);
+    // A native image has no JVM to borrow a platform library from, so it carries
+    // its own. ECJ searches the classpath LAST, so on a JVM this changes nothing.
+    PlatformReference.forThisRuntime(progress)
+        .ifPresent(
+            reference -> {
+              launcher.getEnvironment().setSourceClasspath(new String[] {reference.toString()});
+              progress.log("platform reference: java " + COMPLIANCE_LEVEL + " API (embedded)");
+            });
     if (progress.isEnabled()) {
       launcher.getEnvironment().setSpoonProgress(new SpoonProgressReporter(progress));
     }
