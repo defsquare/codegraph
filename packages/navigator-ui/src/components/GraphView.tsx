@@ -9,6 +9,7 @@ import {
   type GraphDisplay,
   type GraphMode,
 } from "../model/graph.js";
+import { GRAPH_SIZES, GRAPH_SIZE_SLOW, graphLayoutBudget } from "../model/layout.js";
 
 cytoscape.use(fcose);
 
@@ -62,15 +63,21 @@ function edgeWidth(count: number): number {
 export function GraphView({ ix, hideExternals, active, selection, onSelect, onReveal }: GraphViewProps) {
   const [mode, setMode] = useState<GraphMode>("modules");
   const [minFanIn, setMinFanIn] = useState(0);
+  /** How much of the ranked node set this drawing takes — the cost knob. */
+  const [cap, setCap] = useState<number>(DEFAULT_GRAPH_CAP);
   const [query, setQuery] = useState("");
+  const [laying, setLaying] = useState(false);
   const container = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | undefined>(undefined);
   const fitZoom = useRef(1);
   const labelState = useRef("");
+  /** The display the canvas currently holds — what makes a relayout skippable. */
+  const drawnRef = useRef<GraphDisplay | undefined>(undefined);
+  const frame = useRef<number | undefined>(undefined);
 
   const display: GraphDisplay = useMemo(
-    () => graphDisplay(ix.model, { mode, hideExternals, minFanIn }),
-    [ix.model, mode, hideExternals, minFanIn],
+    () => graphDisplay(ix.model, { mode, hideExternals, minFanIn, cap }),
+    [ix.model, mode, hideExternals, minFanIn, cap],
   );
 
   /**
@@ -177,10 +184,8 @@ export function GraphView({ ix, hideExternals, active, selection, onSelect, onRe
     };
   }, [refreshLabels]);
 
-  // Rebuild elements and lay out when the display set changes.
-  useEffect(() => {
-    const cy = cyRef.current;
-    if (cy === undefined) return;
+
+  const draw = useCallback((cy: Core) => {
     cy.scratch("mode", mode);
     const elements: cytoscape.ElementDefinition[] = [];
     if (mode === "types") {
@@ -228,18 +233,10 @@ export function GraphView({ ix, hideExternals, active, selection, onSelect, onRe
     }
     cy.elements().remove();
     cy.add(elements);
-    const layout =
-      mode === "modules"
-        ? { name: "fcose", quality: "proof", animate: false, nodeSeparation: 110, idealEdgeLength: 130 }
-        : {
-            name: "fcose",
-            quality: "default",
-            animate: false,
-            packComponents: true,
-            nodeSeparation: 70,
-            nestingFactor: 0.1,
-          };
-    cy.layout(layout as cytoscape.LayoutOptions).run();
+    // The layout budget, not a fixed quality: proof over 1,200 nodes is an
+    // O(n²) spectral solve that froze this tab for 144 seconds.
+    const layout = graphLayoutBudget(mode, display.nodes.length);
+    cy.layout(layout as unknown as cytoscape.LayoutOptions).run();
     cy.fit(undefined, 30);
     fitZoom.current = cy.zoom();
     labelState.current = "";
@@ -247,10 +244,45 @@ export function GraphView({ ix, hideExternals, active, selection, onSelect, onRe
     refreshLabels(cy, mode, true);
   }, [display, ix.model, mode, refreshLabels]);
 
+  /**
+   * Rebuild elements and lay out when the display set changes — but ONLY while
+   * the tab is showing, and never in the same task that decided to.
+   *
+   * Two rules, both learned from a frozen app. (1) The layout is seconds of
+   * synchronous work; running it in the effect that observed the change means
+   * the browser never paints between "the user clicked Graph" and "the drawing
+   * is ready", so the whole app looks hung. Two frames of yield buy the
+   * overlay one paint. (2) This component stays MOUNTED behind the other tabs
+   * so its layout survives a tab switch — which also means a change made
+   * elsewhere (the header's externals toggle) would otherwise relayout a
+   * drawing nobody is looking at. Hidden work is deferred, not done.
+   */
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (cy === undefined || !active) return undefined;
+    if (drawnRef.current === display) return undefined;
+    setLaying(true);
+    let cancelled = false;
+    const outer = requestAnimationFrame(() => {
+      const inner = requestAnimationFrame(() => {
+        if (cancelled || cyRef.current !== cy) return;
+        draw(cy);
+        drawnRef.current = display;
+        setLaying(false);
+      });
+      frame.current = inner;
+    });
+    frame.current = outer;
+    return () => {
+      cancelled = true;
+      if (frame.current !== undefined) cancelAnimationFrame(frame.current);
+    };
+  }, [display, active, draw]);
+
   // Focus follows the app-wide selection; incoming cyan, outgoing amber.
   useEffect(() => {
     const cy = cyRef.current;
-    if (cy === undefined) return;
+    if (cy === undefined || drawnRef.current !== display) return;
     cy.elements().removeClass("faded focus hi in out");
     if (selection === undefined) return;
     const node = cy.getElementById(`N${selection}`);
@@ -309,7 +341,7 @@ export function GraphView({ ix, hideExternals, active, selection, onSelect, onRe
 
   useEffect(() => {
     const cy = cyRef.current;
-    if (cy === undefined || matches === undefined) return;
+    if (cy === undefined || matches === undefined || drawnRef.current !== display) return;
     cy.elements().removeClass("faded hi in out focus");
     if (matches.length === 0) return;
     cy.elements().not(".parent").addClass("faded");
@@ -318,7 +350,7 @@ export function GraphView({ ix, hideExternals, active, selection, onSelect, onRe
     found.removeClass("faded").addClass("hi");
     found.connectedEdges().removeClass("faded");
     cy.fit(found, 80);
-  }, [matches]);
+  }, [matches, display]);
 
   const selected = selection === undefined ? undefined : ix.model.nodes[selection];
   const selectedPath =
@@ -359,6 +391,17 @@ export function GraphView({ ix, hideExternals, active, selection, onSelect, onRe
             />
           </label>
         )}
+        <label className="graph-size">
+          nodes
+          <select value={cap} onChange={(event) => setCap(Number(event.target.value))}>
+            {GRAPH_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size.toLocaleString()}
+                {size > GRAPH_SIZE_SLOW ? " — slow" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
         <input
           type="search"
           className="graph-search"
@@ -372,11 +415,28 @@ export function GraphView({ ix, hideExternals, active, selection, onSelect, onRe
         {display.truncated && (
           <span className="graph-truncated" role="status">
             {display.totalNodes.toLocaleString()} pass the filters — drawing the top{" "}
-            {DEFAULT_GRAPH_CAP.toLocaleString()} by fan-in. Raise the fan-in floor to choose the slice.
+            {cap.toLocaleString()} by fan-in.
+            {mode === "types" ? " Raise the fan-in floor to choose the slice." : ""}
           </span>
         )}
       </div>
       <div className="graph-canvas" ref={container} />
+      {laying && (
+        <div className="graph-laying" role="status" aria-live="polite">
+          <div className="graph-laying-card">
+            <p className="graph-laying-text">
+              Laying out {display.nodes.length.toLocaleString()} nodes ·{" "}
+              {display.edges.length.toLocaleString()} links
+            </p>
+            <div className="progress-track indeterminate">
+              <div className="progress-fill" />
+            </div>
+            <p className="graph-laying-note">
+              A force-directed layout of this size takes a few seconds to place.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="graph-legend">
         <span><i className="lg-line" /> declared</span>
         <span><i className="lg-line lg-dashed" /> inference</span>

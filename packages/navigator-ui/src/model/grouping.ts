@@ -102,3 +102,22 @@ export function depsForSelection(ix: ModelIndexes, node: number): SelectionDeps 
     outgoingByMember: owner ? groupByMember(ix, outgoingRows) : [],
   };
 }
+
+/**
+ * PAGING, not truncation. A hot external type carries tens of thousands of
+ * dependency rows (`String` in a real corpus: 25,386); mounting them all cost
+ * 3.3 s of blocked main thread and roughly 200k DOM nodes. A section mounts
+ * one page at a time and says how many rows are still behind it — the COUNT it
+ * reports is always the whole truth, only the DOM is bounded.
+ */
+export const DEP_PAGE_SIZE = 200;
+
+export interface DepPage {
+  readonly shown: number;
+  readonly remaining: number;
+}
+
+export function depPage(total: number, pages: number, size = DEP_PAGE_SIZE): DepPage {
+  const shown = Math.min(total, size * Math.max(pages, 1));
+  return { shown, remaining: total - shown };
+}

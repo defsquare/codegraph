@@ -55,7 +55,14 @@ export interface GraphDisplay {
   readonly truncated: boolean;
 }
 
-export const DEFAULT_GRAPH_CAP = 1200;
+/**
+ * The default drawing size. It was 1,200 — a hairball that took TWO MINUTES
+ * to lay out and read as one solid blob when it finally appeared. The cost
+ * curve is worse than quadratic past ~400 nodes (see `layout.ts`), so the
+ * default is the largest size that still lands near a second; the toolbar
+ * offers the bigger ones to anyone who wants to wait for them.
+ */
+export const DEFAULT_GRAPH_CAP = 300;
 
 /** Categorical palette size; hues are assigned by hashing the hue KEY. */
 export const HUE_SLOTS = 12;

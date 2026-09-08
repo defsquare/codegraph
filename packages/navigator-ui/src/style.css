@@ -1224,3 +1224,93 @@ button.twisty:hover {
   background: var(--out);
   border-radius: 2px;
 }
+
+/* ------------------------------------------------- graph layout progress -- */
+/*
+ * The layout of a corpus-scale drawing is seconds of synchronous work that no
+ * library reports on. The overlay is what makes the wait legible instead of
+ * looking like a hang: it names the size being placed, and the indeterminate
+ * bar is the loader's own — the same visual promise, made twice.
+ */
+.graph-laying {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--ink) 72%, transparent);
+  z-index: 2;
+}
+
+.graph-laying-card {
+  width: min(380px, 80%);
+  padding: 20px 24px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--ink-raised);
+}
+
+.graph-laying-text {
+  margin: 0 0 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-laying-note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--paper-faint);
+}
+
+/* -------------------------------------------------- dependency row paging -- */
+/*
+ * A section mounts one page at a time; the footer states the remainder in
+ * full, so a bounded DOM never reads as a bounded fact.
+ */
+.dep-more {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0 4px;
+}
+
+.dep-more button {
+  font: inherit;
+  font-size: 11px;
+  color: var(--paper);
+  background: var(--ink-sunken);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.dep-more button:hover {
+  border-color: var(--paper-faint);
+}
+
+.dep-more-note {
+  font-size: 11px;
+  color: var(--paper-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--paper-dim);
+}
+
+.graph-size select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--paper);
+  background: var(--ink-sunken);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 3px 6px;
+}

@@ -2,7 +2,7 @@ import { memo, useMemo, useState } from "react";
 import type { DepRole, NavigatorModel } from "@codegraph/navigator";
 import type { ModelIndexes } from "../model/indexes.js";
 import { ancestorsOf } from "../model/indexes.js";
-import { depsForSelection, type DepGroup, type MemberGroup } from "../model/grouping.js";
+import { DEP_PAGE_SIZE, depPage, depsForSelection, type DepGroup, type MemberGroup } from "../model/grouping.js";
 
 /**
  * The fan-in / fan-out view: what points AT the selected node, and what it
@@ -117,6 +117,23 @@ const DepRowLine = memo(function DepRowLine({ ix, row, direction, onNavigate }: 
   );
 });
 
+/**
+ * One page of a section's rows, plus the button that reveals the next. The
+ * remainder is stated in full: a bounded DOM must never read as a bounded
+ * fact (a section whose rows are all mounted shows no footer at all).
+ */
+function MoreRows({ remaining, onMore }: { remaining: number; onMore: () => void }) {
+  if (remaining <= 0) return null;
+  return (
+    <li className="dep-more">
+      <button type="button" onClick={onMore}>
+        Show {Math.min(remaining, DEP_PAGE_SIZE).toLocaleString()} more
+      </button>
+      <span className="dep-more-note">{remaining.toLocaleString()} not shown</span>
+    </li>
+  );
+}
+
 function Section({
   ix,
   group,
@@ -129,18 +146,21 @@ function Section({
   onNavigate: (node: number) => void;
 }) {
   const [open, setOpen] = useState(true);
+  const [pages, setPages] = useState(1);
+  const page = depPage(group.rows.length, pages);
   return (
     <section className="dep-section">
       <button type="button" className="dep-section-head" onClick={() => setOpen(!open)} aria-expanded={open}>
         <span className="twisty">{open ? "▾" : "▸"}</span>
         <span className="dep-role">{ROLE_LABEL[group.role]}</span>
-        <span className="dep-count">{group.rows.length}</span>
+        <span className="dep-count">{group.rows.length.toLocaleString()}</span>
       </button>
       {open && (
         <ul className="dep-rows">
-          {group.rows.map((row) => (
+          {group.rows.slice(0, page.shown).map((row) => (
             <DepRowLine key={row} ix={ix} row={row} direction={direction} onNavigate={onNavigate} />
           ))}
+          <MoreRows remaining={page.remaining} onMore={() => setPages(pages + 1)} />
         </ul>
       )}
     </section>
@@ -160,6 +180,8 @@ function MemberSection({
   onNavigate: (node: number) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [pages, setPages] = useState(1);
+  const page = depPage(group.rows.length, pages);
   const member = group.member === undefined ? undefined : ix.model.nodes[group.member];
   return (
     <section className="dep-section">
@@ -168,13 +190,14 @@ function MemberSection({
         <span className="dep-role" title={member === undefined ? ownLabel : (member.signature ?? member.name)}>
           {member === undefined ? ownLabel : (member.signature ?? member.name)}
         </span>
-        <span className="dep-count">{group.rows.length}</span>
+        <span className="dep-count">{group.rows.length.toLocaleString()}</span>
       </button>
       {open && (
         <ul className="dep-rows">
-          {group.rows.map((row) => (
+          {group.rows.slice(0, page.shown).map((row) => (
             <DepRowLine key={row} ix={ix} row={row} direction="outgoing" onNavigate={onNavigate} />
           ))}
+          <MoreRows remaining={page.remaining} onMore={() => setPages(pages + 1)} />
         </ul>
       )}
     </section>
