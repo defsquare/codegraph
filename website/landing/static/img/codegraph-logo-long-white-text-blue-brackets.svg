@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="234px" height="54px" viewBox="0 0 234 54" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>codegraph-logo-long-white-text-blue-brackets</title>
+    <g id="Codegraph" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="codegraph-logo-long-white-text-blue-brackets" transform="translate(0.500000, 0.000000)">
+            <text id="codegraph" font-family="Helvetica-Bold, Helvetica" font-size="40" font-weight="bold" fill="#EEEEEE">
+                <tspan x="14.4140625" y="39">codegraph</tspan>
+            </text>
+            <g id="right-bracket" transform="translate(218.000000, 3.000000)" fill="#9BB2D9">
+                <rect id="Rectangle" transform="translate(7.500000, 3.500000) scale(-1, 1) translate(-7.500000, -3.500000) " x="0" y="0" width="15" height="7"></rect>
+                <rect id="Rectangle" transform="translate(7.500000, 45.500000) scale(-1, 1) translate(-7.500000, -45.500000) " x="0" y="42" width="15" height="7"></rect>
+                <rect id="Rectangle" transform="translate(11.500000, 24.000000) scale(-1, 1) rotate(-90.000000) translate(-11.500000, -24.000000) " x="-12.5" y="20.5" width="48" height="7"></rect>
+            </g>
+            <g id="left-bracket" transform="translate(0.000000, 3.000000)" fill="#9BB2D9">
+                <rect id="Rectangle" transform="translate(7.500000, 3.500000) scale(-1, 1) rotate(180.000000) translate(-7.500000, -3.500000) " x="0" y="0" width="15" height="7"></rect>
+                <rect id="Rectangle" transform="translate(7.500000, 45.500000) scale(-1, 1) translate(-7.500000, -45.500000) " x="0" y="42" width="15" height="7"></rect>
+                <rect id="Rectangle" transform="translate(3.500000, 24.000000) scale(-1, 1) rotate(-90.000000) translate(-3.500000, -24.000000) " x="-20.5" y="20.5" width="48" height="7"></rect>
+            </g>
+        </g>
+    </g>
+</svg>
