@@ -7,13 +7,18 @@ export class OrderError extends Error {
   }
 }
 
-/** A guard `if` and one `catch` with a rethrow: two throw sites, one target. */
+/**
+ * A guard `if`, a `catch` whose narrowed rethrow resolves, and a wrap: three
+ * throw sites, one target. A rethrow of the raw `unknown` binding would be
+ * dropped and counted — the checker names no type for it.
+ */
 export function ensure(orders: Order[]): number {
   if (orders.length === 0) throw new OrderError("empty");
   try {
     return orders.map((order) => order.bill()).reduce((a, b) => a + b, 0);
   } catch (error) {
-    throw error;
+    if (error instanceof OrderError) throw error;
+    throw new OrderError(String(error));
   }
 }
 

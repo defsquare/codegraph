@@ -2616,11 +2616,19 @@ Wiring into the repo's scripts and CI:
   byte-identical to core's encoder and profile-valid with zero issues; the
   core gate; `snapshots --extractor` running `.js` under `node`;
   `bin/codegraph-typescript`; `test.sh --ts` with the built-bin `cmp`.
-- **M13b — the model**: members, every edge kind incl. `annotationUse` with
-  written arguments and `throws`, spaces per entity, merging, escaping,
-  `sloc` + `cyclomatic`, literals, JSX, the workspace resolver, the full
-  fixture and its README, determinism and stub-discipline tests, the
-  fixture in every per-fixture suite, every CLI command verified on it.
+- **M13b — the model** ✅ (2026-09-08): members (methods, accessors as
+  `#get`/`#set`, statics as `#static` beside an instance twin, constructors,
+  properties incl. parameter properties, enum members with computed values,
+  parameters, destructured bindings, locals as `#local:name:line:column`,
+  nested functions as `#fn:`), nameless invocables by `line:column`, bound
+  object literals and class expressions, overloads folded to the
+  implementation, cross-kind merging by rank; every edge kind incl.
+  `annotationUse` with written arguments named after the factory's
+  parameters and `throws` at the site; JSX elements as invocations;
+  accessor writes on the setter; `sloc` + `cyclomatic`; constant-shaped
+  values (`4 * 25` unevaluated); the full 23-file fixture and its README;
+  the fixture in the analyzer, city, navigator and CLI suites; every CLI
+  command verified on it. Snapshot: 193 entities / 127 edges.
 - **M13c — self-hosting + audit + distribution**: codegraph on codegraph
   (validate clean, the boundary graph query, city and navigator screenshots
   reviewed); the three-corpus audit with resolution causes measured and the
@@ -2660,7 +2668,7 @@ TypeScript fixture in every per-fixture suite.
 | M12b | C# extractor — model | ✅ members (incl. implicit and primary constructors, operators, indexers, events, locals, lambdas, local functions), every profile edge kind incl. `annotationUse` with written values and `throws`, extension `attachedTo`, `sloc` + `cyclomatic`; synthesized record members fold to their type; stub discipline (BCL stubs in real namespaces, error types in `<unresolved>`, unbound receivers referenced by name); snapshot 244 entities / 285 edges, byte-identical to core's encoder; 76 .NET tests + 20 core gate tests; the fixture in the analyzer, city, navigator and CLI suites; every CLI command verified on it |
 | M12c | C# extractor — binaries + audit | ✅ five-RID `dotnet publish` matrix cross-published from one Linux host (287 s; ELF x64/aarch64, Mach-O x64/arm64, PE32+); GitHub Actions gate (`verify`, `java`, `csharp-test`, `csharp-publish` ×5, `csharp-smoke` on Ubuntu x64/arm64, macOS arm64/Intel and Windows — each binary must reproduce the snapshot byte for byte — and tagged releases with SHA256SUMS); three-corpus audit: Humanizer 97.3 % / 12 146 entities / 6 s, dotnet/eShop 63.5 % / 7 396 / 12 s, OrchardCore 93.4 % / 88 007 entities / 225 184 edges / 54 s, every model `validate`-clean; five defects found and fixed (signatures carry type arguments, conversion operators their return type, duplicate parameter names their ordinal, same-keyed declarations across projects kept and re-keyed by file, C# 14 extension blocks); resolution causes measured — the SDK's implicit usings and the ASP.NET Core reference pack now in — and the residue named in the profile notes; eShop city and navigator screenshots reviewed; `docs/csharp-extractor.md` |
 | M13a | TypeScript extractor — skeleton | ✅ `extractors/typescript/` (the compiler API as the front end, no build, `typescript` the only runtime dependency — §14); typescript profile v2; walking skeleton → `fixtures/typescript/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; core gate; boundary test; `snapshots --extractor` runs `.js` under `node`; `test.sh --ts` built-bin `cmp` |
-| M13b | TypeScript extractor — model | members, every edge kind incl. `annotationUse` with written arguments and `throws`, `space` per entity, declaration merging per file, key escaping, JSX invocations, workspace-package resolution without `node_modules`, `sloc` + `cyclomatic`, literals; the full fixture with its README; determinism and stub-discipline tests; the fixture in every per-fixture suite |
+| M13b | TypeScript extractor — model | ✅ members, every edge kind incl. `annotationUse` with written arguments and `throws`, `space` per entity, declaration merging per file, key escaping, JSX invocations, workspace-package resolution without `node_modules`, `sloc` + `cyclomatic`, literals; the full fixture with its README; determinism and stub-discipline tests; the fixture in every per-fixture suite |
 | M13c | TypeScript extractor — self-hosting + audit | codegraph's own model `validate`-clean with its package boundaries recovered as a graph query, city and navigator screenshots reviewed; TypeScript 4.9 compiler / nestjs / excalidraw audit with resolution causes in the profile notes; `npx codegraph-typescript`, the three-OS smoke matrix and tagged npm release; `docs/typescript-extractor.md` |
 
 ## 16. Decisions made in this plan (deltas vs. the design doc)

@@ -160,8 +160,10 @@ describe("fixtures/typescript/expected/model.jsonl", () => {
       ),
     ).toBe(true);
     // A class merged with an interface (module augmentation) is ONE class.
-    const things = model.entities.filter((e) => e.id.startsWith("ts:legacy-lib/Thing"));
+    const things = model.entities.filter((e) => e.id === "ts:legacy-lib/Thing" || e.id === "ts:legacy-lib/Thing#interface");
     expect(things.map((e) => `${e.id}:${e.kind}`)).toEqual(["ts:legacy-lib/Thing:class"]);
+    // The augmentation's member is parented by the merged class.
+    expect(entity(model, "ts:legacy-lib/Thing.extra")["parent"]).toBe("ts:legacy-lib/Thing");
     expect(
       model.edges.some(
         (e) => e.edge === "inheritance" && e.from === "ts:packages%2Forder%2Fsrc%2Faugment.ts/Wrapper" && e.to === "ts:legacy-lib/Thing",
@@ -198,6 +200,66 @@ describe("fixtures/typescript/expected/model.jsonl", () => {
     expect(kindOf("ts:packages%2Forder%2Fsrc%2Fabstract-order.ts/AbstractOrder", "ts:packages%2Forder%2Fsrc%2Fdiscountable.ts/Discountable")).toBe("interfaceImplementation");
     expect(kindOf("ts:packages%2Forder%2Fsrc%2Forder.ts/Order", "ts:packages%2Forder%2Fsrc%2Fabstract-order.ts/AbstractOrder")).toBe("inheritance");
     expect(entity(model, "ts:packages%2Forder%2Fsrc%2Fabstract-order.ts/AbstractOrder")["kind"]).toBe("abstractClass");
+  });
+
+  /**
+   * MEMBERS AND THEIR EDGES (M13b): the TypeScript-specific claims of PLAN
+   * §14.2 and §14.3, each readable in the fixture (its README names them).
+   */
+  it("keys twins apart, nameless invocables by position, and a constructor without a name", () => {
+    const model = loadSnapshot();
+    expect(entity(model, "ts:packages%2Forder%2Fsrc%2Forder.ts/Order.parse#static")["kind"]).toBe("method");
+    expect(entity(model, "ts:packages%2Forder%2Fsrc%2Fmoney.ts/Money.amount#get")["kind"]).toBe("method");
+    expect(entity(model, "ts:packages%2Forder%2Fsrc%2Fmoney.ts/Money.%23secret")["name"]).toBe("#secret");
+    expect(entity(model, "ts:packages%2Forder%2Fsrc%2Fnotifications.ts/both#8:16")["kind"]).toBe("arrowFunction");
+    expect(entity(model, "ts:packages%2Forder%2Fsrc%2Fnotifications.ts/both#8:57")["kind"]).toBe("arrowFunction");
+    // A top-level IIFE: an empty symbol below the module, the METAMODEL §1.1 clause.
+    expect(entity(model, "ts:packages%2Forder%2Fsrc%2Fnotifications.ts#23:2")["parent"]).toBe("ts:packages%2Forder%2Fsrc%2Fnotifications.ts");
+    const ctor = entity(model, "ts:packages%2Forder%2Fsrc%2Forder.ts/Order.constructor");
+    expect(ctor["kind"]).toBe("constructor");
+    expect(ctor["traits"]).not.toContain("TNamed");
+  });
+
+  it("resolves calls through variables, JSX and workspace packages, and says what an access does", () => {
+    const model = loadSnapshot();
+    const targets = (from: string, kind: string): string[] =>
+      model.edges.filter((e) => e.from === from && e.edge === kind).map((e) => e.to).sort();
+    expect(targets("ts:packages%2Forder%2Fsrc%2Fnotifications.ts", "invocation")).toEqual(["ts:packages%2Forder%2Fsrc%2Fnotifications.ts#23:2"]);
+    expect(targets("ts:packages%2Forder%2Fsrc%2Fui%2Forder-table.tsx/OrderTable#7:17", "invocation")).toEqual(["ts:packages%2Forder%2Fsrc%2Fui%2Forder-table.tsx/Row"]);
+    expect(targets("ts:packages%2Forder%2Fsrc%2Forder.ts/Order.bill", "invocation")).toEqual(["ts:packages%2Fpricing%2Fsrc%2Findex.ts/applyTax"]);
+    const total = model.edges.find(
+      (e) => e.edge === "access" && e.from === "ts:packages%2Forder%2Fsrc%2Forder.ts/Order.discount" && e.to === "ts:packages%2Forder%2Fsrc%2Fabstract-order.ts/AbstractOrder.total" && e.anchor.span[0] === 22,
+    ) as Record<string, unknown> | undefined;
+    expect(total?.["isRead"]).toBe(true);
+    expect(total?.["isWrite"]).toBe(true);
+    // Throw sites: the guard, the narrowed rethrow and the wrap, each at its own line.
+    const throws = model.edges.filter((e) => e.edge === "throws" && e.from === "ts:packages%2Forder%2Fsrc%2Freporting.ts/ensure");
+    expect(throws.map((e) => e.anchor.span[0]).sort()).toEqual([16, 20, 21]);
+    expect(new Set(throws.map((e) => e.to))).toEqual(new Set(["ts:packages%2Forder%2Fsrc%2Freporting.ts/OrderError"]));
+  });
+
+  /**
+   * MEASURES AND VALUES (M10b/M10c shapes), hand-counted from the fixture:
+   *   Report.max  for-of + if + `??`  = 4      ensure  if + catch + if = 4
+   *   MAX_LINES = 4 * 25 rides unevaluated: TypeScript folds nothing.
+   */
+  it("carries hand-counted measures and written values", () => {
+    const model = loadSnapshot();
+    const measure = (id: string, key: string): unknown =>
+      (entity(model, id)["metrics"] as Record<string, number>)[key];
+    expect(measure("ts:packages%2Forder%2Fsrc%2Fdecorators.ts/Report.max", "cyclomatic")).toBe(4);
+    expect(measure("ts:packages%2Forder%2Fsrc%2Freporting.ts/ensure", "cyclomatic")).toBe(4);
+    expect(measure("ts:packages%2Forder%2Fsrc%2Fmoney.ts/Money", "sloc")).toBe(19);
+    expect(entity(model, "ts:packages%2Forder%2Fsrc%2Forder.ts/Order.MAX_LINES")["value"]).toEqual({ k: "unevaluated", source: "4 * 25" });
+    expect(entity(model, "ts:packages%2Forder%2Fsrc%2Fchannel.ts/Channel.Phone")["value"]).toEqual({ k: "number", v: "11" });
+    expect(entity(model, "ts:packages%2Forder%2Fsrc%2Forder.ts/Order.constructor#param:channel")["value"]).toEqual({
+      k: "enum", type: "ts:packages%2Forder%2Fsrc%2Fchannel.ts/Channel", name: "Web",
+    });
+    const uses = model.edges.filter((e) => e.edge === "annotationUse");
+    expect(uses.map((e) => [e.from, (e as unknown as { arguments: unknown }).arguments])).toEqual([
+      ["ts:packages%2Forder%2Fsrc%2Fdecorators.ts/Report", [{ name: "tag", value: { k: "string", v: "monthly" } }]],
+      ["ts:packages%2Forder%2Fsrc%2Fdecorators.ts/Report.max", [{ name: "tag", value: { k: "string", v: "max" } }, { name: "verbose", value: { k: "boolean", v: true } }]],
+    ]);
   });
 
   it("separates facts from inferences: every edge carries a known provenance", () => {

@@ -96,6 +96,16 @@ describe("codegraph validate on clean output", () => {
     expect(result.stdout).not.toContain("FAILED");
   });
 
+  it("exits 0 with a clean verdict on the committed TypeScript snapshot too", () => {
+    const typescript = fileURLToPath(new URL("../../../fixtures/typescript/expected/model.jsonl", import.meta.url));
+    const result = invoke(["validate", typescript]);
+
+    expect(result.code).toBe(EXIT.OK);
+    expect(result.stdout).toContain("OK — every model conforms");
+    expect(result.stdout).toContain("lang ts");
+    expect(result.stdout).not.toContain("FAILED");
+  });
+
   it("puts the report on stdout and leaves stderr empty (decision 3)", () => {
     const result = invoke(["validate", FIXTURE]);
     expect(result.stderr).toBe("");

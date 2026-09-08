@@ -33,6 +33,19 @@ export function csharpGraph(): CodeGraph {
   return buildGraph(loadModels(csharpFixture(), { sources: ["fixtures/csharp"] }).union);
 }
 
+/** The committed M13 snapshot: real compiler-API output over `fixtures/typescript/src`. */
+const TYPESCRIPT_FIXTURE = fileURLToPath(
+  new URL("../../../fixtures/typescript/expected/model.jsonl", import.meta.url),
+);
+
+export function typescriptFixture(): Model {
+  return readModelFileSync(TYPESCRIPT_FIXTURE);
+}
+
+export function typescriptGraph(): CodeGraph {
+  return buildGraph(loadModels(typescriptFixture(), { sources: ["fixtures/typescript"] }).union);
+}
+
 /** A minimal hand-built model, for shapes the fixture does not contain. */
 export function toyModel(
   entities: readonly Entity[],

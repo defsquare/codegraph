@@ -5,8 +5,11 @@ import type { Cents } from "./money.js";
 
 /** A customer order. */
 export class Order extends AbstractOrder {
-  /** A compile-time constant: the initializer folds across the arithmetic. */
+  /** TypeScript folds nothing at the declaration: the initializer rides `unevaluated`, as written. */
   static readonly MAX_LINES = 4 * 25;
+
+  /** A literal initializer on a readonly field IS a written value. */
+  static readonly CURRENCY = "EUR";
 
   private channel: Channel;
 

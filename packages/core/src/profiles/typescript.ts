@@ -40,6 +40,7 @@ export const typescriptProfile: Profile = {
       optional: ["TComment", "TMetrics", "TWithInvocations", "TWithAccesses", "TWithLocalVariables"],
     },
 
+    // A `static { }` block runs code the class itself owns, hence the markers.
     class: {
       required: [
         "TNamed",
@@ -50,7 +51,7 @@ export const typescriptProfile: Profile = {
         "TChildOf",
         "TSourceAnchor",
       ],
-      optional: ["TComment", "TMetrics"],
+      optional: ["TComment", "TMetrics", "TWithInvocations", "TWithAccesses"],
     },
 
     abstractClass: {
@@ -63,7 +64,7 @@ export const typescriptProfile: Profile = {
         "TChildOf",
         "TSourceAnchor",
       ],
-      optional: ["TComment", "TMetrics"],
+      optional: ["TComment", "TMetrics", "TWithInvocations", "TWithAccesses"],
     },
 
     // `interface A extends B, C` is inheritance, and it is multiple; an
@@ -154,10 +155,12 @@ export const typescriptProfile: Profile = {
 
     // `var`/`let`/`const` at any level. A function-valued initializer is a
     // separate child entity (hence TWithChildren), never a collapse into one
-    // invocable node; a literal initializer of a `const` is its TWithValue.
+    // invocable node; a literal initializer of a `const` is its TWithValue;
+    // an initializer that is code owns its calls and accesses (the C# rule
+    // for properties: the narrowest declared owner).
     variable: {
       required: ["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"],
-      optional: ["TComment", "TWithChildren", "TWithValue"],
+      optional: ["TComment", "TWithChildren", "TWithValue", "TWithInvocations", "TWithAccesses"],
     },
 
     // TWithValue: a written default (`retries = 3`).
@@ -168,10 +171,11 @@ export const typescriptProfile: Profile = {
 
     // Class fields, object-literal members and enum members share this kind;
     // an object literal used as a namespace is a `variable` with `property`
-    // children, and a property may itself hold methods (TWithChildren).
+    // children, and a property may itself hold methods (TWithChildren). A
+    // field initializer or a computed enum member is code: it owns its edges.
     property: {
       required: ["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"],
-      optional: ["TComment", "TWithChildren", "TWithValue"],
+      optional: ["TComment", "TWithChildren", "TWithValue", "TWithInvocations", "TWithAccesses"],
     },
   },
 
@@ -232,6 +236,8 @@ export const typescriptProfile: Profile = {
     "Measures (TMetrics, METAMODEL.md §3.8): `sloc` on every type and invocable — lines of its own span that are neither blank nor comment-only, counted with the compiler's own scanner, so template literals, regular expressions and JSX text cannot swallow a comment marker. `cyclomatic` on invocables only: 1 + if / for / for-in / for-of / while / do / non-default case / catch / ternary / `&&` / `||` / `??`. A nested arrow or function does NOT contribute to its enclosing invocable: it is its own invocable and carries its own count.",
     "Path resolution depends on `tsconfig` `paths`, `baseUrl`, `rootDirs` and `package.json` fields; the extractor reads a `tsconfig.json` for those RESOLUTION options only — never for `files`/`include` (the roots define the corpus) and never for project `references` — and creates one program over every source file under the roots. Nothing is built and `node_modules` is never required.",
     "Dynamic `import(expr)` and `require(expr)` with a computed, template-literal or variable path are unresolvable: no `import` edge is emitted, and the site is counted. Only statically literal specifiers produce edges. CommonJS `module.exports` reassignment shapes beyond a literal `require`, monkey patching (`Obj.prototype.m = fn`, `Object.assign`), `this` rebinding through `call`/`apply`/`bind`, and computed member access `o[k]` with a non-literal key follow the JavaScript profile's rules: no entity is invented and the site yields at most `access`/`reference` edges at the patch site, or nothing.",
-    "Getters and setters are `method` entities; a property access that runs an accessor is an `access` edge, not an invocation, so a read that runs code is visible as access. Class fields and object-literal members share the `property` kind.",
+    "Getters and setters are `method` entities; a property access that runs an accessor is an `access` edge, not an invocation, so a read that runs code is visible as access — a write lands on the setter, a read on the getter. Class fields and object-literal members share the `property` kind; a parameter property (`constructor(readonly x: T)`) is both a `parameter` and a `property`, and an access to it lands on the property.",
+    "Locals are entities keyed `#local:name:line:column` below their invocable (two `let x` in sibling blocks are two entities) and listed in its `localVariables`; a function declared inside an invocable is `#fn:name`, a type declared there `#type:name`. Locals and parameters are never edge targets: an access to a local is not a dependency, and a call through a parameter of function type names no declaration (dropped and counted as an indirect call). A member of an anonymous type literal (`{ order: Order }`) is not an entity — the literal is none.",
+    "A written value (TWithValue) is emitted for a `const` variable, a `readonly` property, an enum member and a parameter default whose initializer is CONSTANT-SHAPED — a literal, `-N`, an enum member, a type used as a value, arrays and operator expressions over those. TypeScript folds nothing at the declaration, so `4 * 25` rides `unevaluated` with its source text where Java would fold it; an enum member's value is the checker's computed constant. An initializer that is code — a call, a `new`, a function, an object literal — carries no value at all: absence is a claim. Such an initializer's calls and accesses are edges FROM the variable or property (the narrowest declared owner), which then carries TWithInvocations/TWithAccesses.",
   ],
 };

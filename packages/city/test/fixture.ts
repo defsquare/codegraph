@@ -26,6 +26,16 @@ export function csharpGraph(): CodeGraph {
   return buildGraph(loadModels(model, { sources: ["fixtures/csharp"] }).union);
 }
 
+/** The committed M13 snapshot: real compiler-API output over `fixtures/typescript/src`. */
+const TYPESCRIPT_FIXTURE = fileURLToPath(
+  new URL("../../../fixtures/typescript/expected/model.jsonl", import.meta.url),
+);
+
+export function typescriptGraph(): CodeGraph {
+  const model = readModelFileSync(TYPESCRIPT_FIXTURE);
+  return buildGraph(loadModels(model, { sources: ["fixtures/typescript"] }).union);
+}
+
 export function graphOf(entities: readonly Entity[], edges: readonly Edge[] = []): CodeGraph {
   const model: Model = {
     schemaVersion: "1.0.0",

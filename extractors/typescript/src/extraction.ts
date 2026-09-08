@@ -46,7 +46,7 @@ export function extract(options: ExtractOptions, progress: Progress, version: st
   const ids = new Ids(corpus, stubs);
 
   const table = progress.phase("entities", () => extractEntities(corpus, ids, stats), (t) => `${t.values().length} entities`);
-  const edges = progress.phase("edges", () => extractEdges(corpus, ids, stubs, stats), (e) => `${e.length} edges`);
+  const edges = progress.phase("edges", () => extractEdges(corpus, ids, stubs, table, stats), (e) => `${e.length} edges`);
   const stubEntities = progress.phase("stubs", () => stubs.emit(table.keys(), stats), (s) => `${s.length} stubs`);
 
   const entities: Entity[] = [...table.values(), ...stubEntities];

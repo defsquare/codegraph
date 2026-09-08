@@ -12,12 +12,16 @@ export class ResolutionStats {
   importsUnresolved = 0;
   importsWorkspaceResolved = 0;
   selfEdgesDropped = 0;
+  /** Calls and member accesses through an `any`/`unknown`/error-typed receiver. */
   anyReceiversDropped = 0;
+  /** Calls through a parameter or local of function type: no declaration to name. */
+  indirectCallsDropped = 0;
   computedAccessesDropped = 0;
   computedImportsDropped = 0;
   heritageExpressionsDropped = 0;
   namelessClassesDropped = 0;
-  /** Same-keyed declarations in one file: the later one re-keyed by its kind or position. */
+  throwsDropped = 0;
+  /** Same-keyed declarations in one file: the later one re-keyed by its position. */
   readonly duplicateKeys: string[] = [];
   /** Stubs by origin, for the summary line. */
   stubs = { lib: 0, packages: 0, unresolved: 0, modules: 0 };
@@ -48,7 +52,7 @@ export class ResolutionStats {
       `  any-typed receivers (dropped) : ${this.anyReceiversDropped}`,
       `  imports         : ${this.imports} (unresolved: ${this.importsUnresolved}, workspace-resolved: ${this.importsWorkspaceResolved})`,
       `  entities        : ${entities} (stubs: ${stubs} — lib ${this.stubs.lib}, packages ${this.stubs.packages}, <unresolved> ${this.stubs.unresolved}, modules ${this.stubs.modules})`,
-      `  edges           : ${edges} (self-edges dropped: ${this.selfEdgesDropped}, computed accesses dropped: ${this.computedAccessesDropped}, computed imports dropped: ${this.computedImportsDropped}, heritage expressions dropped: ${this.heritageExpressionsDropped}, nameless classes dropped: ${this.namelessClassesDropped})`,
+      `  edges           : ${edges} (self-edges dropped: ${this.selfEdgesDropped}, indirect calls dropped: ${this.indirectCallsDropped}, computed accesses dropped: ${this.computedAccessesDropped}, computed imports dropped: ${this.computedImportsDropped}, heritage expressions dropped: ${this.heritageExpressionsDropped}, nameless classes dropped: ${this.namelessClassesDropped}, throw sites dropped: ${this.throwsDropped})`,
       `  duplicates      : ${this.duplicateKeys.length} same-keyed declarations re-keyed (first in file order keeps the plain key)`,
       "",
     ].join("\n");
