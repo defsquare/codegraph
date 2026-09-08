@@ -232,7 +232,7 @@ Each page links to the tutorial or how-to that applies it.
 | `time-as-structure.md` | Hotspots, ownership, co-change, hidden coupling and deadweight; why history is a dependency source cannot show; the replay design. | PLAN §11, Tornhill | write |
 | `explaining-bottom-up.md` | Units, cycles as one unit, context packs, fingerprints, the side-car rule. | docs/insights.md | exists |
 | `architecture.md` | The packages, the hard boundaries and why each exists. | CLAUDE.md, PLAN §1–2 | partial |
-| `decisions.md` | The decision log. | PLAN §14 | exists |
+| `decisions.md` | The decision log. | PLAN §16 | exists |
 | `prior-art.md` | Moose/FamixNG, CodeCity, Structure101, Gource and Tornhill, Sourcetrail, jQAssistant, ArchUnit: what each does and where codegraph differs. | README credits | write |
 
 ### 4.5 Documentation debt found while writing (repository docs, not the site)

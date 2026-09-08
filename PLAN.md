@@ -1187,8 +1187,9 @@ that it cannot be detected by construction.
    real extractor, first-class on Linux/macOS, shipped as one binary per OS.
 1. **Clojure** via `clj-kondo --analysis` → thin JSON adapter (near-free; first
    cross-language test on the Import layer; exercises the fn-var case for real).
-2. **TypeScript** via the TS compiler API (self-hosting: run codegraph on
-   codegraph) — introduces `space: type|value` and declaration merging.
+2. **TypeScript** via the TS compiler API — planned in full as Phase 11
+   (§14, M13): self-hosting (run codegraph on codegraph), `space: type|value`,
+   declaration merging, and the `namespace`-style legacy corpus.
 3. **SCIP adapter** (one effort → Rust + TS + Python via existing indexers).
 4. **Code city visualization** (`packages/viz`, Three.js + Vite): render the
    analyzed model as a 3D city — districts = modules, buildings = types
@@ -2156,7 +2157,484 @@ Wiring, mirroring the C# story so the two cannot disagree:
 - CI builds and smoke-tests all five RIDs and attaches them to a `v*` release
   beside the C# binaries.
 
-## 14. Milestones
+## 14. Phase 11 — TypeScript extractor (the compiler API) and self-hosting (M13)
+
+Motivation: the third real extractor closes the loop the plan opened in §10 —
+**run codegraph on codegraph**. It is also the first extractor written in the
+same language as `core`, which makes it the sharpest test of the boundary rule:
+when importing `@codegraph/core` is one line away, an extractor must still
+conform using nothing but `schemas/`. TypeScript brings the two metamodel
+features no other profile exercises — `Entity.space` (type vs value) and
+declaration merging — and its own flavour of non-compilable legacy: the
+pre-ES-module codebase of `namespace` blocks and `/// <reference path>`
+directives compiled with `outFile`, which no modern toolchain builds any more.
+
+**What is the Spoon / Roslyn of TypeScript?** The answer is the language's own
+compiler, used as a library — the `typescript` npm package, the same package
+that ships `tsc`:
+
+| Roslyn | TypeScript compiler API | Role |
+|---|---|---|
+| `CSharpCompilation` | `ts.Program` (`ts.createProgram`) | one compilation over a set of files and options |
+| `SyntaxTree` / `SyntaxNode` | `ts.SourceFile` / `ts.Node` | the concrete syntax tree, positions included |
+| `SemanticModel` | `ts.TypeChecker` (`program.getTypeChecker()`) | binding and typing on demand: `getSymbolAtLocation`, `getTypeAtLocation`, `getResolvedSignature` |
+| `ISymbol` | `ts.Symbol` — with `declarations[]`, plural | the binder's view; the plural is declaration merging made explicit |
+| `MetadataReference` (the BCL ref pack) | `lib.*.d.ts` inside the package | the standard library, resolved from the package's own directory |
+| `IErrorTypeSymbol` | the `any`/error type from an unresolved name | binding failure, tolerated, never fatal |
+
+It is error-tolerant by construction: a `Program` over files with missing
+modules, missing types and type errors still binds everything that binds —
+`tsc` prints diagnostics and emits anyway. So "noClasspath" is not a mode to
+switch on, it is the default; the extractor's job is to keep the honest
+distinction between "resolved to a declaration" and "resolved to `any`".
+
+The alternatives, and why they are not the baseline:
+
+| Candidate | What it is | Verdict |
+|---|---|---|
+| **ts-morph** | a convenience wrapper over the compiler API (Spoon-like navigation, `findReferences`) | rejected — wraps every node in an object, so memory and time scale badly on the corpora this pipeline exists for; lags TypeScript releases; adds nothing the extractor needs beyond the checker it already wraps |
+| **tree-sitter, swc, oxc, Babel, esbuild** | parsers — fast, error-tolerant, no binder | rejected as a baseline — without a checker every call is a `dynamic-candidate` and every import an unresolved string; the model would be a lexical approximation of the graph. A syntactic pass is not needed for speed either: the compiler API parses a million lines in seconds; the checker is what costs |
+| **scip-typescript** (Sourcegraph) | an indexer built on the same compiler API, emitting SCIP occurrences | not for this extractor — SCIP carries definition/reference/implementation occurrences, not kinds, traits, provenance, `access` vs `invocation`, or spaces. It remains the cheap multi-language *adapter* path §10 lists, whose output is a lower bound of this one |
+| `ts.createLanguageService` | the editor-facing incremental layer | unnecessary — one batch program per run; incremental extraction is the temporal track's problem (§11.4) |
+
+Three principles, locked up front:
+
+1. **The checker without a build — the noClasspath of TypeScript.** The
+   extractor never runs `tsc`, never builds project references, and never
+   needs `node_modules`. It walks `--src` for `*.ts`, `*.tsx`, `*.mts`,
+   `*.cts` (and `*.js`/`*.jsx` under `--allow-js`), skipping `node_modules`
+   and build output, and creates ONE `Program` over all of them. A
+   `tsconfig.json` is read for **resolution options only** — `paths`,
+   `baseUrl`, `rootDirs`, `jsx`, `lib`, `target` — never for `files`/`include`
+   (the roots define the corpus) and never for `references`. A module
+   specifier that resolves to nothing is a **stub module keyed by the
+   specifier**, not a dropped edge; a package that is not installed is a stub,
+   not a failure. One resolution the standard host does not do, and this one
+   does: a bare specifier that names a package declared *inside the roots*
+   (`@codegraph/core` → the `package.json` under `packages/core`) resolves to
+   that package's source entry even with nothing installed and nothing built
+   — the monorepo's own packages are corpus, not dependencies.
+2. **No metamodel intelligence — and no `@codegraph/*` at runtime.** The
+   extractor's only runtime dependency is `typescript`. A boundary test (the
+   twin of `packages/llm/test/boundary.test.ts`) pins that nothing under
+   `extractors/typescript/src` imports `@codegraph/`; core is a
+   *dev*Dependency for the extractor's own tests, where validating one's
+   output against the reference implementation is exactly right. Two
+   reasons: the core-side gate — "byte-identical to what core's encoder
+   writes" — is a statement about two independent encoders only if they are
+   independent; and a package that depends on `typescript` alone can be
+   published and run with `npx` on a machine that has never seen this repo.
+3. **Byte-identity across OS and across install state.** Two runs over one
+   unchanged corpus write the same bytes on Linux, macOS and Windows — the C#
+   contract — and, because external entities are keyed by **package name**
+   (from the nearest `package.json`) and never by a resolved
+   `node_modules/…/index.d.ts` path, the *keys* of a model do not depend on
+   what happens to be installed. Edge *counts* do (an uninstalled package's
+   exports are `any`, and a call through `any` is dropped and counted), and
+   the fixture snapshot is produced with no `node_modules` at all, so the
+   committed bytes are reproducible from a bare checkout.
+
+### 14.1 Toolchain and repository layout
+
+```
+extractors/typescript/                 pnpm workspace package `codegraph-typescript` (public name; bin of the same name)
+  package.json                         dependencies: typescript (catalog) — NOTHING else at runtime
+                                       devDependencies: @codegraph/core, vitest, fast-check, tsup
+  tsconfig.json                        strict, NodeNext, extends ../../tsconfig.base.json
+  src/
+    main.ts                            CLI: the extractor contract (schemas/README.md §8) + --tsconfig, --allow-js, --ignore-node-modules
+    corpus.ts                          pass 0: walk (ordinal order), tsconfig resolution options, the workspace-package resolver, ts.createProgram
+    whitelist.ts                       pass 1: the declared-symbol set (every declaration under the roots and outside node_modules)
+    ids.ts                             THE TypeScript id scheme (§14.3): keys, escaping, spaces
+    entities.ts                        pass 2
+    edges.ts                           pass 3
+    stubs.ts                           pass 4: lib / package / <unresolved> stubs, stub modules for specifiers
+    measures.ts                        sloc (ts.createScanner — the compiler's own lexer, JSX and template literals included) + cyclomatic
+    literals.ts                        const initializers, enum values (checker.getConstantValue), decorator arguments, parameter defaults
+    model/                             NaturalKey, Entity, Edge, canonical order, JsonlWriter (JSON.stringify — the reference bytes, natively), Progress
+  test/                                vitest; the C# suite's names where the property is the same (snapshot, determinism, stub-discipline,
+                                       ids, schema-per-line, cli, boundary) + spaces, merging, escaping
+  bin/codegraph-typescript             `#!/usr/bin/env node` → dist/main.js
+fixtures/typescript/src/               the reference corpus (§14.6): `acme-order`, the Java and C# corpora's twin, plus a legacy script half
+fixtures/typescript/expected/model.jsonl
+```
+
+- `pnpm-workspace.yaml` gains `extractors/typescript`; `pnpm -r build/test/typecheck`
+  cover it with no new tooling. `build.sh --ts` already builds it; `test.sh
+  --ts` gains the built-bundle smoke test: run `bin/codegraph-typescript` on
+  `fixtures/typescript/src` and `cmp` with the snapshot — the one test that
+  sees the bundled code path rather than vitest's source aliasing.
+- **`typescript` stays external to the tsup bundle.** `ts.createProgram`
+  locates `lib.*.d.ts` relative to `typescript.js`
+  (`ts.getDefaultLibFilePath`); a bundle that inlines the compiler binds no
+  standard library and every `Array`, `Promise` and `string` method becomes
+  `<unresolved>` — the `Assembly.Location` trap of §13.1 in its Node form. A
+  test pins that `Array` resolves to a stub in module `<lib>`, and runs
+  against the *built* bin, not the sources.
+- The pinned compiler version is the workspace catalog's (`typescript`
+  ^5.9); the header's `extractor.version` is the package version and the
+  compiler version rides in `extractor` as an extra key (the header schema
+  allows it), so a model says which checker produced it.
+- `codegraph snapshots --extractor` learns one more launcher rule beside
+  `.jar → java -jar`: a `.js`/`.mjs`/`.cjs` file runs under `node`. Anything
+  else, `bin/codegraph-typescript` included, still runs directly.
+- Node ≥ 22 is already a requirement of codegraph itself, so "nothing to
+  install" holds for anyone who can run the analyzer. A Node single-executable
+  build is deferred (§14.7).
+
+### 14.2 Mapping table (TypeScript profile) — and the profile corrections M13 forces
+
+The profile (`packages/core/src/profiles/typescript.ts`) predates M6, M10 and
+M12; the first M13 commit is `feat(core): typescript profile v2`, data changes
+with the M12 pattern of justification:
+
+| Change | Why |
+|---|---|
+| kind `constructor` added: `TInvocable, TWithChildren, TWithParameters, TWithLocalVariables, TWithInvocations, TWithAccesses, TChildOf, TSourceAnchor` (+ `TComment`, `TMetrics`); no `TNamed`, no `TTypedEntity` | the Java/C# shape; a class constructor is not a `method` named `constructor` — it has no return type and its parameter properties declare fields |
+| `TMetrics` optional on every type kind and every invocable; `module` too | M10b: `sloc` + `cyclomatic`, so `--height sum:cyclomatic` works on a TypeScript city unchanged. A module's top level is executable code, hence measured |
+| `TWithValue` optional on `variable` (`const` initializers), `property` (enum members, readonly literals), `parameter` (defaults) | M10c, the value door; an enum member is a `property` whose value is its constant |
+| `TWithInvocations`, `TWithAccesses`, `TWithLocalVariables` optional on `module` | a module body IS a scope with statements: `app.listen()` at top level is an invocation FROM the module, and `const x = …` at top level is a local of it. Without the licence the model states edges from an entity its profile says cannot have them |
+| edges `annotationUse` and `throws` added | decorators ARE annotation usage (M10c's edge kind, with `arguments`); `throw` sites are the M10d-era evidence the insights walk consumes |
+| `arrowFunction` / nameless `function` disambiguator: `line:column` | the M7 lesson (§5.3): two arrows on one line collide on `(file, line)`. The module is the file already, so the disambiguator needs no file component |
+| merging note rewritten: a merged symbol is one entity **per declaration file**, one entity per file for same-file merges | the module is the file and containment is where a thing is written (invariant 5). The old note ("one namespace id may span files") contradicted both. An edge to a merged symbol targets the declaration that owns the referenced member (§14.3) |
+| new note: key escaping (`/`, `#`, `%` and, in names, `.`) | the file path is the module and `/` is a reserved separator (§14.3) |
+| `space` on `enum` becomes per-entity: `["type"]` for `const enum` | the profile already says `const enum` members leave no runtime entity; the entity should say so where analyses read it |
+| `any`-receiver note reworded: dropped and COUNTED, never emitted as `dynamic-candidate` | the M10d/M12 decision: candidate generation is the analyzer's, which alone has whole-corpus knowledge |
+
+Construct → kind, on top of the profile's table:
+
+| TypeScript construct | kind | notes |
+|---|---|---|
+| a source file, module or script | `module` | `definedIn` = the one file; `space: ["value"]`. A **script** (no import/export) puts its declarations in the global scope *semantically*, but they are still children of the file (invariant 5); nothing lives in a `<global>` module |
+| `namespace X` / `module X {}` (internal module), nested `X.Y` | `namespace` | child of the file or the enclosing namespace; `space` from what it declares (`["type"]` if it exports only types) |
+| `declare module "pkg" {}` (ambient external module) | `module` | keyed by the quoted name (`ts:pkg`), `definedIn` = the `.d.ts`, `isStub: false` — it IS declared by the corpus; `import "pkg"` resolves to it |
+| `declare global {}` and module augmentations `declare module "express" { interface Request { user: User } }` | no entity for the block | its members are ordinary declared entities parented by the augmented type — a stub type when the package is external (§14.4) |
+| `class`, `abstract class`, class expression bound to a name (`const A = class {}`, `export default class {}`) | `class` / `abstractClass` | name from the binding (`default` for a nameless default export); a class expression with no binding is not an entity (dropped and counted), its members neither |
+| `interface` | `interface` | `extends` → `inheritance` (multiple); `space: ["type"]` |
+| `type T = …` | `typeAlias` | constituents → `reference` edges |
+| `enum`, `const enum` | `enum` | members → `property` children with `TWithValue` (`checker.getConstantValue`); `const enum` → `space: ["type"]` |
+| function declaration, overload signatures + implementation | `function` | ONE entity, anchored at the implementation (or the sole ambient signature); overload signatures are not entities. `signature` is the implementation's |
+| function expression, arrow function | `function` (no `TNamed`) / `arrowFunction` | `#line:column`; `const f = () => {}` yields the `variable` f AND its child arrow (profile rule); call sites target the arrow |
+| method, `get`/`set` accessor, `static` member, `abstract` method, object-literal method | `method` | accessors: `#get` / `#set`; static: `#static` (§14.3) |
+| `constructor(…)` | `constructor` | parameter properties (`constructor(private x: T)`) yield BOTH a `parameter` and a `property` |
+| property declaration, `accessor` field, object-literal property, enum member | `property` | index signatures are not entities |
+| `#private` member | `method` / `property` | name escaped (`%23secret`), never the unescaped `#` |
+| `var`/`let`/`const` at any level, every binding of a destructuring pattern | `variable` | parent = module / invocable / block-owning invocable; `TWithLocalVariables` on the owner lists them |
+| parameter, `this` parameter excluded | `parameter` | `#param:name` below the owner, below the owner's own disambiguator when it has one |
+| type parameter | not an entity | its constraint and default → `reference` edges from the declaring entity |
+| decorator `@Dec(args)` | `annotationUse` edge with `arguments` (literals) | legacy (`experimentalDecorators`) and TC39 decorators alike — both parse; the *decorator* is an ordinary `function`/`variable` entity |
+| `import x from "m"`, `import { a as b }`, `import * as ns`, `import type`, `export … from`, `export * from`, `import("m")` / `require("m")` with a literal, `/// <reference path="…">` | `import` → the module | module-level, never a member (the Java fold). `import type` is an ordinary import edge whose erasure shows in the target's `space`. A computed specifier is dropped and counted |
+| `class A extends B` | `inheritance` | `extends Mixin(Base)`: the checker's base type if it names a declaration, else a `reference` to what is named, counted |
+| `class A implements I` | `interfaceImplementation`, provenance `declared` | structural conformance is NOT computed by the extractor — `derived` conformance is an analyzer enrichment, never mixed in |
+| call, `new`, tagged template, optional call `f?.()`, JSX element `<Comp/>` with a component tag | `invocation` | target = the resolved signature's declaration, else every declaration of the callee's symbol (a union receiver's synthetic symbol has the real ones); receiver typed `any`/`unknown`/error → dropped and counted. A JSX element is a call by the language definition, so the edge is `declared`; intrinsic tags (`<div>`) yield nothing |
+| property read / write / compound / `delete`, destructuring reads, `obj["lit"]` | `access` (`isRead` / `isWrite`) | computed non-literal keys dropped and counted; a property access that runs an accessor is `access`, not `invocation` (the C# rule) |
+| type positions: annotations, generic arguments, `as`, `satisfies`, `typeof X` in a type, `keyof T`, `import("m").T`, conditional/mapped-type operands, heritage clause type arguments, `instanceof X` | `reference` | to named types only; primitives, literal types, type parameters and `any` name nothing |
+| `throw expr` | `throws` | the static type of `expr` when it names a declaration; rethrow → the caught binding's static type; else dropped and counted |
+| JSDoc / leading doc comment | `comments` | the declaration's own JSDoc, not every leading comment |
+
+Explicitly NOT extracted in M13, stated in the profile `notes`: structural
+(`derived`) interface conformance; `emitDecoratorMetadata` synthesis; CommonJS
+`module.exports` reassignment shapes beyond a literal `require`; monkey
+patching (the JS profile's rules apply verbatim); Vue/Svelte/Angular template
+files (only `.ts`/`.tsx` bodies are read — a `.vue` SFC's script block is a
+later `--extract-sfc` flag, never a default); `declare` d code whose
+implementation is in a language the pipeline does not model (native
+addons).
+
+### 14.3 The TypeScript id scheme (`ids.ts`)
+
+```
+module (file)         ts:src%2Facme%2Forder.ts                  path relative to root, escaped
+ambient module        ts:express                                 declare module "express" in the corpus
+external package      ts:zod/ZodType     ts:@types%2Fnode/Buffer  nearest package.json `name` under node_modules
+external subpath      ts:zod%2Fv4                                 an import edge's target: the specifier as written
+lib                   ts:<lib>/Array                             lib.*.d.ts inside the typescript package
+unresolved name       ts:<unresolved>/Ledger                     a name that binds to nothing, as written
+unresolved specifier  ts:.%2Fmissing     ts:@megacorp%2Fledger    a stub module for an import nothing resolves
+type / value          ts:src%2Facme%2Forder.ts/OrderService     nested namespaces: Ns.Inner.Type
+member                ts:src%2Facme%2Forder.ts/OrderService.bill no parameter list — TypeScript overloads are one declaration
+static / accessors    …/OrderService.create#static   …/OrderService.total#get   …/OrderService.total#set
+constructor           …/OrderService.constructor
+nameless invocable    …/OrderService.bill#12:7     top level: ts:src%2Fa.ts#3:15
+parameter / local     …/OrderService.bill#param:order   …/OrderService.bill#12:7#param:x
+```
+
+- **Escaping, the one rule.** `renderId` reserves `/` and `#` in a module
+  and `#` in a symbol so rendering stays injective; a file path is made of
+  `/`. Every path segment and every non-identifier name entering a key is
+  percent-encoded for exactly `/` → `%2F`, `#` → `%23`, `%` → `%25`, and —
+  for names only, where `.` is the nesting separator — `.` → `%2E`.
+  Identifiers cannot contain any of the four, so an identifier is written
+  as-is and the encoding is injective and reversible; the extractor's
+  `escape`/`unescape` pair is pinned by a fast-check round-trip property.
+  Rejected alternatives: relaxing core's reservation (breaks rendering
+  injectivity for every language, since a module entity renders with no
+  `/` after it); a look-alike separator such as U+2215 (not typeable on a
+  CLI or in a SQL query); dropping the extension or dotting the path
+  (`a.b/c.ts` and `a/b.c.ts` collide). The `name` of the module entity is
+  the unescaped path, which is what the city and navigator display.
+- **Module = file, always.** The `<global>` module of C# has no counterpart:
+  a script file's globals are children of the file (invariant 5), and an
+  entity's module is the file it is written in. Consequence for declaration
+  merging: an `interface Order` in two files is two entities; two in one file
+  is one entity anchored at the first. A reference to a merged symbol targets
+  the declaration that owns the referenced member (`checker.getSymbolAtLocation`
+  on the member gives one declaration); a reference to the merged container
+  itself targets its **first declaration in canonical file order** — a
+  deterministic choice, named in the profile note as one.
+- **Overloads are one entity** — TypeScript has no overloading by parameter
+  type at the declaration level; the overload list is one function's
+  signature set. No parameter-list component, unlike Java and C#.
+- **Same-name members that TypeScript allows to coexist** get a
+  disambiguator: `static` for static members (a class may declare `static
+  parse()` and `parse()`), `get`/`set` for accessor pairs. The disambiguator
+  is the only place these flags are identity, so a class with only an
+  instance `parse` renders with no suffix — the absent-first canonical order
+  puts the instance member first.
+- **Nameless invocables** carry `line:column` of their first token, below
+  the nearest *named* ancestor's symbol and below that ancestor's own
+  disambiguator when it has one — so two arrows on one line are two
+  entities, and an arrow inside an arrow does not become its own parent (the
+  METAMODEL §1.1 column rule). At module top level the symbol is empty and
+  the disambiguator alone identifies the entity: `ts:src%2Fa.ts#3:15`.
+  METAMODEL §1.1 says the symbol is "empty only for a module"; M13a loosens
+  that by one clause ("or for a nameless entity at module top level, which
+  then carries a disambiguator"). Verified (2026-09-08): the JSONL reader
+  recognises a module record by `m === i`, and `renderId` only omits the
+  `/` for an empty symbol — nothing in `core` or the analyzer treats an
+  empty symbol as the module marker, so the form needs no new encoding.
+- **Stub keys have the same shape as declared keys** — membership is the
+  whitelist, never the key. An external type's module is the npm package
+  name (walk up from the declaring file to the nearest `package.json`),
+  never the resolved path under `node_modules`, so keys are the same on
+  every machine; an import edge's stub module is the specifier as written
+  (`zod` and `zod/v4` are two entry points, honestly two modules). Node
+  built-ins are normalised to the `node:` form (`fs` and `node:fs` are one
+  module in fact, and `module.builtinModules` says which names those are).
+
+### 14.4 Stub discipline, checker edition
+
+Pass 1 builds the whitelist: every `ts.Symbol` at least one of whose
+declarations lies in a file under the roots and outside `node_modules`. Then:
+
+| The checker says | The model says |
+|---|---|
+| declared in the corpus | a declared entity |
+| declared only under `node_modules/<pkg>` | stub type in module `<pkg>`; a member reference into it retargets to the type stub (the C# fold); a free function or variable exported by the package retargets to the **stub module** — the smallest degraded container a module-level value has |
+| declared in `lib.*.d.ts` | stub type in `<lib>`; `string`/`number`/`boolean`/`symbol`/`bigint`/`void`/`null`/`undefined` and literal types are not entities (the Java primitive rule) |
+| an error type / `cannot find name` | stub in `<unresolved>`, named as written — never a guess from the file's imports |
+| a specifier that resolves to nothing | a stub module keyed by the specifier; the import edge survives (import fan-out stays honest) |
+| `any` / `unknown` / an index signature on a receiver | the edge is dropped and counted; the count is the profile's stated resolution ceiling |
+| a corpus declaration merged into an external one (module augmentation) | the corpus members are declared entities parented by the stub type — closure holds because the stub exists; `isStub` is a fact about the type, not about its members |
+| the `typescript` package itself, when a corpus imports it | an external package like any other (`ts:typescript/Node`) — the extractor's own dependency is not corpus |
+
+Two things the checker resolves that are still external: the standard library
+(`<lib>`) and installed packages. Resolvability is not membership — the C#
+rule, verbatim.
+
+The **workspace-package resolver** (principle 1) is the one place the
+extractor adds resolution the compiler host lacks, and it is bounded: a bare
+specifier whose package name matches a `package.json` `name` under the roots
+resolves to that package's source entry — the `source`/`module`/`main`/`types`
+field that points at a file under the roots, else `src/index.ts` when it
+exists — and *only* when standard resolution failed. It never reads
+`node_modules` to do so, never follows `exports` conditions into `dist/`
+(build output, not corpus), and names every such resolution on stderr under
+its own counter, because it is a fact about the repository layout rather than
+about the language. A subpath into a workspace package (`@acme/pricing/rules`)
+resolves the same way below that package's source root, else stubs.
+
+### 14.5 The extractor command-line contract, plus three flags
+
+Same flag shape and exit codes as the Java jar and the C# binary
+(`schemas/README.md §8`) — `codegraph snapshots` must stay language-blind.
+Three additions, all optional:
+
+| Flag | Meaning |
+|---|---|
+| `--tsconfig <file>` | the `tsconfig.json` whose *resolution options* apply (`paths`, `baseUrl`, `rootDirs`, `jsx`, `lib`, `target`, `allowJs`); default: the nearest `tsconfig.json` at or above each `--src` root, the first root's winning on conflict (named on stderr); `none` for the synthesized defaults (`target esnext`, `moduleResolution bundler`, `lib esnext + dom`, `jsx preserve`, `skipLibCheck`, `noEmit`) |
+| `--allow-js` | also walk `*.js`/`*.jsx`/`*.mjs`/`*.cjs`; JSDoc types feed `declaredType` (the JS profile's rule); the model still claims `lang: "ts"` — a mixed corpus is a TypeScript program with JavaScript files in it, which is what the checker models too |
+| `--ignore-node-modules` | never read `node_modules`, even when present: every external package is an unresolved stub module. What the fixture uses, and what makes two machines' models key-and-edge identical |
+
+`stdout` carries nothing but `--help`/`--version`; progress and the resolution
+summary go to `stderr`:
+
+```
+✓ walk        310 files  0.1s
+✓ program     310 files, tsconfig ./tsconfig.base.json, lib esnext  2.4s
+✓ whitelist   4 812 symbols  0.3s
+✓ entities    9 340 entities  1.1s
+✓ edges       21 907 edges  1.8s
+✓ stubs       417 stubs (lib 96, packages 288, <unresolved> 33)  0.1s
+✓ write       31 664 records  0.4s
+RESOLUTION SUMMARY
+  type references : 21 907
+  resolved        : 20 588
+  unresolved      : 1 319
+  resolution rate : 94.0%
+  any-typed receivers (dropped) : 212   ← the honest ceiling (profile note)
+  imports         : 1 204 (unresolved: 41, workspace-resolved: 388)
+  entities        : 9 757 (stubs: 417)
+  edges           : 21 907 (self-edges dropped: 3, computed accesses dropped: 19, nameless classes dropped: 1)
+wrote model.jsonl
+```
+
+### 14.6 Validation (the M2 gate, replayed a third time)
+
+- **Walking skeleton first**: modules and imports (resolved, workspace-resolved,
+  unresolved → stub modules), every type kind with `space`, inheritance /
+  implements, stubs — one file in, `codegraph validate` green, snapshot
+  committed, the core gate `packages/core/test/fixtures-typescript.test.ts`
+  (parses as a `Model`; byte-identical to core's encoder; ZERO profile
+  issues; closed; no self-edges; the stub-discipline evidence by id).
+- **The fixture corpus** `fixtures/typescript/src` — `acme-order` as an ES
+  module package tree plus a **legacy script half** — around 18 files, 350
+  lines, each pinning one hazard (its README lists them, the Java README's
+  form):
+  - `tsconfig.json` with `paths` (`@acme/*`) and a second workspace package
+    `packages/pricing` imported by name with **no `node_modules` and no
+    `dist`** — the workspace resolver's case;
+  - `@megacorp/ledger` imported and never present — the stub-module case;
+    `Ledger` extended from it — inheritance from a stub; a call through its
+    `any` export — the dropped-and-counted case;
+  - `import type` and an inline `type` specifier — erased imports whose edge
+    is the same kind;
+  - `interface Order` merged **in one file** and again **across two files**;
+    a `namespace Acme.Order` in two script files joined by `/// <reference
+    path>` — the legacy internal-module style; a module augmentation of the
+    absent package;
+  - `const enum Channel` and a plain `enum` with computed and literal
+    members — `space: ["type"]` on one and `TWithValue` on both;
+  - two arrow functions on one line, an arrow inside an arrow, a top-level
+    arrow (`ts:…#line:col`), an IIFE;
+  - overloads with one implementation; `static parse()` beside `parse()`;
+    a `get`/`set` pair; a `#private` field; a string-literal member `"a.b"`
+    and a computed `[Symbol.iterator]` — every escaping rule;
+  - a `.tsx` component tree (`<OrderTable rows={…}/>`) — JSX invocations;
+  - decorators with literal arguments (both syntaxes, two files);
+  - `throw new OrderError(...)`, a rethrow, a `throw "string"` (dropped);
+  - parameter properties, destructured parameters and locals, a `declare
+    module "legacy-lib"` ambient in a corpus `.d.ts`, `export default class
+    {}`, `export * from`, a dynamic `import("./lazy")` with a literal and
+    one with a template (dropped and counted), a compound assignment
+    (`isRead` and `isWrite` both).
+- **The extractor's own suite** (vitest): per-line schema validation against
+  `schemas/*.schema.json` and the sequence rules; the trait-key rule of
+  contract §4; snapshot byte-identity; determinism (two runs, shuffled walk
+  order, CRLF-converted sources, `--src` given as `a b` and `b a`);
+  stub discipline by id; the escaping round-trip property; the spaces of
+  every fixture kind; merging (which declaration an edge lands on); the
+  built bin's CLI (exit codes 0/1/2, silent stdout, `--version`); the
+  boundary test; `Array` resolving to `<lib>` **from the built bundle**.
+- **The fixture in every per-fixture suite**: analyzer (`fixture.ts` loaders,
+  conformance, coupling, cycles, store import/fold/diagnose), city, navigator,
+  CLI e2e (`validate`, `analyze`, `export`, `import`, `city`, `navigator`,
+  `domain-facts`, `explain --dry-run`).
+- **Self-hosting — the DoD of the phase.** `codegraph-typescript --src packages
+  --src extractors/typescript --out codegraph.jsonl` on this repository:
+  `validate` clean, zero `<unresolved>` entities that name a corpus symbol
+  (every one must be a genuinely absent dependency, named in the audit),
+  `analyze --report cycles` agreeing with the package boundaries CLAUDE.md
+  states (no cycle crosses a package; `viz` and `navigator-ui` import their
+  model packages for types only — the boundary tests restated as a graph
+  query), and the city and navigator of codegraph reviewed as screenshots at
+  user-facing angles.
+- **Three-corpus audit**, the M12c pattern, with resolution causes measured
+  and the residue named in the profile `notes`:
+  - **TypeScript 4.9's own `src/compiler`** — the legacy corpus: `namespace
+    ts {}` in a hundred files merged by `/// <reference>`, `outFile`-style,
+    no ES modules. Merging, script-file globals and the per-file entity rule
+    at scale;
+  - **nestjs/nest** — decorators everywhere, a pnpm monorepo of packages
+    importing each other by name: the workspace resolver and `annotationUse`
+    at scale;
+  - **excalidraw** — a large `.tsx` React corpus: JSX invocations, `any`
+    density, `import type` erasure, path aliases.
+
+  No second TypeScript extractor exists, so the oracle rule does not apply;
+  the resolution-rate categorisation, the `<lib>` stub check and the
+  self-hosting graph query are the substitutes.
+
+### 14.7 Distribution: an npm package, and why not a binary yet
+
+**`npx codegraph-typescript --src . --out model.jsonl` on any machine with
+Node ≥ 22** — the same floor as codegraph itself. The published package
+bundles the extractor into one file (tsup, `platform: node`, `typescript`
+external) and declares `typescript` as its one dependency, so an install is
+the compiler plus a few hundred kilobytes. `bin/codegraph-typescript` at the
+repository root runs the same bundle from a checkout, and is what
+`test.sh --ts` smoke-tests and what `codegraph snapshots --extractor` is
+pointed at.
+
+A **Node single-executable application** (SEA) per OS — the C# distribution
+shape — is deferred, with the trap named now so it is not rediscovered: a SEA
+embeds the bundle but not the `typescript` package's `lib/*.d.ts` files, and
+`ts.getDefaultLibFilePath` then points into a directory that does not exist,
+which binds no standard library and passes every test run from sources. Doing
+it means embedding the lib files as assets and a custom `CompilerHost` that
+serves them from memory — a build-and-host change, not a model change — and
+it is worth doing only once someone needs the extractor on a machine without
+Node, which today is nobody who can run the rest of the pipeline.
+
+Wiring into the repo's scripts and CI:
+
+- `build.sh --ts` (already `pnpm -r build`) lists `extractors/typescript/dist`
+  in its artifact report; `test.sh --ts` adds the built-bin `cmp` against the
+  snapshot.
+- `.github/workflows/ci.yml`: the `verify` job already builds and tests the
+  package as part of the workspace; a `typescript-smoke` matrix runs the built
+  bin on `fixtures/typescript/src` on `ubuntu-latest`, `macos-latest` and
+  `windows-latest` and `cmp`s the output with the snapshot — Windows is the
+  one that matters (`\` paths, CRLF checkouts, case-insensitive walks), and
+  `actions/setup-node` makes it a two-step job. On a `v*` tag the package is
+  published to npm with provenance (`npm publish --provenance`) beside the C#
+  binaries on the release.
+- `README.md` + `CLAUDE.md` architecture block gain `extractors/typescript/`;
+  `docs/typescript-extractor.md` mirrors `docs/csharp-extractor.md` (run with
+  `npx`, from a checkout, the flags, reading the summary, troubleshooting —
+  the tsconfig-conflict and `<lib>`-empty symptoms first).
+
+### 14.8 OS- and toolchain-specific hazards, each with the test that pins it
+
+| Hazard | Where it shows | Guard |
+|---|---|---|
+| `typescript` inlined into the bundle | built bin binds no lib: every `Array` is `<unresolved>`; sources pass | tsup `external: ["typescript"]`; the `<lib>` test runs against the built bin |
+| `\` path separators and drive letters | Windows anchors, `definedIn`, module keys | `ts.sys` paths normalised with `/` before they enter a key; `paths.test.ts` on a `\`-joined input; the Windows smoke job |
+| case-insensitive file systems | macOS/Windows: the checker's `useCaseSensitiveFileNames` differs, `Foo.ts`/`foo.ts` cannot coexist, enumeration order differs | ordinal sort of walked paths; the host is created with `useCaseSensitiveFileNames: true` so keys keep the written case; `DeterminismTest` shuffles the walk |
+| `\r\n` sources | Windows checkouts, `.gitattributes`-less corpora | `ts.getLineAndCharacterOfPosition` is EOL-agnostic; the `sloc` scanner test with both endings; the CRLF determinism case |
+| `tsconfig` conflicts in a monorepo | two roots with incompatible `paths` | first root wins, the conflict named on stderr; `--tsconfig` overrides; a fixture with two roots |
+| `Intl`/locale-sensitive sorting | canonical order on a machine with a different locale | comparisons by UTF-16 code unit (`<` on strings), never `localeCompare`; an eslint rule forbidding `localeCompare` in the extractor |
+| `JSON.stringify` of lone surrogates and non-BMP names | byte identity with core | it IS core's encoder, natively — the one hazard this extractor lacks |
+| memory on very large programs | the checker holds every type; `excalidraw` and `nest` are fine, `vscode`-sized corpora are not | `--max-old-space-size` documented; `Program` created with `skipLibCheck` and no emit; an explicit "one program per `--src` root" flag is a later enrichment if a corpus needs it |
+
+### 14.9 Milestone split
+
+- **M13a — profile v2 + skeleton + contract**: `feat(core): typescript profile
+  v2` (§14.2) with the METAMODEL §1.1 clause for nameless top-level entities;
+  the workspace package with its boundary test; the walking skeleton
+  (§14.6 first bullet) → `fixtures/typescript/expected/model.jsonl`
+  byte-identical to core's encoder and profile-valid with zero issues; the
+  core gate; `snapshots --extractor` running `.js` under `node`;
+  `bin/codegraph-typescript`; `test.sh --ts` with the built-bin `cmp`.
+- **M13b — the model**: members, every edge kind incl. `annotationUse` with
+  written arguments and `throws`, spaces per entity, merging, escaping,
+  `sloc` + `cyclomatic`, literals, JSX, the workspace resolver, the full
+  fixture and its README, determinism and stub-discipline tests, the
+  fixture in every per-fixture suite, every CLI command verified on it.
+- **M13c — self-hosting + audit + distribution**: codegraph on codegraph
+  (validate clean, the boundary graph query, city and navigator screenshots
+  reviewed); the three-corpus audit with resolution causes measured and the
+  profile `notes` rewritten from numbers; the npm publish shape with the
+  tagged release; the `typescript-smoke` matrix; `docs/typescript-extractor.md`.
+
+Definition of done: `fixtures/typescript/expected/model.jsonl` byte-identical
+to core's encoder and profile-valid with zero issues; the same bytes from the
+built bin on Ubuntu, macOS and Windows runners; codegraph's own model
+`validate`-clean with its package boundaries recovered as a graph query; the
+audit numbers in the profile notes; `./test.sh` and CI green with the
+TypeScript fixture in every per-fixture suite.
+
+## 15. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -2181,8 +2659,11 @@ Wiring, mirroring the C# story so the two cannot disagree:
 | M12a | C# extractor — skeleton | ✅ `extractors/csharp/` (Roslyn 5.9 on .NET 10, no MSBuild, BCL ref pack embedded — §13); csharp profile v2 in core; walking skeleton (namespaces, every type kind, delegates + parameters, doc comments, import/inheritance/implements, stubs) → `fixtures/csharp/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; 51 .NET tests (per-line schema + sequence rules, stub discipline, determinism incl. CRLF and walk order, id scheme, CLI) + 13 core gate tests; `codegraph validate` OK; `codegraph snapshots --extractor` (jar or binary); extractor CLI contract as `schemas/README.md §8`; `build.sh --csharp [--publish-all]` / `test.sh --csharp` with the published-binary `cmp` |
 | M12b | C# extractor — model | ✅ members (incl. implicit and primary constructors, operators, indexers, events, locals, lambdas, local functions), every profile edge kind incl. `annotationUse` with written values and `throws`, extension `attachedTo`, `sloc` + `cyclomatic`; synthesized record members fold to their type; stub discipline (BCL stubs in real namespaces, error types in `<unresolved>`, unbound receivers referenced by name); snapshot 244 entities / 285 edges, byte-identical to core's encoder; 76 .NET tests + 20 core gate tests; the fixture in the analyzer, city, navigator and CLI suites; every CLI command verified on it |
 | M12c | C# extractor — binaries + audit | ✅ five-RID `dotnet publish` matrix cross-published from one Linux host (287 s; ELF x64/aarch64, Mach-O x64/arm64, PE32+); GitHub Actions gate (`verify`, `java`, `csharp-test`, `csharp-publish` ×5, `csharp-smoke` on Ubuntu x64/arm64, macOS arm64/Intel and Windows — each binary must reproduce the snapshot byte for byte — and tagged releases with SHA256SUMS); three-corpus audit: Humanizer 97.3 % / 12 146 entities / 6 s, dotnet/eShop 63.5 % / 7 396 / 12 s, OrchardCore 93.4 % / 88 007 entities / 225 184 edges / 54 s, every model `validate`-clean; five defects found and fixed (signatures carry type arguments, conversion operators their return type, duplicate parameter names their ordinal, same-keyed declarations across projects kept and re-keyed by file, C# 14 extension blocks); resolution causes measured — the SDK's implicit usings and the ASP.NET Core reference pack now in — and the residue named in the profile notes; eShop city and navigator screenshots reviewed; `docs/csharp-extractor.md` |
+| M13a | TypeScript extractor — skeleton | `extractors/typescript/` (the compiler API as the front end, no build, `typescript` the only runtime dependency — §14); typescript profile v2; walking skeleton → `fixtures/typescript/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; core gate; boundary test; `snapshots --extractor` runs `.js` under `node`; `test.sh --ts` built-bin `cmp` |
+| M13b | TypeScript extractor — model | members, every edge kind incl. `annotationUse` with written arguments and `throws`, `space` per entity, declaration merging per file, key escaping, JSX invocations, workspace-package resolution without `node_modules`, `sloc` + `cyclomatic`, literals; the full fixture with its README; determinism and stub-discipline tests; the fixture in every per-fixture suite |
+| M13c | TypeScript extractor — self-hosting + audit | codegraph's own model `validate`-clean with its package boundaries recovered as a graph query, city and navigator screenshots reviewed; TypeScript 4.9 compiler / nestjs / excalidraw audit with resolution causes in the profile notes; `npx codegraph-typescript`, the three-OS smoke matrix and tagged npm release; `docs/typescript-extractor.md` |
 
-## 15. Decisions made in this plan (deltas vs. the design doc)
+## 16. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -2227,3 +2708,9 @@ Wiring, mirroring the C# story so the two cannot disagree:
 | Implicit usings (M12c) | Microsoft.NET.Sdk's seven `global using`s added as a synthetic tree by default; the Web SDK's opt-in (`--implicit-usings web`); none write an import edge | they live in the generated obj/ file the extractor skips as build output; without them `Task`/`List<T>` were OrchardCore's top unresolved names (62.7 % → 93.4 %); the Web set on a mixed corpus makes names ambiguous (OrchardCore's own `StartupBase`, 345 times) |
 | Reference packs (M12c) | the ASP.NET Core shared framework's pack embedded beside the BCL's when the building SDK has it | `ILogger<T>`, `IServiceCollection`, `WebApplication` topped eShop's and OrchardCore's unresolved lists; a shared framework is not a NuGet package and ships with every SDK |
 | C# 14 extension blocks (M12c) | members of `extension(T t) { … }` are members of the enclosing static class with `TAttachedTo` → the receiver; the block itself is no entity | Roslyn models the block as a nameless nested type, which failed `validate` on an empty name (Humanizer); the block names no type the source can reference |
+| TypeScript front end (M13) | the `typescript` compiler API (`ts.createProgram` + `TypeChecker`) used directly; ts-morph, parser-only front ends (tree-sitter, swc, oxc, Babel) and scip-typescript rejected | it is Roslyn's twin — a compilation plus a semantic model, error-tolerant by default; ts-morph wraps every node and lags releases; a parser has no binder, so every call would be a guess; SCIP carries occurrences, not kinds, provenance or spaces |
+| TypeScript corpus loading (M13) | one `Program` over every source file under the roots; `tsconfig` read for resolution options only; a bare specifier naming a package declared under the roots resolves by `package.json` name to its source entry when standard resolution fails; a missing package is a stub module | the noClasspath contract: no build, no `node_modules`, no project references; a monorepo's own packages are corpus, not dependencies |
+| TypeScript extractor boundary (M13) | runtime dependency `typescript` only; `@codegraph/core` a devDependency of its tests; a boundary test scans `extractors/typescript/src` | the two-encoder gate ("byte-identical to core's encoder") is a statement only while the encoders are independent; the temptation to import core is greatest in core's own language; a one-dependency package runs under `npx` anywhere |
+| TypeScript module identity (M13) | the module is the file, always; every path segment and non-identifier name entering a key percent-encodes `/`, `#`, `%` (and `.` in names); declaration merging yields one entity per declaring file, edges land on the declaration owning the referenced member | `/` is a reserved separator and rendering must stay injective for every language; a look-alike separator is not typeable in a CLI or a SQL query; containment is where a thing is written (invariant 5) — a `<global>` module would state otherwise |
+| TypeScript external keys (M13) | stubs keyed by npm package name (nearest `package.json`), lib types in `<lib>`, unbound names in `<unresolved>`, an unresolved specifier a stub module keyed by the specifier; `--ignore-node-modules` produces the fixture | keys must not depend on what happens to be installed; resolvability is not membership (the C# rule); a dropped import edge would understate fan-out |
+| TypeScript distribution (M13) | an npm package run with `npx`, `typescript` external to the bundle; a Node single-executable per OS deferred | Node ≥ 22 is already the pipeline's floor; a bundle that inlines the compiler loses `lib.*.d.ts` and binds no standard library — the `Assembly.Location` trap in its Node form, pinned by a test on the built bin |
