@@ -39,31 +39,46 @@ exist today:
 
 ## 2. Stack and hosting
 
-Two sites, one directory:
+**One site, one build, one deployment**, at `website/` — Hugo (extended,
+≥ 0.146). Two halves that look nothing alike, sharing one config, one content
+tree and one `public/`:
 
-- **`website/landing/`** — the landing page, served at the site root.
-  **Hugo with no theme**: the copy is `content/` (one Markdown file per essay
-  row), the templates are `layouts/`, and Hugo Pipes concatenates, minifies
-  and fingerprints the two stylesheets into one request. Built on the
-  Defsquare Design System (EB Garamond display, IBM Plex Sans Condensed body,
-  navy footer, the heat gradient on one display word). Every documentation
-  link resolves through one `docsBase` param.
-- **`website/doc/`** — the documentation site, served under `/doc/`.
-  **Hugo (extended, ≥ 0.146) with the Hextra theme**, vendored as a git
-  submodule at `website/doc/themes/hextra`. `website/doc/package.json` is a
-  shim so `pnpm -r build` covers it on a machine with Hugo; CI builds it in
-  its own job with the Hugo version pinned. The PlantUML diagrams are
-  rendered to SVG by `render-plantuml.sh` and committed under
-  `website/doc/static/`.
+- **`/` — the landing page.** **Themeless**: the copy is
+  `content/_index.md` plus `content/sections/*.md` (one Markdown file per
+  essay row), the templates are `layouts/landing/`, and Hugo Pipes
+  concatenates, minifies and fingerprints the two stylesheets into one
+  request. Built on the Defsquare Design System (EB Garamond display, IBM Plex
+  Sans Condensed body, navy footer, the heat gradient on one display word).
+  Every documentation link resolves through one `docsBase` param.
+- **`/docs/` — the documentation.** The **Hextra theme**, vendored as a git
+  submodule at `website/themes/hextra`, over `content/docs/` in the four
+  Diátaxis quadrants. The PlantUML diagrams are rendered to SVG by
+  `render-plantuml.sh` and committed under `website/static/`.
 
-Both live in this repository so a CLI change and its documentation ship in
-one merge request; deployed to Cloudflare Pages (GitLab Pages as fallback).
+The two shells coexist by **scoping, not by separate sites** — a project
+`layouts/baseof.html` would otherwise shadow the theme's on every
+documentation page:
+
+1. the landing shell is scoped by page type (`type: landing` →
+   `layouts/landing/*.html`);
+2. its partials are namespaced (`layouts/_partials/landing/*.html`);
+3. it carries its own Markdown render hooks (`layouts/landing/_markup/`),
+   because Hextra's emit Tailwind `hx:` classes, a copy button and heading
+   anchors that the landing stylesheet cannot style.
+
+Syntax highlighting follows the same principle rather than a global switch:
+`noClasses: false` makes colour a stylesheet concern, the documentation loads
+Hextra's Chroma sheet, and the landing — which does not — gets code in one
+colour, as the design system asks.
+
+`website/package.json` is a shim so `pnpm -r build` covers the site on a
+machine with Hugo; CI builds it in its own job with the Hugo version pinned.
+It lives in this repository so a CLI change and its documentation ship in one
+merge request; deployed to Cloudflare Pages (GitLab Pages as fallback).
 
 ```bash
-cd website/landing && hugo server --port 1315  # http://localhost:1315
-cd website/doc && hugo server -D --port 1314   # http://localhost:1314/doc/
-cd website/landing && hugo --minify --gc       # → website/landing/public/
-cd website/doc && hugo --minify --gc           # → website/doc/public/
+cd website && hugo server -D --port 1314   # http://localhost:1314/  and  /docs/
+cd website && hugo --minify --gc           # → website/public/
 ```
 
 ---
@@ -81,7 +96,7 @@ order, each with its job:
 - **Two buttons:** *Try the live demo* (the hosted gson city) and *Get
   started* (the first tutorial).
 - **Beside the text:** today, the gson city drawn as an SVG from the real
-  `city.json` (`website/landing/scripts/city-svg.mjs`); later, a looping
+  `city.json` (`website/scripts/city-svg.mjs`); later, a looping
   10-second recording of orbiting the same city, with the SVG as its poster
   frame so nothing critical depends on the video playing.
 
@@ -267,11 +282,11 @@ shipped early.
   `website/public/`.
 
 ### W1 — Site skeleton and landing page
-- [x] `website/doc/` Hugo site with Hextra vendored as a submodule; `hugo`
-      builds it locally; the `website/doc/package.json` shim keeps `pnpm -r build`
+- [x] `website/` Hugo site with Hextra vendored as a submodule; `hugo`
+      builds it locally; the `website/package.json` shim keeps `pnpm -r build`
       covering it.
 - [x] A pinned-version Hugo job in `.gitlab-ci.yml` (`hugomods/hugo:exts-0.165.0`, submodules fetched).
-- [x] Landing page per §3 at `website/landing/`, a themeless Hugo site on the
+- [x] Landing page per §3 at `website/` root, a themeless Hugo shell on the
       Defsquare Design System: hero with a generated SVG of the real gson city (the artifact
       drawn, not an illustration), four questions as essay rows, trust,
       sixty-second start, limitations, navy footer. Reviewed as screenshots

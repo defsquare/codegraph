@@ -1,0 +1,163 @@
+# Codegraph website — ONE Hugo site, one build, one server.
+#
+#   /       the landing page: themeless, on the Defsquare Design System.
+#           Its content is content/_index.md (the intro) plus
+#           content/sections/*.md (the essay rows); its templates are scoped
+#           to the `landing` type so they never shadow the theme's.
+#   /docs/  the documentation: Hugo + Hextra (vendored at themes/hextra as a
+#           git submodule), Diátaxis quadrants under content/docs/.
+#
+# The two shells coexist by scoping, not by separate sites:
+#   layouts/landing/{baseof,home}.html  are found only for `type: landing`;
+#   layouts/_partials/landing/*.html    are namespaced away from Hextra's.
+baseURL: "https://codegraph.dev/"
+title: "Codegraph"
+theme: hextra
+enableRobotsTXT: true
+enableGitInfo: true
+enableInlineShortcodes: true
+
+# Nothing on this site is tagged, so the taxonomy pages would all be empty.
+disableKinds: [taxonomy, term]
+
+module:
+  hugoVersion:
+    extended: true
+    min: "0.146.0"
+
+outputs:
+  home: [html, llms]
+  page: [html, markdown]
+  section: [html, rss, markdown]
+
+markup:
+  goldmark:
+    renderer:
+      unsafe: true   # the landing copy carries a few inline spans; Hextra needs it too
+  highlight:
+    # Class-based, so colour is a stylesheet concern. The docs load Hextra's
+    # Chroma sheet and get syntax colour; the landing shell does not load it,
+    # so its one code block renders in a single colour — which is what the
+    # design system asks for — without a site-wide switch.
+    noClasses: false
+
+menu:
+  main:
+    - identifier: tutorials
+      name: Tutorials
+      pageRef: /docs/tutorials
+      weight: 1
+    - identifier: how-to
+      name: How-to
+      pageRef: /docs/how-to
+      weight: 2
+    - identifier: reference
+      name: Reference
+      pageRef: /docs/reference
+      weight: 3
+    - identifier: explanation
+      name: Explanation
+      pageRef: /docs/explanation
+      weight: 4
+    - name: Landing page
+      weight: 7
+      url: "/"
+    - name: Search
+      weight: 8
+      params:
+        type: search
+    - name: GitLab
+      weight: 9
+      url: "https://gitlab.com/jgrodziski/codegraph"
+      params:
+        icon: gitlab
+
+params:
+  description: "Codegraph extracts a dependency model from sources alone, with no build, and lets you query it, walk it as a 3D city, browse every dependency to its source line, replay its history, and have it explained bottom-up."
+
+  # ---------------------------------------------------------------- landing
+  # Where the documentation lives. Every documentation link on the landing
+  # page is built from it, so moving the docs is a one-line change.
+  docsBase: "/docs/"
+
+  nav:
+    - name: "Tutorials"
+      doc: "tutorials/"
+    - name: "Documentation"
+      doc: ""
+    - name: "Source"
+      url: "https://gitlab.com/jgrodziski/codegraph"
+
+  # The landing page's own footer. Kept apart from params.footer, which is
+  # Hextra's and has an entirely different shape.
+  landingFooter:
+    about:
+      logo: "img/defsquare-long-white-red.svg"
+      alt: "Defsquare"
+      text: >-
+        Codegraph is designed, built and run by [Defsquare](https://defsquare.com), a software studio that designs,
+        builds and runs software systems in complex environments. 
+    columns:
+      - heading: "Documentation"
+        links:
+          - name: "Tutorials"
+            doc: "tutorials/"
+          - name: "How-to guides"
+            doc: "how-to/"
+          - name: "Reference"
+            doc: "reference/"
+          - name: "Explanation"
+            doc: "explanation/"
+      - heading: "Project"
+        links:
+          - name: "Source on GitLab"
+            url: "https://gitlab.com/jgrodziski/codegraph"
+          - name: "Prior art and credits"
+            doc: "explanation/prior-art/"
+          - name: "Design decisions"
+            doc: "explanation/decisions/"
+          - name: "License: not yet chosen. Until a LICENSE file lands, all rights reserved."
+    studio:
+      name: "Defsquare"
+      url: "https://defsquare.com"
+
+  # ------------------------------------------------------------------ docs
+  externalLinkDecoration: true
+  navbar:
+    # The logo IS the wordmark, so the title text would just repeat it.
+    displayTitle: false
+    displayLogo: true
+    logo:
+      # Hextra emits both and swaps them by theme: the dark-blue wordmark would
+      # be invisible on the dark ground, so its white counterpart is required,
+      # not decorative. Same red brackets in both.
+      path: "img/codegraph-logo-long-dark-blue-text-red-brackets.svg"
+      dark: "img/codegraph-logo-long-white-text-red-brackets.svg"
+      width: 148   # the SVG's own 242×49, scaled to a 30px navbar height
+      height: 30
+    width: wide
+  theme:
+    default: system
+    displayToggle: true
+  footer:
+    enable: true
+    displayCopyright: false
+    displayPoweredBy: false
+    width: normal
+  displayUpdatedDate: true
+  dateFormat: "January 2, 2006"
+  search:
+    enable: true
+    type: flexsearch
+    flexsearch:
+      index: content
+      tokenize: forward
+  editURL:
+    enable: true
+    base: "https://gitlab.com/jgrodziski/codegraph/-/edit/main/website/content"
+  highlight:
+    copy:
+      enable: true
+      display: hover
+  page:
+    width: normal

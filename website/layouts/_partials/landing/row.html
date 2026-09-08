@@ -1,0 +1,16 @@
+{{- /* One essay row: heading and lead on the left, the page's Markdown on the
+       right. The asymmetric split is the design system's own home layout. */ -}}
+{{ $id := .File.BaseFileName | anchorize }}
+<div class="row" aria-labelledby="{{ $id }}">
+  <div class="row__left">
+    <h2 class="row__h2" id="{{ $id }}">{{ .Title }}</h2>
+    <div class="row__lead">{{ .RenderString (dict "display" "inline") .Params.lead }}</div>
+  </div>
+  <div class="row__right">
+    {{ with .Params.cmd }}<code class="row__cmd">{{ . }}</code>{{ end }}
+    {{ .Content }}
+    {{ with .Params.more }}
+      <a class="row__more" href="{{ partial "landing/link.html" . }}">{{ .name }}</a>
+    {{ end }}
+  </div>
+</div>

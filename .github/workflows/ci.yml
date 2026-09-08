@@ -53,11 +53,11 @@ jobs:
       - run: pnpm run gen:schemas
       - run: git diff --exit-code schemas/ || (echo "schemas/ is stale — run pnpm run gen:schemas and commit" && exit 1)
 
-  # The two websites — the landing page and the documentation (Hugo + Hextra,
-  # a git submodule) — built with the same pinned Hugo version a developer
-  # runs locally. Independent of the Node toolchain.
+  # The website — the landing page at / and the documentation at /docs/, one
+  # Hugo site (Hextra vendored as a git submodule) — built with the same pinned
+  # Hugo version a developer runs locally. Independent of the Node toolchain.
   website:
-    name: websites (hugo)
+    name: website (hugo)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,14 +68,11 @@ jobs:
         with:
           hugo-version: "0.165.0"
           extended: true
-      - run: cd website/landing && hugo --minify --gc
-      - run: cd website/doc && hugo --minify --gc
+      - run: cd website && hugo --minify --gc
       - uses: actions/upload-artifact@v4
         with:
-          name: websites
-          path: |
-            website/landing/public
-            website/doc/public
+          name: website
+          path: website/public
           retention-days: 7
 
   java:

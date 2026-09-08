@@ -336,10 +336,6 @@ importers:
 
   website: {}
 
-  website/doc: {}
-
-  website/landing: {}
-
 packages:
 
   '@babel/code-frame@7.29.7':

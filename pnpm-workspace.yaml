@@ -1,7 +1,6 @@
 packages:
   - "packages/*"
-  - "website/doc"
-  - "website/landing"
+  - "website"
 
 # Single source of truth for shared dependency versions across the workspace.
 # Packages reference them as "catalog:" so no two packages can drift apart.
