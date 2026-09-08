@@ -168,14 +168,17 @@ if wants_java && [ "$SKIP_JAVA" = "no" ]; then
   # (types the corpus never declared, ~10 points of resolution), which is exactly
   # the kind of regression a snapshot catches and a summary line does not.
   #
-  # Unlike C#, the model's `root` is the ABSOLUTE path the run was pointed at, so
-  # the comparison normalises it the way SnapshotTest does — and nothing else.
+  # Exactly ONE field is machine-specific: the header's `root`, the absolute path
+  # the run was pointed at. It is rewritten wherever it points, after a guard
+  # asserts it named the fixture corpus — matching a POSIX path instead is what
+  # sent the whole CI matrix red on Windows, where root reads D:\a\codegraph\…
+  # Every other byte must match; file paths inside the model are already forced
+  # to forward slashes by Anchors.relativize, precisely so that holds.
   bin="$JAVA_DIR/dist/$(host_rid)/codegraph-java"
   [ -x "$bin" ] || bin="$bin.exe"
   if [ -x "$bin" ]; then
-    corpus="$(cd "$ROOT/fixtures/java/src" && pwd -P)"
     phase "native java binary reproduces the snapshot" \
-      sh -c "cd '$ROOT' && out=\$(mktemp) && '$bin' --src fixtures/java/src --out \"\$out\" --progress none >/dev/null 2>&1 && sed 's|\"$corpus\"|\"fixtures/java/src\"|' \"\$out\" | cmp - fixtures/java/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
+      sh -c "cd '$ROOT' && out=\$(mktemp) && '$bin' --src fixtures/java/src --out \"\$out\" --progress none >/dev/null 2>&1 && head -1 \"\$out\" | grep -qE '\"root\":\"[^\"]*fixtures[^\"]*java[^\"]*src\"' && sed '1s|\"root\":\"[^\"]*\"|\"root\":\"fixtures/java/src\"|' \"\$out\" | cmp - fixtures/java/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
   else
     warn "no native binary at $JAVA_DIR/dist/$(host_rid) — run ./build.sh --java --native for the smoke test"
   fi
