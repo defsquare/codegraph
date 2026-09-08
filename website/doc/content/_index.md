@@ -32,7 +32,7 @@ The [first tutorial](/tutorials/first-city/) walks through every step.
 
 ## Limitations, up front
 
-- **Java only, today.** Nine language profiles exist on paper; the shipped extractor is Java. A second language is the next milestone.
+- **Two languages today: Java and C#.** Nine language profiles exist on paper; the shipped extractors are Spoon for Java (needs a JDK 17+) and Roslyn for C# (needs the .NET 10 SDK to build; the binary it produces needs nothing). A Clojure adapter is next.
 - **No build means imperfect resolution.** Without a classpath some references stay unresolved; they become stubs, honest but still gaps. Keep one package to one source root per run.
 - **`explain` costs money and needs a network.** It is the only command that does; `--dry-run` and `--estimate` come first.
 - **Not a linter.** Codegraph reports structure, coupling and cycles, not style or bugs.
