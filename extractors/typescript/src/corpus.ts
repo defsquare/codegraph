@@ -129,7 +129,14 @@ export function loadCorpus(options: CorpusOptions): Corpus {
   const cache = ts.createModuleResolutionCache(options.cwd, (name) => name, compilerOptions);
   const resolveOne = (specifier: string, containingFile: string): ts.ResolvedModuleWithFailedLookupLocations => {
     const standard = ts.resolveModuleName(specifier, containingFile, compilerOptions, host, cache);
-    if (standard.resolvedModule !== undefined) return standard;
+    const landed = standard.resolvedModule?.resolvedFileName;
+    // Resolved, and to a corpus file: done. Resolved through a workspace
+    // symlink into a package's own BUILD OUTPUT under the roots (`dist/`,
+    // skipped by the walk): that package is corpus, so its source entry is
+    // the honest target — not the `.d.ts` a previous build left behind.
+    if (landed !== undefined && (fileSet.has(slashes(landed)) || !isUnder(slashes(landed), root) || /(^|\/)node_modules\//.test(slashes(landed)))) {
+      return standard;
+    }
     const fallback = resolveWorkspace(specifier, packageByName, fileSet);
     if (fallback === undefined) return standard;
     workspaceResolutions.add(`${containingFile}|${specifier}`);

@@ -23,6 +23,8 @@ export class ResolutionStats {
   throwsDropped = 0;
   /** Same-keyed declarations in one file: the later one re-keyed by its position. */
   readonly duplicateKeys: string[] = [];
+  /** Edges whose endpoint no entity declares — an id-scheme gap, dropped rather than written dangling. */
+  readonly unclosableEdgesDropped: string[] = [];
   /** Stubs by origin, for the summary line. */
   stubs = { lib: 0, packages: 0, unresolved: 0, modules: 0 };
 
@@ -54,6 +56,7 @@ export class ResolutionStats {
       `  entities        : ${entities} (stubs: ${stubs} — lib ${this.stubs.lib}, packages ${this.stubs.packages}, <unresolved> ${this.stubs.unresolved}, modules ${this.stubs.modules})`,
       `  edges           : ${edges} (self-edges dropped: ${this.selfEdgesDropped}, indirect calls dropped: ${this.indirectCallsDropped}, computed accesses dropped: ${this.computedAccessesDropped}, computed imports dropped: ${this.computedImportsDropped}, heritage expressions dropped: ${this.heritageExpressionsDropped}, nameless classes dropped: ${this.namelessClassesDropped}, throw sites dropped: ${this.throwsDropped})`,
       `  duplicates      : ${this.duplicateKeys.length} same-keyed declarations re-keyed (first in file order keeps the plain key)`,
+      `  unclosable      : ${this.unclosableEdgesDropped.length} edges dropped (an endpoint no entity declares)`,
       "",
     ].join("\n");
   }

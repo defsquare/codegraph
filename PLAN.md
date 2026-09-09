@@ -2629,11 +2629,51 @@ Wiring into the repo's scripts and CI:
   values (`4 * 25` unevaluated); the full 23-file fixture and its README;
   the fixture in the analyzer, city, navigator and CLI suites; every CLI
   command verified on it. Snapshot: 193 entities / 127 edges.
-- **M13c — self-hosting + audit + distribution**: codegraph on codegraph
-  (validate clean, the boundary graph query, city and navigator screenshots
-  reviewed); the three-corpus audit with resolution causes measured and the
-  profile `notes` rewritten from numbers; the npm publish shape with the
-  tagged release; the `typescript-smoke` matrix; `docs/typescript-extractor.md`.
+- **M13c — self-hosting + audit + distribution** ✅ (2026-09-09):
+  - **Codegraph on codegraph** (`--src packages --src extractors/typescript`):
+    24 887 entities / 51 255 edges in 12 s, `validate` clean, 96.5 %
+    resolution, ZERO `<unresolved>`, zero duplicates, zero unclosable edges;
+    168 imports resolved to workspace packages by name. The architecture
+    rules of CLAUDE.md hold as graph queries (`test/self-hosting.test.ts`):
+    no dependency cycle crosses a package; `viz` and `navigator-ui` reach
+    their model packages only through imports and through TYPE-space
+    entities (interface members ARE type-space — the audit's first
+    correction to the profile); `@openrouter/sdk` is imported by
+    `packages/llm/src/openrouter.ts` alone, `three` by `viz` alone, `react`
+    by `navigator-ui` alone. City (355 stub buildings unmeasured, as
+    designed) and navigator reviewed as screenshots.
+  - **Three-corpus audit**, every model `validate`-clean:
+
+    | corpus | files | entities / edges | rate | `<unresolved>` | any-receivers | time |
+    |---|---|---|---|---|---|---|
+    | microsoft/TypeScript 4.9.5 `src/compiler` (namespaces + `/// <reference>`, `outFile` style) | 69 | 52 341 / 120 127 | 97.4 % | 3 (`Profile`, `Session`, `Stats` — node types with no `@types/node`) | 2 684 | 21 s |
+    | nestjs/nest `packages` (decorators, a monorepo importing itself by name) | 902 | 29 992 / 32 537 | 88.6 % | 78 (fastify/express/class-transformer types, not installed) | 20 745 | 12 s |
+    | excalidraw `packages` + `excalidraw-app` (`.tsx`, path aliases) | 628 | 43 706 / 62 557 | 94.4 % | 41 (react/mermaid/vitest types, not installed) | 24 954 | 23 s |
+
+    All three ran with NO `node_modules`: the any-receiver counts are the
+    ceiling the profile note describes — every call into an uninstalled
+    package is a call through `any`, dropped and counted — and nest's 508
+    workspace-resolved imports are its own `@nestjs/*` packages reached by
+    `package.json` name. excalidraw's 303 stub modules are mostly font and
+    asset imports (`./Excalifont-Regular-….woff2`), honest imports of
+    non-code. Six defects found and fixed by the audit: members of an unbound
+    object literal (array elements, arguments) were entities and collided
+    (2 260 re-keyings on codegraph itself); a parameter owned an arrow written
+    in its default value; methods of an unbound literal keyed their
+    parameters under the enclosing function; members of an unbound class
+    expression (`return class extends Base {}`, nest's dynamic modules)
+    surfaced as members of the enclosing method and aborted the write with a
+    dangling constructor; overloaded signatures with no implementation (an
+    interface's, an ambient function's) each emitted parameters (74 on the
+    compiler); a class expression bound to a PROPERTY (`static readonly
+    ConfigProxy = class …`) was both a property and a class. Plus the safety
+    net the contract asks for: an edge the model cannot close is dropped and
+    counted (`unclosable`), never written dangling and never an abort.
+  - **Distribution**: `typescript-smoke` in CI runs the built bundle on
+    Ubuntu, macOS and Windows and `cmp`s the fixture snapshot; `npm-publish`
+    on a `v*` tag publishes `codegraph-typescript` with provenance when the
+    repository holds `NPM_TOKEN` (skipped, not failed, otherwise);
+    `docs/typescript-extractor.md`; README and CLAUDE.md name the extractor.
 
 Definition of done: `fixtures/typescript/expected/model.jsonl` byte-identical
 to core's encoder and profile-valid with zero issues; the same bytes from the
@@ -2669,7 +2709,7 @@ TypeScript fixture in every per-fixture suite.
 | M12c | C# extractor — binaries + audit | ✅ five-RID `dotnet publish` matrix cross-published from one Linux host (287 s; ELF x64/aarch64, Mach-O x64/arm64, PE32+); GitHub Actions gate (`verify`, `java`, `csharp-test`, `csharp-publish` ×5, `csharp-smoke` on Ubuntu x64/arm64, macOS arm64/Intel and Windows — each binary must reproduce the snapshot byte for byte — and tagged releases with SHA256SUMS); three-corpus audit: Humanizer 97.3 % / 12 146 entities / 6 s, dotnet/eShop 63.5 % / 7 396 / 12 s, OrchardCore 93.4 % / 88 007 entities / 225 184 edges / 54 s, every model `validate`-clean; five defects found and fixed (signatures carry type arguments, conversion operators their return type, duplicate parameter names their ordinal, same-keyed declarations across projects kept and re-keyed by file, C# 14 extension blocks); resolution causes measured — the SDK's implicit usings and the ASP.NET Core reference pack now in — and the residue named in the profile notes; eShop city and navigator screenshots reviewed; `docs/csharp-extractor.md` |
 | M13a | TypeScript extractor — skeleton | ✅ `extractors/typescript/` (the compiler API as the front end, no build, `typescript` the only runtime dependency — §14); typescript profile v2; walking skeleton → `fixtures/typescript/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; core gate; boundary test; `snapshots --extractor` runs `.js` under `node`; `test.sh --ts` built-bin `cmp` |
 | M13b | TypeScript extractor — model | ✅ members, every edge kind incl. `annotationUse` with written arguments and `throws`, `space` per entity, declaration merging per file, key escaping, JSX invocations, workspace-package resolution without `node_modules`, `sloc` + `cyclomatic`, literals; the full fixture with its README; determinism and stub-discipline tests; the fixture in every per-fixture suite |
-| M13c | TypeScript extractor — self-hosting + audit | codegraph's own model `validate`-clean with its package boundaries recovered as a graph query, city and navigator screenshots reviewed; TypeScript 4.9 compiler / nestjs / excalidraw audit with resolution causes in the profile notes; `npx codegraph-typescript`, the three-OS smoke matrix and tagged npm release; `docs/typescript-extractor.md` |
+| M13c | TypeScript extractor — self-hosting + audit | ✅ codegraph's own model (24 887 entities / 51 255 edges, 12 s, 96.5 %, zero `<unresolved>`) validate-clean with the package boundaries, the frontend types-only rule and the three import boundaries recovered as graph queries, city and navigator screenshots reviewed; TypeScript 4.9 compiler (52 341 / 120 127, 97.4 %) / nestjs (29 992 / 32 537, 88.6 %) / excalidraw (43 706 / 62 557, 94.4 %) audit with six defects fixed and the causes in the profile notes; `typescript-smoke` on three OSes and `npm-publish` on a tag; `docs/typescript-extractor.md` | `validate`-clean with its package boundaries recovered as a graph query, city and navigator screenshots reviewed; TypeScript 4.9 compiler / nestjs / excalidraw audit with resolution causes in the profile notes; `npx codegraph-typescript`, the three-OS smoke matrix and tagged npm release; `docs/typescript-extractor.md` |
 
 ## 16. Decisions made in this plan (deltas vs. the design doc)
 
@@ -2722,3 +2762,6 @@ TypeScript fixture in every per-fixture suite.
 | TypeScript module identity (M13) | the module is the file, always; every path segment and non-identifier name entering a key percent-encodes `/`, `#`, `%` (and `.` in names); declaration merging yields one entity per declaring file, edges land on the declaration owning the referenced member | `/` is a reserved separator and rendering must stay injective for every language; a look-alike separator is not typeable in a CLI or a SQL query; containment is where a thing is written (invariant 5) — a `<global>` module would state otherwise |
 | TypeScript external keys (M13) | stubs keyed by npm package name (nearest `package.json`), lib types in `<lib>`, unbound names in `<unresolved>`, an unresolved specifier a stub module keyed by the specifier; `--ignore-node-modules` produces the fixture | keys must not depend on what happens to be installed; resolvability is not membership (the C# rule); a dropped import edge would understate fan-out |
 | TypeScript distribution (M13) | an npm package run with `npx`, `typescript` external to the bundle; a Node single-executable per OS deferred | Node ≥ 22 is already the pipeline's floor; a bundle that inlines the compiler loses `lib.*.d.ts` and binds no standard library — the `Assembly.Location` trap in its Node form, pinned by a test on the built bin |
+| Interface members are type-space (M13c) | a `method` or `property` written in an `interface` body carries `space: ["type"]`; the profile licenses both spaces on those kinds | the self-hosting query "frontends depend on model packages for types only" was false with interface members in the value space — `viz` reads `city.roles`, a shape, not a value; an access to an interface member is a dependency on the interface's shape and is erased at runtime like the interface |
+| What an object literal's parts are (M13c) | members of a literal BOUND to a name (`const Ops = {…}`, `static x = {…}`) are entities below the binding; members of an unbound literal (array elements, arguments, return values) are none, and a method written there is keyed positionally like an arrow; a class expression bound to a variable or property IS that binding | 2 260 re-keyed collisions on codegraph's own tests came from `[{hash, time}, {hash, time}]`; an unbound literal is no entity, so its parts cannot be either, while the functions written inside it are still code |
+| Unclosable edges (M13c) | the extractor drops an edge whose endpoint no entity declares, counts it on stderr as `unclosable`, and never aborts | schemas/README.md §5: a producer that cannot close a reference drops it and says so; two audited corpora aborted the write on a dangling constructor before this net existed — zero on every corpus is the goal, and a non-zero count names an id-scheme gap |

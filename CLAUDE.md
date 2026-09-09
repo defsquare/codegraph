@@ -24,6 +24,11 @@ extractors/java/     Maven project (Spoon, noClasspath) → emits model.jsonl. J
 extractors/csharp/   .NET 10 project (Roslyn, NO MSBuild: one compilation over
                      every *.cs, BCL reference pack embedded) → emits
                      model.jsonl. Published as one self-contained binary per OS.
+extractors/typescript/ pnpm workspace package `codegraph-typescript` (the
+                     compiler API: ONE program over every *.ts under the roots,
+                     a tsconfig read for resolution options only, no build, no
+                     node_modules needed) → emits model.jsonl. Runtime dependency:
+                     `typescript` alone — never @codegraph/* (a boundary test).
 schemas/             Generated per-record JSON Schemas + the container contract
                      (README.md) — THE cross-language contract, committed.
 packages/core/       @codegraph/core — traits, edges, language profiles (data),
@@ -125,6 +130,10 @@ cd extractors/csharp && dotnet test -c Release   # needs the .NET 10 SDK (see ex
 ./test.sh --csharp                               # dotnet test + the published binary must reproduce the snapshot
 extractors/csharp/dist/linux-x64/codegraph-csharp --src <dir> --out model.jsonl
 #   runtime-only or SDK forms (dotnet <dll>, dotnet run): docs/csharp-extractor.md
+
+./bin/codegraph-typescript --src <dir> --out model.jsonl   # after `pnpm -r build`; no other toolchain
+./bin/codegraph-typescript --src packages --src extractors/typescript --out codegraph.jsonl   # self-hosting
+#   docs/typescript-extractor.md; `test.sh --ts` checks the built bundle against fixtures/typescript
 
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
 ./bin/codegraph city model.jsonl --serve           # 3D city at http://localhost:4177

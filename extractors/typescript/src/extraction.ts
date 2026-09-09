@@ -3,7 +3,7 @@ import { loadCorpus, type Corpus } from "./corpus.js";
 import { extractEdges } from "./edges.js";
 import { extractEntities } from "./entities.js";
 import { Ids } from "./ids.js";
-import { LANG } from "./model/keys.js";
+import { keyIndex, LANG, renderKey } from "./model/keys.js";
 import type { Entity, Model, Repository } from "./model/model.js";
 import type { Progress } from "./progress.js";
 import { ResolutionStats } from "./stats.js";
@@ -50,13 +50,23 @@ export function extract(options: ExtractOptions, progress: Progress, version: st
   const stubEntities = progress.phase("stubs", () => stubs.emit(table.keys(), stats), (s) => `${s.length} stubs`);
 
   const entities: Entity[] = [...table.values(), ...stubEntities];
+  // Closure is a property of the ENCODING (a reference is a surrogate), so an
+  // edge the model cannot close is unwritable: a producer drops it and says
+  // so, never aborts (schemas/README.md §5). Zero on every audited corpus is
+  // the goal; a non-zero count names an id-scheme gap on stderr.
+  const declared = new Set(entities.map((entity) => keyIndex(entity.key)));
+  const closed = edges.filter((edge) => {
+    const ok = declared.has(keyIndex(edge.from)) && declared.has(keyIndex(edge.to));
+    if (!ok) stats.unclosableEdgesDropped.push(`${edge.kind} ${renderKey(edge.from)} -> ${renderKey(edge.to)}`);
+    return ok;
+  });
   const model: Model = {
     lang: LANG,
     extractor: { name: EXTRACTOR_NAME, version, typescript: ts.version },
     root: corpus.rootDisplay,
     ...(options.repository === undefined ? {} : { repository: options.repository }),
     entities,
-    edges,
+    edges: closed,
   };
   return { model, stats, stubs: stubEntities.length, corpus };
 }

@@ -50,7 +50,7 @@
 {"t":"e","i":25,"k":8,"tr":[5,4,11,6,3,1],"m":25,"s":"legacy-lib","name":"legacy-lib","isStub":false,"definedIn":[3,4],"comments":["An ambient module the corpus DECLARES (this file is a script, so the block declares rather than augments): a module entity, not a stub."],"metrics":{"sloc":7},"space":["value"],"anchor":[3,2,8]}
 {"t":"e","i":26,"k":2,"tr":[5,8,13,12,11,0,6,3],"m":25,"s":"Thing","name":"Thing","isStub":false,"parent":25,"metrics":{"sloc":4},"space":["type","value"],"anchor":[3,3,6]}
 {"t":"e","i":27,"k":7,"tr":[5,2,11,16,15,14,10,0,6,3],"m":25,"s":"Thing.describe","name":"describe","signature":"(): string","parent":26,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"space":["value"],"anchor":[3,5,5]}
-{"t":"e","i":28,"k":7,"tr":[5,2,11,16,15,14,10,0,6,3],"m":25,"s":"Thing.extra","name":"extra","signature":"(): void","parent":26,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"space":["value"],"anchor":[4,6,6]}
+{"t":"e","i":28,"k":7,"tr":[5,2,11,16,15,14,10,0,6,3],"m":25,"s":"Thing.extra","name":"extra","signature":"(): void","parent":26,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"space":["type"],"anchor":[4,6,6]}
 {"t":"e","i":29,"k":11,"tr":[5,7,9,0,6],"m":25,"s":"Thing.id","name":"id","parent":26,"space":["value"],"anchor":[3,4,4]}
 {"t":"e","i":30,"k":5,"tr":[5,2,11,16,15,14,10,0,6,3,9],"m":25,"s":"load","name":"load","signature":"(id: number): Thing","declaredType":26,"parent":25,"parameters":[31],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"space":["value"],"anchor":[3,7,7]}
 {"t":"e","i":31,"k":10,"tr":[5,7,9,0,6],"m":25,"s":"load","d":"param:id","name":"id","parent":30,"space":["value"],"anchor":[3,7,7]}
@@ -66,7 +66,7 @@
 {"t":"e","i":41,"k":8,"tr":[5,4,11,6,3],"m":41,"s":"packages%2Forder%2Fsrc%2Fambient.d.ts","name":"packages/order/src/ambient.d.ts","isStub":false,"definedIn":[3],"metrics":{"sloc":7},"space":["value"],"anchor":[3,1,8]}
 {"t":"e","i":42,"k":8,"tr":[5,4,11,6,3],"m":42,"s":"packages%2Forder%2Fsrc%2Faugment.ts","name":"packages/order/src/augment.ts","isStub":false,"definedIn":[4],"metrics":{"sloc":18},"space":["value"],"anchor":[4,1,23]}
 {"t":"e","i":43,"k":6,"tr":[5,8,13,11,0,6,3,1],"m":42,"s":"AcmeWindow","name":"AcmeWindow","isStub":false,"parent":42,"comments":["Lives in the global scope, is written in this file: a child of this file."],"metrics":{"sloc":3},"space":["type"],"anchor":[4,12,14]}
-{"t":"e","i":44,"k":11,"tr":[5,7,9,0,6],"m":42,"s":"AcmeWindow.acme","name":"acme","parent":43,"space":["value"],"anchor":[4,13,13]}
+{"t":"e","i":44,"k":11,"tr":[5,7,9,0,6],"m":42,"s":"AcmeWindow.acme","name":"acme","parent":43,"space":["type"],"anchor":[4,13,13]}
 {"t":"e","i":45,"k":2,"tr":[5,8,13,12,11,0,6,3],"m":42,"s":"Wrapper","name":"Wrapper","isStub":false,"parent":42,"metrics":{"sloc":7},"space":["type","value"],"anchor":[4,17,23]}
 {"t":"e","i":46,"k":7,"tr":[5,2,11,16,15,14,10,0,6,3,9],"m":42,"s":"Wrapper.open","name":"open","signature":"(id: number): Wrapper","declaredType":45,"parent":45,"parameters":[48],"localVariables":[47],"metrics":{"cyclomatic":1,"sloc":5},"space":["value"],"anchor":[4,18,22]}
 {"t":"e","i":47,"k":13,"tr":[5,7,9,0,6],"m":42,"s":"Wrapper.open","d":"local:thing:19:11","name":"thing","declaredType":26,"parent":46,"space":["value"],"anchor":[4,19,19]}
@@ -111,9 +111,9 @@
 {"t":"e","i":86,"k":10,"tr":[5,7,9,0,6],"m":75,"s":"Report.max","d":"param:values","name":"values","parent":83,"space":["value"],"anchor":[7,12,12]}
 {"t":"e","i":87,"k":8,"tr":[5,4,11,6,3],"m":87,"s":"packages%2Forder%2Fsrc%2Fdiscountable.ts","name":"packages/order/src/discountable.ts","isStub":false,"definedIn":[8],"metrics":{"sloc":7},"space":["value"],"anchor":[8,1,11]}
 {"t":"e","i":88,"k":6,"tr":[5,8,13,11,0,6,3,1],"m":87,"s":"Discountable","name":"Discountable","isStub":false,"parent":87,"comments":["`interface extends interface` is inheritance, not implementation."],"metrics":{"sloc":3},"space":["type"],"anchor":[8,4,6]}
-{"t":"e","i":89,"k":7,"tr":[5,2,11,16,15,14,10,0,6,3],"m":87,"s":"Discountable.discount","name":"discount","signature":"(pct: number): number","parent":88,"parameters":[90],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"space":["value"],"anchor":[8,5,5]}
+{"t":"e","i":89,"k":7,"tr":[5,2,11,16,15,14,10,0,6,3],"m":87,"s":"Discountable.discount","name":"discount","signature":"(pct: number): number","parent":88,"parameters":[90],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"space":["type"],"anchor":[8,5,5]}
 {"t":"e","i":90,"k":10,"tr":[5,7,9,0,6],"m":87,"s":"Discountable.discount","d":"param:pct","name":"pct","parent":89,"space":["value"],"anchor":[8,5,5]}
-{"t":"e","i":91,"k":11,"tr":[5,7,9,0,6],"m":87,"s":"Discountable.reason","name":"reason","parent":88,"space":["value"],"anchor":[8,10,10]}
+{"t":"e","i":91,"k":11,"tr":[5,7,9,0,6],"m":87,"s":"Discountable.reason","name":"reason","parent":88,"space":["type"],"anchor":[8,10,10]}
 {"t":"e","i":92,"k":8,"tr":[5,4,11,6,3],"m":92,"s":"packages%2Forder%2Fsrc%2Fhandler.ts","name":"packages/order/src/handler.ts","isStub":false,"definedIn":[9],"metrics":{"sloc":5},"space":["value"],"anchor":[9,1,7]}
 {"t":"e","i":93,"k":5,"tr":[5,2,11,16,15,14,10,0,6,3,1],"m":92,"s":"default","name":"default","signature":"(order: Order): string","parent":92,"parameters":[94],"localVariables":[],"comments":["A nameless default export: named `default`."],"metrics":{"cyclomatic":1,"sloc":3},"space":["value"],"anchor":[9,5,7]}
 {"t":"e","i":94,"k":10,"tr":[5,7,9,0,6],"m":92,"s":"default","d":"param:order","name":"order","declaredType":142,"parent":93,"space":["value"],"anchor":[9,5,5]}
@@ -179,7 +179,7 @@
 {"t":"e","i":154,"k":10,"tr":[5,7,9,0,6],"m":141,"s":"Order.parse","d":"static#param:text","name":"text","parent":153,"space":["value"],"anchor":[16,27,27]}
 {"t":"e","i":155,"k":8,"tr":[5,4,11,6,3],"m":155,"s":"packages%2Forder%2Fsrc%2Fpriceable.ts","name":"packages/order/src/priceable.ts","isStub":false,"definedIn":[17],"metrics":{"sloc":3},"space":["value"],"anchor":[17,1,4]}
 {"t":"e","i":156,"k":6,"tr":[5,8,13,11,0,6,3,1],"m":155,"s":"Priceable","name":"Priceable","isStub":false,"parent":155,"comments":["Anything with a price."],"metrics":{"sloc":3},"space":["type"],"anchor":[17,2,4]}
-{"t":"e","i":157,"k":7,"tr":[5,2,11,16,15,14,10,0,6,3],"m":155,"s":"Priceable.price","name":"price","signature":"(): number","parent":156,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"space":["value"],"anchor":[17,3,3]}
+{"t":"e","i":157,"k":7,"tr":[5,2,11,16,15,14,10,0,6,3],"m":155,"s":"Priceable.price","name":"price","signature":"(): number","parent":156,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"space":["type"],"anchor":[17,3,3]}
 {"t":"e","i":158,"k":8,"tr":[5,4,11,6,3],"m":158,"s":"packages%2Forder%2Fsrc%2Fpromo%232024.ts","name":"packages/order/src/promo#2024.ts","isStub":false,"definedIn":[18],"metrics":{"sloc":1},"space":["value"],"anchor":[18,1,2]}
 {"t":"e","i":159,"k":13,"tr":[5,7,9,0,6,17,1],"m":158,"s":"PROMO","name":"PROMO","parent":158,"comments":["A `#` in a file name: escaped in the module key."],"value":{"k":"string","v":"SUMMER"},"space":["value"],"anchor":[18,2,2]}
 {"t":"e","i":160,"k":8,"tr":[5,4,11,6,3],"m":160,"s":"packages%2Forder%2Fsrc%2Freporting.ts","name":"packages/order/src/reporting.ts","isStub":false,"definedIn":[19],"metrics":{"sloc":24},"space":["value"],"anchor":[19,1,35]}
@@ -211,7 +211,7 @@
 {"t":"e","i":186,"k":10,"tr":[5,7,9,0,6],"m":180,"s":"Row","d":"param:props","name":"props","parent":185,"space":["value"],"anchor":[21,14,14]}
 {"t":"e","i":187,"k":8,"tr":[5,4,11,6,3],"m":187,"s":"packages%2Fpricing%2Fsrc%2Findex.ts","name":"packages/pricing/src/index.ts","isStub":false,"definedIn":[22],"metrics":{"sloc":7},"space":["value"],"anchor":[22,1,10]}
 {"t":"e","i":188,"k":6,"tr":[5,8,13,11,0,6,3],"m":187,"s":"Priced","name":"Priced","isStub":false,"parent":187,"metrics":{"sloc":3},"space":["type"],"anchor":[22,4,6]}
-{"t":"e","i":189,"k":7,"tr":[5,2,11,16,15,14,10,0,6,3],"m":187,"s":"Priced.price","name":"price","signature":"(): number","parent":188,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"space":["value"],"anchor":[22,5,5]}
+{"t":"e","i":189,"k":7,"tr":[5,2,11,16,15,14,10,0,6,3],"m":187,"s":"Priced.price","name":"price","signature":"(): number","parent":188,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":1},"space":["type"],"anchor":[22,5,5]}
 {"t":"e","i":190,"k":13,"tr":[5,7,9,0,6,17,1],"m":187,"s":"TAX_RATE","name":"TAX_RATE","parent":187,"comments":["Tax rules. A workspace package: imported by NAME, with nothing installed and nothing built."],"value":{"k":"number","v":"0.2"},"space":["value"],"anchor":[22,2,2]}
 {"t":"e","i":191,"k":5,"tr":[5,2,11,16,15,14,10,0,6,3],"m":187,"s":"applyTax","name":"applyTax","signature":"(amount: number): number","parent":187,"parameters":[192],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"space":["value"],"anchor":[22,8,10]}
 {"t":"e","i":192,"k":10,"tr":[5,7,9,0,6],"m":187,"s":"applyTax","d":"param:amount","name":"amount","parent":191,"space":["value"],"anchor":[22,8,8]}

@@ -176,6 +176,7 @@ class FileVisitor {
     if (ts.isFunctionExpression(node) || ts.isArrowFunction(node)) return this.visitNamelessInvocable(node);
     if (ts.isPropertyDeclaration(node) || ts.isPropertySignature(node) || ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) {
       if (ts.isPropertySignature(node) && ts.isTypeLiteralNode(node.parent)) return this.visitChildren(node);
+      if (ts.isObjectLiteralExpression(node.parent) && boundName(node.parent) === undefined) return this.visitChildren(node);
       return this.visitProperty(node);
     }
     if (ts.isVariableDeclaration(node)) return this.visitVariable(node);
@@ -346,7 +347,8 @@ class FileVisitor {
       parameters: [],
       localVariables: [],
       metrics: this.invocableMetrics(node),
-      space: ["value"],
+      // An interface's member exists only for the checker (METAMODEL §1.4).
+      space: isInterfaceMember(node) ? ["type"] : ["value"],
       anchor: this.anchorOf(node),
     };
     this.withReturnType(node, entity);
@@ -427,6 +429,12 @@ class FileVisitor {
   visitProperty(
     node: ts.PropertyDeclaration | ts.PropertySignature | ts.PropertyAssignment | ts.ShorthandPropertyAssignment,
   ): void {
+    const classInitializer = ts.isPropertyDeclaration(node) || ts.isPropertyAssignment(node) ? unwrap(node.initializer) : undefined;
+    if (classInitializer !== undefined && ts.isClassExpression(classInitializer)) {
+      // The property IS the class (ids.ts): visit the expression, no property entity.
+      this.visitChildren(node);
+      return;
+    }
     const key = this.ids.declarationKey(node);
     const parent = this.ids.ownerKey(node);
     const name = declarationName(node);
@@ -440,7 +448,7 @@ class FileVisitor {
       traits: ["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"],
       name,
       parent,
-      space: ["value"],
+      space: isInterfaceMember(node) ? ["type"] : ["value"],
       anchor: this.anchorOf(node),
     };
     this.withDeclaredType(node, entity);
@@ -622,6 +630,11 @@ class FileVisitor {
     entity.comments = comments;
     (entity.traits as Trait[]).push("TComment");
   }
+}
+
+/** Written inside an `interface` body: a member with no runtime existence. */
+function isInterfaceMember(node: ts.Node): boolean {
+  return node.parent !== undefined && ts.isInterfaceDeclaration(node.parent);
 }
 
 function typeTraits(kind: Kind): Trait[] {

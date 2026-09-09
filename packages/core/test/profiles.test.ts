@@ -384,6 +384,9 @@ describe("structural claims that must not silently regress", () => {
     expect(space["typeAlias"]).toEqual(["type"]);
     expect(space["class"]).toEqual(["type", "value"]);
     expect(space["function"]).toEqual(["value"]);
+    // An interface's members are type-space; a class's are values.
+    expect(space["method"]).toEqual(["type", "value"]);
+    expect(space["property"]).toEqual(["type", "value"]);
   });
 
   it("TypeScript's kinds are a strict superset of JavaScript's", () => {

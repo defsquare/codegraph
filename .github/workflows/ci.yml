@@ -11,7 +11,11 @@
 #   csharp-smoke    each binary runs on a runner of ITS OWN OS and must reproduce
 #                   the committed fixture snapshot byte for byte — the cross-OS gate
 #                   the plan could only delegate to a laptop under GitLab
-#   release         on a v* tag, the five binaries attached to a GitHub Release
+#   typescript-smoke the bundled TypeScript extractor on a runner of each OS must
+#                   reproduce its fixture snapshot byte for byte (PLAN.md §14.7):
+#                   Windows paths, CRLF checkouts, case-insensitive walks
+#   release         on a v* tag, the five binaries attached to a GitHub Release,
+#                   and the TypeScript extractor published to npm when NPM_TOKEN is set
 #
 # `test.sh` and `build.sh` are the same gate on a developer machine; CI calls
 # them where it can so the two cannot disagree about what "green" means.
@@ -216,10 +220,41 @@ jobs:
           cmp out.jsonl fixtures/csharp/expected/model.jsonl
           echo "byte-identical on ${{ matrix.os }}"
 
+  typescript-smoke:
+    name: typescript extractor on ${{ matrix.os }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter codegraph-typescript build
+      # The BUILT bundle, from the repo root with the RELATIVE --src the
+      # snapshot was made with; `typescript` resolves from the workspace
+      # install because the bundle leaves it external (its lib files must sit
+      # beside it). `cmp` is the whole cross-OS gate: the model is bytes.
+      - shell: bash
+        run: |
+          node extractors/typescript/dist/cli.js --version
+          node extractors/typescript/dist/cli.js --src fixtures/typescript/src --out out.jsonl --progress plain
+          cmp out.jsonl fixtures/typescript/expected/model.jsonl
+          echo "byte-identical on ${{ matrix.os }}"
+
   release:
     name: github release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [verify, java, java-native, csharp-smoke]
+    needs: [verify, java, java-native, csharp-smoke, typescript-smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -249,3 +284,33 @@ jobs:
           (cd release && sha256sum * > SHA256SUMS)
           gh release create "${GITHUB_REF_NAME}" --generate-notes --title "codegraph ${GITHUB_REF_NAME}" release/* \
             || gh release upload "${GITHUB_REF_NAME}" release/* --clobber
+
+  npm-publish:
+    name: npm publish codegraph-typescript
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [verify, typescript-smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter codegraph-typescript build
+      # `npx codegraph-typescript` for anyone with Node 22 (PLAN.md §14.7).
+      # Skipped, not failed, when the repository holds no NPM_TOKEN: the
+      # GitHub release above is the release; npm is the convenience.
+      - name: publish with provenance
+        if: env.NPM_TOKEN != ''
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: cd extractors/typescript && pnpm publish --provenance --access public --no-git-checks

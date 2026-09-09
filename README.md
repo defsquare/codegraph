@@ -25,8 +25,8 @@ Plus the plumbing you need to trust the answers: `validate` for the model,
 
 You need **Node 22+** and **pnpm** (`corepack enable pnpm`) for codegraph
 itself, plus the toolchain of the extractor you intend to run: a **JDK 17+**
-for Java, the **.NET 10 SDK** for C#. Codegraph is not on npm yet; you run it
-from a clone.
+for Java, the **.NET 10 SDK** for C#, nothing more for TypeScript. Codegraph
+is not on npm yet; you run it from a clone.
 
 ```bash
 git clone https://gitlab.com/jgrodziski/codegraph.git && cd codegraph
@@ -58,6 +58,14 @@ command completes in about twelve seconds.
 `--host 127.0.0.1` keeps the pages on your machine. Without it the servers
 bind every interface, which is convenient on a LAN and wrong for a sensitive
 codebase.
+
+TypeScript needs no other toolchain: the extractor is the compiler used as a
+library, and it reads a tree that neither builds nor has `node_modules`.
+
+```bash
+./bin/codegraph-typescript --src ~/src/some-app/src --out app.jsonl
+./bin/codegraph-typescript --src packages --src extractors/typescript --out codegraph.jsonl   # codegraph on itself
+```
 
 For C#, the extractor is a Roslyn program that reads `*.cs` directly: no
 solution, no project file, no MSBuild, and a missing NuGet package is a stub
@@ -239,6 +247,7 @@ Read these before you commit an afternoon.
    sources ──▶  extractor  ──▶  model.jsonl  ──▶  analyzer  ──▶  reports, exports
   (any state)  (Java: Spoon)  (the contract)      (TypeScript)      city.json ──▶ 3D city
                (C#: Roslyn)
+               (TS: the compiler API)
                                    │                                navigator.json ──▶ navigator
                               schemas/*.json                        model.db ──▶ SQL, time
                             (published JSON Schema)                 *.insights.jsonl ──▶ explanations
@@ -256,6 +265,7 @@ so a model file has one direction of truth. The full reference is
 |---|---|
 | `extractors/java` | Spoon-based extractor; emits `model.jsonl` |
 | `extractors/csharp` | Roslyn-based extractor (no MSBuild, BCL embedded); one self-contained binary per OS |
+| `extractors/typescript` | compiler-API extractor (no build, no `node_modules` needed); runs with `npx` |
 | `schemas/` | the generated JSON Schema every extractor must satisfy |
 | `packages/core` | traits, edges, language profiles, validation |
 | `packages/analyzer` | graph, views, folding, cycles, coupling, exports, SQLite store |
@@ -274,6 +284,7 @@ so a model file has one direction of truth. The full reference is
 - [`docs/sql-cookbook.md`](docs/sql-cookbook.md) — querying `model.db` yourself
 - [`docs/city-model.md`](docs/city-model.md), [`docs/city-render.md`](docs/city-render.md) — how the city is built and drawn
 - [`docs/csharp-extractor.md`](docs/csharp-extractor.md) — running the C# extractor: the self-contained binary, the .NET runtime alone, or the SDK from source
+- [`docs/typescript-extractor.md`](docs/typescript-extractor.md) — running the TypeScript extractor, how it resolves without a build, reading its summary
 - [`docs/navigator.md`](docs/navigator.md) — the navigator's design
 - [`docs/insights.md`](docs/insights.md) — the explanation walk's design
 - [`PLAN.md`](PLAN.md) — milestones, decisions and their rationale
@@ -299,6 +310,7 @@ about known code shows up as a diff.
 | Measures, literal values, Spring framework semantics | done |
 | LLM explanations (`explain`) | done |
 | Second language extractor (C#, Roslyn): one self-contained binary per OS, byte-identity smoke tests in CI on five platforms, audited on Humanizer, dotnet/eShop and OrchardCore | done |
+| Third language extractor (TypeScript, the compiler API): no build, no `node_modules`, self-hosting — codegraph's own package boundaries recovered as graph queries; byte-identity smoke tests on three OSes; audited on TypeScript 4.9's compiler, nestjs and excalidraw | done |
 | Clojure extractor (clj-kondo) | next |
 | Published releases (npm, extractor jar) | planned |
 | Project website and documentation site | planned, see [`WEBSITE.md`](WEBSITE.md) |

@@ -58,6 +58,7 @@ export function run(args: readonly string[], io: Io, cwd: string): number {
       io.stderr.write(`tsconfig not applied (another root's won): ${conflict}\n`);
     }
     for (const duplicate of result.stats.duplicateKeys) io.stderr.write(`duplicate declaration re-keyed: ${duplicate}\n`);
+    for (const dropped of result.stats.unclosableEdgesDropped) io.stderr.write(`unclosable edge dropped: ${dropped}\n`);
     io.stderr.write(result.stats.summary(result.model.entities.length, result.stubs, result.model.edges.length));
     io.stderr.write(`wrote ${options.out}\n`);
     return EXIT.OK;

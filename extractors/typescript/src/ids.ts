@@ -151,10 +151,14 @@ export class Ids {
     }
     if (ts.isParameter(node)) {
       if (!ts.isIdentifier(node.name) || node.name.text === "this") return undefined;
+      // A parameter written in a TYPE (`(record: X) => X`, a call signature) declares nothing.
+      if (isSignatureType(node.parent)) return undefined;
       const owner = this.ownerKey(node);
       return owner === undefined ? undefined : disambiguated(owner, `param:${escapeName(node.name.text)}`);
     }
-    if (ts.isFunctionExpression(node) || ts.isArrowFunction(node)) {
+    if (ts.isFunctionExpression(node) || ts.isArrowFunction(node) || isUnboundLiteralMethod(node)) {
+      // A method of an UNBOUND literal (`return { write(text) {…} }`) has a
+      // name but no owner to hang it on: positional, like an arrow.
       const owner = this.ownerKey(node);
       return owner === undefined ? undefined : disambiguated(owner, this.position(node));
     }
@@ -163,6 +167,11 @@ export class Ids {
       return owner === undefined ? undefined : memberKey(owner, "constructor");
     }
     if (isNamedMember(node) || ts.isFunctionDeclaration(node) || isTypeDeclaration(node)) {
+      // `static Proxy = class {}` / `useClass: class {}`: the member IS the class; one key.
+      if (ts.isPropertyDeclaration(node) || ts.isPropertyAssignment(node)) {
+        const initializer = unwrap(node.initializer);
+        if (initializer !== undefined && ts.isClassExpression(initializer)) return this.declarationKey(initializer);
+      }
       const owner = this.ownerKey(node);
       if (owner === undefined) return undefined;
       const name = declarationName(node);
@@ -226,6 +235,15 @@ export class Ids {
         current = current.parent;
         continue;
       }
+      // A parameter owns nothing: an arrow in its default value belongs to the invocable.
+      if (ts.isParameter(current) || ts.isBindingElement(current)) {
+        current = current.parent;
+        continue;
+      }
+      // A class expression bound to nothing is no entity (dropped and counted),
+      // and neither is anything written inside it: its constructor must not
+      // surface as a member of the enclosing method.
+      if (ts.isClassExpression(current) && boundName(current) === undefined) return undefined;
       if (isKeyedDeclaration(current)) {
         const key = this.declarationKey(current);
         if (key !== undefined) return key;
@@ -254,16 +272,30 @@ export class Ids {
    * so nothing written on it — a parameter, a type — is either.
    */
   isOverloadSignature(node: ts.Node): boolean {
-    if (!ts.isFunctionDeclaration(node) && !ts.isMethodDeclaration(node) && !ts.isConstructorDeclaration(node)) return false;
-    if (node.body !== undefined) return false;
+    if (
+      !ts.isFunctionDeclaration(node) &&
+      !ts.isMethodDeclaration(node) &&
+      !ts.isConstructorDeclaration(node) &&
+      !ts.isMethodSignature(node)
+    ) {
+      return false;
+    }
+    if ((node as ts.FunctionLikeDeclaration).body !== undefined) return false;
     const symbol = ts.isConstructorDeclaration(node)
       ? this.checker.getTypeAtLocation(node.parent).getSymbol()?.members?.get(ts.InternalSymbolName.Constructor)
       : node.name === undefined
         ? undefined
         : this.checker.getSymbolAtLocation(node.name);
-    return (symbol?.declarations ?? []).some(
-      (declaration) => ts.isFunctionLike(declaration) && (declaration as ts.FunctionLikeDeclaration).body !== undefined,
-    );
+    const declarations = symbol?.declarations ?? [];
+    // Beside an implementation, every bare signature folds into it.
+    if (declarations.some((d) => ts.isFunctionLike(d) && (d as ts.FunctionLikeDeclaration).body !== undefined)) return true;
+    // Signatures only (an interface's overloads, an ambient function): the
+    // FIRST one written in this file is the entity, the others fold into it.
+    const file = node.getSourceFile();
+    const first = declarations
+      .filter((d) => d.getSourceFile() === file && ts.isFunctionLike(d))
+      .sort((a, b) => a.pos - b.pos)[0];
+    return first !== undefined && first !== node;
   }
 
   /** `line:column` of a node's first token, 1-based: a source fact, and two can start on one line. */
@@ -496,6 +528,13 @@ export function isNamedMember(node: ts.Node): boolean {
   if ((ts.isPropertySignature(node) || ts.isMethodSignature(node)) && node.parent !== undefined && ts.isTypeLiteralNode(node.parent)) {
     return false;
   }
+  // A member of an object literal is an entity only when the literal itself
+  // is bound to a name (`const Ops = { … }`); the elements of an array, the
+  // argument of a call, the value of another property are not — the
+  // literal is no entity, so neither are its parts.
+  if (node.parent !== undefined && ts.isObjectLiteralExpression(node.parent) && boundName(node.parent) === undefined) {
+    return false;
+  }
   return (
     ts.isMethodDeclaration(node) ||
     ts.isMethodSignature(node) ||
@@ -519,6 +558,28 @@ export function isKeyedDeclaration(node: ts.Node): boolean {
     ts.isVariableDeclaration(node) ||
     ts.isParameter(node) ||
     ts.isBindingElement(node)
+  );
+}
+
+/** A signature that is a type, not a declaration: its parameters are not entities. */
+export function isSignatureType(node: ts.Node): boolean {
+  return (
+    ts.isFunctionTypeNode(node) ||
+    ts.isConstructorTypeNode(node) ||
+    ts.isCallSignatureDeclaration(node) ||
+    ts.isConstructSignatureDeclaration(node) ||
+    ts.isIndexSignatureDeclaration(node) ||
+    ((ts.isMethodSignature(node) || ts.isPropertySignature(node)) && node.parent !== undefined && ts.isTypeLiteralNode(node.parent))
+  );
+}
+
+/** A method or accessor written in an object literal that is bound to nothing. */
+export function isUnboundLiteralMethod(node: ts.Node): boolean {
+  return (
+    (ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node)) &&
+    node.parent !== undefined &&
+    ts.isObjectLiteralExpression(node.parent) &&
+    boundName(node.parent) === undefined
   );
 }
 
