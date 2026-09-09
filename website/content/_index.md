@@ -28,7 +28,7 @@ city:
     **The model codegraph extracted** from [google/gson](https://github.com/google/gson),
     drawn as it is laid out. Nine packages as plates, nested like the packages they are;
     113 classes as blocks whose height is lines of code and whose footprint is member count;
-    in <span class="red">red</span>, the cyclic dependencies.
+    in <span class="red">red</span>, the cyclic ependencies.
 corpora:
   lead: "Run end to end on"
   items:
