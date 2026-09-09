@@ -45,13 +45,20 @@ codegraph import   model.jsonl [--out FILE] [--at SHA [--time T]] [--json]
                    # build the SQLite analysis store (model.db) beside a model;
                    # --at appends the model as a snapshot of the TEMPORAL store
 
-codegraph city     [model.jsonl] [--serve [--port N] [--host ADDR]] [--layout] [--out FILE]
+codegraph serve    [model.jsonl] [--port N] [--host ADDR] [--name STR]
+                   [--height METRIC] [--height-scale linear|sqrt|log]
+                   [--footprint METRIC] [--footprint-scale linear|sqrt|log]
+                   [--carry M1,M2] [--framework spring]
+                   [--internal-only] [--declared-only] [--no-cache]
+                   # one page: the navigator, with the 3D city as a tab
+
+codegraph city     [model.jsonl] [--layout] [--out FILE]
                    [--height METRIC] [--height-scale linear|sqrt|log]
                    [--footprint METRIC] [--footprint-scale linear|sqrt|log]
                    [--carry M1,M2] [--name STR] [--framework spring]
                    [--internal-only] [--declared-only]
 
-codegraph navigator [model.jsonl] [--serve [--port N] [--host ADDR]] [--out FILE]
+codegraph navigator [model.jsonl] [--out FILE]
                    [--name STR] [--internal-only] [--declared-only]
 
 codegraph domain-facts [model.jsonl] [--framework spring] [--out FILE]
@@ -118,23 +125,33 @@ skip parsing and lets you query the graph yourself
 snapshot: revisions accumulate in one store, keyed by the natural key across
 time, and `timeline` and `replay` read them.
 
+### `serve`
+Opens the model browser on port 4177 (every interface unless `--host` narrows
+it): ONE page over the model, built from one graph under one view. Its tabs:
+**Navigate** — a searchable, virtualized tree (modules → types → members) and,
+for the selection, incoming and outgoing dependencies classified by role, with
+the member that carries each, its provenance and its source anchor; **City** —
+the 3D code city, full-width, where a selected building's panel offers *Open
+in navigator* and lands on that type's Navigate entry with its dependencies;
+**Graph** (Cytoscape), **Cycles** (the precomputed tangle report) and
+**Coupling** (ranked metrics). The city's channels are the `city` flags
+below, so the page's city is exactly the artifact `city` would write. The
+server hands out `/navigator.json` and `/city.json`; stdout stays empty.
+
 ### `city`
 Writes the code-city artifact (`city.json`): modules as districts (nested when
 the model declares package containment), types as buildings whose height and
 footprint follow the chosen metrics, type dependencies as roof-to-roof arcs.
-`--serve` lays it out and opens the Three.js viewer on port 4177. Built-in
+`--layout` adds placement (the viewer needs it). Built-in
 metrics: `degree`, `fanIn`, `fanOut`, `fields`, `loc`, `members`, `methods`,
 `one`; open forms `attribute:<key>` and `sum:<key>` reach any measure the
 extractor emitted (`--height sum:cyclomatic` builds the complexity city).
 Unmeasured metrics are drawn at the channel minimum and labelled unmeasured.
 
 ### `navigator`
-Writes the navigator artifact and, with `--serve`, opens the model browser on
-port 4178: a searchable, virtualized tree (modules → types → members) and, for
-the selection, incoming and outgoing dependencies classified by role, with the
-member that carries each, its provenance and its source anchor. Tabs for the
-dependency graph (Cytoscape), the precomputed tangle report, and ranked
-coupling.
+Writes the navigator artifact (`navigator.json`): the tree, one classified
+dependency row per base edge, and the cycle/coupling reports. Type and module
+nodes carry their entity id, which is how the city's buildings address them.
 
 ### `domain-facts`
 One JSON artifact (`codegraph.domainFacts/1`) with one dossier per corpus

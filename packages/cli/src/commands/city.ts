@@ -8,11 +8,10 @@ import {
   UnknownScaleError,
   type CityModel,
 } from "@codegraph/city";
-import type { CityOptions } from "../args.js";
+import type { CityBuildOptions, CityOptions } from "../args.js";
 import { UsageError, type ExitCode } from "../exit.js";
 import { errLine, errLines, type IoSink } from "../io.js";
-import { loadExitCode, loadModelFiles, type LoadedModels } from "../load.js";
-import { startCityServer, vizAssetsDir, type CityServerOptions } from "../serve.js";
+import { loadExitCode, loadModelFiles } from "../load.js";
 import { resolveView } from "../view.js";
 
 /**
@@ -37,38 +36,18 @@ import { resolveView } from "../view.js";
  * throws `UnknownMetricError` naming what exists, and the CLI's job is to hand
  * that to the user with the flag they typed.
  *
- * `--serve` hosts the visualizer with this city as /city.json (all interfaces
- * unless --host narrows the binding).
- * It implies --layout (the viewer refuses a city with no placement), keeps
- * stdout empty (the server is the artifact's destination; --out still writes
- * the file too), and returns immediately — the LIVE SERVER is what keeps the
- * process running, exactly like any dev server, until Ctrl-C.
+ * To LOOK at the city, `codegraph serve` — the page that hosts it as a tab
+ * beside the navigator; this command only writes the artifact.
  */
-
-/** The server seam, injectable so tests need no sockets and no built viz. */
-export interface ServeDeps {
-  readonly assetsDir: typeof vizAssetsDir;
-  readonly startServer: (serverOptions: CityServerOptions) => unknown;
-}
-const REAL_SERVE: ServeDeps = { assetsDir: vizAssetsDir, startServer: startCityServer };
-
-export function cityCommand(
-  options: CityOptions,
-  io: IoSink,
-  deps: ServeDeps = REAL_SERVE,
-): ExitCode {
-  // Resolve the assets FIRST: an unbuilt visualizer must fail before a large
-  // model is loaded, not after.
-  const assets = options.serve ? deps.assetsDir() : undefined;
-
+export function cityCommand(options: CityOptions, io: IoSink): ExitCode {
   const loaded = loadModelFiles(options.models);
   const graph = buildGraph(loaded.union);
 
-  const city = build(graph, options);
-  const laidOut = options.layout || options.serve;
+  const city = cityOf(graph, options);
+  const laidOut = options.layout;
   const artifact = cityToJsonString(laidOut ? layoutCity(city) : city);
 
-  errLines(io, warnings(loaded, city));
+  errLines(io, cityWarnings(loaded, city));
 
   if (options.out !== undefined) {
     io.writeFile(options.out, artifact);
@@ -77,18 +56,15 @@ export function cityCommand(
       `wrote ${plural(Buffer.byteLength(artifact, "utf8"), "byte")} to ${options.out} ` +
         `(${describe(city, laidOut)}).`,
     );
-  } else if (assets === undefined) {
+  } else {
     io.out(artifact);
-  }
-
-  if (assets !== undefined) {
-    deps.startServer({ artifact, assets, port: options.port, host: options.host, io });
   }
 
   return loadExitCode(loaded);
 }
 
-function build(graph: ReturnType<typeof buildGraph>, options: CityOptions): CityModel {
+/** The city of a graph under the CLI's flags — shared with `serve`. */
+export function cityOf(graph: ReturnType<typeof buildGraph>, options: CityBuildOptions): CityModel {
   try {
     const framework =
       options.framework === undefined ? undefined : FRAMEWORK_PROFILES[options.framework];
@@ -125,9 +101,13 @@ function describe(city: CityModel, laidOut: boolean): string {
 /**
  * Everything that makes the city smaller or vaguer than the model, on stderr. A
  * city that quietly omits buildings is how a wrong impression of a codebase
- * gets believed.
+ * gets believed. Shared with `serve`, which passes `clean: true` and states
+ * the models' cleanliness once for the whole page.
  */
-function warnings(loaded: LoadedModels, city: CityModel): readonly string[] {
+export function cityWarnings(
+  loaded: { readonly clean: boolean; readonly paths: readonly string[] },
+  city: CityModel,
+): readonly string[] {
   const lines: string[] = [];
 
   if (!loaded.clean) {

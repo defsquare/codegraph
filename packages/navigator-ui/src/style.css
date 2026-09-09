@@ -762,6 +762,18 @@ button.twisty:hover {
   display: none;
 }
 
+/* ------------------------------------------------------------- city tab -- */
+
+/* The city fills the body: no tree panel, the viewer brings its own chrome
+   (`@codegraph/viz` scopes every rule under `.city-view`, so its light
+   palette stays inside this box). */
+.city-tab {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+}
+
 /* -------------------------------------------------- shared report chrome -- */
 
 .seg {

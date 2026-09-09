@@ -70,6 +70,12 @@ export interface NavNodeMetrics {
 export interface NavNode {
   /** Display name; an unnamed invocable (a constructor) shows its signature. */
   readonly name: string;
+  /**
+   * The entity's rendered id, on TYPES and MODULES only — the nodes another
+   * artifact addresses (the city's buildings and districts carry the same
+   * ids). Opaque: compared, never parsed. Members carry none.
+   */
+  readonly id?: string;
   /** The entity kind, verbatim from the model: `class`, `package`, `method`… */
   readonly kind: string;
   /** From traits (TModule/TType/TInvocable/TStructural), never from `kind`. */

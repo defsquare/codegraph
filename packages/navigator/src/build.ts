@@ -130,6 +130,7 @@ export function buildNavigator(
           : undefined;
     return {
       name: stringKey(entity, "name") ?? signature ?? id,
+      ...(category === "type" || category === "module" ? { id } : {}),
       kind: entity.kind,
       category,
       isStub: graph.isStub(id),

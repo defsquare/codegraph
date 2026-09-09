@@ -98,17 +98,51 @@ describe("startCityServer", () => {
 });
 
 /**
- * WHICH INTERFACE, and saying so. `navigator --serve` binds every interface by
+ * WHICH INTERFACE, and saying so. `codegraph serve` binds every interface by
  * default, which hands the whole model to anyone who can reach this machine.
  * That is the caller's decision to make and the server's duty to state, so the
  * announcement is asserted as carefully as the port is.
  */
+describe("startArtifactServer: several routes, one server", () => {
+  const CITY = `{"kind":"codegraph.city/1"}`;
+  const NAVIGATOR = `{"kind":"codegraph.navigator/1"}`;
+
+  async function both(): Promise<string> {
+    const io = captureIo();
+    const server = startArtifactServer({
+      routes: { "/navigator.json": NAVIGATOR, "/city.json": CITY },
+      label: "codegraph",
+      assets: fakeAssets(),
+      port: 0,
+      host: "127.0.0.1",
+      io,
+    });
+    servers.push(server);
+    await new Promise((resolve) => server.once("listening", resolve));
+    const address = server.address();
+    const port = typeof address === "object" && address !== null ? address.port : 0;
+    return `http://127.0.0.1:${port}`;
+  }
+
+  it("serves each artifact at its own route, verbatim", async () => {
+    const base = await both();
+    expect(await (await fetch(`${base}/navigator.json`)).text()).toBe(NAVIGATOR);
+    expect(await (await fetch(`${base}/city.json`)).text()).toBe(CITY);
+  });
+
+  it("answers 404 for a route it was not given — prototype keys included", async () => {
+    const base = await both();
+    expect((await fetch(`${base}/replay.json`)).status).toBe(404);
+    expect((await fetch(`${base}/constructor`)).status).toBe(404);
+    expect((await fetch(`${base}/toString`)).status).toBe(404);
+  });
+});
+
 describe("startArtifactServer: the bind address", () => {
   async function bind(host: string | undefined): Promise<{ io: CapturedIo; server: Server }> {
     const io = captureIo();
     const server = startArtifactServer({
-      artifact: ARTIFACT,
-      artifactRoute: "/navigator.json",
+      routes: { "/navigator.json": ARTIFACT },
       label: "model navigator",
       assets: fakeAssets(),
       port: 0,
@@ -156,8 +190,7 @@ describe("startArtifactServer: the bind address", () => {
     const io = captureIo();
     // 203.0.113.1 is TEST-NET-3 (RFC 5737): never an address of this machine.
     const server = startArtifactServer({
-      artifact: ARTIFACT,
-      artifactRoute: "/navigator.json",
+      routes: { "/navigator.json": ARTIFACT },
       label: "model navigator",
       assets: fakeAssets(),
       port: 0,

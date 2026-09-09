@@ -5,71 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>codegraph — code city</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/src/style.css" />
+    <style>
+      html, body, #app { height: 100%; margin: 0; overflow: hidden; }
+    </style>
   </head>
   <body>
-    <canvas id="city"></canvas>
-    <header id="app-header" hidden>
-      <h1 id="corpus-name"></h1>
-      <nav id="header-toggles">
-        <label><input type="checkbox" id="toggle-buildings" checked /> Show buildings</label>
-        <label><input type="checkbox" id="toggle-fan-in" checked /> Show fan-in</label>
-        <label><input type="checkbox" id="toggle-fan-out" checked /> Show fan-out</label>
-        <label><input type="checkbox" id="toggle-externals" checked /> Show externals</label>
-        <label><input type="checkbox" id="toggle-tangles" /> Tangles</label>
-        <label id="cochange-label" hidden
-          ><input type="checkbox" id="toggle-cochange" checked /> Show co-change</label
-        >
-        <label id="color-mode-label" hidden
-          >Colors
-          <select id="color-mode">
-            <option value="time" id="color-mode-time">Time</option>
-            <option value="owner" id="color-mode-owner">Owner</option>
-            <option value="role" id="color-mode-role">Role</option>
-            <option value="plain">Plain</option>
-          </select></label
-        >
-      </nav>
-      <details id="colors-menu">
-        <summary>Colors</summary>
-        <div id="colors-panel">
-          <label title="Building color"><input type="color" id="color-building" /> Buildings</label>
-          <label title="Stub (external type) color"><input type="color" id="color-stub" /> Stubs</label>
-          <label title="District plate color"><input type="color" id="color-district" /> Districts</label>
-          <label title="Fan-in arrow color — who depends on the selection"><input type="color" id="color-fan-in" /> Fan-in arrows</label>
-          <label title="Fan-out arrow color — what the selection depends on"><input type="color" id="color-fan-out" /> Fan-out arrows</label>
-          <button id="reset-colors" type="button">Reset colors</button>
-        </div>
-      </details>
-      <button id="reset-view" type="button">Reset view</button>
-      <button id="help-link" type="button">Help</button>
-    </header>
-    <aside id="tooltip" class="panel" hidden></aside>
-    <aside id="details" class="panel" hidden>
-      <button id="details-close" type="button" aria-label="Close">&times;</button>
-      <div id="details-body"></div>
-    </aside>
-    <footer id="timeline" hidden>
-      <button id="timeline-play" type="button" aria-label="Play">&#9654;</button>
-      <input id="timeline-scrub" type="range" min="0" max="0" step="1" value="0" aria-label="Commit" />
-      <span id="timeline-label"></span>
-    </footer>
-    <dialog id="help">
-      <div id="help-body"></div>
-      <form method="dialog"><button>Close</button></form>
-    </dialog>
-    <div id="loader">
-      <h1>codegraph — code city</h1>
-      <p id="loader-message">
-        Drop a <code>city.json</code> here, or pick one. Produce it with<br />
-        <code>codegraph city model.jsonl --layout --out city.json</code>
-      </p>
-      <div id="loader-progress" hidden>
-        <div id="loader-progress-track"><div id="loader-progress-fill"></div></div>
-        <span id="loader-progress-text"></span>
-      </div>
-      <p><input type="file" id="loader-file" accept=".json,application/json" /></p>
-    </div>
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

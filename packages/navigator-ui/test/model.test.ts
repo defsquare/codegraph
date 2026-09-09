@@ -24,6 +24,13 @@ describe("indexes", () => {
     expect(ix.searchKeys[0]).toBe("p");
   });
 
+  it("finds a type or module by the entity id another artifact carries", () => {
+    // The city's buildings and districts name these ids; members carry none.
+    expect(ix.nodeById.get("java:p/A")).toBe(1);
+    expect(ix.nodeById.get("java:p/p")).toBe(0);
+    expect(ix.nodeById.size).toBe(3);
+  });
+
   it("walks ancestors root-first", () => {
     expect(ancestorsOf(model, 2)).toEqual([0, 1]);
     expect(ancestorsOf(model, 0)).toEqual([]);

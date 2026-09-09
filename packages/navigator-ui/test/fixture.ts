@@ -10,9 +10,10 @@ import type { DepRow, NavigatorModel, NavNode } from "@codegraph/navigator";
  */
 export function artifact(): NavigatorModel {
   const nodes: NavNode[] = [
-    { name: "p", kind: "package", category: "module", isStub: false, children: [1, 4] },
+    { name: "p", id: "java:p/p", kind: "package", category: "module", isStub: false, children: [1, 4] },
     {
       name: "A",
+      id: "java:p/A",
       kind: "class",
       category: "type",
       isStub: false,
@@ -24,6 +25,7 @@ export function artifact(): NavigatorModel {
     { name: "f", kind: "attribute", category: "attribute", isStub: false, parent: 1, children: [] },
     {
       name: "C",
+      id: "java:p/C",
       kind: "class",
       category: "type",
       isStub: false,

@@ -1,31 +1,38 @@
-:root {
+/*
+ * The city view's look, SCOPED to its host: `.city-view` is one element that
+ * may be the whole page (main.ts) or one tab of the navigator, so nothing
+ * here styles :root, html or body, and every panel is positioned inside the
+ * host rather than the viewport.
+ */
+.city-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
   color-scheme: light;
   --panel-bg: rgba(255, 255, 255, 0.92);
   --panel-border: #c9d0da;
   --text: #1c222b;
   --text-dim: #5b6472;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  background: #eef1f5;
+  color: var(--text);
 }
 
-* {
+.city-view * {
   margin: 0;
   box-sizing: border-box;
 }
 
-body {
-  font-family: system-ui, sans-serif;
-  background: #eef1f5;
-  color: var(--text);
-  overflow: hidden;
-}
-
-#city {
-  position: fixed;
+.city-view .cv-canvas {
+  position: absolute;
   inset: 0;
   display: block;
 }
 
-.panel {
-  position: fixed;
+.city-view .cv-panel {
+  position: absolute;
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: 6px;
@@ -38,13 +45,13 @@ body {
 
 /* An author `display` beats the UA's `[hidden] { display: none }`; restate it
    for EVERY container given a display of its own. */
-#app-header[hidden],
-#details[hidden] {
+.city-view .cv-header[hidden],
+.city-view .cv-details[hidden] {
   display: none;
 }
 
-#app-header {
-  position: fixed;
+.city-view .cv-header {
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
@@ -62,7 +69,7 @@ body {
   user-select: none;
 }
 
-#app-header h1 {
+.city-view .cv-header h1 {
   font-size: 14px;
   font-weight: 600;
   margin-right: 6px;
@@ -71,7 +78,7 @@ body {
   text-overflow: ellipsis;
 }
 
-#header-toggles {
+.city-view .cv-toggles {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -79,7 +86,13 @@ body {
   flex-wrap: wrap;
 }
 
-#header-toggles label {
+/* The author `display` below beats the UA's `[hidden]`; restate it, or a
+   static city shows the replay-only controls it hid. */
+.city-view .cv-toggles label[hidden] {
+  display: none;
+}
+
+.city-view .cv-toggles label {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -87,18 +100,18 @@ body {
   white-space: nowrap;
 }
 
-#header-toggles input {
+.city-view .cv-toggles input {
   accent-color: #4a5c75;
   margin: 0;
 }
 
 /* The colors dropdown: a header button that unfolds a small panel, so five
    color wells do not crowd the header line. */
-#colors-menu {
+.city-view .cv-colors-menu {
   position: relative;
 }
 
-#colors-menu summary {
+.city-view .cv-colors-menu summary {
   list-style: none;
   font: inherit;
   color: var(--text);
@@ -110,16 +123,16 @@ body {
   user-select: none;
 }
 
-#colors-menu summary::-webkit-details-marker {
+.city-view .cv-colors-menu summary::-webkit-details-marker {
   display: none;
 }
 
-#colors-menu summary:hover,
-#colors-menu[open] summary {
+.city-view .cv-colors-menu summary:hover,
+.city-view .cv-colors-menu[open] summary {
   background: rgba(0, 0, 0, 0.05);
 }
 
-#colors-panel {
+.city-view .cv-colors-panel {
   position: absolute;
   top: calc(100% + 6px);
   /* The button sits in the header's right cluster; anchor the panel's right
@@ -137,7 +150,7 @@ body {
   z-index: 1;
 }
 
-#colors-panel label {
+.city-view .cv-colors-panel label {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -145,7 +158,7 @@ body {
 }
 
 /* Small flat swatch wells, header-sized instead of the chunky UA default. */
-#colors-panel input[type="color"] {
+.city-view .cv-colors-panel input[type="color"] {
   width: 22px;
   height: 16px;
   padding: 0;
@@ -155,13 +168,13 @@ body {
   cursor: pointer;
 }
 
-#colors-panel #reset-colors {
+.city-view .cv-colors-panel .cv-reset-colors {
   margin-top: 2px;
 }
 
-#help-link,
-#reset-view,
-#reset-colors {
+.city-view .cv-help-link,
+.city-view .cv-reset-view,
+.city-view .cv-reset-colors {
   font: inherit;
   color: var(--text);
   background: none;
@@ -171,13 +184,13 @@ body {
   cursor: pointer;
 }
 
-#help-link:hover,
-#reset-view:hover,
-#reset-colors:hover {
+.city-view .cv-help-link:hover,
+.city-view .cv-reset-view:hover,
+.city-view .cv-reset-colors:hover {
   background: rgba(0, 0, 0, 0.05);
 }
 
-.swatch {
+.city-view .cv-swatch {
   display: inline-block;
   width: 9px;
   height: 9px;
@@ -186,22 +199,22 @@ body {
   transform: translateY(1px);
 }
 
-#tooltip {
+.city-view .cv-tooltip {
   max-width: 420px;
   word-break: break-all;
 }
 
-#details {
+.city-view .cv-details {
   top: 46px;
   right: 12px;
   width: 400px;
-  max-width: calc(100vw - 24px);
-  max-height: calc(100vh - 60px);
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 60px);
   overflow-y: auto;
   pointer-events: auto;
 }
 
-#details-close {
+.city-view .cv-details-close {
   position: absolute;
   top: 6px;
   right: 8px;
@@ -214,45 +227,45 @@ body {
   cursor: pointer;
 }
 
-#details h2 {
+.city-view .cv-details h2 {
   font-size: 13px;
   margin-bottom: 2px;
   padding-right: 16px;
   word-break: break-all;
 }
 
-#details .meta {
+.city-view .cv-details .cv-meta {
   color: var(--text-dim);
   margin-bottom: 6px;
   word-break: break-all;
 }
 
-#details table {
+.city-view .cv-details table {
   border-collapse: collapse;
   width: 100%;
 }
 
-#details td {
+.city-view .cv-details td {
   padding: 1px 0;
 }
 
-#details td:last-child {
+.city-view .cv-details td:last-child {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-#details .unmeasured {
+.city-view .cv-details .cv-unmeasured {
   color: var(--text-dim);
   font-style: italic;
 }
 
 /* A declared constant beside the field it belongs to (M10c). */
-#details details .value {
+.city-view .cv-details details .cv-value {
   color: #7a4f2a;
 }
 
 /* "View source": present only when the artifact carries repository facts. */
-#details .source-link {
+.city-view .cv-details .cv-source-link {
   display: block;
   margin-top: 8px;
   color: #2f5d8c;
@@ -261,20 +274,20 @@ body {
   word-break: break-all;
 }
 
-#details .source-link:hover {
+.city-view .cv-details .cv-source-link:hover {
   text-decoration: none;
 }
 
-#details details {
+.city-view .cv-details details {
   margin-top: 8px;
 }
 
-#details summary {
+.city-view .cv-details summary {
   cursor: pointer;
   font-weight: 600;
 }
 
-#details details ul {
+.city-view .cv-details details ul {
   list-style: disc;
   margin: 4px 0 0;
   padding: 0 0 0 18px;
@@ -282,26 +295,27 @@ body {
   font-size: 11px;
 }
 
-#details details li {
+.city-view .cv-details details li {
   padding: 1px 0;
   word-break: break-all;
 }
 
-#details details li .type {
+.city-view .cv-details details li .cv-type {
   color: var(--text-dim);
 }
 
-#details details .footnote {
+.city-view .cv-details details .cv-footnote {
   margin-top: 4px;
   color: var(--text-dim);
   font-style: italic;
 }
 
-dialog#help {
-  /* The global `* { margin: 0 }` reset kills the UA's centering; restore it. */
+.city-view .cv-help {
+  /* The `.city-view * { margin: 0 }` reset kills the UA's centering; restore it. */
+  position: fixed;
   margin: auto;
   max-width: 560px;
-  max-height: calc(100vh - 48px);
+  max-height: calc(100% - 48px);
   overflow-y: auto;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
@@ -312,42 +326,42 @@ dialog#help {
   line-height: 1.55;
 }
 
-dialog#help::backdrop {
+.city-view .cv-help::backdrop {
   background: rgba(28, 34, 43, 0.35);
 }
 
-#help h2 {
+.city-view .cv-help h2 {
   font-size: 15px;
   margin-bottom: 10px;
 }
 
-#help h3 {
+.city-view .cv-help h3 {
   font-size: 13px;
   margin: 12px 0 4px;
 }
 
-#help p {
+.city-view .cv-help p {
   margin: 4px 0;
   color: var(--text-dim);
 }
 
-#help .entry {
+.city-view .cv-help .cv-entry {
   display: flex;
   gap: 6px;
   align-items: baseline;
   font-size: 12px;
 }
 
-#help .detail {
+.city-view .cv-help .cv-detail {
   color: var(--text-dim);
 }
 
-#help form {
+.city-view .cv-help form {
   margin-top: 14px;
   text-align: right;
 }
 
-#help form button {
+.city-view .cv-help form button {
   font: inherit;
   color: var(--text);
   background: none;
@@ -358,13 +372,13 @@ dialog#help::backdrop {
 }
 
 /* An author `display` beats the UA's `[hidden] { display: none }`; restate it. */
-#timeline[hidden] {
+.city-view .cv-timeline[hidden] {
   display: none;
 }
 
 /* The replay scrubber: a bottom bar, only when the artifact carries `replay`. */
-#timeline {
-  position: fixed;
+.city-view .cv-timeline {
+  position: absolute;
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
@@ -377,10 +391,10 @@ dialog#help::backdrop {
   border-radius: 6px;
   font-size: 12px;
   user-select: none;
-  max-width: calc(100vw - 24px);
+  max-width: calc(100% - 24px);
 }
 
-#timeline-play {
+.city-view .cv-timeline-play {
   font: inherit;
   color: var(--text);
   background: none;
@@ -390,29 +404,29 @@ dialog#help::backdrop {
   cursor: pointer;
 }
 
-#timeline-play:hover {
+.city-view .cv-timeline-play:hover {
   background: rgba(0, 0, 0, 0.05);
 }
 
-#timeline-scrub {
-  width: min(420px, 50vw);
+.city-view .cv-timeline-scrub {
+  width: min(420px, 50%);
   accent-color: #4a5c75;
   margin: 0;
 }
 
-#timeline-label {
+.city-view .cv-timeline-label {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--text-dim);
 }
 
 /* An author `display` beats the UA's `[hidden] { display: none }`; restate it. */
-#loader[hidden] {
+.city-view .cv-loader[hidden] {
   display: none;
 }
 
-#loader {
-  position: fixed;
+.city-view .cv-loader {
+  position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
@@ -423,45 +437,45 @@ dialog#help::backdrop {
   background: #eef1f5;
 }
 
-#loader.error #loader-message {
+.city-view .cv-loader.cv-error .cv-loader-message {
   color: #b3261e;
 }
 
-#loader h1 {
+.city-view .cv-loader h1 {
   font-size: 18px;
   font-weight: 600;
 }
 
-#loader p {
+.city-view .cv-loader p {
   color: var(--text-dim);
 }
 
-#loader code {
+.city-view .cv-loader code {
   color: var(--text);
   background: #dfe4eb;
   padding: 1px 5px;
   border-radius: 4px;
 }
 
-#loader input {
+.city-view .cv-loader input {
   pointer-events: auto;
 }
 
 /* The artifact download: a determinate bar when the server states a total
    (the fill is the verdigris the city itself is built of), the text alone
    when it cannot. Restate display against the UA's [hidden]. */
-#loader-progress[hidden] {
+.city-view .cv-loader-progress[hidden] {
   display: none;
 }
 
-#loader-progress {
+.city-view .cv-loader-progress {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
 }
 
-#loader-progress-track {
+.city-view .cv-loader-progress-track {
   width: 280px;
   height: 6px;
   border-radius: 3px;
@@ -469,23 +483,44 @@ dialog#help::backdrop {
   overflow: hidden;
 }
 
-#loader-progress-track[hidden] {
+.city-view .cv-loader-progress-track[hidden] {
   display: none;
 }
 
-#loader-progress-fill {
+.city-view .cv-loader-progress-fill {
   height: 100%;
   width: 0;
   border-radius: 3px;
   background: #4e8c86;
 }
 
-#loader-progress-text {
+.city-view .cv-loader-progress-text {
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 
-body.dragging #loader {
+.city-view.cv-dragging .cv-loader {
   outline: 2px dashed #8a93a0;
   outline-offset: -16px;
+}
+
+/* The hand-off to the navigator: a full-width button right under the title,
+   in the navigator's own incoming hue so the link reads as one. */
+.city-view .cv-open-navigator {
+  display: block;
+  width: 100%;
+  margin: 2px 0 8px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  color: #1f5f8b;
+  background: rgba(31, 95, 139, 0.08);
+  border: 1px solid rgba(31, 95, 139, 0.35);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.city-view .cv-open-navigator:hover {
+  background: rgba(31, 95, 139, 0.16);
 }

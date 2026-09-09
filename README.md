@@ -35,8 +35,8 @@ Four questions, four commands:
 
 | Question | Command | What you get |
 |---|---|---|
-| What does this codebase look like? | `codegraph city --serve` | a 3D city: packages are districts, classes are buildings sized by real metrics, dependencies are arcs |
-| What exactly depends on what? | `codegraph navigator --serve` | a browsable tree with every incoming and outgoing dependency, the member that carries it, and the source line that proves it |
+| What does this codebase look like? | `codegraph serve` → City tab | a 3D city: packages are districts, classes are buildings sized by real metrics, dependencies are arcs — click a building to open it in the navigator |
+| What exactly depends on what? | `codegraph serve` → Navigate tab | a browsable tree with every incoming and outgoing dependency, the member that carries it, and the source line that proves it |
 | How did it get this way? | `codegraph scm` / `replay` | churn, hotspots, ownership, co-change, and a city whose timeline scrubs the years |
 | What does it mean? | `codegraph explain` | one plain-language explanation per method, class and package, written leaves-first so every summary rests on already-explained parts |
 
@@ -68,17 +68,16 @@ java -jar extractors/java/target/codegraph-java.jar --src ~/src/gson/gson/src/ma
 # 2. is the model sound?
 codegraph validate gson.jsonl
 
-# 3. look at it
-codegraph city gson.jsonl --serve --host 127.0.0.1        # http://localhost:4177
-codegraph navigator gson.jsonl --serve --host 127.0.0.1   # http://localhost:4178
+# 3. look at it: one page, the navigator with the 3D city as a tab
+codegraph serve gson.jsonl --host 127.0.0.1               # http://localhost:4177
 ```
 
 On google/gson (about 3,600 entities) extraction takes seconds and every
 report runs well under a second. On apache/fineract (a 127 MB model) each
 command completes in about twelve seconds.
 
-`--host 127.0.0.1` keeps the pages on your machine. Without it the servers
-bind every interface, which is convenient on a LAN and wrong for a sensitive
+`--host 127.0.0.1` keeps the page on your machine. Without it the server
+binds every interface, which is convenient on a LAN and wrong for a sensitive
 codebase.
 
 TypeScript needs no other toolchain: the extractor is the compiler used as a
@@ -143,8 +142,9 @@ Height and footprint are metrics you choose. The defaults are lines of code
 and member count; the extractor also emits cyclomatic complexity:
 
 ```bash
-codegraph city gson.jsonl --serve --height sum:cyclomatic --footprint loc
-codegraph city petclinic.jsonl --serve --framework spring     # color by Spring role
+codegraph serve gson.jsonl --height sum:cyclomatic --footprint loc
+codegraph serve petclinic.jsonl --framework spring     # color by Spring role
+codegraph city gson.jsonl --layout --out city.json     # the artifact alone
 ```
 
 Arcs appear when you select something: orange for fan-in, blue for fan-out,

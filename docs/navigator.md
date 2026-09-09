@@ -1,13 +1,18 @@
 # The navigator — design record
 
-`codegraph navigator model.jsonl --serve` opens a browsable view of a model: a
+`codegraph serve model.jsonl` opens a browsable view of a model: a
 searchable tree on the left, and for whatever is selected there, the incoming
 and outgoing dependencies broken down by what kind of dependency each one is,
 which member carries it, and where in the source it was found.
 
 The city answers *what does this codebase look like*. The navigator answers
 *what is here, and what exactly depends on what* — the question you cannot ask
-a 3D scene.
+a 3D scene. Since the two merged into one page, the city is the navigator's
+**City** tab (full-width, no tree), and a building selected there offers
+*Open in navigator*: the page resolves the building's entity id against its
+own type nodes — `NavNode.id`, carried on types and modules only — and reveals
+the match on Navigate with its incoming and outgoing dependencies. The two
+artifacts share ids and nothing else; nothing is re-derived in the browser.
 
 ---
 
@@ -25,24 +30,26 @@ renderer is how a picture starts disagreeing with `codegraph analyze`. Every
 role, owner, member attribution and coupling number in the UI was computed
 once, on the Node side, by the analyzer's own primitives.
 
-The CLI serves the artifact at `/navigator.json` beside the frontend's static
-bundle (`packages/cli/src/serve.ts`, `startArtifactServer`).
+The CLI (`codegraph serve`) serves the artifact at `/navigator.json` — and the
+laid-out city at `/city.json`, built from the same graph under the same view —
+beside the frontend's static bundle (`packages/cli/src/serve.ts`,
+`startArtifactServer`, one route per artifact). The frontend embeds the city
+through `@codegraph/viz`'s `mountCityView(host)`; `three` stays confined to
+that package.
 
-**Which interface it binds** is `--host`, and the navigator defaults to
-`0.0.0.0` — every interface — so the page opens from another machine without
-extra ceremony. `city` still binds loopback; the two commands make the choice
-differently and `startArtifactServer` takes it as a parameter rather than
-assuming.
+**Which interface it binds** is `--host`, defaulting to `0.0.0.0` — every
+interface — so the page opens from another machine without extra ceremony;
+`startArtifactServer` takes it as a parameter rather than assuming.
 
 A wildcard bind hands the whole model to anyone who can reach this machine, so
 the server states the reach it actually has:
 
 ```
-model navigator at http://localhost:4178/ (every interface — reachable from other machines) — Ctrl-C to stop.
-model navigator at http://localhost:4178/ — Ctrl-C to stop.      # --host 127.0.0.1
+codegraph at http://localhost:4177/ (every interface — reachable from other machines) — Ctrl-C to stop.
+codegraph at http://localhost:4177/ — Ctrl-C to stop.      # --host 127.0.0.1
 ```
 
-It never prints `http://0.0.0.0:4178/`: that is a bind address, not one a
+It never prints `http://0.0.0.0:4177/`: that is a bind address, not one a
 browser should be handed. A bad `--host` fails as `EADDRNOTAVAIL`, whose bare
 message sends the reader looking at the port, so the failure names the address
 and the flag instead. A blank `--host` is a usage error rather than a silent

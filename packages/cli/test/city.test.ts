@@ -30,9 +30,6 @@ function options(overrides: Partial<CityOptions> = {}): CityOptions {
     internalOnly: false,
     declaredOnly: false,
     layout: false,
-    serve: false,
-    port: 4177,
-    host: "0.0.0.0",
     out: undefined,
     ...overrides,
   };
@@ -282,76 +279,3 @@ describe("city: --layout", () => {
   });
 });
 
-describe("city --serve", () => {
-  interface StartedServer {
-    artifact: string;
-    assets: string;
-    port: number;
-    host: string | undefined;
-  }
-
-  /** The seam: no sockets, no built viz — just what the command handed over. */
-  function serveTo(overrides: Partial<CityOptions> = {}) {
-    const io = captureIo();
-    const started: StartedServer[] = [];
-    const code = cityCommand(options({ serve: true, ...overrides }), io, {
-      assetsDir: () => "/fake/viz/dist",
-      startServer: (serverOptions) => {
-        started.push({
-          artifact: serverOptions.artifact,
-          assets: serverOptions.assets,
-          port: serverOptions.port,
-          host: serverOptions.host,
-        });
-        return undefined;
-      },
-    });
-    return { io, code, started };
-  }
-
-  it("hands the server a LAID-OUT artifact even without --layout", () => {
-    const { code, started } = serveTo();
-    expect(code).toBe(EXIT.OK);
-    expect(started).toHaveLength(1);
-    const city = JSON.parse(started[0]?.artifact ?? "") as {
-      layout: { algorithm: string };
-      buildings: { position?: unknown }[];
-    };
-    expect(city.layout.algorithm).toBe("shelf-rows");
-    expect(city.buildings.every((building) => building.position !== undefined)).toBe(true);
-  });
-
-  it("keeps stdout empty: the server is the artifact's destination", () => {
-    const { io } = serveTo();
-    expect(io.stdout()).toBe("");
-  });
-
-  it("still writes --out alongside serving, with the confirmation on stderr", () => {
-    const path = join(mkdtempSync(join(tmpdir(), "codegraph-cli-serve-")), "city.json");
-    const { io, started } = serveTo({ out: path });
-    expect(io.files().get(path)).toBe(started[0]?.artifact);
-    expect(io.stderr()).toContain("laid out");
-  });
-
-  it("passes the requested port through", () => {
-    const { started } = serveTo({ port: 0 });
-    expect(started[0]?.port).toBe(0);
-  });
-
-  it("passes the requested host through", () => {
-    const { started } = serveTo({ host: "127.0.0.1" });
-    expect(started[0]?.host).toBe("127.0.0.1");
-  });
-
-  it("fails BEFORE loading models when the visualizer is not built", () => {
-    const io = captureIo();
-    expect(() =>
-      cityCommand(options({ serve: true, models: ["/nonexistent.jsonl"] }), io, {
-        assetsDir: () => {
-          throw new UsageError("the visualizer is not built", "Run pnpm -r build.");
-        },
-        startServer: () => undefined,
-      }),
-    ).toThrow(UsageError);
-  });
-});

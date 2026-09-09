@@ -7,6 +7,7 @@ import { DepsView } from "./components/DepsView.js";
 import { GraphView } from "./components/GraphView.js";
 import { CyclesView } from "./components/CyclesView.js";
 import { CouplingView } from "./components/CouplingView.js";
+import { CityTab } from "./components/CityTab.js";
 import { ProgressOverlay } from "./components/ProgressOverlay.js";
 import { Loader } from "./components/Loader.js";
 
@@ -26,15 +27,18 @@ type Phase =
 export const SLOW_LOAD_MS = 2000;
 
 /**
- * The tabs: NAVIGATE is the working surface (tree + evidence); the others are
- * the reports, each on its own tab so a report never crowds the navigation.
- * Every report row leads BACK to Navigate through `reveal` — one selection,
- * four ways of looking at it.
+ * The tabs: NAVIGATE is the working surface (tree + evidence); CITY is the 3D
+ * code city over the same model, full-width — no tree panel there, the city
+ * is the navigation surface; the others are the reports, each on its own tab
+ * so a report never crowds the navigation. Every report row — and a building
+ * selected in the city — leads BACK to Navigate through `reveal`: one
+ * selection, five ways of looking at it.
  */
-const TABS = ["navigate", "graph", "cycles", "coupling"] as const;
+const TABS = ["navigate", "city", "graph", "cycles", "coupling"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Readonly<Record<Tab, string>> = {
   navigate: "Navigate",
+  city: "City",
   graph: "Graph",
   cycles: "Cycles",
   coupling: "Coupling",
@@ -45,6 +49,7 @@ export function App() {
   const [slow, setSlow] = useState(false);
   const [tab, setTab] = useState<Tab>("navigate");
   const [graphVisited, setGraphVisited] = useState(false);
+  const [cityVisited, setCityVisited] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
   const [selection, setSelection] = useState<number | undefined>(undefined);
   const [query, setQuery] = useState("");
@@ -67,6 +72,7 @@ export function App() {
         setQuery("");
         setTab("navigate");
         setGraphVisited(false);
+        setCityVisited(false);
         setPhase({ kind: "ready", ix });
       } catch (error) {
         if (!alive()) return;
@@ -136,6 +142,23 @@ export function App() {
     [ix],
   );
 
+  /**
+   * The city's hand-off: a building or district names an entity id, and the
+   * navigator resolves it against its OWN nodes (the two artifacts share the
+   * ids, nothing else). Unknown — the city was built under another view —
+   * returns false, and the city says so instead of pretending.
+   */
+  const openFromCity = useCallback(
+    (target: { readonly id: string }): boolean => {
+      if (ix === undefined) return false;
+      const node = ix.nodeById.get(target.id);
+      if (node === undefined) return false;
+      reveal(node);
+      return true;
+    },
+    [ix, reveal],
+  );
+
   const toggle = useCallback((node: number) => {
     setExpanded((current) => {
       const next = new Set(current);
@@ -163,6 +186,7 @@ export function App() {
   const pickTab = useCallback((next: Tab) => {
     setTab(next);
     if (next === "graph") setGraphVisited(true);
+    if (next === "city") setCityVisited(true);
   }, []);
 
   if (phase.kind === "loading" && !slow) {
@@ -228,6 +252,13 @@ export function App() {
         />
         <DepsView ix={ix} selection={selection} onNavigate={reveal} />
       </div>
+      {(cityVisited || tab === "city") && (
+        // Mounted on first visit, then kept alive hidden: the city's GPU upload
+        // is too expensive to redo on every tab switch; hidden, it only pauses.
+        <div className="app-body" hidden={tab !== "city"}>
+          <CityTab active={tab === "city"} onOpenInNavigator={openFromCity} />
+        </div>
+      )}
       {(graphVisited || tab === "graph") && (
         // Mounted on first visit, then kept alive hidden: the fcose layout of
         // a real corpus is too expensive to redo on every tab switch.

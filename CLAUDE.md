@@ -54,14 +54,18 @@ packages/llm/        @codegraph/llm — LlmClient + OpenRouter (SDK) + Cloudflar
 packages/cli/        @codegraph/cli — `codegraph` command.
 packages/viz/        @codegraph/viz — Three.js code city: renders a laid-out
                      city.json artifact (its ONLY input; guard-enforced). The
-                     ONLY package that may import three. Vite app, no library.
-packages/navigator-ui/ @codegraph/navigator-ui — React model navigator, four
+                     ONLY package that may import three. Exports ONE thing,
+                     `mountCityView(host)`, which navigator-ui embeds; its own
+                     Vite app is the standalone page (replay/history).
+packages/navigator-ui/ @codegraph/navigator-ui — React model navigator, five
                      tabs: Navigate (virtualized tree + fan-in/fan-out
-                     evidence), Graph (Cytoscape+fcose dependency graph,
-                     module/type modes), Cycles (the artifact's precomputed
-                     tangle report), Coupling (ranked metrics). Renders a
-                     navigator.json artifact (its ONLY input; guard-enforced).
-                     The ONLY package that may import react and cytoscape.
+                     evidence), City (the viz view, full-width, a building's
+                     panel opens it in Navigate), Graph (Cytoscape+fcose
+                     dependency graph, module/type modes), Cycles (the
+                     artifact's precomputed tangle report), Coupling (ranked
+                     metrics). Reads navigator.json + city.json (guard-enforced).
+                     The ONLY package that may import react and cytoscape; the
+                     city comes through @codegraph/viz, never through three.
                      Vite app, no library.
 fixtures/            Reference corpora + expected model.jsonl snapshots.
 ```
@@ -136,9 +140,10 @@ extractors/csharp/dist/linux-x64/codegraph-csharp --src <dir> --out model.jsonl
 #   docs/typescript-extractor.md; `test.sh --ts` checks the built bundle against fixtures/typescript
 
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
-./bin/codegraph city model.jsonl --serve           # 3D city at http://localhost:4177
-./bin/codegraph navigator model.jsonl --serve      # navigator at http://localhost:4178
-#   both bind EVERY interface by default; --host 127.0.0.1 keeps them local
+./bin/codegraph serve model.jsonl                  # navigator + City tab at http://localhost:4177
+#   binds EVERY interface by default; --host 127.0.0.1 keeps it local
+./bin/codegraph city model.jsonl --layout --out city.json        # the artifacts alone
+./bin/codegraph navigator model.jsonl --out navigator.json
 ./bin/codegraph explain model.jsonl --src DIR --dry-run   # the walk plan, no call
 ./bin/codegraph explain model.jsonl --src DIR --estimate --price-in 0.10 --price-out 0.60   # tokens in/out + cost, no call
 OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-calls N]

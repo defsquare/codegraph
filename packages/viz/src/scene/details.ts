@@ -19,12 +19,16 @@ export interface DetailRow {
 }
 
 export interface DistrictDetails {
+  /** The module's entity id — what "Open in navigator" hands over. */
+  readonly id: string;
   readonly title: string;
   readonly meta: string;
   readonly rows: readonly DetailRow[];
 }
 
 export interface BuildingDetails {
+  /** The type's entity id — what "Open in navigator" hands over. */
+  readonly id: string;
   readonly title: string;
   readonly meta: string;
   readonly rows: readonly DetailRow[];
@@ -51,6 +55,7 @@ export function districtDetails(
   const sum = (fan: readonly DistrictArc[]): number =>
     fan.reduce((total, arc) => total + arc.count, 0);
   return {
+    id: plate.id,
     title: districtLabel(plate),
     meta:
       `module${plate.isStub ? " (stub)" : ""}` +
@@ -126,6 +131,7 @@ export function buildingDetails(
     ...(url === undefined || box.source === undefined
       ? {}
       : { link: { url, label: sourceLabel(box.source) } }),
+    id: box.id,
     title: box.name ?? box.id,
     // The module component when the artifact gives it; the district id is the
     // opaque fallback for artifacts from before `identity` existed.

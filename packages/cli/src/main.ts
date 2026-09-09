@@ -7,6 +7,7 @@ import { importCommand } from "./commands/import.js";
 import { domainFactsCommand } from "./commands/domain-facts.js";
 import { navigatorCommand } from "./commands/navigator.js";
 import { scmCommand } from "./commands/scm.js";
+import { serveCommand } from "./commands/serve.js";
 import { snapshotsCommand } from "./commands/snapshots.js";
 import { timelineCommand } from "./commands/timeline.js";
 import { replayCommand } from "./commands/replay.js";
@@ -99,6 +100,8 @@ function dispatch(invocation: Invocation, io: IoSink): ExitCode | Promise<ExitCo
           return cityCommand(invocation.options, io);
         case "navigator":
           return navigatorCommand(invocation.options, io);
+        case "serve":
+          return serveCommand(invocation.options, io);
         case "domain-facts":
           return domainFactsCommand(invocation.options, io);
         case "explain":

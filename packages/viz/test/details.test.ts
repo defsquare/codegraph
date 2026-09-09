@@ -26,6 +26,8 @@ describe("districtDetails", () => {
     expect(order).toBeDefined();
     if (order === undefined) return;
     const details = districtDetails(plates, boxes, arcs, order);
+    // The id the navigator carries on its module node: the hand-off key.
+    expect(details.id).toBe("java:com.acme.order");
     expect(details.title).toBe("com.acme.order");
     expect(details.meta).toBe("module");
     expect(details.rows).toEqual([
@@ -133,6 +135,8 @@ describe("buildingDetails", () => {
     expect(service).toBeDefined();
     if (service === undefined) return;
     const details = buildingDetails(service);
+    // The id the navigator carries on its type node: the hand-off key.
+    expect(details.id).toBe("java:com.acme.order/OrderService");
     expect(details.title).toBe("OrderService");
     expect(details.meta).toBe("class — com.acme.order");
     expect(details.rows).toEqual([

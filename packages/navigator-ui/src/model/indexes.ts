@@ -25,6 +25,12 @@ export interface ModelIndexes {
   readonly depsByToMember: ReadonlyMap<number, readonly number[]>;
   /** Lowercased `name signature`, aligned with `model.nodes` — the search corpus. */
   readonly searchKeys: readonly string[];
+  /**
+   * Entity id → node index, for the nodes that carry one (types and modules).
+   * This is how a building clicked in the city lands on its navigator node:
+   * the two artifacts share the id, compared as an opaque token.
+   */
+  readonly nodeById: ReadonlyMap<string, number>;
 }
 
 function push(map: Map<number, number[]>, key: number, value: number): void {
@@ -44,6 +50,10 @@ export function buildIndexes(model: NavigatorModel): ModelIndexes {
     if (dep.member !== undefined) push(depsByMember, dep.member, index);
     if (dep.toMember !== undefined) push(depsByToMember, dep.toMember, index);
   }
+  const nodeById = new Map<string, number>();
+  for (const [index, node] of model.nodes.entries()) {
+    if (node.id !== undefined) nodeById.set(node.id, index);
+  }
   const searchKeys = model.nodes.map((node) =>
     node.signature === undefined
       ? node.name.toLowerCase()
@@ -57,6 +67,7 @@ export function buildIndexes(model: NavigatorModel): ModelIndexes {
     depsByMember,
     depsByToMember,
     searchKeys,
+    nodeById,
   };
 }
 

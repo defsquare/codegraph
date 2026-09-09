@@ -3,18 +3,17 @@ import { buildNavigator, navigatorToJsonString, type NavigatorModel } from "@cod
 import type { NavigatorOptions } from "../args.js";
 import { EXIT, type ExitCode } from "../exit.js";
 import { errLine, errLines, type IoSink } from "../io.js";
-import { openAnalysis, type AnalysisSource } from "../source.js";
-import { navigatorAssetsDir, startArtifactServer, type ArtifactServerOptions } from "../serve.js";
+import { openAnalysis } from "../source.js";
 import { resolveView } from "../view.js";
 
 /**
- * `codegraph navigator <model.jsonl...> [--serve]`.
+ * `codegraph navigator <model.jsonl...> [--out FILE]`.
  *
  * Writes the NAVIGATOR MODEL — the browsable tree plus one classified
- * dependency row per base edge — as JSON on stdout, or to `--out FILE`, or
- * hands it to the localhost frontend as /navigator.json. The transform lives
- * in `@codegraph/navigator`; this command only resolves flags, loads models
- * and moves bytes (decision 7).
+ * dependency row per base edge — as JSON on stdout, or to `--out FILE`. The
+ * transform lives in `@codegraph/navigator`; this command only resolves
+ * flags, loads models and moves bytes (decision 7). To BROWSE it, `codegraph
+ * serve` hosts the page (with the city as a tab).
  *
  * Unlike `city` this goes through `openAnalysis`, so a single model gets the
  * sibling model.db cache for free (with the standard one-line `cache:` note on
@@ -23,33 +22,9 @@ import { resolveView } from "../view.js";
  *
  * STREAM PURITY (decision 3): with no `--out`, stdout carries the artifact and
  * nothing else. Warnings, the cache note and the `--out` confirmation are
- * stderr. `--serve` keeps stdout empty — the server is the destination.
- *
- * `--serve` binds every interface by default (`--host`), unlike `city`, so the
- * navigator is reachable from another machine without extra ceremony. The
- * server announces that reach on stderr; the artifact it hands out is the
- * whole model, so the address is worth reading.
+ * stderr.
  */
-
-/** The server seam, injectable so tests need no sockets and no built frontend. */
-export interface NavigatorServeDeps {
-  readonly assetsDir: typeof navigatorAssetsDir;
-  readonly startServer: (serverOptions: ArtifactServerOptions) => unknown;
-}
-const REAL_SERVE: NavigatorServeDeps = {
-  assetsDir: navigatorAssetsDir,
-  startServer: startArtifactServer,
-};
-
-export function navigatorCommand(
-  options: NavigatorOptions,
-  io: IoSink,
-  deps: NavigatorServeDeps = REAL_SERVE,
-): ExitCode {
-  // Resolve the assets FIRST: an unbuilt frontend must fail before a large
-  // model is loaded, not after.
-  const assets = options.serve ? deps.assetsDir() : undefined;
-
+export function navigatorCommand(options: NavigatorOptions, io: IoSink): ExitCode {
   const source = openAnalysis(options.models, options, io);
   try {
     const model = buildNavigator(source.graph(), {
@@ -58,7 +33,7 @@ export function navigatorCommand(
     });
     const artifact = navigatorToJsonString(model);
 
-    errLines(io, warnings(source, model));
+    errLines(io, navigatorWarnings(source, model));
 
     if (options.out !== undefined) {
       io.writeFile(options.out, artifact);
@@ -67,20 +42,8 @@ export function navigatorCommand(
         `wrote ${plural(Buffer.byteLength(artifact, "utf8"), "byte")} to ${options.out} ` +
           `(${describe(model)}).`,
       );
-    } else if (assets === undefined) {
+    } else {
       io.out(artifact);
-    }
-
-    if (assets !== undefined) {
-      deps.startServer({
-        artifact,
-        artifactRoute: "/navigator.json",
-        label: "model navigator",
-        assets,
-        port: options.port,
-        host: options.host,
-        io,
-      });
     }
 
     return source.clean ? EXIT.OK : EXIT.FINDINGS;
@@ -104,9 +67,13 @@ function describe(model: NavigatorModel): string {
 /**
  * Everything that makes the navigator smaller or vaguer than the model, on
  * stderr — a tree that quietly omits entities is how a wrong impression of a
- * codebase gets believed.
+ * codebase gets believed. Shared with `serve`, which passes `clean: true` and
+ * states the models' cleanliness once for the whole page.
  */
-function warnings(source: AnalysisSource, model: NavigatorModel): readonly string[] {
+export function navigatorWarnings(
+  source: { readonly clean: boolean; readonly paths: readonly string[] },
+  model: NavigatorModel,
+): readonly string[] {
   const lines: string[] = [];
   if (!source.clean) {
     lines.push(

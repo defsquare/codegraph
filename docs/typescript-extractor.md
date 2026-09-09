@@ -187,8 +187,7 @@ The full rules live in the profile's `notes`
 ```bash
 ./bin/codegraph validate model.jsonl                 # closure, provenance, profile, anchors
 ./bin/codegraph analyze  model.jsonl --report deps   # module/type dependency graph
-./bin/codegraph city     model.jsonl --serve         # 3D city at http://localhost:4177
-./bin/codegraph navigator model.jsonl --serve        # navigator at http://localhost:4178
+./bin/codegraph serve    model.jsonl                 # navigator + 3D city at http://localhost:4177
 ./bin/codegraph explain  model.jsonl --src path/to/src --dry-run
 
 # extract a repository at every tag into a temporal store:

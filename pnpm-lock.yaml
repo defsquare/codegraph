@@ -271,6 +271,9 @@ importers:
       '@codegraph/navigator':
         specifier: workspace:*
         version: link:../navigator
+      '@codegraph/viz':
+        specifier: workspace:*
+        version: link:../viz
       cytoscape:
         specifier: ^3.34.2
         version: 3.34.2

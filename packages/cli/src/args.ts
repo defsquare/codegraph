@@ -25,6 +25,7 @@ export const COMMAND_NAMES = [
   "export",
   "city",
   "navigator",
+  "serve",
   "domain-facts",
   "explain",
   "scm",
@@ -254,11 +255,12 @@ function metricHelp(channel: string): string {
   );
 }
 
-export const CITY_SPEC: CommandSpec = {
-  name: "city",
-  summary: "Write the code city: modules as districts, types as buildings.",
-  positional: MODELS_POSITIONAL_DEFAULTED,
-  options: [
+/**
+ * The channels of the city — shared by `city` (which writes the artifact) and
+ * `serve` (which builds it for the page), so the two cannot offer different
+ * metrics for the same building.
+ */
+const CITY_CHANNEL_OPTIONS: readonly OptionSpec[] = [
     {
       name: "height",
       type: "string",
@@ -294,14 +296,6 @@ export const CITY_SPEC: CommandSpec = {
       placeholder: "M1,M2",
     },
     {
-      name: "name",
-      type: "string",
-      describe:
-        "Display name for the corpus in the visualizer header; " +
-        "defaults to the basename of each model's root.",
-      placeholder: "STR",
-    },
-    {
       name: "framework",
       type: "string",
       describe:
@@ -311,32 +305,28 @@ export const CITY_SPEC: CommandSpec = {
       choices: Object.keys(FRAMEWORK_PROFILES),
       placeholder: "NAME",
     },
+];
+
+/** `--name STR`, the corpus label a frontend shows in its header. */
+const CORPUS_NAME_OPTION: OptionSpec = {
+  name: "name",
+  type: "string",
+  describe: "Display name for the corpus in the page header; defaults to the basename of each model's root.",
+  placeholder: "STR",
+};
+
+export const CITY_SPEC: CommandSpec = {
+  name: "city",
+  summary: "Write the code city: modules as districts, types as buildings.",
+  positional: MODELS_POSITIONAL_DEFAULTED,
+  options: [
+    ...CITY_CHANNEL_OPTIONS,
+    CORPUS_NAME_OPTION,
     {
       name: "layout",
       type: "boolean",
       describe:
         "Lay the city out: positions on buildings, bounds on districts, by recursive shelf packing.",
-    },
-    {
-      name: "serve",
-      type: "boolean",
-      describe:
-        "Serve the 3D visualizer with this city loaded (implies --layout; " +
-        "stdout stays empty; Ctrl-C stops it). Needs the built viz app (pnpm -r build).",
-    },
-    {
-      name: "port",
-      type: "string",
-      describe: "Port for --serve; 0 picks a free one.",
-      placeholder: "N",
-      defaultValue: "4177",
-    },
-    {
-      name: "host",
-      type: "string",
-      describe: "Interface for --serve to bind; 127.0.0.1 keeps the city on this machine only.",
-      placeholder: "ADDR",
-      defaultValue: "0.0.0.0",
     },
     ...VIEW_OPTIONS,
     {
@@ -356,41 +346,10 @@ export const CITY_SPEC: CommandSpec = {
  */
 export const NAVIGATOR_SPEC: CommandSpec = {
   name: "navigator",
-  summary: "Explore the model: a searchable tree with per-node dependency detail.",
+  summary: "Write the navigator model: the browsable tree with one classified row per dependency.",
   positional: MODELS_POSITIONAL_DEFAULTED,
   options: [
-    {
-      name: "name",
-      type: "string",
-      describe:
-        "Display name for the corpus in the navigator header; " +
-        "defaults to the basename of each model's root.",
-      placeholder: "STR",
-    },
-    {
-      name: "serve",
-      type: "boolean",
-      describe:
-        "Serve the navigator with this model loaded, on every interface unless --host says " +
-        "otherwise (stdout stays empty; Ctrl-C stops it). Needs the built navigator-ui app " +
-        "(pnpm -r build).",
-    },
-    {
-      name: "port",
-      type: "string",
-      describe: "Port for --serve; 0 picks a free one.",
-      placeholder: "N",
-      defaultValue: "4178",
-    },
-    {
-      name: "host",
-      type: "string",
-      describe:
-        "Address --serve binds. 0.0.0.0 is every interface, so the page is reachable " +
-        "from other machines; 127.0.0.1 keeps it to this one.",
-      placeholder: "ADDR",
-      defaultValue: "0.0.0.0",
-    },
+    CORPUS_NAME_OPTION,
     ...VIEW_OPTIONS,
     NO_CACHE_OPTION,
     {
@@ -399,6 +358,42 @@ export const NAVIGATOR_SPEC: CommandSpec = {
       describe: "Write the artifact to this file instead of stdout.",
       placeholder: "FILE",
     },
+  ],
+};
+
+/**
+ * `codegraph serve`: ONE PAGE over a model — the navigator (tree, evidence,
+ * graph, cycles, coupling) with the 3D city as one of its tabs. Both
+ * artifacts are built from the same graph under the same view, so a building
+ * clicked in the city is the entity the tree reveals. The transforms live in
+ * `@codegraph/navigator` and `@codegraph/city`; the frontend is
+ * `@codegraph/navigator-ui`'s prebuilt bundle, which embeds `@codegraph/viz`.
+ */
+export const SERVE_SPEC: CommandSpec = {
+  name: "serve",
+  summary: "Serve the navigator with the code city as a tab, over this model.",
+  positional: MODELS_POSITIONAL_DEFAULTED,
+  options: [
+    CORPUS_NAME_OPTION,
+    ...CITY_CHANNEL_OPTIONS,
+    {
+      name: "port",
+      type: "string",
+      describe: "Port to listen on; 0 picks a free one (announced on stderr).",
+      placeholder: "N",
+      defaultValue: "4177",
+    },
+    {
+      name: "host",
+      type: "string",
+      describe:
+        "Address to bind. 0.0.0.0 is every interface, so the page is reachable " +
+        "from other machines; 127.0.0.1 keeps it to this one.",
+      placeholder: "ADDR",
+      defaultValue: "0.0.0.0",
+    },
+    ...VIEW_OPTIONS,
+    NO_CACHE_OPTION,
   ],
 };
 
@@ -898,6 +893,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   EXPORT_SPEC,
   CITY_SPEC,
   NAVIGATOR_SPEC,
+  SERVE_SPEC,
   DOMAIN_FACTS_SPEC,
   EXPLAIN_SPEC,
   SCM_SPEC,
@@ -948,7 +944,8 @@ export interface ExportOptions extends ModelInputOptions, ViewOptions, CacheOpti
   readonly out: string | undefined;
 }
 
-export interface CityOptions extends ModelInputOptions, ViewOptions {
+/** How a city is built — the flags `city` and `serve` share. */
+export interface CityBuildOptions extends ViewOptions {
   /** Metric name; validated by the city package, which owns the registry. */
   readonly height: string;
   readonly heightScale: string;
@@ -960,14 +957,11 @@ export interface CityOptions extends ModelInputOptions, ViewOptions {
   readonly name: string | undefined;
   /** `--framework NAME`: classify types by that framework; undefined = no roles. */
   readonly framework: string | undefined;
+}
+
+export interface CityOptions extends ModelInputOptions, CityBuildOptions {
   /** `--layout`: add placement (positions, bounds) to the artifact. */
   readonly layout: boolean;
-  /** `--serve`: host the visualizer with this city loaded. */
-  readonly serve: boolean;
-  /** `--port N` for `--serve`; 0 = an ephemeral port. */
-  readonly port: number;
-  /** `--host ADDR` for `--serve`; all interfaces unless the user narrows it. */
-  readonly host: string;
   /** `--out FILE`; undefined means stdout. */
   readonly out: string | undefined;
 }
@@ -975,14 +969,15 @@ export interface CityOptions extends ModelInputOptions, ViewOptions {
 export interface NavigatorOptions extends ModelInputOptions, ViewOptions, CacheOptions {
   /** `--name STR`: corpus display name; undefined derives it from the roots. */
   readonly name: string | undefined;
-  /** `--serve`: host the navigator on localhost with this model loaded. */
-  readonly serve: boolean;
-  /** `--port N` for `--serve`; 0 = an ephemeral port. */
-  readonly port: number;
-  /** `--host ADDR` for `--serve`; `0.0.0.0` (every interface) by default. */
-  readonly host: string;
   /** `--out FILE`; undefined means stdout. */
   readonly out: string | undefined;
+}
+
+export interface ServeOptions extends ModelInputOptions, CityBuildOptions, CacheOptions {
+  /** `--port N`; 0 = an ephemeral port. */
+  readonly port: number;
+  /** `--host ADDR`; `0.0.0.0` (every interface) by default. */
+  readonly host: string;
 }
 
 export interface DomainFactsOptions extends ModelInputOptions, ViewOptions, CacheOptions {
@@ -1116,6 +1111,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "export"; readonly options: ExportOptions }
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
   | { readonly kind: "run"; readonly command: "navigator"; readonly options: NavigatorOptions }
+  | { readonly kind: "run"; readonly command: "serve"; readonly options: ServeOptions }
   | { readonly kind: "run"; readonly command: "domain-facts"; readonly options: DomainFactsOptions }
   | { readonly kind: "run"; readonly command: "explain"; readonly options: ExplainOptions }
   | { readonly kind: "run"; readonly command: "scm"; readonly options: ScmOptions }
@@ -1345,6 +1341,20 @@ function hostOf(values: ParsedValues, spec: CommandSpec): string {
 }
 
 /** `--carry a,b` → ["a","b"]; blanks dropped so `a,,b` is not a metric named "". */
+/** The city's build flags, resolved once for `city` and `serve` alike. */
+function cityBuildOf(values: ParsedValues): CityBuildOptions {
+  return {
+    height: stringOf(values, "height") ?? "loc",
+    heightScale: stringOf(values, "height-scale") ?? "linear",
+    footprint: stringOf(values, "footprint") ?? "members",
+    footprintScale: stringOf(values, "footprint-scale") ?? "sqrt",
+    carry: metricList(stringOf(values, "carry")),
+    name: stringOf(values, "name"),
+    framework: stringOf(values, "framework"),
+    ...viewOf(values),
+  };
+}
+
 function metricList(value: string | undefined): readonly string[] {
   if (value === undefined) return [];
   return value
@@ -1538,18 +1548,8 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         command: "city",
         options: {
           models,
-          height: stringOf(values, "height") ?? "loc",
-          heightScale: stringOf(values, "height-scale") ?? "linear",
-          footprint: stringOf(values, "footprint") ?? "members",
-          footprintScale: stringOf(values, "footprint-scale") ?? "sqrt",
-          carry: metricList(stringOf(values, "carry")),
-          name: stringOf(values, "name"),
-          framework: stringOf(values, "framework"),
+          ...cityBuildOf(values),
           layout: flagOf(values, "layout"),
-          serve: flagOf(values, "serve"),
-          port: portOf(values, spec),
-          host: hostOf(values, spec),
-          ...viewOf(values),
           out: stringOf(values, "out"),
         },
       };
@@ -1560,12 +1560,21 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         options: {
           models,
           name: stringOf(values, "name"),
-          serve: flagOf(values, "serve"),
-          port: portOf(values, spec),
-          host: hostOf(values, spec),
           ...viewOf(values),
           noCache: flagOf(values, "no-cache"),
           out: stringOf(values, "out"),
+        },
+      };
+    case "serve":
+      return {
+        kind: "run",
+        command: "serve",
+        options: {
+          models,
+          ...cityBuildOf(values),
+          port: portOf(values, spec),
+          host: hostOf(values, spec),
+          noCache: flagOf(values, "no-cache"),
         },
       };
     case "domain-facts":

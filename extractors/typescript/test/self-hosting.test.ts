@@ -26,8 +26,17 @@ describe.skipIf(!hasWorkspaceInstall())("codegraph over codegraph", () => {
   it("binds every name the corpus declares: no <unresolved> stub, no unresolved workspace import", () => {
     expect(stats.stubs.unresolved).toBe(0);
     expect(model.entities.filter((e) => e.key.module === "<unresolved>")).toEqual([]);
-    // The two unresolved imports are Vite's virtual specifiers, not corpus.
-    expect(stats.importsUnresolved).toBeLessThanOrEqual(2);
+    // Every unresolved import is accounted for: `node:sqlite` (no declarations
+    // in @types/node yet) and each frontend's stylesheet side-effect import
+    // (`./style.css` — a Vite asset, no TS module behind it). Anything else
+    // unresolved is a binding the extractor missed.
+    const stubName = new Map(
+      model.entities.filter((e) => e.isStub && e.kind === "module").map((e) => [e.key.module, e.name]),
+    );
+    const accountedFor = model.edges.filter(
+      (e) => e.kind === "import" && /^node:sqlite$|\.css$/.test(stubName.get(e.to.module) ?? ""),
+    ).length;
+    expect(stats.importsUnresolved).toBe(accountedFor);
     expect(stats.duplicateKeys).toEqual([]);
   });
 

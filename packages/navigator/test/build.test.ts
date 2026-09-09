@@ -94,6 +94,16 @@ describe("the tree", () => {
     }
   });
 
+  it("carries the entity id on types and modules — the nodes another artifact can address", () => {
+    const model = toyGraph();
+    // The city's buildings and districts name these same ids; a member has
+    // no building, so it carries none and the artifact does not grow for it.
+    expect(nodeByName(model, "p").id).toBe(pkg("p").id);
+    expect(nodeByName(model, "A").id).toBe(type("A", "p").id);
+    expect(nodeByName(model, "m").id).toBeUndefined();
+    expect(nodeByName(model, "f").id).toBeUndefined();
+  });
+
   it("resolves declaredType to a node index", () => {
     const model = toyGraph();
     expect(nodeByName(model, "f").declaredType).toBe(indexByName(model, "C"));

@@ -309,18 +309,25 @@ describe("parseArgs errors are re-said in codegraph's terms", () => {
   });
 });
 
-describe("city --serve binding", () => {
-  it("defaults the host to all interfaces", () => {
-    expect(parse(["city", "a.json"])).toMatchObject({
-      command: "city",
+describe("serve binding", () => {
+  it("defaults the host to all interfaces and the port to 4177", () => {
+    expect(parse(["serve", "a.json"])).toMatchObject({
+      command: "serve",
       options: { host: "0.0.0.0", port: 4177 },
     });
   });
 
   it("lets --host narrow the binding", () => {
-    expect(parse(["city", "a.json", "--host", "127.0.0.1"])).toMatchObject({
-      command: "city",
+    expect(parse(["serve", "a.json", "--host", "127.0.0.1"])).toMatchObject({
+      command: "serve",
       options: { host: "127.0.0.1" },
+    });
+  });
+
+  it("takes the city's channel flags, so the page's city is the command's city", () => {
+    expect(parse(["serve", "a.json", "--height", "methods", "--framework", "spring"])).toMatchObject({
+      command: "serve",
+      options: { height: "methods", framework: "spring", footprint: "members" },
     });
   });
 });
