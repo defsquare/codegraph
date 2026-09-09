@@ -1,7 +1,29 @@
-# Codegraph
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+            srcset="website/static/img/codegraph-logo-long-white-text-red-brackets.svg">
+    <img src="website/static/img/codegraph-logo-long-dark-blue-text-red-brackets.svg"
+         alt="Codegraph" width="340">
+  </picture>
+</p>
 
-**See the structure of a codebase you did not write — even one that no longer
-compiles.**
+<p align="center">
+  <strong>See the structure of a codebase you did not write — even one that no
+  longer compiles.</strong>
+</p>
+
+<p align="center">
+  <img src="website/static/img/gson-city.svg" width="860"
+       alt="The code city of google/gson: nine package plates, 113 class blocks sized by lines of code, and thirty red arcs marking the dependencies whose removal would break every cycle.">
+</p>
+
+<p align="center">
+  <sub>The model codegraph extracted from
+  <a href="https://github.com/google/gson">google/gson</a>, drawn as it is laid
+  out. Nine packages as plates, nested like the packages they are; 113 classes
+  as blocks whose height is lines of code and whose footprint is member count;
+  in red, the cyclic dependencies.</sub>
+</p>
 
 Codegraph turns source code into a dependency model you can query, draw as a
 3D city, browse dependency by dependency, replay through its git history, and
