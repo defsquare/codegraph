@@ -1,6 +1,6 @@
 ---
 title: "snapshots"
-weight: 10
+weight: 11
 ---
 
 Extract a repo at sampled revisions into a temporal store (model.db).

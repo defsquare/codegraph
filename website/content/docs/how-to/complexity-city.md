@@ -14,11 +14,11 @@ invocable.
 ## Bind the channels
 
 ```bash
-codegraph city model.jsonl --height sum:cyclomatic --footprint loc --serve
+codegraph serve model.jsonl --height sum:cyclomatic --footprint loc
 ```
 
-`--serve` lays the city out and opens the viewer on port 4177. To keep the
-artifact instead:
+`serve` lays the city out and opens the page on port 4177 — the city is its
+**City** tab. To keep the artifact instead:
 
 ```bash
 codegraph city model.jsonl --height sum:cyclomatic --footprint loc \
@@ -103,5 +103,6 @@ when there is nothing there.
 
 - [Reading a city](/docs/tutorials/reading-the-city/)
 - [City metrics reference](/docs/reference/city-metrics/)
+- [`codegraph serve`](/docs/reference/cli/serve/)
 - [`codegraph city`](/docs/reference/cli/city/)
 - [The city is a model](/docs/explanation/city-is-a-model/)

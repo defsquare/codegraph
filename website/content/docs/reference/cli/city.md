@@ -1,14 +1,16 @@
 ---
 title: "city"
-weight: 5
+weight: 6
 ---
 
 Write the code city: modules as districts, types as buildings.
 
+This writes the artifact. To look at it, [`codegraph serve`](/docs/reference/cli/serve/) hosts the page (the City tab, beside the navigator) and takes the same channel flags.
+
 ## Synopsis
 
 ```
-codegraph city [model.jsonl...] [--height METRIC] [--height-scale <linear|sqrt|log>] [--footprint METRIC] [--footprint-scale <linear|sqrt|log>] [--carry M1,M2] [--name STR] [--framework <spring>] [--layout] [--serve] [--port N] [--host ADDR] [--internal-only] [--declared-only] [--out FILE]
+codegraph city [model.jsonl...] [--height METRIC] [--height-scale <linear|sqrt|log>] [--footprint METRIC] [--footprint-scale <linear|sqrt|log>] [--carry M1,M2] [--name STR] [--framework <spring>] [--layout] [--internal-only] [--declared-only] [--out FILE]
 ```
 
 ## Arguments
@@ -26,12 +28,9 @@ codegraph city [model.jsonl...] [--height METRIC] [--height-scale <linear|sqrt|l
 | `--footprint METRIC` | Metric driving building footprint. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. | `members` |
 | `--footprint-scale <linear\|sqrt\|log>` | How the footprint SIDE follows its metric; sqrt makes the AREA proportional. | `sqrt` |
 | `--carry M1,M2` | Extra metrics to measure onto every building, comma-separated, bound to nothing. | — |
-| `--name STR` | Display name for the corpus in the visualizer header; defaults to the basename of each model's root. | — |
+| `--name STR` | Display name for the corpus in the page header; defaults to the basename of each model's root. | — |
 | `--framework <spring>` | Classify types by a framework's own vocabulary (service, repository, controller…) and offer it as a color channel. An inference from written annotations; absent means the city says nothing about roles. | — |
 | `--layout` | Lay the city out: positions on buildings, bounds on districts, by recursive shelf packing. | — |
-| `--serve` | Serve the 3D visualizer with this city loaded (implies --layout; stdout stays empty; Ctrl-C stops it). Needs the built viz app (pnpm -r build). | — |
-| `--port N` | Port for --serve; 0 picks a free one. | `4177` |
-| `--host ADDR` | Interface for --serve to bind; 127.0.0.1 keeps the city on this machine only. | `0.0.0.0` |
 | `--internal-only` | Drop stub (external) entities and every edge touching one. | — |
 | `--declared-only` | Keep only `declared` facts; drop derived and dynamic-candidate edges. | — |
 | `--out FILE` | Write the artifact to this file instead of stdout. | — |
@@ -55,4 +54,4 @@ wrote 64904 bytes to /tmp/city.json (city, view all, 10 districts, 37 buildings,
 
 ## See also
 
-[City metrics](/docs/reference/city-metrics/) · [city.json](/docs/reference/artifacts/city-json/) · [CLI conventions](/docs/reference/cli/)
+[`serve`](/docs/reference/cli/serve/) · [City metrics](/docs/reference/city-metrics/) · [city.json](/docs/reference/artifacts/city-json/) · [CLI conventions](/docs/reference/cli/)

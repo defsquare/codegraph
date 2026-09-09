@@ -33,7 +33,7 @@ An explicit `--provider openrouter` or `--provider cloudflare` skips the decisio
 
 ## Dev servers
 
-Read only by the Vite configs, so only by `pnpm dev` in those packages. The `--serve` flags on [`city`](/docs/reference/cli/city/) and [`navigator`](/docs/reference/cli/navigator/) do not use them: they serve the built app with the artifact already loaded.
+Read only by the Vite configs, so only by `pnpm dev` in those packages. [`codegraph serve`](/docs/reference/cli/serve/) does not use them: it serves the built app with the artifacts already loaded.
 
 | Variable | Read by | What it does |
 |---|---|---|

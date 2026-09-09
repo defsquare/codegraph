@@ -16,7 +16,7 @@ types being stubs, which is the normal case.
 ## Colour the city by role
 
 ```bash
-codegraph city model.jsonl --framework spring --serve
+codegraph serve model.jsonl --framework spring
 ```
 
 `--framework spring` classifies types by Spring's own vocabulary (service,
@@ -102,5 +102,6 @@ an inference.
 
 - [Facts and inferences never mix](/docs/explanation/facts-vs-inferences/)
 - [`codegraph analyze`](/docs/reference/cli/analyze/)
+- [`codegraph serve`](/docs/reference/cli/serve/)
 - [`codegraph city`](/docs/reference/cli/city/)
 - [Provenance reference](/docs/reference/metamodel/provenance/)

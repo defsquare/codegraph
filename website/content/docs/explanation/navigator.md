@@ -33,14 +33,23 @@ with `codegraph analyze`. Every role, owner, member attribution and coupling
 number in the interface was computed once, on the Node side, by the analyzer's
 own primitives.
 
-The command serves the artifact beside the frontend's static bundle. **Which
-interface it binds is a choice, and the server states the reach it actually
-has.** The navigator defaults to every interface, so the page opens from another
-machine without ceremony; the city binds loopback. A wildcard bind hands the
-whole model to anyone who can reach the machine, so the line the command prints
-says so in words rather than leaving the reader to interpret an address. It never
-prints `http://0.0.0.0:4178/`, because that is a bind address and not one a
-browser should be handed. A bad host fails with the address and the flag named,
+`codegraph serve` serves the artifact beside the frontend's static bundle —
+and the laid-out city beside it, built from the same graph under the same view.
+The city is the navigator's **City** tab (full-width, no tree), and a building
+selected there offers *Open in navigator*: the page resolves the building's
+entity id against its own type nodes — the one id the artifact carries, on types
+and modules only — and reveals the match on Navigate with its incoming and
+outgoing dependencies. The two artifacts share ids and nothing else; nothing is
+re-derived in the browser, and the city itself arrives through `@codegraph/viz`'s
+mountable view, so Three.js stays confined to that package.
+
+**Which interface it binds is a choice, and the server states the reach it
+actually has.** It defaults to every interface, so the page opens from another
+machine without ceremony. A wildcard bind hands the whole model to anyone who
+can reach the machine, so the line the command prints says so in words rather
+than leaving the reader to interpret an address. It never prints
+`http://0.0.0.0:4177/`, because that is a bind address and not one a browser
+should be handed. A bad host fails with the address and the flag named,
 because the bare system error sends the reader looking at the port instead.
 
 ## NV-2 · The artifact is index-addressed

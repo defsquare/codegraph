@@ -201,11 +201,13 @@ owns the filesystem, the environment and the printing — the three things every
 other package is forbidden to touch.
 
 The one arrow worth reading twice is the CLI's relationship with the frontends.
-`codegraph city --serve` starts a server that hands out the visualizer's
-**prebuilt static bundle** plus the in-memory artifact. Three.js never enters the
-CLI's import graph; the dependency is assets-only, resolved at runtime, and an
-unbuilt visualizer produces a usage error naming the build command rather than a
-crash.
+`codegraph serve` starts a server that hands out the navigator frontend's
+**prebuilt static bundle** plus the in-memory artifacts — the navigator model
+and the laid-out city, built from one graph. Three.js never enters the CLI's
+import graph; the dependency is assets-only, resolved at runtime, and an unbuilt
+frontend produces a usage error naming the build command rather than a crash.
+Inside the frontend the same rule holds one level down: the navigator embeds the
+city through `@codegraph/viz`'s mountable view and never imports `three` itself.
 
 ## What it costs
 
@@ -228,7 +230,7 @@ missing a field.
 - [How to write an extractor](/docs/how-to/write-an-extractor/) — conforming to the
   contract from another language.
 - [How to install](/docs/how-to/install/) — building the workspace, and why the
-  frontends need a build before `--serve` works.
+  frontends need a build before `serve` works.
 - [The city is a model](/docs/explanation/city-is-a-model/) and
   [the navigator](/docs/explanation/navigator/) — the split, twice, in detail.
 - [Why the interchange is a line-based file](/docs/explanation/why-jsonl/).

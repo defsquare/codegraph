@@ -288,9 +288,10 @@ pressed and released in place.
 
 ## CR-6 · Deliberately absent
 
-- **Rendering knowledge in the CLI.** `codegraph city --serve` is byte movement,
-  not rendering: a small server handing out the visualizer's prebuilt bundle plus
-  the in-memory artifact. Three.js never enters the CLI's import graph.
+- **Rendering knowledge in the CLI.** `codegraph serve` is byte movement,
+  not rendering: a small server handing out the navigator frontend's prebuilt
+  bundle (which embeds this renderer as its City tab) plus the in-memory
+  artifacts. Three.js never enters the CLI's import graph.
 - **Labels, minimaps, district captions.** Text in WebGL is a rabbit hole; the
   tooltip covers identification for now.
 - **Colour as a metric channel**, until the model declares one.

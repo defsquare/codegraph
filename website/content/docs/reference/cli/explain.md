@@ -1,6 +1,6 @@
 ---
 title: "explain"
-weight: 8
+weight: 9
 ---
 
 Explain every operation, type and module with an LLM, bottom-up, into a side-car.

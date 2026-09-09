@@ -15,7 +15,7 @@ pnpm install && pnpm -r build
 java -jar extractors/java/target/codegraph-java.jar \
      --src ~/src/gson/gson/src/main/java --out gson.jsonl
 ./bin/codegraph validate gson.jsonl
-./bin/codegraph city gson.jsonl --serve --host 127.0.0.1
+./bin/codegraph serve gson.jsonl --host 127.0.0.1
 ```
 
-On gson this takes about a minute end to end, most of it the clone. The city opens on port 4177; the navigator, on 4178. Both bind every interface unless you say otherwise, which is why the last line does.
+On gson this takes about a minute end to end, most of it the clone. One page opens on port 4177: the navigator, with the city as a tab. It binds every interface unless you say otherwise, which is why the last line does.

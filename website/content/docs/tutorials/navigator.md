@@ -18,18 +18,19 @@ The model is gson at tag **`gson-parent-2.14.0`**.
 
 ```bash
 cd ~/codegraph-tutorial
-codegraph navigator gson.jsonl --name gson --serve --host 127.0.0.1
+codegraph serve gson.jsonl --name gson --host 127.0.0.1
 ```
 
 ```text
 cache: gson.db
-model navigator at http://localhost:4178/ — Ctrl-C to stop.
+codegraph at http://localhost:4177/ — Ctrl-C to stop.
 ```
 
-Open <http://localhost:4178/>.
+Open <http://localhost:4177/>. This is the same page as the city: the navigator
+opens on its **Navigate** tab, and the city you toured is one tab over.
 
 {{< callout type="warning" >}}
-`navigator --serve` binds **every interface** by default, so the page opens from
+`serve` binds **every interface** by default, so the page opens from
 another machine without extra ceremony. `--host 127.0.0.1` keeps it on yours.
 The server states the reach it actually has in the line it prints, so read that
 line before you walk away from it.
@@ -42,7 +43,7 @@ it any time. You will query it yourself in
 
 The header shows what was loaded: **1,855 nodes · 6,236 dependencies**.
 
-<!-- screenshot: the navigator on the Navigate tab — virtualized tree on the left with com.google.gson expanded, the dependency panel on the right, header stats and the four tabs across the top -->
+<!-- screenshot: the navigator on the Navigate tab — virtualized tree on the left with com.google.gson expanded, the dependency panel on the right, header stats and the five tabs across the top -->
 
 ## 2. Find the class
 

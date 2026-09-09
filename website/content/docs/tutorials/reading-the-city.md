@@ -14,11 +14,11 @@ The model is gson at tag **`gson-parent-2.14.0`**.
 
 **How long.** About 15 minutes.
 
-Start the city again and leave it open beside the terminal:
+Start the page again, open the **City** tab, and leave it beside the terminal:
 
 ```bash
 cd ~/codegraph-tutorial
-codegraph city gson.jsonl --name gson --serve --host 127.0.0.1
+codegraph serve gson.jsonl --name gson --host 127.0.0.1
 ```
 
 ## 1. Read the legend before anything else

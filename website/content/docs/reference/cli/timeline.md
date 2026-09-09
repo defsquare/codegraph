@@ -1,6 +1,6 @@
 ---
 title: "timeline"
-weight: 12
+weight: 13
 ---
 
 Report an entity's life across the revisions of a temporal store.

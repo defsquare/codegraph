@@ -4,7 +4,7 @@ linkTitle: CLI
 weight: 1
 ---
 
-`codegraph` is one command with fourteen sub-commands. Every sub-command prints its own options with `codegraph <command> --help`; the pages below are that output, with the conventions the commands share stated once here.
+`codegraph` is one command with fifteen sub-commands. Every sub-command prints its own options with `codegraph <command> --help`; the pages below are that output, with the conventions the commands share stated once here.
 
 ```
 codegraph <command> [options]
@@ -66,9 +66,8 @@ global options:
 
 | Command | Default port | Default host |
 |---|---|---|
-| `city --serve` | `4177` | `0.0.0.0` |
+| `serve` | `4177` | `0.0.0.0` |
 | `history --serve` | `4177` | `0.0.0.0` |
 | `replay --serve` | `4177` | `0.0.0.0` |
-| `navigator --serve` | `4178` | `0.0.0.0` |
 
-`0.0.0.0` is every interface. `--host 127.0.0.1` keeps the page on the local machine; `--port 0` picks a free port.
+`0.0.0.0` is every interface. `--host 127.0.0.1` keeps the page on the local machine; `--port 0` picks a free port. `serve` is the one page over a model — the navigator with the city as a tab; `history --serve` and `replay --serve` open the standalone city viewer on a replay.

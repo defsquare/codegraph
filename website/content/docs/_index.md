@@ -26,7 +26,7 @@ pnpm install && pnpm -r build
 
 java -jar extractors/java/target/codegraph-java.jar --src ~/src/gson/gson/src/main/java --out gson.jsonl
 ./bin/codegraph validate gson.jsonl
-./bin/codegraph city gson.jsonl --serve --host 127.0.0.1     # http://localhost:4177
+./bin/codegraph serve gson.jsonl --host 127.0.0.1            # http://localhost:4177
 ```
 
 The [first tutorial](/docs/tutorials/first-city/) walks through every step.

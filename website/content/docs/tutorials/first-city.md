@@ -25,7 +25,7 @@ is the whole point: it works the same on code that no longer builds.
 flowchart LR
   A[gson sources] --> B[extractor jar]
   B --> C[gson.jsonl]
-  C --> D[codegraph city --serve]
+  C --> D[codegraph serve]
   D --> E[the city in your browser]
 ```
 
@@ -109,17 +109,20 @@ exits `0` here; a model with findings exits `3`.
 ## 5. Open the city
 
 ```bash
-codegraph city gson.jsonl --name gson --serve --host 127.0.0.1
+codegraph serve gson.jsonl --name gson --host 127.0.0.1
 ```
 
 ```text
+cache: gson.db
 warning: 10 types left out — the model gives them no module, so there is no district to stand them in.
 warning: 29 arrows dropped — an endpoint is not a building in this view.
 warning: height is unmeasured on 150 buildings (metric loc) — those are drawn at the channel minimum, not at zero.
-city visualizer at http://localhost:4177/ — Ctrl-C to stop.
+codegraph at http://localhost:4177/ — Ctrl-C to stop.
 ```
 
-Open <http://localhost:4177/>.
+Open <http://localhost:4177/> and click the **City** tab. The page opens on the
+navigator's tree; the city is the tab beside it, and it fills the window — no
+tree panel there, the city is the navigation.
 
 The warnings are the city telling you what it could not draw, before you ask.
 The last one matters: 150 buildings have no line count because they are stubs —
@@ -148,6 +151,11 @@ Three moves, in this order:
    nested districts, and its module-level arcs appear — amber for what depends
    on it, blue for what it depends on. Click the same plate again, or the bare
    ground, to clear the selection.
+4. **Click a building, then *Open in navigator*.** The card of a selected
+   building carries that button. It takes you to the Navigate tab with the same
+   type selected and every incoming and outgoing dependency listed — the
+   question the next tutorial is about. The City tab keeps your camera where
+   you left it.
 
 Dependency arrows are hidden until you select something. That is deliberate: a
 corpus this size has 1409 type arcs, and all of them at once is a hairball, not
@@ -157,9 +165,9 @@ a picture.
 
 ## 7. Stop the server
 
-`Ctrl-C` in the terminal. The city was served from memory; nothing was written.
+`Ctrl-C` in the terminal. The page was served from memory; nothing was written.
 
-If you want the artifact on disk instead of a server:
+If you want the city artifact on disk instead of a server:
 
 ```bash
 codegraph city gson.jsonl --name gson --layout --out city.json

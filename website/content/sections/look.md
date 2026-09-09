@@ -2,7 +2,7 @@
 title: "What does it look like?"
 weight: 1
 lead: "A city you can walk. **Every visual channel is a documented metric**, and colour is never decoration."
-cmd: "codegraph city gson.jsonl --serve"
+cmd: "codegraph serve gson.jsonl"
 more:
   name: "Read the tutorial on reading a city"
   doc: "tutorials/reading-the-city/"

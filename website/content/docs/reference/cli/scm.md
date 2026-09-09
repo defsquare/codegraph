@@ -1,6 +1,6 @@
 ---
 title: "scm"
-weight: 9
+weight: 10
 ---
 
 Mine a repository's history into a deterministic history.jsonl.

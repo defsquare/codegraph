@@ -1,6 +1,6 @@
 ---
 title: "domain-facts"
-weight: 7
+weight: 8
 ---
 
 Write per-type domain dossiers: joined facts for domain extraction.

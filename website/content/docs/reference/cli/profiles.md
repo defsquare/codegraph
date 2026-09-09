@@ -1,6 +1,6 @@
 ---
 title: "profiles"
-weight: 14
+weight: 15
 ---
 
 Print the language profiles core ships.
