@@ -8,8 +8,7 @@
 </p>
 
 <p align="center">
-  <strong>See the structure of a codebase you did not write — even one that no
-  longer compiles.</strong>
+  <strong>See the structure of your codebase.</strong>
 </p>
 
 <p align="center">
@@ -28,8 +27,7 @@
 Codegraph turns source code into a dependency model you can query, draw as a
 3D city, browse dependency by dependency, replay through its git history, and
 have a language model explain bottom-up. It does this without building the
-code: the extractors run on sources alone — no classpath, no jars, no project
-files — so they work on the legacy that nobody can compile any more.
+code: the extractors run on sources alone (no classpath, jars, etc.).
 
 Four questions, four commands:
 
