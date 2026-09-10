@@ -238,9 +238,6 @@ design bets are:
 
 Read these before you commit an afternoon.
 
-- **Two languages today: Java and C#.** The metamodel and the language
-  profiles cover nine languages on paper, but the shipped extractors are
-  Spoon for Java and Roslyn for C#. A Clojure adapter is next.
 - **No build means imperfect resolution.** Without a classpath Spoon cannot
   resolve every Java reference; on the reference corpus resolution is around
   94%, and the rest are stubs. The C# extractor carries the base class
@@ -256,10 +253,10 @@ Read these before you commit an afternoon.
   `--max-calls` caps it.
 - **Not a linter.** Codegraph reports structure, coupling and cycles; it does
   not judge style or find bugs.
-- **Runs from a clone.** There is no npm package or binary release yet.
+- **Runs from a clone.** There is no npm package or binary release yet with `Homebrew` for instance (but it's in the roadmap).
 - **Big models want memory.** A 100 MB model loads in the navigator in about
   a second, but the extractor and the analyzer are single-process Node and
-  JVM tools; a monorepo of millions of lines is untested.
+  JVM tools; a monorepo of millions of lines is untested, we tested with Fineract that is close to 1M sloc (874 kSLOC precisely).
 
 ## How it works
 
