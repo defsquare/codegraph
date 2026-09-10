@@ -8,7 +8,7 @@ more:
 ---
 
 ```
-git clone https://gitlab.com/jgrodziski/codegraph.git && cd codegraph
+git clone https://github.com/defsquare/codegraph.git && cd codegraph
 pnpm install && pnpm -r build
 (cd extractors/java && ./mvnw -B package)
 

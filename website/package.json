@@ -1,6 +1,7 @@
 {
   "name": "@codegraph/website",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "The Codegraph website: one Hugo site, one build. The landing page at / (themeless, Defsquare Design System) and the documentation at /docs/ (Hextra, vendored as a submodule). Builds when the hugo binary is on PATH; skips (with a notice) otherwise, so Node-only environments stay green.",
   "scripts": {

@@ -17,7 +17,7 @@ A JDK 17+ is needed only for step 5.
 1. Clone the repository and build every package.
 
    ```bash
-   git clone https://gitlab.com/jgrodziski/codegraph.git && cd codegraph
+   git clone https://github.com/defsquare/codegraph.git && cd codegraph
    pnpm install && pnpm -r build
    ```
 
@@ -91,8 +91,9 @@ here is the clone route, and a checkout you built is the only supported install.
 
 ## Using it at work
 
-The repository carries no `LICENSE` file yet, so the code is all rights reserved
-until one lands. Check with the project before you put it in a shared build.
+The code is [MIT-licensed](https://github.com/defsquare/codegraph/blob/main/LICENSE):
+use it, modify it and ship it in a shared build, keeping the copyright and
+permission notice with any copy.
 
 ## Related
 

@@ -66,11 +66,11 @@ menu:
       weight: 8
       params:
         type: search
-    - name: GitLab
+    - name: GitHub
       weight: 9
-      url: "https://gitlab.com/jgrodziski/codegraph"
+      url: "https://github.com/defsquare/codegraph"
       params:
-        icon: gitlab
+        icon: github
 
 params:
   description: "Codegraph extracts a dependency model from sources alone, with no build, and lets you query it, walk it as a 3D city, browse every dependency to its source line, replay its history, and have it explained bottom-up."
@@ -86,7 +86,7 @@ params:
     - name: "Documentation"
       doc: ""
     - name: "Source"
-      url: "https://gitlab.com/jgrodziski/codegraph"
+      url: "https://github.com/defsquare/codegraph"
 
   # The landing page's own footer. Kept apart from params.footer, which is
   # Hextra's and has an entirely different shape.
@@ -110,13 +110,14 @@ params:
             doc: "explanation/"
       - heading: "Project"
         links:
-          - name: "Source on GitLab"
-            url: "https://gitlab.com/jgrodziski/codegraph"
+          - name: "Source on GitHub"
+            url: "https://github.com/defsquare/codegraph"
           - name: "Prior art and credits"
             doc: "explanation/prior-art/"
           - name: "Design decisions"
             doc: "explanation/decisions/"
-          - name: "License: not yet chosen. Until a LICENSE file lands, all rights reserved."
+          - name: "License: MIT"
+            url: "https://github.com/defsquare/codegraph/blob/main/LICENSE"
     studio:
       name: "Defsquare"
       url: "https://defsquare.com"
@@ -154,7 +155,7 @@ params:
       tokenize: forward
   editURL:
     enable: true
-    base: "https://gitlab.com/jgrodziski/codegraph/-/edit/main/website/content"
+    base: "https://github.com/defsquare/codegraph/edit/main/website/content"
   highlight:
     copy:
       enable: true

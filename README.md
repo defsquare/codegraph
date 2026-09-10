@@ -363,5 +363,4 @@ each design doc are.
 
 ## License
 
-Not yet chosen. Until a `LICENSE` file lands in this repository, the code is
-all rights reserved; open an issue if you need to use it before then.
+[MIT](LICENSE). Copyright (c) 2026 Defsquare.

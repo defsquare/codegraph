@@ -23,5 +23,7 @@
     <Version>$(CodegraphExtractorVersion)</Version>
     <InformationalVersion>$(CodegraphExtractorVersion)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright (c) 2026 Defsquare</Copyright>
   </PropertyGroup>
 </Project>

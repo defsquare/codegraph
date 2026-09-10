@@ -4,7 +4,7 @@ linkTitle: model.jsonl
 weight: 2
 ---
 
-The interchange format: one model, one JSONL file. Contract version **1.0.0**. The canonical source is [`schemas/`](https://gitlab.com/jgrodziski/codegraph/-/tree/main/schemas) in the repository — one JSON Schema per record type plus the prose container contract; those files are generated from `@codegraph/core` by `pnpm run gen:schemas`.
+The interchange format: one model, one JSONL file. Contract version **1.0.0**. The canonical source is [`schemas/`](https://github.com/defsquare/codegraph/tree/main/schemas) in the repository — one JSON Schema per record type plus the prose container contract; those files are generated from `@codegraph/core` by `pnpm run gen:schemas`.
 
 A model is one **JSONL** file: one JSON object per line, UTF-8, LF-terminated, with the record type in the leading `t` key. Every line validates against the per-record JSON Schema of its type.
 

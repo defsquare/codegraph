@@ -1,6 +1,7 @@
 {
   "name": "@codegraph/scm",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "description": "Codegraph SCM miner: git history -> deterministic history.jsonl, plus the file-level evolution reports",
   "exports": {

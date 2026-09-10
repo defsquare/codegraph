@@ -1,6 +1,7 @@
 {
   "name": "@codegraph/llm",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "description": "Codegraph LLM client: the one package that talks to a model provider (OpenRouter), behind a small client interface with a deterministic fake",
   "exports": {

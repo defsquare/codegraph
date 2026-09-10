@@ -1,6 +1,7 @@
 {
   "name": "@codegraph/analyzer",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "description": "Codegraph analyzer: graph construction, derived indexes, queries, metrics, exports",
   "exports": {

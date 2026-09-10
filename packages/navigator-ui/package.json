@@ -1,6 +1,7 @@
 {
   "name": "@codegraph/navigator-ui",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "Codegraph model navigator: searchable tree + fan-in/fan-out dependency explorer over a navigator.json artifact",

@@ -1,6 +1,7 @@
 {
   "name": "codegraph-typescript",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "description": "codegraph extractor for TypeScript: the compiler API as the front end, no build and no node_modules required — emits model.jsonl",
   "bin": {

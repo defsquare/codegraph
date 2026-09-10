@@ -1,6 +1,7 @@
 {
   "name": "@codegraph/core",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "description": "Codegraph metamodel: traits, entities, edges, language profiles, validation, JSON Schema export",
   "exports": {

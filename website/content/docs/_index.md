@@ -20,7 +20,7 @@ The documentation is in four parts, each for a different moment:
 Node 22+, pnpm and a JDK 17+ on `PATH`. Codegraph runs from a clone today.
 
 ```bash
-git clone https://gitlab.com/jgrodziski/codegraph.git && cd codegraph
+git clone https://github.com/defsquare/codegraph.git && cd codegraph
 pnpm install && pnpm -r build
 (cd extractors/java && ./mvnw -B package)
 
@@ -39,4 +39,4 @@ The [first tutorial](/docs/tutorials/first-city/) walks through every step.
 - **Not a linter.** Codegraph reports structure, coupling and cycles, not style or bugs.
 - **Runs from a clone.** No npm package or binary release yet.
 
-Source: [gitlab.com/jgrodziski/codegraph](https://gitlab.com/jgrodziski/codegraph). License: not yet chosen; until a `LICENSE` file lands, all rights reserved.
+Source: [github.com/defsquare/codegraph](https://github.com/defsquare/codegraph). License: [MIT](https://github.com/defsquare/codegraph/blob/main/LICENSE).
