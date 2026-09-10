@@ -95,8 +95,7 @@ params:
       logo: "img/defsquare-long-white-red.svg"
       alt: "Defsquare"
       text: >-
-        Codegraph is designed, built and run by [Defsquare](https://defsquare.com), a software studio that designs,
-        builds and runs software systems in complex environments. 
+        Codegraph is designed, built and run by <a href="https://defsquare.com">Defsquare</a>, a software studio that designs, builds and runs software systems in complex environments. 
     columns:
       - heading: "Documentation"
         links:
