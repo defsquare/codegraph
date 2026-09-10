@@ -51,7 +51,7 @@ for Java, the **.NET 10 SDK** for C#, nothing more for TypeScript. Codegraph
 is not on npm yet; you run it from a clone.
 
 ```bash
-git clone https://gitlab.com/jgrodziski/codegraph.git && cd codegraph
+git clone https://github.com/defsquare/codegraph.git && cd codegraph
 pnpm install && pnpm -r build
 (cd extractors/java && ./mvnw -B package)        # Java: the wrapper, no local Maven needed
 ./build.sh --csharp                              # C#: needs the .NET 10 SDK, see below
