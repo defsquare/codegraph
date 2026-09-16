@@ -74,6 +74,13 @@ packages/navigator-ui/ @codegraph/navigator-ui — React model navigator, five
                      The ONLY package that may import react and cytoscape; the
                      city comes through @codegraph/viz, never through three.
                      Vite app, no library.
+apps/desktop/        The desktop app (Tauri 2): a Cargo workspace — `discovery/`
+                     (the extractor catalogue looked up on PATH/Homebrew, written as
+                     the daemon's registry; pure Rust, tested anywhere) and
+                     `src-tauri/` (window, menu, dialog, drag-and-drop, the
+                     single-executable `codegraph` as its ONE sidecar; needs the
+                     platform's WebKit to compile). No model logic in Rust; the
+                     page it shows is the daemon's, with no Tauri IPC.
 fixtures/            Reference corpora + expected model.jsonl snapshots.
 ```
 
@@ -145,6 +152,10 @@ extractors/csharp/dist/linux-x64/codegraph-csharp --src <dir> --out model.jsonl
 ./build.sh --ts --sea                  # ONE Node single-executable of the CLI + daemon + both frontends
 packages/cli/dist-sea/<rid>/codegraph --version           # for THIS platform only (the image is this Node)
 node packages/cli/scripts/sea-smoke.mjs packages/cli/dist-sea/<rid>/codegraph   # its three gates (test.sh runs it)
+
+pnpm --filter @codegraph/desktop tauri:dev     # the desktop shell (after --sea): copies the image as the
+#   sidecar, then `tauri dev` — needs Rust + the platform's WebKit (apps/desktop/README.md)
+cd apps/desktop && cargo test -p codegraph-discovery   # the discovery crate alone, no WebKit needed
 
 ./bin/codegraph-typescript --src <dir> --out model.jsonl   # after `pnpm -r build`; no other toolchain
 ./bin/codegraph-typescript --src packages --src extractors/typescript --out codegraph.jsonl   # self-hosting

@@ -2,6 +2,7 @@ packages:
   - "packages/*"
   - "extractors/typescript"
   - "website"
+  - "apps/desktop"
 
 # Single source of truth for shared dependency versions across the workspace.
 # Packages reference them as "catalog:" so no two packages can drift apart.

@@ -1,0 +1,26 @@
+[
+  {
+    "name": "java",
+    "extensions": [".java"],
+    "command": "codegraph-java",
+    "install": "brew install defsquare/tap/codegraph-java"
+  },
+  {
+    "name": "csharp",
+    "extensions": [".cs"],
+    "command": "codegraph-csharp",
+    "install": "brew install defsquare/tap/codegraph-csharp"
+  },
+  {
+    "name": "typescript",
+    "extensions": [".ts", ".tsx"],
+    "command": "codegraph-typescript",
+    "install": "brew install defsquare/tap/codegraph-typescript"
+  },
+  {
+    "name": "elixir",
+    "extensions": [".ex", ".exs"],
+    "command": "codegraph-elixir",
+    "install": "brew install defsquare/tap/codegraph-elixir"
+  }
+]

@@ -6,6 +6,12 @@ dist/
 # The single-executable image: the CJS bundle, the SEA blob and the injected
 # binary per RID (./build.sh --sea). A release artifact, never source.
 dist-sea/
+
+# The desktop shell's Cargo workspace output (apps/desktop). Its dist/ is NOT
+# a build product: it is the one-line starting page Tauri loads before the
+# daemon's page replaces it, checked in.
+apps/desktop/target/
+!apps/desktop/dist/
 *.tsbuildinfo
 coverage/
 .vitest/

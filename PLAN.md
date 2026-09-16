@@ -3036,12 +3036,57 @@ including the capability token (a request outside `/<token>/` is `404`, never
   green, `node:sqlite` and the model.db cache working inside it. Tests: the
   asset seam with two sources through one server (27), the config generator,
   `versionOf`; every existing suite rewired to `FrontendAssets`.
-- **M14c — the shell.** `apps/desktop/`, the WebGL gate first, the one
-  sidecar by triple, launch/close lifecycle, the extractor catalogue and
-  discovery (registry entries without `path`, the daemon's `not-installed`
-  answer and the page's install line with "Check again"), menu, dialog,
-  drag-and-drop, recents; `tauri dev` reviewed as screenshots on the Java
-  fixture and on fineract, and on a folder whose extractor is not installed.
+- **M14c — the shell** ◐ (2026-09-16, written on a Linux machine without
+  WebKitGTK or a display: everything below the Tauri crate is tested here,
+  the crate itself is compiled by CI's `desktop` job, and THE WEBGL GATE HAS
+  NOT BEEN RUN — it is the first thing to do on a Mac, per §15.4). The
+  daemon's side: `registry.ts` accepts an entry without `path` when it
+  carries `install`; the census counts its extensions; `detect` answers
+  `not-installed` `{ extractors: [{ name, files, install }] }` when only such
+  entries claim a tree (or the chosen one is missing), and an installed +
+  missing pair is `ambiguous` with the missing candidate carrying its install
+  line; `POST /jobs` → 422 `not-installed`; `/app` lists `installed` and
+  `install` per extractor; the registry is a SOURCE (`registrySource`,
+  mtime-cached) asked on every request, so the shell's rewrite after a rescan
+  is seen without a restart and a rewrite that does not parse keeps the last
+  good one. The page: the extractors line marks "not installed", the
+  `NotInstalled` panel shows each install line (selectable) with "Check
+  again" (a plain retry — no IPC), the "which extractor?" question shows a
+  missing candidate's install line instead of a button. `apps/desktop/`: a
+  Cargo workspace — `discovery/` (`codegraph-discovery`: the catalogue
+  `{name, extensions, command, install}`, `search_dirs` = PATH then
+  `$HOMEBREW_PREFIX/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, Linuxbrew;
+  `find_command` (executable files only, `.exe` on Windows), `discover` with
+  `settings.json` overrides (launch inferred for a jar/script), the registry
+  JSON round-tripping the daemon's contract, atomic `write_registry`; 8
+  tests) and `src-tauri/` (`daemon.rs`: spawn the sidecar beside the
+  executable with stdin held open, read the one line, `POST jobs` / `GET
+  recent` over `ureq`, refusals as one sentence with the install line,
+  shutdown = close stdin + kill; `lib.rs`: discovery → registry → spawn →
+  `navigate` the webview; File › Open Folder… (⌘O, native dialog), Open
+  Recent (rebuilt from `recent`), Rescan Extractors; drag-and-drop; rescan +
+  menu refresh on every window focus; close → shutdown; a refusal from the
+  shell's own open is a native dialog). `tauri.conf.json`: one window, one
+  sidecar `binaries/codegraph`, the catalogue as a resource, the JIT-trio
+  entitlements; `capabilities/default.json` lists the shell's permissions
+  and deliberately no `remote` origin — the page has no Tauri API at all.
+  `scripts/sidecar.mjs` copies `dist-sea/<rid>/codegraph` to
+  `binaries/codegraph-<triple>`; icons from `tauri icon`; `dist/index.html`
+  the one-line starting page; `@codegraph/desktop` in the pnpm workspace with
+  no-op `build`/`test` and explicit `tauri:dev`/`tauri:build`. CI `desktop`
+  job (ubuntu with the WebKitGTK packages, macos): sidecar from the `sea`
+  artifact, `cargo fmt --check`, `cargo test --workspace`. Verified here:
+  the new daemon/registry/page tests (824 CLI tests green), 8 discovery
+  tests, `cargo fmt`, lint; a headless run of the not-installed path — the
+  home says "elixir — not installed", an Elixir tree shows the install line
+  with Check again, the registry rewritten (as the shell does on focus) and
+  Check again opens it without a restart, screenshots reviewed. NOT
+  verified here: the Tauri crate compiling (no WebKitGTK), `tauri dev`, the
+  screenshots on the Java fixture and fineract, the WebGL frame time. Two
+  rough edges to revisit on a Mac: an ambiguous folder opened from the
+  menu/drop is a dialog that sends the user to the page's path field (the
+  page cannot be told what the shell posted without IPC), and the
+  `codegraph://rescanned` event is emitted but nothing listens.
 - **M14d — signed, notarized, in the tap.** The `desktop` job per macOS
   architecture, notarization, the two DMGs on the release beside the raw
   SEA, the cask and its bump step; the three extractor formulae
@@ -3539,7 +3584,7 @@ the Elixir fixture in every per-fixture suite.
 | M13c | TypeScript extractor — self-hosting + audit | ✅ codegraph's own model (24 887 entities / 51 255 edges, 12 s, 96.5 %, zero `<unresolved>`) validate-clean with the package boundaries, the frontend types-only rule and the three import boundaries recovered as graph queries, city and navigator screenshots reviewed; TypeScript 4.9 compiler (52 341 / 120 127, 97.4 %) / nestjs (29 992 / 32 537, 88.6 %) / excalidraw (43 706 / 62 557, 94.4 %) audit with six defects fixed and the causes in the profile notes; `typescript-smoke` on three OSes and `npm-publish` on a tag; `docs/typescript-extractor.md` | `validate`-clean with its package boundaries recovered as a graph query, city and navigator screenshots reviewed; TypeScript 4.9 compiler / nestjs / excalidraw audit with resolution causes in the profile notes; `npx codegraph-typescript`, the three-OS smoke matrix and tagged npm release; `docs/typescript-extractor.md` |
 | M14a | Desktop — the daemon | ✅ `codegraph serve --app [--data-dir DIR] [--extractors FILE]`: loopback capability URL (`/<token>/`, one stdout JSON line, 404 outside it, 403 on a foreign `Origin`), extractor registry as data with extension-census detection (a tie is a 422 question), `POST /jobs` (202/409/422/404) + `jobs/current` SSE with replay, `--data-dir` holding model + model.db + artifacts + recents, extraction skipped on an unchanged tree fingerprint and the build on an unchanged build key, a `model.jsonl` opens with no extractor, exit on stdin EOF/SIGTERM; the page's empty state in app form (recents, three phases + extractor stderr, the open instruction, the "which extractor?" question, failures); 64 tests incl. the fake extractor over real sockets and the real binary as a child; driven headlessly on the Java fixture and the TypeScript extractor, screenshots reviewed |
 | M14b | Desktop — the SEA | ✅ one Node single-executable image per OS, ONE program: `dist-sea/codegraph.cjs` (CJS, everything but built-ins inlined, 2.9 MB) + both frontends and `package.json` as assets, folded into a copy of the building Node by `scripts/sea-build.mjs` (postject, macOS re-signing) → `dist-sea/<rid>/codegraph`; `node:sea` reached via `process.getBuiltinModule`; one `FrontendAssets` seam with a directory and a keyed source; `./build.sh --ts --sea`, `test.sh` gate, five-runner `sea` CI job + release artifacts; `scripts/sea-smoke.mjs` green on linux-x64 (131 MB): `--version`, `analyze` ×3 byte-identical to the ESM build, `serve --app` serving the page from the image and opening the Java fixture |
-| M14c | Desktop — the shell | `apps/desktop/` (Tauri 2): WebGL gate on fineract reviewed as screenshots FIRST, the one sidecar (the SEA) by target triple, daemon lifecycle (spawn, read the port line, navigate, close stdin + kill), the extractor catalogue + discovery on PATH and the Homebrew prefixes writing the registry (missing entries carry `install`, no `path`; the daemon answers `not-installed` and the page shows the line with "Check again"), File › Open… / Open Recent / drag-and-drop each one `POST /jobs`; no `@tauri-apps/*` outside `apps/desktop` (boundary test) |
+| M14c | Desktop — the shell | ◐ `apps/desktop/` (Tauri 2) written and CI-compiled, the WebGL gate on fineract NOT yet run (needs a Mac): the one sidecar (the SEA) by target triple via `scripts/sidecar.mjs`, daemon lifecycle (spawn, read the port line, navigate, close stdin + kill), the extractor catalogue + `codegraph-discovery` (PATH + Homebrew prefixes + settings overrides, 8 tests) writing the registry (missing entries carry `install`, no `path`), the daemon's `not-installed` answer + registry re-read on every request (tested, headless screenshots reviewed), the page's install line with "Check again", File › Open Folder… / Open Recent / Rescan / drag-and-drop each one `POST /jobs`; no `@tauri-apps/*` outside `apps/desktop` (boundary test); remaining: `tauri dev` screenshots on the Java fixture and fineract, the WebGL frame time |
 | M14d | Desktop — signed, in the tap | notarized `.app` per macOS architecture with the JIT entitlement trio, two DMGs + the raw SEA on the release, `defsquare/homebrew-tap` cask generated by the app's release job (`app` + ONE `binary` stanza) and one formula per extractor generated by that extractor's release job (`codegraph-java`, `codegraph-csharp` per architecture; `codegraph-typescript` on Homebrew's `node`); on clean Apple-silicon and Intel Macs `brew install --cask defsquare/tap/codegraph` opens the app, a Java folder names the install line, and after `brew install defsquare/tap/codegraph-{java,csharp,typescript}` all four commands are on PATH, each reproducing its fixture snapshot |
 | M15a | Elixir extractor — profile + skeleton | `elixir` profile in core (the tenth: the module is the file, a `defmodule` is a `module` kind carrying `TType`, arity is identity, no inheritance/embedding — §16.2); `extractors/elixir/` as a Mix project on the compiler's parser with the embedded OTP table, no runtime dependency (§16); walking skeleton → `fixtures/elixir/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; core gate; escript on `bin/codegraph-elixir`; `build.sh --elixir` / `test.sh --elixir` with the escript `cmp`; `elixir-test` in CI |
 | M15b | Elixir extractor — model | ✅ (2026-09-16) every kind and edge of §16.2: clause and default folds, the four import forms as one edge kind, `defimpl` as an attached named module, `@derive` as `generated`, `use` as import + `__using__` invocation, struct-expansion accesses, protocol and `GenServer` self-call `dynamic-candidate`s, `throws`, `@spec` references, docs as comments; `sloc` + `cyclomatic`, literals; `--deps` (exports only); the full fixture with its README; determinism, stub-discipline, scope and arity suites; the fixture in every per-fixture suite; city and navigator screenshots reviewed. Snapshot 210 entities / 174 edges; 60 ExUnit tests + 3 properties; Plausible re-run: 16 369 entities / 51 736 edges in 5 s, `validate`-clean, 64.7 % of 119 972 sites resolved or Kernel, the rest counted by reason (`local_injected` and `local_unbound` dominate — the macro ceiling `--trace` exists for) |

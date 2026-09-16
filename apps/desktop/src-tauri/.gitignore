@@ -1,0 +1,5 @@
+# Cargo output, Tauri's generated schemas, and the sidecar scripts/sidecar.mjs
+# copies in from packages/cli/dist-sea — a build product, never source.
+/target/
+/gen/
+/binaries/

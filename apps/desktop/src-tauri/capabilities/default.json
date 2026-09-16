@@ -1,0 +1,7 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "default",
+  "description": "The shell's own commands. The page is a remote origin (the daemon on loopback) and is deliberately NOT listed under `remote`: it gets no Tauri IPC at all — it talks to the daemon over HTTP, as it does in any browser.",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:default"]
+}

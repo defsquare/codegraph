@@ -169,6 +169,16 @@ if wants_ts; then
     warn "no single-executable at packages/cli/dist-sea/$(host_rid) — run ./build.sh --ts --sea for its gates"
   fi
 
+  # The desktop shell's discovery crate (apps/desktop/discovery): pure Rust,
+  # no WebKit needed, so it runs wherever cargo does. The Tauri crate itself
+  # needs the platform's WebKit and is compiled by CI's `desktop` job.
+  if command -v cargo >/dev/null 2>&1; then
+    phase "desktop discovery crate tests (cargo test)" \
+      sh -c "cd '$ROOT/apps/desktop' && cargo test -p codegraph-discovery --quiet"
+  else
+    warn "cargo not on PATH — skipping the desktop discovery crate's tests"
+  fi
+
   # Regenerating a committed artifact must change nothing. Only meaningful
   # against a clean working tree: if schemas/ is already edited, the diff would
   # blame this run for the user's own in-progress change.

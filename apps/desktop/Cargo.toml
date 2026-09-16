@@ -1,0 +1,16 @@
+# The desktop app (PLAN.md §15.4): two crates.
+#
+#   discovery   the extractor catalogue, PATH/Homebrew lookup and the registry
+#               the daemon reads — pure Rust, no Tauri, so `cargo test -p
+#               codegraph-discovery` runs on any machine with a Rust toolchain
+#   src-tauri   the shell: window, menu, dialog, drag-and-drop, the sidecar's
+#               lifetime — needs Tauri's platform libraries (WebKitGTK on
+#               Linux, WebKit on macOS, WebView2 on Windows) to compile
+[workspace]
+members = ["discovery", "src-tauri"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"

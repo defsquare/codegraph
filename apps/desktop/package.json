@@ -1,0 +1,21 @@
+{
+  "name": "@codegraph/desktop",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "The Codegraph desktop app: a Tauri 2 shell over the codegraph daemon (PLAN.md §15.4). Not built by `pnpm -r build` — the shell needs a Rust toolchain and the platform's WebKit; `pnpm tauri:dev` / `pnpm tauri:build` are explicit.",
+  "scripts": {
+    "build": "echo 'desktop: not part of pnpm -r build — use pnpm --filter @codegraph/desktop tauri:build' >&2",
+    "typecheck": "true",
+    "test": "true",
+    "sidecar": "node scripts/sidecar.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "node scripts/sidecar.mjs && tauri dev",
+    "tauri:build": "node scripts/sidecar.mjs && tauri build",
+    "cargo:test": "cargo test --workspace"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  }
+}
