@@ -43,5 +43,5 @@ export * from "./integrity.js";
 // Language profiles as data, plus validation (METAMODEL.md §5).
 export * from "./profile.js";
 
-// The nine shipped profiles and their registry.
+// The ten shipped profiles and their registry.
 export * from "./profiles/index.js";

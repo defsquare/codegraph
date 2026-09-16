@@ -2,6 +2,7 @@ import type { Profile } from "../profile.js";
 
 import { clojureProfile } from "./clojure.js";
 import { csharpProfile } from "./csharp.js";
+import { elixirProfile } from "./elixir.js";
 import { goProfile } from "./go.js";
 import { javaProfile } from "./java.js";
 import { javascriptProfile } from "./javascript.js";
@@ -13,6 +14,7 @@ import { typescriptProfile } from "./typescript.js";
 export {
   clojureProfile,
   csharpProfile,
+  elixirProfile,
   goProfile,
   javaProfile,
   javascriptProfile,
@@ -25,6 +27,7 @@ export {
 const ALL_PROFILES: readonly Profile[] = [
   clojureProfile,
   csharpProfile,
+  elixirProfile,
   goProfile,
   javaProfile,
   javascriptProfile,
@@ -35,7 +38,7 @@ const ALL_PROFILES: readonly Profile[] = [
 ];
 
 /**
- * The nine profiles keyed by `lang` — the same prefix an EntityId carries.
+ * The ten profiles keyed by `lang` — the same prefix an EntityId carries.
  * Null-prototype so a lookup of a language named `constructor` or `toString`
  * cannot resolve to an inherited Object member.
  */

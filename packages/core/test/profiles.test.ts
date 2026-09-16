@@ -4,7 +4,7 @@ import { SPACES } from "../src/primitives.js";
 import { Entity } from "../src/entity.js";
 import { parseModel, SCHEMA_VERSION } from "../src/model.js";
 import { validateEntity, validateModel, validateProfile, type Profile } from "../src/profile.js";
-import { PROFILES, clojureProfile, getProfile, typescriptProfile } from "../src/profiles/index.js";
+import { PROFILES, clojureProfile, elixirProfile, getProfile, typescriptProfile } from "../src/profiles/index.js";
 
 // Profiles are data; this suite is the check that the data stays inside the
 // canonical vocabularies and keeps saying what each language actually is.
@@ -17,6 +17,7 @@ const profiles: readonly [string, Profile][] = Object.entries(PROFILES).sort(([a
 const EXPECTED_LANGS = [
   "clj",
   "csharp",
+  "ex",
   "go",
   "java",
   "js",
@@ -26,9 +27,9 @@ const EXPECTED_LANGS = [
   "ts",
 ] as const;
 
-describe("the nine shipped profiles", () => {
-  it("registers exactly nine profiles under unique langs", () => {
-    expect(profiles).toHaveLength(9);
+describe("the ten shipped profiles", () => {
+  it("registers exactly ten profiles under unique langs", () => {
+    expect(profiles).toHaveLength(10);
     expect(profiles.map(([lang]) => lang)).toEqual([...EXPECTED_LANGS].sort());
   });
 
@@ -395,5 +396,135 @@ describe("structural claims that must not silently regress", () => {
     expect(js.length).toBeGreaterThan(0);
     for (const kind of js) expect(ts, `ts is missing js kind ${kind}`).toContain(kind);
     expect(ts.size).toBeGreaterThan(js.length);
+  });
+
+  /**
+   * Elixir profile (PLAN §16.2): the module is the file and a `defmodule` is
+   * a `module` kind carrying TType, so every claim the parser-as-library
+   * extractor emits against is pinned here as data.
+   */
+  describe("Elixir profile licenses what the parser extractor emits", () => {
+    const ex = elixirProfile;
+
+    it("makes the file the module and the defmodule a type below it", () => {
+      expect(ex.kinds["file"]?.required).toEqual(["TNamed", "TModule", "TWithChildren"]);
+      expect(ex.kinds["module"]?.required).toContain("TType");
+      expect(ex.kinds["module"]?.required).toContain("TChildOf");
+      expect(ex.kinds["module"]?.required).not.toContain("TModule");
+      // A defimpl block is attached to the type it implements for.
+      expect(ex.kinds["module"]?.optional).toContain("TAttachedTo");
+      expect(ex.kinds["module"]?.optional).toContain("TWithImplements");
+    });
+
+    it("has neither inheritance nor embedding, and every invocable is a container", () => {
+      expect(ex.edges).not.toContain("inheritance");
+      expect(ex.edges).not.toContain("embedding");
+      for (const kind of Object.values(ex.kinds)) {
+        expect(kind.required).not.toContain("TWithInheritances");
+        expect(kind.optional).not.toContain("TWithInheritances");
+      }
+      for (const kind of ["function", "macro", "callback"]) {
+        expect(ex.kinds[kind]?.required, kind).toContain("TWithChildren");
+        expect(ex.kinds[kind]?.required, kind).toContain("TWithParameters");
+      }
+      // A callback has no body: no invocations, no accesses.
+      expect(ex.kinds["callback"]?.required).not.toContain("TWithInvocations");
+      expect(ex.kinds["function"]?.required).toContain("TWithInvocations");
+    });
+
+    it("validates a defmodule, its arity-keyed function and an external stub under <otp>", () => {
+      const model = parseModel({
+        schemaVersion: SCHEMA_VERSION,
+        lang: "ex",
+        extractor: { name: "codegraph-elixir", version: "0.0.0" },
+        root: "fixtures/elixir/src",
+        entities: [
+          {
+            id: "ex:lib%2Forder.ex",
+            kind: "file",
+            traits: ["TNamed", "TModule", "TWithChildren", "TSourceAnchor"],
+            name: "lib/order.ex",
+            definedIn: ["lib/order.ex"],
+            isStub: false,
+            anchor: { file: "lib/order.ex", span: [1, 9] },
+          },
+          {
+            id: "ex:lib%2Forder.ex/Acme%2EOrder",
+            kind: "module",
+            traits: ["TNamed", "TType", "TWithChildren", "TChildOf", "TSourceAnchor", "TWithImplements"],
+            name: "Acme.Order",
+            isStub: false,
+            parent: "ex:lib%2Forder.ex",
+            anchor: { file: "lib/order.ex", span: [1, 9] },
+          },
+          {
+            id: "ex:lib%2Forder.ex/Acme%2EOrder.total#2",
+            kind: "function",
+            traits: [
+              "TNamed",
+              "TInvocable",
+              "TWithChildren",
+              "TWithParameters",
+              "TWithInvocations",
+              "TWithAccesses",
+              "TChildOf",
+              "TSourceAnchor",
+            ],
+            name: "total",
+            signature: "total/2",
+            parameters: [],
+            parent: "ex:lib%2Forder.ex/Acme%2EOrder",
+            anchor: { file: "lib/order.ex", span: [4, 8] },
+          },
+          {
+            id: "ex:<otp>",
+            kind: "file",
+            traits: ["TNamed", "TModule", "TWithChildren"],
+            name: "<otp>",
+            definedIn: [],
+            isStub: true,
+          },
+          {
+            id: "ex:<otp>/GenServer",
+            kind: "module",
+            traits: ["TNamed", "TType", "TChildOf"],
+            name: "GenServer",
+            isStub: true,
+            parent: "ex:<otp>",
+          },
+        ],
+        edges: [
+          {
+            edge: "import",
+            from: "ex:lib%2Forder.ex",
+            to: "ex:<otp>/GenServer",
+            provenance: "declared",
+            anchor: { file: "lib/order.ex", span: [2, 2] },
+          },
+          {
+            edge: "interfaceImplementation",
+            from: "ex:lib%2Forder.ex/Acme%2EOrder",
+            to: "ex:<otp>/GenServer",
+            provenance: "declared",
+            anchor: { file: "lib/order.ex", span: [3, 3] },
+          },
+        ],
+      });
+      expect(validateModel(model, ex).map((i) => `${i.code} @ ${i.path}: ${i.message}`)).toEqual([]);
+    });
+
+    it("refuses a defmodule that claims to be a module of its own", () => {
+      const rogue = Entity.parse({
+        id: "ex:lib%2Forder.ex/Acme%2EOrder",
+        kind: "module",
+        traits: ["TNamed", "TType", "TModule", "TWithChildren", "TChildOf", "TSourceAnchor"],
+        name: "Acme.Order",
+        definedIn: ["lib/order.ex"],
+        isStub: false,
+        parent: "ex:lib%2Forder.ex",
+        anchor: { file: "lib/order.ex", span: [1, 9] },
+      });
+      expect(validateEntity(ex, rogue).map((i) => i.code)).toEqual(["trait-not-allowed"]);
+    });
   });
 });

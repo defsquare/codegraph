@@ -27,7 +27,7 @@ function profileOf(lang: string): Profile {
 }
 
 describe("the listing", () => {
-  it("names all nine profiles, one line each, with counts and edge kinds", () => {
+  it("names all ten profiles, one line each, with counts and edge kinds", () => {
     const { code, io } = invoke(["profiles"]);
     expect(code).toBe(EXIT.OK);
 
