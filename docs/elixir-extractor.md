@@ -8,12 +8,10 @@ rejects is skipped and counted. This page is about running it; what the
 model says is in `packages/core/src/profiles/elixir.ts` (the profile's
 `notes`) and the fixture's `fixtures/elixir/README.md`.
 
-> **Status (M15b):** the full model — files, modules, functions with their
-> parameters, `defstruct` fields, module attributes, `@callback`s, every edge
-> kind of the profile (imports, implementations, invocations through the
-> lexical scope, struct-field and attribute accesses, captures and modules as
-> values, `raise` sites), dynamic dispatch as candidates, docs as comments,
-> `sloc` and `cyclomatic`, `--deps`. The `--trace` enrichment comes with M15c.
+> **Status (M15c):** the full model, `--deps`, and the `--trace` enrichment
+> (`mix codegraph.trace` inside a project that compiles). Audited on the
+> Elixir standard library, Phoenix and Plausible; a Burrito binary is the
+> remaining distribution step.
 
 ## 1. From a clone
 
@@ -25,7 +23,19 @@ machine that runs it (the jar's JDK):
 ./build.sh --elixir                     # mix escript.build → extractors/elixir/dist/codegraph-elixir
 ./bin/codegraph-elixir --src lib --out model.jsonl
 ./test.sh --elixir                      # mix test + the escript must reproduce fixtures/elixir/expected/model.jsonl
+./build.sh --elixir --native            # + the Burrito binary for THIS host → extractors/elixir/dist/<rid>/codegraph-elixir
 ```
+
+The **Burrito binary** is the release plus its own ERTS in one file: nothing
+to install on the machine that runs it (the GraalVM image of the Java
+extractor, the `dotnet publish` single file of the C# one). Building it needs
+Zig 0.16.0 (`ensure_zig` in `scripts/lib.sh` looks on PATH, then under
+`~/.local/share/zig`); CI's `elixir-native` job builds the Linux and macOS
+ones and `test.sh` runs the same `cmp` against the snapshot on whichever
+is present. Burrito caches the unpacked payload per app version under
+`~/.local/share/.burrito/`: a rebuilt binary with the same version reuses
+it — `codegraph-elixir maintenance uninstall` (or deleting that directory)
+clears it.
 
 `build.sh` and `test.sh` look for `elixir` on PATH, then in the user-local
 install below, then in asdf/mise shims. Requirements: Elixir ≥ 1.18 (its
@@ -145,6 +155,47 @@ then binds `from/2` as a fact, a call into a dependency that exports the
 function counts as resolved, and one it does not export is dropped as
 `deps_unknown`. No entity is emitted from `deps/` and keys never change — a
 dependency stays a stub below `<deps>`.
+
+### `--trace <file>`: the compiler as the second reader
+
+Everything above is read from source, before macro expansion. What a
+`use`d macro injects — a Phoenix router's routes, an Ecto schema's fields,
+the `assert` of `use ExUnit.Case`, a `__struct__/1` — exists only after the
+compiler expands it, and the parser counts those sites as `local_injected`.
+When the project compiles, the compiler can be the second reader:
+
+```bash
+cd ~/src/some-app
+mix codegraph.trace --out codegraph-trace.jsonl        # mix compile --force under a tracer
+codegraph-elixir --src . --trace codegraph-trace.jsonl --out model.jsonl
+```
+
+`mix codegraph.trace` needs the task on the code path: add
+`{:codegraph_elixir, "~> 0.1", only: :dev, runtime: false}` to the project's
+deps, or point the VM at a compiled checkout without touching `mix.exs`:
+
+```bash
+ERL_FLAGS="-pa <codegraph>/extractors/elixir/_build/dev/lib/codegraph_elixir/ebin" mix codegraph.trace
+```
+
+The trace is JSONL: a header naming the Elixir version and the project root,
+then one event per resolved call or struct expansion — file, line, the
+caller (module, or module + function/arity), the callee (module, name,
+arity). The extractor merges it AFTER its own pass: an event whose site the
+baseline already wrote is the same fact (`known`); a new one becomes an edge
+with provenance **`generated`**, resolved through the same rules (a stub for
+an external callee); a call to a function the module does not declare in
+source (`__struct__/1`, an injected `greet/1`) has no entity to land on and
+is counted as `injected`; a call bound to Kernel is `kernel`. Keys never
+come from the trace, so a model with and without it has the same entities,
+and every `declared` edge stays exactly as it was:
+
+```
+  trace           : 16797 events — 5896 generated edges added, 4140 already in the model, 6174 kernel, 36 to injected definitions (no entity), 64 outside the corpus or its declarations, 487 unresolvable
+```
+
+`--explain-dropped` prints every dropped site (`dropped <reason>: file:line
+name`) — the listing an audit reads to see what the parser lost and where.
 
 ## 5. Feeding the result to codegraph
 

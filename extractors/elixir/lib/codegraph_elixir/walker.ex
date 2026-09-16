@@ -26,7 +26,8 @@ defmodule CodegraphElixir.Walker do
               duplicate_keys: [],
               dynamic_modules: 0,
               imports: %{alias: 0, import: 0, require: 0, use: 0},
-              counts: %{}
+              counts: %{},
+              sites: []
   end
 
   @file_traits ["TNamed", "TModule", "TWithChildren", "TSourceAnchor", "TMetrics"]
@@ -419,15 +420,23 @@ defmodule CodegraphElixir.Walker do
         if(first.private, do: [{"private", true}], else: [])
 
     # Parameters: one per position, named by the first clause that names it.
-    params =
-      Enum.map(0..(arity - 1)//1, fn index ->
+    # A name a head repeats (`def f(mode, mode)` pins the second) names one position only.
+    {params, _seen} =
+      Enum.map_reduce(0..(arity - 1)//1, MapSet.new(), fn index, seen ->
         named =
           Enum.find_value(clauses, fn clause -> Enum.at(clause.params, index) |> then(&(&1 && &1.name)) end)
+
+        named = if named && MapSet.member?(seen, named), do: nil, else: named
 
         default =
           Enum.find_value(clauses, fn clause -> Enum.at(clause.params, index) |> then(&(&1 && &1.default)) end)
 
         tag = if named, do: "param:#{named}", else: "param:#{index + 1}"
+        {{index, named, default, tag}, if(named, do: MapSet.put(seen, named), else: seen)}
+      end)
+
+    params =
+      Enum.map(params, fn {_index, named, default, tag} ->
         {Key.disambiguated(key, tag), named, default}
       end)
 

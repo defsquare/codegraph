@@ -22,6 +22,8 @@ defmodule CodegraphElixir.Stats do
             kernel: 0,
             emitted: %{},
             dropped: %{},
+            explained: [],
+            trace: nil,
             self_edges_dropped: 0,
             dynamic_modules_dropped: 0,
             duplicate_keys: [],
@@ -34,6 +36,9 @@ defmodule CodegraphElixir.Stats do
 
   def drop(%__MODULE__{} = s, reason, n),
     do: %__MODULE__{s | dropped: Map.update(s.dropped, reason, n, &(&1 + n))}
+
+  @doc "A dropped site, kept when `--explain-dropped` asked for the listing."
+  def explain(%__MODULE__{} = s, reason, site), do: %__MODULE__{s | explained: [{reason, site} | s.explained]}
 
   def summary(%__MODULE__{} = s, model) do
     stubs = s.stubs.otp + s.stubs.deps
@@ -64,6 +69,12 @@ defmodule CodegraphElixir.Stats do
       edges           : #{length(model.edges)}#{if emitted == "", do: "", else: " (" <> emitted <> ")"}; self-edges dropped: #{s.self_edges_dropped}, dynamic module names dropped: #{s.dynamic_modules_dropped}
       duplicates      : #{length(s.duplicate_keys)} same-keyed declarations re-keyed, #{length(s.duplicate_modules)} module names declared in more than one file (the first in file order is the import target)
       unclosable      : #{length(s.unclosable)} edges dropped (an endpoint no entity declares)
-    """
+    """ <> trace_line(s.trace)
+  end
+
+  defp trace_line(nil), do: ""
+
+  defp trace_line(t) do
+    "  trace           : #{t.events} events — #{t.added} generated edges added, #{t.known} already in the model, #{t.kernel} kernel, #{t.injected} to injected definitions (no entity), #{t.unplaced} outside the corpus or its declarations, #{t.dropped} unresolvable\n"
   end
 end

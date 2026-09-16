@@ -41,11 +41,21 @@ defmodule CodegraphElixir.CLITest do
     assert stderr =~ "not a directory"
   end
 
-  test "exits 3 for the enrichment flag that is not implemented yet", %{scratch: scratch} do
-    assert %{code: 3, stderr: stderr} =
+  test "exits 1 when the trace file cannot be read", %{scratch: scratch} do
+    assert %{code: 1, stderr: stderr} =
              invoke(["--src", fixture_src(), "--trace", Path.join(scratch, "t.jsonl")])
 
-    assert stderr =~ "not implemented"
+    assert stderr =~ "--trace: cannot read"
+  end
+
+  test "--explain-dropped names every dropped site", %{scratch: scratch} do
+    out = Path.join(scratch, "explained.jsonl")
+
+    assert %{code: 0, stderr: stderr} =
+             invoke(["--src", fixture_src(), "--out", out, "--progress", "none", "--explain-dropped"])
+
+    assert stderr =~ "dropped local_injected: lib/acme_order/schema/line.ex:10 field/2"
+    assert stderr =~ "dropped map_access: lib/acme_order/order.ex:23"
   end
 
   test "writes the snapshot, keeps stdout empty, and summarises on stderr", %{scratch: scratch} do

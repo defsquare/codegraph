@@ -14,7 +14,6 @@ defmodule CodegraphElixir.CLI do
   @exit_ok 0
   @exit_failure 1
   @exit_usage 2
-  @exit_unimplemented 3
 
   defmodule Io do
     @moduledoc "Two sinks; `terminal?` decides whether `--progress auto` prints."
@@ -53,10 +52,6 @@ defmodule CodegraphElixir.CLI do
         io.stdout.("#{@version}\n")
         @exit_ok
 
-      {:ok, %Options{trace: trace}} when trace != nil ->
-        io.stderr.("error: --trace is not implemented yet (PLAN.md §16.5, M15c)\n")
-        @exit_unimplemented
-
       {:ok, options} ->
         extract(options, io, cwd)
     end
@@ -72,6 +67,10 @@ defmodule CodegraphElixir.CLI do
 
     for path <- result.stats.unparsed, do: io.stderr.("unparsed (skipped): #{path}\n")
     for dup <- result.stats.duplicate_keys, do: io.stderr.("duplicate declaration re-keyed: #{dup}\n")
+
+    for {reason, site} <- Enum.reverse(result.stats.explained),
+        do: io.stderr.("dropped #{reason}: #{site}\n")
+
     io.stderr.(CodegraphElixir.Stats.summary(result.stats, result.model))
     io.stderr.("wrote #{options.out}\n")
     @exit_ok

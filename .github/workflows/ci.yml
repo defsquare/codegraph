@@ -265,6 +265,80 @@ jobs:
       - run: ./build.sh --elixir --skip-install --no-auto-install
       - run: ./test.sh --elixir --skip-install --no-auto-install --no-schemas
 
+  elixir-smoke:
+    name: elixir extractor on ${{ matrix.os }}
+    needs: elixir-test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: extractors/elixir/.tool-versions
+          version-type: strict
+      - uses: actions/checkout@v4
+      # The escript, from the repo root with the RELATIVE --src the snapshot
+      # was made with; `cmp` is the whole cross-OS gate: the model is bytes.
+      # (`escript` runs the file on every OS; the bash wrapper is Unix-only.)
+      - shell: bash
+        run: |
+          cd extractors/elixir && mix local.hex --force --if-missing && mix escript.build && cd ../..
+          escript extractors/elixir/dist/codegraph-elixir --version
+          escript extractors/elixir/dist/codegraph-elixir --src fixtures/elixir/src --out out.jsonl --progress plain
+          cmp out.jsonl fixtures/elixir/expected/model.jsonl
+          echo "byte-identical on ${{ matrix.os }}"
+
+  elixir-native:
+    name: elixir native binary on ${{ matrix.os }}
+    needs: elixir-test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: extractors/elixir/.tool-versions
+          version-type: strict
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      # The same steps a developer's `./build.sh --elixir --native` runs; the
+      # Burrito binary must reproduce the snapshot like the escript does.
+      - run: ./build.sh --elixir --native --skip-install --no-auto-install
+      - run: ./test.sh --elixir --skip-install --no-auto-install --no-schemas
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codegraph-elixir-${{ matrix.os }}
+          path: extractors/elixir/dist/*/
+          if-no-files-found: error
+          retention-days: 14
+
+  hex-publish:
+    name: hex publish codegraph_elixir
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [elixir-test, elixir-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: extractors/elixir/.tool-versions
+          version-type: strict
+      # `mix codegraph.trace` for any project that adds the dependency
+      # (PLAN.md §16.7). Skipped, not failed, when the repository holds no
+      # HEX_API_KEY: the GitHub release is the release; Hex is the convenience.
+      - name: publish
+        if: env.HEX_API_KEY != ''
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+        run: cd extractors/elixir && mix local.hex --force && mix hex.publish --yes
+
   release:
     name: github release
     if: startsWith(github.ref, 'refs/tags/v')

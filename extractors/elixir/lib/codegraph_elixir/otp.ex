@@ -52,7 +52,10 @@ defmodule CodegraphElixir.Otp do
            # path (`defimpl P, for: BitString`): defined by the language, like `Any`.
            |> Map.merge(Map.new([Any, BitString, Function, PID, Port, Reference, Tuple], &{&1, MapSet.new()}))
 
-  @kernel MapSet.union(Map.fetch!(@exports, Kernel), Map.fetch!(@exports, Kernel.SpecialForms))
+  @kernel Map.fetch!(@exports, Kernel)
+  # Special forms are variadic (`for`, `try`, `with` take any number of
+  # arguments): matched by name alone.
+  @special_forms @exports |> Map.fetch!(Kernel.SpecialForms) |> Enum.map(&elem(&1, 0)) |> MapSet.new()
 
   @elixir_version System.version()
   @otp_release to_string(:erlang.system_info(:otp_release))
@@ -68,7 +71,8 @@ defmodule CodegraphElixir.Otp do
   end
 
   @doc "A Kernel or Kernel.SpecialForms export: the language itself, never an edge."
-  def kernel?(name, arity) when is_atom(name), do: MapSet.member?(@kernel, {name, arity})
+  def kernel?(name, arity) when is_atom(name),
+    do: MapSet.member?(@kernel, {name, arity}) or MapSet.member?(@special_forms, name)
 
   def size, do: map_size(@exports)
 

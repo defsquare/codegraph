@@ -11,6 +11,7 @@ defmodule CodegraphElixir.Options do
             repository: nil,
             deps: nil,
             trace: nil,
+            explain_dropped: false,
             help: false,
             version: false
 
@@ -30,6 +31,7 @@ defmodule CodegraphElixir.Options do
              repo: %{},
              deps: nil,
              trace: nil,
+             explain_dropped: false,
              help: false,
              version: false
            }),
@@ -44,6 +46,7 @@ defmodule CodegraphElixir.Options do
          repository: repository,
          deps: acc.deps,
          trace: acc.trace,
+         explain_dropped: acc.explain_dropped,
          help: acc.help,
          version: acc.version
        }}
@@ -70,6 +73,7 @@ defmodule CodegraphElixir.Options do
   defp walk(["--repo-provider", value | rest], acc), do: walk(rest, put_in(acc.repo[:provider], value))
   defp walk(["--deps", value | rest], acc), do: walk(rest, %{acc | deps: value})
   defp walk(["--trace", value | rest], acc), do: walk(rest, %{acc | trace: value})
+  defp walk(["--explain-dropped" | rest], acc), do: walk(rest, %{acc | explain_dropped: true})
   defp walk([flag | rest], acc) when flag in ["--help", "-h"], do: walk(rest, %{acc | help: true})
   defp walk(["--version" | rest], acc), do: walk(rest, %{acc | version: true})
 
@@ -124,8 +128,10 @@ defmodule CodegraphElixir.Options do
       --deps <dir>          parse dependency sources under <dir> for their EXPORTS only
                             (names and arities); keys never change, only counts do.
                             Default: none, even when deps/ exists beside the roots
-      --trace <file>        merge a compiler trace made inside the project by
-                            `mix codegraph.trace` (not implemented yet: exit 3)
+      --trace <file>        merge the compiler trace `mix codegraph.trace` wrote inside the
+                            project: calls the parser cannot see (macro-injected) become
+                            `generated` edges; keys never change
+      --explain-dropped     list every dropped site on stderr (reason, file:line, name/arity)
       --repo-remote <url>   normalized https clone URL, no .git suffix
       --repo-commit <sha>   the sha this tree is at — a permalink, not a branch
       --repo-root <path>    repo-relative path of the analyzed root ("" at the repo root)

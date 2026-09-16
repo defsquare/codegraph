@@ -98,7 +98,7 @@ defmodule CodegraphElixir.Body do
   defp visit({:%, meta, [module_ast, {:%{}, _, pairs}]}, ctx, acc) do
     case Scope.resolve(ctx.scope, module_ast) do
       nil ->
-        visit_all(pairs, ctx, count(acc, :dynamic_module))
+        visit_all(pairs, ctx, count(acc, :dynamic_module, meta, ctx, module_ast))
 
       module ->
         acc = raw(acc, "reference", ctx.owner, {:module, module}, meta, ctx)
@@ -178,7 +178,7 @@ defmodule CodegraphElixir.Body do
 
         _ ->
           case Scope.resolve(ctx.scope, first) do
-            nil -> visit(first, ctx, count(acc, :throw_dynamic))
+            nil -> visit(first, ctx, count(acc, :throw_dynamic, meta, ctx, first))
             module -> raw(acc, "throws", ctx.owner, {:module, module}, meta, ctx)
           end
       end
@@ -187,18 +187,20 @@ defmodule CodegraphElixir.Body do
   end
 
   # `apply/2,3` and `:erlang.apply`: dispatch no static reader resolves.
-  defp visit({:apply, _, args}, ctx, acc) when is_list(args) and length(args) in [2, 3] do
-    visit_all(args, ctx, count(acc, :dynamic_dispatch))
+  defp visit({:apply, meta, args}, ctx, acc) when is_list(args) and length(args) in [2, 3] do
+    visit_all(args, ctx, count(acc, :dynamic_dispatch, meta, ctx, {:apply, [], args}))
   end
 
   # Remote call `receiver.f(args)`, or a map access `m.field` (no parens).
   defp visit({{:., _, [receiver, name]}, meta, args}, ctx, acc) when is_atom(name) and is_list(args) do
     case Scope.resolve(ctx.scope, receiver) do
       nil ->
+        node = {{:., [], [receiver, name]}, [], args}
+
         acc =
           if args == [] and Keyword.get(meta, :no_parens, false),
-            do: count(acc, :map_access),
-            else: count(acc, :dynamic_dispatch)
+            do: count(acc, :map_access, meta, ctx, node),
+            else: count(acc, :dynamic_dispatch, meta, ctx, node)
 
         acc = visit(receiver, %{ctx | mode: :expr}, acc)
         visit_all(args, %{ctx | mode: :expr}, acc)
@@ -214,10 +216,13 @@ defmodule CodegraphElixir.Body do
   # A module written as a value: a reference. `__MODULE__` alone is not one.
   defp visit({:__aliases__, meta, _} = ast, ctx, acc) do
     case Scope.resolve(ctx.scope, ast) do
-      nil -> count(acc, :dynamic_module)
+      nil -> count(acc, :dynamic_module, meta, ctx, ast)
       module -> raw(acc, "reference", ctx.owner, {:module, module}, meta, ctx)
     end
   end
+
+  # `x :: spec` inside a binary: the specifier (`size(8)`, `binary-unit(8)`) is syntax, not calls.
+  defp visit({:"::", _, [left, _spec]}, ctx, acc), do: visit(left, ctx, acc)
 
   # Syntax: walk the children only.
   defp visit({form, _, args}, ctx, acc) when form in @syntax and is_list(args), do: visit_all(args, ctx, acc)
@@ -241,7 +246,7 @@ defmodule CodegraphElixir.Body do
 
   defp remote(ctx, acc, module_ast, name, arity, meta, kind) do
     case Scope.resolve(ctx.scope, module_ast) do
-      nil -> count(acc, :dynamic_dispatch)
+      nil -> count(acc, :dynamic_dispatch, meta, ctx, {{:., [], [module_ast, name]}, [], []})
       module -> raw(acc, kind, ctx.owner, {:function, module, name, arity}, meta, ctx)
     end
   end
@@ -251,7 +256,7 @@ defmodule CodegraphElixir.Body do
   defp handler_dispatch(GenServer, name, [server | _], meta, ctx, acc) when name in [:call, :cast] do
     case Scope.resolve(ctx.scope, server) do
       nil ->
-        count(acc, :dynamic_dispatch)
+        count(acc, :dynamic_dispatch, meta, ctx, {{:., [], [GenServer, name]}, [], [server]})
 
       module ->
         handler = if name == :call, do: {:handle_call, 3}, else: {:handle_cast, 2}
@@ -282,5 +287,11 @@ defmodule CodegraphElixir.Body do
     %{acc | edges: [edge | acc.edges]}
   end
 
-  defp count(acc, reason), do: %{acc | counts: Map.update(acc.counts, reason, 1, &(&1 + 1))}
+  # A dropped site: counted by reason, and named for `--explain-dropped`.
+  defp count(acc, reason, meta, ctx, node) do
+    line = Keyword.get(meta, :line, 1)
+    what = node |> Macro.to_string() |> String.replace(~r/\s+/, " ") |> String.slice(0, 80)
+    site = {reason, "#{ctx.file}:#{line} #{what}"}
+    %{acc | counts: Map.update(acc.counts, reason, 1, &(&1 + 1)), sites: [site | acc.sites]}
+  end
 end

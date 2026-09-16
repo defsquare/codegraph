@@ -86,6 +86,18 @@ library, and it reads a tree that neither builds nor has `node_modules`.
 ./bin/codegraph-typescript --src packages --src extractors/typescript --out codegraph.jsonl   # codegraph on itself
 ```
 
+Elixir needs Erlang/OTP on the machine and nothing else: the extractor is the
+compiler's parser used as a library, shipped as an escript, and it reads a
+tree that neither compiles nor has its `deps/` fetched.
+
+```bash
+./build.sh --elixir                                              # mix escript.build
+./bin/codegraph-elixir --src ~/src/some-app --out app.jsonl
+./bin/codegraph-elixir --src ~/src/some-app --deps ~/src/some-app/deps --out app.jsonl   # dependency exports
+./bin/codegraph-elixir --src ~/src/some-app --trace ~/src/some-app/codegraph-trace.jsonl --out app.jsonl
+#   the trace: what the compiler bound after macro expansion — `mix codegraph.trace` inside the project
+```
+
 For C#, the extractor is a Roslyn program that reads `*.cs` directly: no
 solution, no project file, no MSBuild, and a missing NuGet package is a stub
 rather than a build failure. Building it needs the **.NET 10 SDK**:
@@ -287,6 +299,7 @@ so a model file has one direction of truth. The full reference is
 | `extractors/java` | Spoon-based extractor; emits `model.jsonl` |
 | `extractors/csharp` | Roslyn-based extractor (no MSBuild, BCL embedded); one self-contained binary per OS |
 | `extractors/typescript` | compiler-API extractor (no build, no `node_modules` needed); runs with `npx` |
+| `extractors/elixir` | parser-as-library extractor (no compile, no `deps/`); an escript, plus `mix codegraph.trace` for the compiler-trace enrichment |
 | `schemas/` | the generated JSON Schema every extractor must satisfy |
 | `packages/core` | traits, edges, language profiles, validation |
 | `packages/analyzer` | graph, views, folding, cycles, coupling, exports, SQLite store |
@@ -306,6 +319,7 @@ so a model file has one direction of truth. The full reference is
 - [`docs/city-model.md`](docs/city-model.md), [`docs/city-render.md`](docs/city-render.md) — how the city is built and drawn
 - [`docs/csharp-extractor.md`](docs/csharp-extractor.md) — running the C# extractor: the self-contained binary, the .NET runtime alone, or the SDK from source
 - [`docs/typescript-extractor.md`](docs/typescript-extractor.md) — running the TypeScript extractor, how it resolves without a build, reading its summary
+- [`docs/elixir-extractor.md`](docs/elixir-extractor.md) — running the Elixir extractor, the OTP table and the stub discipline, the dropped-site reasons, `--deps` and the `--trace` enrichment
 - [`docs/navigator.md`](docs/navigator.md) — the navigator's design
 - [`docs/insights.md`](docs/insights.md) — the explanation walk's design
 - [`PLAN.md`](PLAN.md) — milestones, decisions and their rationale

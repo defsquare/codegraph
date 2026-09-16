@@ -35,3 +35,4 @@ books
 extractors/elixir/_build/
 extractors/elixir/deps/
 extractors/elixir/dist/
+extractors/elixir/burrito_out/

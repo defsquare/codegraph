@@ -48,7 +48,9 @@ Options:
   --elixir, --elixir-only
                        only extractors/elixir (mix escript.build)
   --native             Java: also build the GraalVM native binary for THIS
-                       platform (extractors/java/dist/<rid>/codegraph-java)
+                       platform (extractors/java/dist/<rid>/codegraph-java);
+                       Elixir: also build the Burrito binary for THIS platform
+                       (extractors/elixir/dist/<rid>/codegraph-elixir, needs Zig 0.16)
   --publish-all        C#: publish linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64
   --rid <rid>          C#: publish exactly this RID (what the CI matrix calls, one per job)
   --all                everything (default)
@@ -206,8 +208,20 @@ if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
   step "build elixir extractor (mix escript.build)"
   ( cd "$ELIXIR_DIR" && run mix local.hex --force --if-missing >/dev/null && run mix escript.build )
   step_done
+  # The Burrito binary for THIS host (PLAN.md §16.7): a prod release wrapped
+  # with its ERTS, nothing to install on the machine that runs it. Other
+  # targets need their ERTS downloaded and, for Windows, 7z: CI's job.
   if [ "$NATIVE" = "yes" ]; then
-    warn "--native for the Elixir extractor (a Burrito binary) is M15c — the escript is the deliverable for now"
+    step "build elixir native binary (burrito, $(host_rid))"
+    ensure_zig
+    ( cd "$ELIXIR_DIR" && MIX_ENV=prod run mix deps.get >/dev/null && \
+      MIX_ENV=prod BURRITO_TARGET="$(burrito_target "$(host_rid)")" run mix release codegraph_elixir --overwrite )
+    run mkdir -p "$ELIXIR_DIR/dist/$(host_rid)"
+    case "$(host_rid)" in
+      win-*) run cp "$ELIXIR_DIR/burrito_out/codegraph_elixir_$(burrito_target "$(host_rid)").exe" "$ELIXIR_DIR/dist/$(host_rid)/codegraph-elixir.exe" ;;
+      *)     run cp "$ELIXIR_DIR/burrito_out/codegraph_elixir_$(burrito_target "$(host_rid)")" "$ELIXIR_DIR/dist/$(host_rid)/codegraph-elixir" ;;
+    esac
+    step_done
   fi
 fi
 
@@ -255,6 +269,12 @@ if wants_csharp && [ "$SKIP_CSHARP" = "no" ]; then
 fi
 if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
   report "$ELIXIR_DIR/dist/codegraph-elixir"
+  if [ "$NATIVE" = "yes" ]; then
+    case "$(host_rid)" in
+      win-*) report "$ELIXIR_DIR/dist/$(host_rid)/codegraph-elixir.exe" ;;
+      *)     report "$ELIXIR_DIR/dist/$(host_rid)/codegraph-elixir" ;;
+    esac
+  fi
 fi
 [ "$missing" -eq 0 ] || die "$missing expected artifact(s) missing — the build did not produce a usable tree"
 step_done

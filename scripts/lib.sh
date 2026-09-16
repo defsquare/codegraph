@@ -446,6 +446,27 @@ ensure_erlang() {
   ok "elixir $(elixir --version 2>/dev/null | tail -1 | sed 's/^Elixir //')"
 }
 
+# Burrito (the Elixir native binary) cross-builds through Zig, whose version
+# Burrito pins exactly. Found on PATH, then in the user-local unpack of the
+# ziglang.org tarball; never installed automatically.
+ensure_zig() {
+  local candidate
+  if ! command -v zig >/dev/null 2>&1; then
+    for candidate in "$HOME"/.local/share/zig/zig-*-0.16.*; do
+      if [ -x "$candidate/zig" ]; then export PATH="$candidate:$PATH"; break; fi
+    done
+  fi
+  command -v zig >/dev/null 2>&1 || die \
+    "no zig found — the Elixir native binary (Burrito) needs Zig 0.16.0" \
+    "user-local: curl -fsSL https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz | tar -xJ -C ~/.local/share/zig" \
+    "homebrew:   brew install zig" \
+    "or build the escript only: $SCRIPT_NAME --elixir"
+  ok "zig $(zig version)"
+}
+
+# linux-x64 -> linux_x64: the Burrito target name of a RID (mix.exs `releases`).
+burrito_target() { printf '%s' "$1" | tr '-' '_'; }
+
 # ------------------------------------------------------- shared parsing -----
 
 # Defaults every script shares; each script may add its own flags on top.

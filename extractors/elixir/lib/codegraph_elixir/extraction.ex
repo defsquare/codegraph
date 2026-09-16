@@ -6,7 +6,7 @@ defmodule CodegraphElixir.Extraction do
   close is dropped and counted, never written dangling and never an abort.
   """
 
-  alias CodegraphElixir.{Corpus, Deps, Ids, Otp, Progress, Scope, Stats, Walker}
+  alias CodegraphElixir.{Corpus, Deps, Ids, Otp, Progress, Scope, Stats, Trace, Walker}
   alias CodegraphElixir.Model
   alias CodegraphElixir.Model.{Edge, Entity, Key}
 
@@ -47,7 +47,12 @@ defmodule CodegraphElixir.Extraction do
         end),
       dynamic_modules_dropped: Enum.sum(Enum.map(walked, & &1.dynamic_modules)),
       duplicate_keys: Enum.flat_map(walked, & &1.duplicate_keys),
-      dropped: Enum.reduce(walked, %{}, fn w, acc -> Map.merge(acc, w.counts, fn _, a, b -> a + b end) end)
+      dropped: Enum.reduce(walked, %{}, fn w, acc -> Map.merge(acc, w.counts, fn _, a, b -> a + b end) end),
+      explained:
+        if(options.explain_dropped,
+          do: Enum.flat_map(walked, &Enum.reverse(&1.sites)) |> Enum.reverse(),
+          else: []
+        )
     }
 
     # The whitelist: every module the corpus declares, by atom — the first
@@ -59,12 +64,27 @@ defmodule CodegraphElixir.Extraction do
       end)
 
     stats = %Stats{stats | duplicate_modules: duplicates}
-    world = %{whitelist: whitelist, deps: deps, impls: impl_index(whitelist)}
+
+    world = %{
+      whitelist: whitelist,
+      deps: deps,
+      impls: impl_index(whitelist),
+      explain?: options.explain_dropped
+    }
 
     {edges, entities, stubs, stats} =
       Progress.phase(progress, "edges", fn -> close(raw_edges, entities, world, stats) end, fn {e, _, _, _} ->
         "#{length(e)} edges"
       end)
+
+    # The `--trace` enrichment: what the compiler bound after expansion, as `generated` edges.
+    {edges, stubs, stats} =
+      Progress.phase(
+        progress,
+        "trace",
+        fn -> Trace.merge(options.trace, corpus, world, edges, stubs, stats) end,
+        fn {_, _, s} -> if(s.trace == nil, do: "none", else: "#{s.trace.added} edges added") end
+      )
 
     stub_entities = Progress.phase(progress, "stubs", fn -> emit_stubs(stubs) end, &"#{length(&1)} stubs")
 
@@ -173,7 +193,9 @@ defmodule CodegraphElixir.Extraction do
             {edges, stubs, %Stats{stats | kernel: stats.kernel + 1}}
 
           {:drop, reason, stubs} ->
-            {edges, stubs, Stats.drop(stats, reason)}
+            stats = Stats.drop(stats, reason)
+            stats = if world.explain?, do: Stats.explain(stats, reason, site(raw)), else: stats
+            {edges, stubs, stats}
         end
       end)
 
@@ -190,6 +212,39 @@ defmodule CodegraphElixir.Extraction do
       end)
 
     {Enum.reverse(edges), entities, stubs, stats}
+  end
+
+  # `reason file:line name` — what --explain-dropped prints.
+  defp site(raw) do
+    {file, line, _} = raw.anchor
+
+    name =
+      case raw.to do
+        {:function, m, f, a} -> "#{Scope.module_name(m)}.#{f}/#{a}"
+        {:local, _m, f, a, _} -> "#{f}/#{a}"
+        {:handler, m, {f, a}} -> "#{Scope.module_name(m)}.#{f}/#{a}"
+        {:attribute, m, n} -> "#{Scope.module_name(m)}.@#{n}"
+        {:field, m, n} -> "%#{Scope.module_name(m)}{#{n}}"
+        {:file_of, m} -> Scope.module_name(m)
+        {:module, m} -> Scope.module_name(m)
+        _ -> "?"
+      end
+
+    "#{file}:#{line} #{name}"
+  end
+
+  @doc "Resolve one raw edge's target against the corpus — shared with the trace merge."
+  def resolve(raw, world, stubs), do: resolve_target(raw, world, stubs)
+
+  @doc "Resolve an edge END (a key, or a module atom) — shared with the trace merge."
+  def resolve_endpoint(target, world, stubs), do: resolve_end(target, world, stubs)
+
+  @doc "The declared function of a corpus module covering `name/arity`, defaults folded."
+  def declared_function(world, module, name, arity) do
+    case Map.fetch(world.whitelist, module) do
+      {:ok, declared} -> lookup(declared.functions, name, arity)
+      :error -> nil
+    end
   end
 
   # A `type` literal names a module: closed like any reference.
@@ -390,9 +445,10 @@ defmodule CodegraphElixir.Extraction do
     end
   end
 
-  defp injected?(snapshot, world) do
-    Enum.any?(Map.get(snapshot, :uses, []), fn used -> not Map.has_key?(world.whitelist, used) end)
-  end
+  # Any `use` may have injected the name — a corpus macro's `__using__` is as
+  # opaque to the parser as a dependency's (the standard library's own tests
+  # `use ExUnit.Case`).
+  defp injected?(snapshot, _world), do: Map.get(snapshot, :uses, []) != []
 
   defp resolve_handler(module, name, arity, world, stubs) do
     case Map.fetch(world.whitelist, module) do

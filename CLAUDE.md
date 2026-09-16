@@ -29,6 +29,13 @@ extractors/typescript/ pnpm workspace package `codegraph-typescript` (the
                      a tsconfig read for resolution options only, no build, no
                      node_modules needed) → emits model.jsonl. Runtime dependency:
                      `typescript` alone — never @codegraph/* (a boundary test).
+extractors/elixir/   Mix project `codegraph_elixir` (the compiler's PARSER as a
+                     library: `Code.string_to_quoted/2` + a lexical resolver + an
+                     OTP module/export table baked at compile time; no compile, no
+                     deps/) → emits model.jsonl. Shipped as an escript (Elixir
+                     embedded, Erlang/OTP on the machine). `mix codegraph.trace`
+                     writes the compiler trace `--trace` merges as `generated`
+                     edges. No runtime dependency.
 schemas/             Generated per-record JSON Schemas + the container contract
                      (README.md) — THE cross-language contract, committed.
 packages/core/       @codegraph/core — traits, edges, language profiles (data),
@@ -138,6 +145,12 @@ extractors/csharp/dist/linux-x64/codegraph-csharp --src <dir> --out model.jsonl
 ./bin/codegraph-typescript --src <dir> --out model.jsonl   # after `pnpm -r build`; no other toolchain
 ./bin/codegraph-typescript --src packages --src extractors/typescript --out codegraph.jsonl   # self-hosting
 #   docs/typescript-extractor.md; `test.sh --ts` checks the built bundle against fixtures/typescript
+
+./build.sh --elixir                                 # mix escript.build → extractors/elixir/dist/codegraph-elixir
+./bin/codegraph-elixir --src <dir> --out model.jsonl   # needs Erlang/OTP 27+ on PATH (or ~/.local/share/beam)
+./bin/codegraph-elixir --src <dir> --deps <dir>/deps --trace <dir>/codegraph-trace.jsonl --out model.jsonl
+#   docs/elixir-extractor.md; `test.sh --elixir` = mix test + the escript must reproduce fixtures/elixir
+#   the trace, inside the project: ERL_FLAGS="-pa <repo>/extractors/elixir/_build/dev/lib/codegraph_elixir/ebin" mix codegraph.trace
 
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
 ./bin/codegraph serve model.jsonl                  # navigator + City tab at http://localhost:4177

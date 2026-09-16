@@ -241,6 +241,17 @@ if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
   else
     warn "no escript at $ELIXIR_DIR/dist/codegraph-elixir — run ./build.sh --elixir for the smoke test"
   fi
+
+  # The Burrito binary is a different runtime (its own ERTS, the release's
+  # boot, Burrito's argv plumbing), not a repackaging: the same `cmp`.
+  bin="$ELIXIR_DIR/dist/$(host_rid)/codegraph-elixir"
+  [ -x "$bin" ] || bin="$bin.exe"
+  if [ -x "$bin" ]; then
+    phase "native elixir binary reproduces the snapshot" \
+      sh -c "cd '$ROOT' && out=\$(mktemp) && '$bin' --src fixtures/elixir/src --out \"\$out\" --progress none >/dev/null 2>&1 && cmp \"\$out\" fixtures/elixir/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
+  else
+    warn "no native binary at $ELIXIR_DIR/dist/$(host_rid) — run ./build.sh --elixir --native for the smoke test"
+  fi
 fi
 
 # The ERR trap must not fire here: `verdict` reporting failures IS the result.
