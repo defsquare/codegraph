@@ -1195,6 +1195,10 @@ that it cannot be detected by construction.
    analyzed model as a 3D city — districts = modules, buildings = types
    (height/footprint/color mapped to documented metrics), edges as flows.
    Consumes analyzer output only; visual-language rules live in `CLAUDE.md`.
+5. **Elixir** via the compiler's parser as a library plus a lexical resolver,
+   compilation tracers as the optional enrichment — planned in full as
+   Phase 13 (§16, M15): the first macro-first, dynamically dispatched
+   language, `generated` and `dynamic-candidate` provenance exercised for real.
 
 Documented static limits (all languages, per profile `notes`): reflection,
 `Class.forName`/Spring XML, service loaders, pre-expansion macro code.
@@ -2699,7 +2703,7 @@ binaries the app carries. **The CLI is the backend**: nothing is rewritten, the
 pipeline of §7, §11, §12 and the navigator is called through a long-lived
 process instead of one command line.
 
-Locked decisions, each with its reason (the delta table in §17 repeats them):
+Locked decisions, each with its reason (the delta table in §18 repeats them):
 
 - **Tauri is the shell, not a runtime.** Window, native menu, folder dialog,
   drag-and-drop, sidecar lifecycle, bundling, signing and notarization. No
@@ -2911,7 +2915,449 @@ resolver seams covered; the WebGL screenshots reviewed.
 
 ---
 
-## 16. Milestones
+## 16. Phase 13 — Elixir extractor (the parser as a library, tracers as enrichment) (M15)
+
+Motivation: the fourth real extractor is the first for a **dynamic, macro-first
+language on a VM with no class library of types** — the case the trait design
+was built for (§2, the Clojure fn-var) and the one no shipped extractor has
+exercised. Elixir brings three things the pipeline has not modeled: a
+`defmodule` that is at once the compilation unit, the namespace and the type
+(a struct, a behaviour, a protocol are all modules); dispatch that is
+overwhelmingly dynamic by design (protocols, behaviours called by OTP, message
+passing) and must be reported honestly rather than guessed; and code that does
+not exist before macro expansion (`use`, `@derive`, a Phoenix router, an Ecto
+schema) — the Clojure profile's `generated` provenance, for real. Its legacy is
+of the non-compilable kind too: a Phoenix 1.3 app whose `deps/` no longer
+resolves and whose `mix compile` fails at the first `use Ecto.Schema`.
+
+**What is the Spoon / Roslyn / tsc of Elixir?** The compiler again — but split
+in two, and the split is the design:
+
+| Roslyn / `ts` | Elixir | Role |
+|---|---|---|
+| `SyntaxTree` | `Code.string_to_quoted/2` → the quoted AST (`{form, meta, args}`), `columns: true`, `token_metadata: true` (`do`/`end`/`closing` positions), `literal_encoder` for literal positions | syntax with positions; the same data structure every macro receives |
+| `SemanticModel` / `TypeChecker` | **none before expansion.** Binding happens in `:elixir_expand`, reachable only by compiling, through **compilation tracers** (`Code.put_compiler_option(:tracers, …)`: `remote_function`, `local_function`, `imported_function`, `alias_reference`, `require`, `import`, `struct_expansion`, `on_module`) | exact calls after macro expansion — Spoon-grade, and unreachable without every dependency present |
+| the BCL ref pack / `lib.*.d.ts` | the Elixir standard library and Erlang/OTP: a module and export table generated at build time from the building Elixir/OTP (`Application.spec(:elixir, :modules)`, `:code.all_available/0`, `Module.exports/1`) and embedded in the extractor | what `Enum.map/2`, `Kernel.is_nil/1`, `:ets.lookup/2` resolve to on a machine with nothing installed |
+| `IErrorTypeSymbol` | a local call that binds to nothing (a macro-injected import the AST cannot see) | binding failure, tolerated, counted, never fatal |
+
+So the baseline is a **lexical resolver over the parser's AST** — the alias /
+import / require / use scope stack, nested-`defmodule` auto-aliases,
+`__MODULE__`, the embedded OTP table — and it needs nothing but source. It is
+"noClasspath" by construction: a file that parses is a file that extracts. The
+tracer is the optional enrichment (`--trace`, §16.5), the `--references` slot
+of §13 and the `--deps` idea of §14: it needs a project that compiles, and when
+it has one it recovers what the baseline honestly could not.
+
+The alternatives, and why they are not the baseline:
+
+| Candidate | What it is | Verdict |
+|---|---|---|
+| **`mix xref`** | the compiler's own dependency graph (`mix xref graph`, compile/export/runtime edges between modules) | not an extractor — it needs a compiled project, knows modules only (no functions, no anchors, no provenance), and says nothing a tracer does not. It becomes an **oracle** (§16.6): on a corpus that compiles, the baseline's module layer must reproduce it |
+| **tree-sitter-elixir driven from TypeScript** | a parser with a CST | rejected — it re-implements the Elixir parser's desugaring (do-blocks, keyword lists, multi-clause heads, sigils, operators as calls) to reach the quoted form the language defines, and can never reach tracers. The compiler's own parser is the reference and is a library call away |
+| **ElixirSense / ElixirLS / Expert's Spitfire** | editor-oriented analysis (error-tolerant parsing, completion metadata) | not a baseline — designed for one file with a warm project, not one pass over a corpus; Spitfire's error tolerance is a later enrichment for files the compiler's parser rejects (§16.8) |
+| **`Code.compile_file` / `Code.eval_*` on corpus files** | running the corpus | never — evaluating corpus code is the thing the pipeline refuses (§5.2, §13); a `mix.exs` is read as source, not run |
+
+Three principles, locked up front:
+
+1. **The parser without the compiler — the noClasspath of Elixir.** The
+   extractor never runs `mix`, never reads `_build`, never loads a corpus
+   module. It walks `--src` for `*.ex` and `*.exs` (skipping `_build`, `deps`,
+   `.elixir_ls`, `node_modules`), parses each file to its quoted form, and
+   resolves names through a lexical scope stack plus the embedded OTP table. A
+   module the corpus does not declare is a stub, not a failure; a file the
+   parser rejects is skipped and counted, never fatal. Everything visible
+   **before** expansion is `declared`; what only expansion produces is
+   `generated` when the language itself defines the expansion (`use X` calls
+   `X.__using__/1`; `@derive P` defines an impl) and absent otherwise, with the
+   absence counted.
+2. **No metamodel intelligence, and the extractor is a BEAM program.** It is
+   written in Elixir, on the language's own parser, and shipped as an escript
+   (the jar: needs Erlang/OTP on the machine, nothing else — an escript embeds
+   Elixir) and as a Burrito binary per OS (the GraalVM image: needs nothing).
+   It knows the Elixir id scheme, the kind→traits table and how to write bytes;
+   trait vocabulary, profile validation and closure live in `core`, and the
+   cross-language gate (`packages/core/test/fixtures-elixir.test.ts`) is where
+   the two halves meet. `codegraph snapshots --extractor` and the M14 registry
+   run it as a process under the §13.5 contract and learn no Elixir.
+3. **Byte-identity across OS and across install state.** Two runs over one
+   unchanged corpus write the same bytes on Linux, macOS and Windows, from the
+   escript and from the binary; and because external modules are keyed by
+   **module name** under reserved modules (`<otp>`, `<deps>`, `<unresolved>`,
+   §16.3), never by a path under `deps/`, the keys of a model do not depend on
+   what is checked out beside it. Edge *counts* do (`--deps` resolves imported
+   names through dependency sources, §16.5), and the fixture snapshot is
+   produced with no `deps/` at all.
+
+### 16.1 Toolchain and repository layout
+
+```
+extractors/elixir/                     Mix project `codegraph_elixir` (escript name `codegraph-elixir`)
+  mix.exs                              deps: NONE at runtime (Elixir ≥ 1.18 for the built-in `JSON`); ex_unit + stream_data (property tests) for test
+  lib/codegraph_elixir/
+    cli.ex                             the extractor contract (schemas/README.md §8) + --deps, --trace
+    corpus.ex                          pass 0: walk (ordinal order), parse each file (`Code.string_to_quoted_with_comments/2`), the skipped-file count
+    otp.ex                             the embedded OTP table (modules + exports of the building Elixir/OTP), generated by `mix codegraph.otp_table` at build time
+    scope.ex                           the lexical resolver: alias / import / require / use stack, nested defmodule, __MODULE__, Kernel except:
+    whitelist.ex                       pass 1: every defmodule under the roots — membership, never a name prefix
+    ids.ex                             THE Elixir id scheme (§16.3): keys, escaping, arity
+    entities.ex                        pass 2
+    edges.ex                           pass 3
+    stubs.ex                           pass 4: <otp> / <deps> / <unresolved> stubs
+    measures.ex                        sloc (`:elixir_tokenizer`, the compiler's own lexer) + cyclomatic
+    literals.ex                        module-attribute constants, struct-field defaults, parameter defaults (`\\`)
+    model/                             NaturalKey, Entity, Edge, canonical order (UTF-16 code units), JsonlWriter (`JSON.encode_to_iodata!`)
+  test/                                ExUnit; the C# suite's names where the property is the same (snapshot, determinism, stub-discipline,
+                                       ids, schema-per-line, cli) + scope, arity, clauses, defimpl, dynamic-candidate
+  priv/otp/<elixir>-<otp>.etf          the generated OTP table (Erlang term format), one per building toolchain; the fixture pins one
+  dist/<rid>/codegraph-elixir          Burrito output, one per OS/arch (build.sh --elixir --native)
+bin/codegraph-elixir                   the escript (build.sh --elixir)
+fixtures/elixir/src/                   the reference corpus (§16.6): `acme_order`, the Java, C# and TypeScript corpora's twin, Mix-shaped
+fixtures/elixir/expected/model.jsonl
+```
+
+- `scripts/lib.sh` gains `have_elixir_extractor`, `ensure_erlang` (Erlang/OTP
+  ≥ 27 and Elixir ≥ 1.18 on PATH, or the instructions to install them with
+  `mise`/`asdf`); `build.sh --elixir` runs `mix escript.build`, `--native` adds
+  Burrito; `test.sh --elixir` runs `mix test` and then the built escript AND
+  the binary (when present) on `fixtures/elixir/src` with `cmp` against the
+  snapshot — the Java/C# shape. CI adds `elixir-test` (`erlef/setup-beam`) and
+  `elixir-smoke` on the three OS runners.
+- **Nothing installed on the machine that runs the binary.** An escript needs
+  `escript` (Erlang) on PATH — the jar's JDK. Burrito wraps a Mix release with
+  its ERTS into one executable per target (Linux x64/arm64, macOS x64/arm64,
+  Windows x64), cross-built from one host through Zig — the `dotnet publish`
+  matrix of §13.7. The `--version` output names the Elixir and OTP versions the
+  OTP table was generated from, and the header carries them as extra keys
+  under `extractor` (the header schema allows it), so a model says which
+  standard library it resolved against.
+- `codegraph snapshots --extractor` learns nothing new: an escript is a file
+  with `#!/usr/bin/env escript` and runs directly on Linux/macOS; on Windows
+  the registry entry (§15) names `escript.exe <path>` or the Burrito binary.
+  The M14 cask gains a fifth `binary` stanza and the registry a fourth entry
+  (`extensions: [".ex", ".exs"]`).
+- The extractor's own `mix.exs` has no runtime dependency: `JSON` (Elixir
+  1.18), `Code`, `Macro` and `:elixir_tokenizer` are the whole front end.
+  `stream_data` is a test dependency, the fast-check of this side.
+
+### 16.2 Mapping table (Elixir profile — new, `ex`)
+
+There is no Elixir profile yet; the first M15 commit is `feat(core): elixir
+profile` — the tenth, data before implementation (invariant 8; the profile
+registry's "nine profiles" test becomes ten). Its shape follows two prior
+decisions rather than inventing a third:
+
+| Decision | Why |
+|---|---|
+| **the module (`TModule`) is the file**, the TypeScript rule verbatim | Elixir has no namespace: `MyApp.Accounts.User` is one atom, and nothing contains it but the file it is written in (invariant 5). The import layer stays file-level and comparable with TypeScript's (invariant 9); umbrella apps (`apps/<name>/lib/…`) fall out as directory districts with no extra concept |
+| **a `defmodule` is a `module` kind carrying `TType`** — one building per defmodule | the module IS the type: a struct is `%Mod{}`, a behaviour is a module, a protocol is a module, `@spec f :: Mod.t()`. Making only `defstruct` modules types would leave most of a Phoenix app's city empty; a separate `struct` entity would draw two buildings for one thing |
+| no `inheritance`, no `embedding` | Elixir has neither; the absence is profile information, as in Go and Clojure |
+| `TWithLocalVariables` deferred (optional on the profile, unemitted in M15) | every match binds; emitting each `=` as a local multiplies entities by ten for no edge the analyzer reads today. The trait stays licensed so M15c can add it without a profile change |
+
+Kinds, with the traits that identify them (`TSourceAnchor`, `TComment`,
+`TMetrics` optional wherever it makes sense):
+
+| kind | required traits | Elixir construct |
+|---|---|---|
+| `file` | `TNamed, TModule, TWithChildren` | a source file; optional `TWithInvocations`, `TWithAccesses` — `config/*.exs` and `mix.exs` call at top level (the TypeScript module rule) |
+| `module` | `TNamed, TType, TWithChildren, TChildOf, TSourceAnchor` | `defmodule`; optional `TWithImplements` (`@behaviour`, `defimpl`, `@derive`), `TAttachedTo` (a `defimpl` block, attached to the type it implements for), `TComment` (`@moduledoc`) |
+| `protocol` | as `module` | `defprotocol`; its `def`s are `callback` children |
+| `function` | `TNamed, TInvocable, TWithParameters, TWithInvocations, TWithAccesses, TChildOf, TSourceAnchor` | `def` / `defp`, every clause folded into ONE entity (§16.3); `defdelegate` is a `function` whose body is one invocation; `private: true` rides as a pass-through key (the metamodel has no visibility, the contract tolerates the key) |
+| `macro` | as `function` | `defmacro` / `defmacrop`; the guard `@doc` reads; a call to it is an `invocation` whose expansion is invisible |
+| `callback` | `TNamed, TInvocable, TWithParameters, TChildOf, TSourceAnchor` | `@callback`, `@macrocallback`, a protocol's `def` — the interface-method analog, no body |
+| `field` | `TNamed, TStructural, TChildOf, TSourceAnchor` | a `defstruct` / `defexception` key; optional `TWithValue` (the default) |
+| `attribute` | `TNamed, TStructural, TChildOf, TSourceAnchor` | `@name value` for a non-reserved attribute — the module constant; optional `TWithValue`, `TWithAccesses` (its value may reference modules) |
+| `parameter` | `TStructural, TChildOf` | one per position of the folded function; optional `TNamed` (from the first clause that names the position, `_`-prefixed and bare `_` excluded), `TWithValue` (a `\\` default) |
+
+Construct → what the model says, on top of that table:
+
+| Elixir construct | model |
+|---|---|
+| `defmodule A.B do … end`, nested `defmodule C` inside it | two `module` entities, `A.B` and `A.B.C`, both children of the file (nesting is an alias, not containment); `C` is aliased inside `A.B` (the auto-alias rule) |
+| `defimpl P, for: T` (and `for: [T1, T2]`) | a `module` named as the compiler names it (`P.T`), child of the file, `attachedTo` → T; an `interfaceImplementation` edge T → P, `declared`, anchored at the block — the Clojure `implBlock` shape (METAMODEL.md §7) with the name Elixir gives it. `for: Any` → the stub type `<otp>/Any` |
+| `@behaviour B` | `interfaceImplementation` module → B, `declared` |
+| `use X` / `use X, opts` | an `import` edge file → X's file (declared, form `use`) AND an `invocation` of `X.__using__#1` (declared: `use` is defined as `require X` + `X.__using__(opts)`). What `__using__` injects — `@behaviour`, imports, `def`s — is NOT modeled in the baseline and every local it would have bound is counted (§16.4); `--trace` recovers it as `generated` |
+| `@derive P` / `@derive {P, opts}` | `interfaceImplementation` module → P, provenance **`generated`**, anchored at the attribute — the language defines the expansion (`Protocol.derive/3`), so the fact is safe to state and honest to mark |
+| `alias A.B`, `alias A.{B, C}`, `alias A, as: X`, `import M` (`only:`/`except:`), `require M` | one `import` edge kind, file → M's file (or the stub module), with the written form as a pass-through key (`alias`/`import`/`require`/`use`) — the TypeScript "three ways to import, one edge kind" rule. Scoped forms inside a function apply to that function's body only |
+| `M.f(a, b)`, `M.f a, b`, `x \|> M.f(b)` (arity + 1), `:erl_mod.f(x)`, `__MODULE__.f(x)`, `alias`-resolved `F.f(x)` | `invocation` → `M.f#arity`; M resolved through the scope stack; a corpus M → the declared function (defaults fold, §16.3); M in the OTP table → its stub; else a stub under `<deps>` |
+| `f(a, b)` (a local call) | resolved in this order: a `def`/`defp`/`defmacro` of the enclosing module with that name and arity (defaults folded) → an explicit `import M` that exports it (a corpus M, or the OTP table) → Kernel / Kernel.SpecialForms (unless `import Kernel, except:` removed it) → the **sole** non-corpus `import M` that could provide it (attributed to `<deps>/M.f#arity`, counted as `import-attributed`) → two or more candidates: dropped and counted → nothing: dropped and counted as `local-unbound` — the macro-injected import, the baseline's stated ceiling |
+| `&M.f/2`, `&f/2`, `&M.f(&1, x)` | `reference` → the function; the call happens elsewhere (the Clojure higher-order rule) |
+| `%M{…}`, `%M{s \| …}`, `%__MODULE__{}` in expressions and patterns | `reference` → M (struct expansion); each named key → `access` to `M.<key>` (`isRead` in a pattern, `isWrite` in an update or construction) — the ONLY static field access Elixir has; `s.name` is a runtime map access, dropped and counted |
+| `@attr` read inside a body | `access` → the module's `attribute`, `isRead` |
+| `children = [MyWorker, {Registry, keys: :unique}]`, `Supervisor.start_link(children, …)`, any module atom in argument position | `reference` → the module — how the supervision tree surfaces; a module in argument position is a value, not a call |
+| `GenServer.call(__MODULE__, msg)`, `.cast`, `Agent.get(__MODULE__, …)`, `send(self(), …)` | `invocation` → the target module's `handle_call#3` / `handle_cast#2` / `handle_info#2`, provenance **`dynamic-candidate`** with every clause-folded handler as the candidate set and `to` the first — the one message-passing form that is statically honest, because `__MODULE__` names the module. Any other first argument (a pid, a name, a variable): dropped and counted as `dynamic-dispatch` |
+| `P.f(x)` where P is a corpus `defprotocol` | `invocation` → `P.f#arity` (the `callback`), provenance `dynamic-candidate`, candidates = every corpus `defimpl` of P's `f#arity` — the Go interface-call and Clojure multimethod rule; a protocol from `<otp>` (`Enumerable`, `String.Chars`) → an ordinary stub invocation, its impls unknown |
+| `raise M`, `raise M, msg`, `reraise M, …` | `throws` → M (`<otp>/RuntimeError` for `raise "text"`, `<otp>/ArgumentError` for `raise ArgumentError`); `throw`/`exit` are not exceptions and yield nothing |
+| `@spec f(A.t()) :: B.t()`, `@type t :: %__MODULE__{…}`, `@typep`, `@opaque` | `reference` edges from the function (or module) to every named remote type's module; `@type` is not an entity in M15 (noted) |
+| `@moduledoc "…"`, `@doc "…"`, the `#` comment block directly above a definition | `comments` (`TComment`) — the docs are the semantic comment, the `#` block is what the TypeScript rule takes |
+| `defexception [:message, :code]` | a `module` with `field` children, `TWithImplements` (the `Exception` behaviour it declares) |
+| `defdelegate f(a), to: M, as: :g` | a `function` `f#1` with one `invocation` → `M.g#1`, `declared` — the delegation is written |
+| `apply(M, :f, args)`, `mod.f(x)` with `mod` a variable, `Module.concat(…)`, `Code.eval_*`, `:erlang.apply` | dropped and counted as `dynamic-dispatch` — the profile's blind spot, stated |
+| a file `Code.string_to_quoted` rejects | skipped, counted as `unparsed`, the path on stderr; the model carries the file record without entities |
+
+Explicitly NOT extracted in M15, stated in the profile `notes`: definitions a
+`use`d macro injects (a Phoenix router's routes, an Ecto schema's fields, a
+`plug` pipeline) and the locals that call them; callback implementations as
+edges (`handle_call/3` under `@behaviour GenServer` — the analyzer recovers
+"implements callback" from `interfaceImplementation` + name/arity, as it does
+for Java overrides); message passing beyond the `__MODULE__` form; process
+topology at runtime (`Registry`, `:via` tuples, dynamic supervisors); `.erl`
+files in a mixed corpus (an Erlang profile is its own phase); `@type` entities.
+
+### 16.3 The Elixir id scheme (`ids.ex`)
+
+```
+module (file)      ex:lib%2Facme_order%2Forder.ex                       path relative to root, escaped
+external (OTP)     ex:<otp>/Enum     ex:<otp>/ets     ex:<otp>/Enum.map#2   the embedded table: Elixir + Erlang/OTP, by module name
+external (deps)    ex:<deps>/Ecto%2EChangeset     …/Ecto%2EChangeset.cast#3  a module nothing under the roots declares
+unresolved         ex:<unresolved>/from#2                               a local call that binds to nothing, as written
+module (defmodule) ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder     the atom as written, its dots escaped
+function / macro   …/AcmeOrder%2EOrder.total#1     …/AcmeOrder%2EOrder.create#2   name, then ARITY as the disambiguator — always present
+defimpl module     ex:lib%2Facme_order%2Fmoney.ex/String%2EChars%2EMoney   the compiler's name for it
+callback           …/AcmeOrder%2EPricing.price#2                          the same shape as a function
+field / attribute  …/AcmeOrder%2EOrder.lines      …/AcmeOrder%2EOrder.@max_lines   no arity: a 0-arity `lines#0` cannot collide
+parameter          …/AcmeOrder%2EOrder.create#2#param:attrs     …#2#param:2 (an unnamed position, by ordinal)
+```
+
+- **Escaping, the TypeScript rule with one more input.** `/`, `#` and `%`
+  are percent-encoded in every path segment and name; `.` is the nesting
+  separator inside a symbol, so a **module atom's own dots** are encoded
+  (`AcmeOrder%2EOrder`) exactly as a TypeScript name containing `.` is. The
+  rejected shortcut — leaving the dots and relying on the rule that alias
+  segments start uppercase while function names do not — holds for
+  `defmodule A.B` and fails for `defmodule :"a.b"`, which is legal; the
+  encoding is injective by construction, pinned by a `stream_data` round-trip
+  property, and the module's `name` is the atom as written, which is what the
+  city and navigator display.
+- **Arity is identity, always.** `f/1` and `f/2` are unrelated functions in
+  Elixir, so the disambiguator is never absent on a `function`, `macro` or
+  `callback`. `def f(a, b \\ 1)` declares `f/1` and `f/2`: ONE entity, `f#2`,
+  and a call `f(x)` resolves to it (the profile note states the fold; a
+  `defaults: 1` pass-through key says how many arities it covers). Multiple
+  clauses of one `f/2` are ONE entity anchored from the first clause's line
+  to the last clause's `end` — the TypeScript overload fold, with the
+  `parameter` set taken per position across clauses (§16.2).
+- **`defimpl` is a named module.** `defimpl String.Chars, for: Money`
+  defines `String.Chars.Money` on the BEAM; the key uses that name in the
+  file where the block is written, and `attachedTo` carries the relation the
+  name only implies.
+- **Stub keys have the same shape as declared keys** — membership is the
+  whitelist, never the key or the name. Three reserved modules, each a fact
+  about where the name was NOT found: `<otp>` (in the embedded table — the
+  BEAM ships it), `<deps>` (a module the roots do not declare and the table
+  does not know — a dependency, whichever one), `<unresolved>` (a local that
+  bound nowhere, keyed by name and arity as written). `:ets` and `Enum` sit
+  side by side in `<otp>`: the Erlang/Elixir split is a naming convention on
+  one VM, not a boundary the model should invent.
+
+### 16.4 Stub discipline, parser edition
+
+Pass 1 builds the whitelist: every `defmodule` (and `defprotocol`, `defimpl`)
+under the roots, by atom. Then:
+
+| The resolver says | The model says |
+|---|---|
+| a module under the roots | a declared entity |
+| a module in the OTP table | a stub `module` in `<otp>`; a function of it, when the table exports that name/arity, a stub `function` below it; a name the table does not export (a typo, a newer Elixir than the table's) → the stub module, counted |
+| a module neither declared nor in the table | a stub `module` in `<deps>`; every function called on it a stub `function` below it, named as written — there is nothing to check it against |
+| a local that resolves through the sole non-corpus import | a stub function under that import's `<deps>` module, counted as `import-attributed` — what the compiler itself would conclude |
+| a local that resolves to nothing | dropped and counted as `local-unbound` — never a `<unresolved>` entity for a *call*; `<unresolved>` receives only what an edge must target and cannot (an `@behaviour`/`raise` naming a module that is neither declared nor known, keyed as written) |
+| a variable in module position (`mod.f()`), `apply/3`, a computed module | dropped and counted as `dynamic-dispatch` |
+| a file that does not parse | a file record, no entities, counted as `unparsed` |
+
+Resolvability is not membership — the C# rule, verbatim: `Enum` resolves and
+is external; `AcmeOrder.Repo` is declared even when `use Ecto.Repo` bound
+nothing.
+
+**`--deps <dir>`** (§16.5) is the one bounded place the baseline adds
+resolution it otherwise lacks: the dependency sources under `deps/*/lib` are
+parsed for their **exports only** (names and arities of `def`/`defmacro` per
+module) so that `import Ecto.Query` followed by `from(u in User)` binds to
+`<deps>/Ecto.Query.from#2` as a fact rather than an attribution, and so that
+a `__using__` whose body is nothing but `import`/`alias` lines can be read
+for those lines. Keys do not change — `<deps>` stays `<deps>` — only counts do,
+every such resolution under its own counter; and a `deps/` tree is never
+corpus: no entity is emitted from it. The fixture runs without it.
+
+### 16.5 The extractor command-line contract, plus two flags
+
+Same flag shape and exit codes as the jar, the C# binary and the TypeScript
+bin (`schemas/README.md §8`). Two additions, both optional:
+
+| Flag | Meaning |
+|---|---|
+| `--deps <dir>` | parse dependency sources for their exports only (§16.4); default: none, even when `deps/` exists beside the roots — the model of a corpus must not change with what is checked out next to it |
+| `--trace <file>` | merge a compiler trace produced INSIDE the project by `mix codegraph.trace --out <file>` (a Mix task shipped with the extractor, run by the user where `mix compile` works): every `remote_function`/`local_function`/`imported_function`/`struct_expansion` event after macro expansion, keyed by file and position. Edges the baseline already has are unchanged; edges only the trace knows are added with provenance `generated`; a baseline `local-unbound` that the trace binds is resolved and the counter says so. Keys never come from the trace — the AST assigns them, the trace only closes edges between them. Shape fixed in M15c after the audit says how much it recovers |
+
+`stdout` carries nothing but `--help`/`--version`; progress and the resolution
+summary go to `stderr`:
+
+```
+✓ walk        412 files (.ex 388, .exs 24)  0.1s
+✓ parse       411 parsed, 1 unparsed  1.9s
+✓ whitelist   603 modules  0.1s
+✓ entities    7 912 entities  0.8s
+✓ edges       19 340 edges  1.4s
+✓ stubs       541 stubs (<otp> 212, <deps> 318, <unresolved> 11)  0.1s
+✓ write       27 806 records  0.3s
+RESOLUTION SUMMARY
+  references      : 19 340
+  resolved        : 17 863
+  unresolved      : 1 477
+  resolution rate : 92.4%
+  local-unbound (dropped)   : 1 102   ← macro-injected imports: the honest ceiling without --trace (profile note)
+  dynamic-dispatch (dropped): 375
+  import-attributed         : 84
+  imports         : 2 410 (alias 1 630, import 402, require 118, use 260; unresolved: 318)
+  dynamic-candidate         : 96 (protocol 61, GenServer self-calls 35)
+  entities        : 8 453 (stubs: 541)
+  edges           : 19 340 (self-edges dropped: 6)
+wrote model.jsonl
+```
+
+### 16.6 Validation (the M2 gate, replayed a fourth time)
+
+- **Walking skeleton first**: files, `defmodule`s, `def`/`defp` with arity,
+  the four import forms, `@behaviour`, stubs — one file in, `codegraph
+  validate` green, snapshot committed, the core gate
+  `packages/core/test/fixtures-elixir.test.ts` (parses as a `Model`;
+  byte-identical to core's encoder; ZERO profile issues; closed; no
+  self-edges; the stub-discipline evidence by id).
+- **The fixture corpus** `fixtures/elixir/src` — `acme_order` as a Mix
+  project (`mix.exs`, `lib/`, `test/`, `config/`) of around 20 files and 400
+  lines, each pinning one hazard (its README lists them, the TypeScript
+  README's form):
+  - `application.ex`: `use Application`, a `children` list → `reference`
+    edges to every child module — the supervision tree;
+  - `order.ex`: `defstruct` with defaults and `@enforce_keys`, a multi-clause
+    `total/1`, `def create(attrs, opts \\ [])` — the defaults fold — a pipe
+    (`|> Money.add(x)` → `add#2`), a capture, `defdelegate`, `@max_lines`
+    read in a body, `%__MODULE__{}` in a pattern and an update;
+  - `money.ex`: `defimpl String.Chars, for: Money` → the named impl module
+    attached to `Money`; `@derive Jason.Encoder` → `generated`; `raise
+    ArgumentError` → `throws` to `<otp>`;
+  - `pricing.ex`: a behaviour with two `@callback`s and two implementations
+    (`@behaviour`, `@impl true`) — `interfaceImplementation` declared;
+  - `priceable.ex`: `defprotocol` with two `defimpl`s and `for: Any` → the
+    `dynamic-candidate` protocol call with two candidates;
+  - `stock.ex`: `use GenServer`, `GenServer.call(__MODULE__, {:reserve, id})`
+    → candidates = the three `handle_call/3` clauses folded to one, an
+    `:ets.lookup/2` call → `<otp>/ets`, a `GenServer.call(pid, …)` dropped;
+  - `repo.ex` and `schema/line.ex`: `use Ecto.Repo`, `use Ecto.Schema`,
+    `import Ecto.Changeset`, `field :qty, :integer` (local-unbound, counted),
+    `cast(line, attrs, [:qty])` (import-attributed to `<deps>/Ecto.Changeset`),
+    `from(l in Line)` under `import Ecto.Query` — the `--deps` case in a test,
+    not in the snapshot;
+  - `macros.ex`: a corpus `defmacro __using__` `use`d by another module — the
+    `__using__#1` invocation resolves to a declared macro;
+  - `notifier.ex`: nested `defmodule` auto-alias, `alias AcmeOrder.{Order,
+    Money}`, `alias Money, as: M`, `import Kernel, except: [length: 1]` plus a
+    local `length/1` of its own, a function-scoped `alias`;
+  - `errors.ex`: `defexception`, `raise "text"` → `<otp>/RuntimeError`,
+    `reraise`;
+  - `dynamic.ex`: `apply/3`, `mod.f()`, `Module.concat` — dropped and counted;
+  - `spec.ex`: `@spec`/`@type` naming remote types → `reference`;
+  - `legacy/broken.ex`: a file with a syntax error — skipped and counted;
+  - `two_modules.ex`: two `defmodule`s in one file; `promo#2024.ex`: a `#` in
+    a file name; `defmodule :"legacy.mod"`: an atom-named module with a dot;
+  - `test/acme_order/order_test.exs`: `use ExUnit.Case`, `.exs` walked like
+    `.ex`; `config/config.exs`: `import Config` and top-level `config/3` calls
+    FROM the file.
+- **Extractor-side tests** (ExUnit): every line against the per-record schema
+  for its `t` (a JSON Schema validator in test only, never at runtime), the
+  sequence rules, dense surrogates, canonical order; `DeterminismTest`
+  shuffles the walk order and flips line endings; `StubDisciplineTest` asserts
+  membership by whitelist on a corpus whose module names mimic OTP's
+  (`defmodule Enum.Extra` is corpus; `Enum` is not); `ScopeTest` and
+  `ArityTest` as tables; `stream_data` properties for the key round trip and
+  for the clause fold (n clauses → one entity spanning all).
+- **Two oracles Elixir alone offers.** On a corpus that compiles (the
+  standard library's `lib/elixir`, Phoenix), `mix xref graph --format dot`
+  is the compiler's module graph: the baseline's file-level `import` layer,
+  folded to modules, must reproduce its compile-time edges (`alias`,
+  `require`, `use`, `import`) exactly, and its runtime edges up to the
+  documented blind spots. And on the same corpus the trace (`--trace`) is
+  the richer extractor of the cross-validation rule: the baseline's edge set
+  must be a **subset** of the traced one, every gap a named resolution miss
+  in the audit table, never noise.
+- **Every per-fixture suite** (analyzer, city, navigator, CLI `validate`,
+  core `fixtures-*`) gains the Elixir fixture; every CLI command is run on
+  it; the city and navigator are reviewed as screenshots — one building per
+  `defmodule`, districts by directory (`lib/acme_order/schema/`), the
+  `dynamic-candidate` arcs visibly distinct.
+
+### 16.7 Distribution
+
+- **The escript** (`bin/codegraph-elixir`, built by `mix escript.build`):
+  runs anywhere Erlang/OTP ≥ 27 is installed; Elixir itself is embedded in
+  the archive. This is the jar: the development and CI form.
+- **The Burrito binary** (`extractors/elixir/dist/<rid>/codegraph-elixir`):
+  a Mix release plus ERTS in one executable per target, cross-built from one
+  host; needs nothing on the machine. The published artifact — and the M14
+  sidecar. Both forms must `cmp` the fixture snapshot (the §13.7 gate,
+  twice), and the `elixir-smoke` job runs the binary on the three OS runners.
+- **A Hex package** (`codegraph_elixir`) for the `mix codegraph.trace` task,
+  so a project can produce the trace with one dependency; published on a
+  `v*` tag when `HEX_API_KEY` is present (skipped, not failed, otherwise) —
+  the `npm-publish` shape.
+
+### 16.8 OS- and toolchain-specific hazards, each with the test that pins it
+
+| Hazard | Where it shows | Guard |
+|---|---|---|
+| canonical order compares UTF-16 code units; Elixir strings are UTF-8 binaries | any name with a character above U+FFFF or in the surrogate-adjacent range sorts differently under byte order | comparison key = `:unicode.characters_to_binary(s, :utf8, {:utf16, :big})`, compared as bytes; the `fixtures/unicode` corpus (the Java/C# guard) reproduced byte for byte |
+| JSON bytes must match core's `JSON.stringify` | escaping (` `, control characters, `/` unescaped), key order, integers vs floats in `metrics` | the two-encoder gate in core; a `JsonWriterTest` with the characters JS and Elixir disagree on by default; `JSON.encode_to_iodata!` with an explicit string encoder where the defaults differ |
+| a source file that is not valid UTF-8 (Latin-1 legacy) | `Code.string_to_quoted` rejects it; a lone surrogate cannot exist in a binary | counted as `unparsed`, path on stderr; `--encoding latin1` is a later flag, not a default that guesses |
+| `\r\n` sources | Windows checkouts | the tokenizer is EOL-agnostic; the CRLF determinism case; `sloc` counted from tokens, not from line splits |
+| `\` path separators and drive letters | Windows anchors and module keys | `Path.relative_to/2` + a forced `/` join before a path enters a key; the Windows smoke job |
+| case-insensitive file systems | enumeration order differs, `Foo.ex`/`foo.ex` cannot coexist | ordinal sort of walked paths by UTF-16 units; the walk never trusts `File.ls` order |
+| the OTP table drifts with the building toolchain | a module built with Elixir 1.19 resolves `Enum.new_fn/1`, one built with 1.18 counts it | the table is a build artifact named by version and pinned in the header's `extractor` keys; the fixture snapshot names the version it was made with and CI builds with exactly it (`erlef/setup-beam` versions in `.tool-versions`) |
+| `escript` on Windows | no shebang; `escript.exe` must be on PATH | the registry entry names the launcher; the Burrito binary is the Windows deliverable |
+| Burrito's cross-build | needs Zig and downloads ERTS per target at build time | `build.sh --elixir --native` checks for Zig and names the ERTS cache; CI caches it; the escript is the fallback every job has |
+| an `.exs` that is a script, not a module | `mix.exs`, `config/*.exs`, `seeds.exs` call at top level | the `file` kind licenses `TWithInvocations`/`TWithAccesses` (§16.2); a top-level `defmodule` in an `.exs` is a module like any other |
+| memory on very large corpora | the whole quoted AST of a file is held during its pass; nothing is held across files but the whitelist and the tables | per-file passes, streaming write; the standard library's `lib/elixir` (≈ 900 files) is the size gate |
+
+### 16.9 Milestone split
+
+- **M15a — profile + skeleton + contract.** `feat(core): elixir profile`
+  (§16.2, the tenth) and the registry test; `extractors/elixir/` as a Mix
+  project with the embedded OTP table; the walking skeleton (§16.6 first
+  bullet) → `fixtures/elixir/expected/model.jsonl` byte-identical to core's
+  encoder and profile-valid with zero issues; the core gate; the escript on
+  `bin/codegraph-elixir`; `build.sh --elixir` / `test.sh --elixir` with the
+  escript `cmp`; `elixir-test` in CI.
+- **M15b — the model.** Every kind and edge of §16.2 (clause and default
+  folds, the four import forms, `defimpl` as an attached named module,
+  `@derive` as `generated`, `use` as import + `__using__` invocation, struct
+  expansion accesses, protocol and `GenServer` self-call
+  `dynamic-candidate`s, `throws`, `@spec` references, docs as comments),
+  `sloc` + `cyclomatic`, literals; the full fixture with its README; the
+  determinism, stub-discipline, scope and arity suites; `--deps`; the fixture
+  in every per-fixture suite; every CLI command verified on it; city and
+  navigator screenshots reviewed.
+- **M15c — audit + oracles + distribution.** Three corpora, every model
+  `validate`-clean: `elixir-lang/elixir` `lib/elixir` (the standard library —
+  the size gate and the `mix xref` oracle), `phoenixframework/phoenix`
+  (macros everywhere: the ceiling measured), an Ecto-heavy application
+  (`plausible/analytics`: schemas, changesets, queries — the `--deps` and
+  `--trace` value measured); the `mix xref` subset check and the trace
+  superset check as tests with an opt-in real-corpus run
+  (`CODEGRAPH_CORPUS_ELIXIR`, the M11 pattern); `mix codegraph.trace` and
+  `--trace` shaped by what the audit shows; the defects found named in the
+  profile notes with their counts; Burrito binaries, `elixir-smoke` on three
+  OS runners, the M14 registry entry and cask stanza, the Hex package on a
+  tag; `docs/elixir-extractor.md`; README and CLAUDE.md name the extractor.
+
+Definition of done: `fixtures/elixir/expected/model.jsonl` byte-identical to
+core's encoder and profile-valid with zero issues; the same bytes from the
+escript and from the Burrito binary on Ubuntu, macOS and Windows runners; the
+baseline's module layer equal to `mix xref`'s compile-time graph on the
+standard library and its edge set a subset of the traced one, with every gap
+named; the audit numbers in the profile notes; `./test.sh` and CI green with
+the Elixir fixture in every per-fixture suite.
+
+---
+
+## 17. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -2943,8 +3389,11 @@ resolver seams covered; the WebGL screenshots reviewed.
 | M14b | Desktop — the SEA | one Node single-executable image per OS: CJS single-file bundle, `typescript` inlined, dispatch on the invoked name (`codegraph` / `codegraph-typescript`, `CODEGRAPH_PROGRAM` override), frontends + `lib.*.d.ts` as assets behind one resolver seam, macOS re-signing; five-runner `sea` job with three gates (extractor `cmp`, `analyze` byte-identical to the ESM build, `serve --app` answering) |
 | M14c | Desktop — the shell | `apps/desktop/` (Tauri 2): WebGL gate on fineract reviewed as screenshots FIRST, sidecars by target triple, daemon lifecycle (spawn, read the port line, navigate, close stdin + kill), File › Open… / Open Recent / drag-and-drop each one `POST /jobs`; no `@tauri-apps/*` outside `apps/desktop` (boundary test) |
 | M14d | Desktop — signed, in the tap | notarized `.app` per macOS architecture with the JIT entitlement trio, two DMGs + raw sidecars on the release, `defsquare/homebrew-tap` cask generated by the release job (`app` + four `binary` stanzas, `codegraph-typescript` by `target:`); `brew install --cask defsquare/tap/codegraph` on clean Apple-silicon and Intel Macs opens the app and puts the four commands on PATH, each reproducing its fixture snapshot |
+| M15a | Elixir extractor — profile + skeleton | `elixir` profile in core (the tenth: the module is the file, a `defmodule` is a `module` kind carrying `TType`, arity is identity, no inheritance/embedding — §16.2); `extractors/elixir/` as a Mix project on the compiler's parser with the embedded OTP table, no runtime dependency (§16); walking skeleton → `fixtures/elixir/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; core gate; escript on `bin/codegraph-elixir`; `build.sh --elixir` / `test.sh --elixir` with the escript `cmp`; `elixir-test` in CI |
+| M15b | Elixir extractor — model | every kind and edge of §16.2: clause and default folds, the four import forms as one edge kind, `defimpl` as an attached named module, `@derive` as `generated`, `use` as import + `__using__` invocation, struct-expansion accesses, protocol and `GenServer` self-call `dynamic-candidate`s, `throws`, `@spec` references, docs as comments; `sloc` + `cyclomatic`, literals; `--deps` (exports only); the full fixture with its README; determinism, stub-discipline, scope and arity suites; the fixture in every per-fixture suite; city and navigator screenshots reviewed |
+| M15c | Elixir extractor — audit + oracles + distribution | `elixir-lang/elixir` `lib/elixir`, Phoenix and an Ecto-heavy app audited `validate`-clean with the causes in the profile notes; the `mix xref` module-graph equality and the `--trace` superset check as opt-in real-corpus tests; `mix codegraph.trace` + `--trace` shaped by the audit; Burrito binaries per OS, `elixir-smoke` on three runners, the M14 registry entry and cask stanza, the Hex package on a tag; `docs/elixir-extractor.md` |
 
-## 17. Decisions made in this plan (deltas vs. the design doc)
+## 18. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -3005,3 +3454,11 @@ resolver seams covered; the WebGL screenshots reviewed.
 | Extractor selection in the app (M14) | a registry `{ name, path, extensions[], launch }` written by the shell; detection by extension census; a tie is asked, never guessed | profiles are data (invariant 8) and so is this: the daemon runs a registry entry under the §13.5 contract and names no language |
 | Daemon lifetime (M14) | exits on stdin EOF and on SIGTERM; the shell also kills it on close | an orphaned daemon keeps a model in memory and a port open after the window is gone; two rules make that impossible rather than unlikely |
 | Homebrew (M14) | a cask in `defsquare/homebrew-tap`, generated by the release job; `brew upgrade` is the update path, the Tauri updater off; Linux and Windows on the release, outside brew | Tauri produces a `.app`, which a cask installs and a formula cannot; homebrew-core refuses vendored binaries; two update mechanisms drift |
+| Elixir front end (M15) | the compiler's parser as a library (`Code.string_to_quoted/2`) plus a lexical resolver and an embedded OTP export table; compilation tracers only as the `--trace` enrichment; `mix xref`, tree-sitter-elixir and editor tooling rejected as baselines | binding in Elixir exists only after macro expansion, which needs every dependency present — a Phoenix corpus with no `deps/` fails at its first `use`; the parser needs nothing, so the noClasspath contract is met by construction and the tracer adds `generated` facts where a project still compiles |
+| Elixir host and distribution (M15) | written in Elixir; an escript (Erlang on the machine, Elixir embedded) and a Burrito binary per OS (nothing on the machine); no runtime dependency (Elixir ≥ 1.18 `JSON`) | the quoted AST is the reference form and is reachable only from the BEAM; the escript is the jar and Burrito the native image, so `test.sh` and the M14 registry keep their shapes |
+| Elixir module identity (M15) | the module is the file (the TypeScript rule); a `defmodule` is a `module` kind carrying `TType`, child of its file, nesting an alias not a containment; a module atom's dots are percent-encoded inside the symbol | Elixir has no namespace to contain a module but the file (invariant 5); the module IS the type (struct, behaviour, protocol), so one building per `defmodule` is the honest city; the capitalization rule that would make raw dots injective fails for `defmodule :"a.b"` |
+| Elixir function identity (M15) | arity is the disambiguator, always present; `f(a, b \\ 1)` is one entity `f#2` covering `f/1`; n clauses are one entity spanning first to last; `defimpl` is the named module the compiler defines, `attachedTo` the type | `f/1` and `f/2` are distinct functions in the language; a default-generated arity and a clause are not declarations of their own (the TypeScript overload fold); the BEAM names the impl module, the model only adds the relation the name implies |
+| Elixir external keys (M15) | three reserved modules — `<otp>` from the embedded table, `<deps>` for a module nothing declares, `<unresolved>` for a target an edge must name and cannot; a local that binds nowhere is dropped and counted, never an entity; `--deps` parses dependency sources for exports only and changes counts, never keys | keys must not depend on what is checked out beside the corpus (the TypeScript rule); a `deps/` tree is not corpus; Erlang and Elixir modules share one VM and one reserved module |
+| Elixir dynamic dispatch (M15) | protocol calls and `GenServer.call(__MODULE__, …)`-style self-calls are `dynamic-candidate` invocations written by the extractor with the corpus impls / handler clauses as candidates; every other dynamic form (`apply/3`, `mod.f()`, a pid) is dropped and counted | the Go interface-call and Clojure multimethod precedent: the extractor holds the whole corpus and the candidate set is a language fact, unlike Spring DI whose set needs a framework table (M10d); a guess beyond that would be an invented edge |
+| Language-defined expansions (M15) | `use X` is an `import` plus a `declared` invocation of `X.__using__/1`; `@derive P` is a `generated` `interfaceImplementation`; what a `use`d macro injects is absent from the baseline and counted as `local-unbound` | both expansions are defined by the language, not by a library, so stating them invents nothing; a router's routes or a schema's fields exist only after expansion, and the Clojure profile's rule (`generated` where known, absent otherwise) applies verbatim |
+| Elixir oracles (M15) | on a corpus that compiles, `mix xref graph` must equal the baseline's module-level import layer and the `--trace` edge set must be a superset of the baseline's; both as opt-in real-corpus tests | the cross-validation rule ("the richer extractor is the oracle, any gap is a missed case") gets two oracles the language ships for free — the first extractor whose ceiling is measured rather than estimated |
