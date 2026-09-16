@@ -662,6 +662,233 @@ button.twisty:hover {
   color: var(--paper-faint);
 }
 
+/* ------------------------------------------------ the app form's home -- */
+
+.home-card {
+  width: min(680px, 92vw);
+  max-height: 92vh;
+  overflow: auto;
+}
+
+.home-card kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--paper-dim);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0 5px;
+}
+
+.home-open {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.home-open input {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--paper);
+  background: var(--ink-sunken);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 7px 9px;
+}
+
+.home-button {
+  font-size: 12px;
+  color: var(--paper);
+  background: var(--ink-sunken);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 6px 12px;
+}
+
+.home-button:hover:not(:disabled) {
+  border-color: var(--in);
+}
+
+.home-button:disabled {
+  color: var(--paper-faint);
+  cursor: default;
+}
+
+.home-note {
+  margin: 0 0 14px;
+  font-size: 11px;
+  color: var(--paper-faint);
+}
+
+.home-note code {
+  color: var(--paper-dim);
+}
+
+.home-question {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--out);
+  background: var(--ink-sunken);
+  border-radius: 2px;
+}
+
+.home-question p {
+  margin: 0 0 8px;
+  color: var(--paper-dim);
+}
+
+.home-question-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.home-question-count {
+  color: var(--paper-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-job {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--ink-sunken);
+}
+
+.home-job-running {
+  border-color: var(--in);
+}
+
+.home-job-failed {
+  border-color: #d0685f;
+}
+
+.home-job h2,
+.home-recent h2 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--paper-dim);
+}
+
+.home-job-extractor {
+  font-weight: 400;
+  color: var(--paper-faint);
+}
+
+.home-phases {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  font-size: 12px;
+}
+
+.home-phase {
+  display: contents;
+}
+
+.home-phase-name {
+  color: var(--paper-faint);
+}
+
+.home-phase-active .home-phase-name {
+  color: var(--in);
+}
+
+.home-phase-done .home-phase-name {
+  color: var(--paper-dim);
+}
+
+.home-phase-detail {
+  color: var(--paper-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.home-progress {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 180px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--paper-dim);
+  background: var(--ink);
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+  white-space: pre-wrap;
+}
+
+.home-recent ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.home-recent-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 12px;
+  text-align: left;
+  padding: 7px 10px;
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+  background: var(--ink-sunken);
+}
+
+.home-recent-row:hover:not(:disabled) {
+  border-color: var(--in);
+}
+
+.home-recent-row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.home-recent-name {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.home-recent-src {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--paper-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-recent-meta {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--paper-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.header-open {
+  font-size: 11px;
+  color: var(--paper-dim);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 2px 8px;
+}
+
+.header-open:hover {
+  border-color: var(--in);
+  color: var(--paper);
+}
+
 .progress-phase {
   margin: 0 0 10px;
   color: var(--paper-dim);

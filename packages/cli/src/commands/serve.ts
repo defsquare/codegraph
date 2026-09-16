@@ -1,10 +1,14 @@
+import { readFileSync } from "node:fs";
 import { buildNavigator, navigatorToJsonString } from "@codegraph/navigator";
 import { cityToJsonString, layoutCity } from "@codegraph/city";
-import type { ServeOptions } from "../args.js";
-import { EXIT, type ExitCode } from "../exit.js";
+import type { AppOptions, ServeOptions } from "../args.js";
+import { startDaemon, type DaemonOptions } from "../app/daemon.js";
+import { createJobRunner } from "../app/jobs.js";
+import { parseRegistry, type Registry } from "../app/registry.js";
+import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLines, type IoSink } from "../io.js";
 import { openAnalysis } from "../source.js";
-import { navigatorAssetsDir, startArtifactServer, type ArtifactServerOptions } from "../serve.js";
+import { navigatorAssets, startArtifactServer, type ArtifactServerOptions, type FrontendAssets } from "../serve.js";
 import { resolveView } from "../view.js";
 import { cityOf, cityWarnings } from "./city.js";
 import { navigatorWarnings } from "./navigator.js";
@@ -28,14 +32,28 @@ import { navigatorWarnings } from "./navigator.js";
  * Stdout stays empty: the server is the destination. Warnings and the reach
  * announcement are stderr. The command returns at once; the live server is
  * what keeps the process running, until Ctrl-C.
+ *
+ * `--app` IS THE DAEMON (PLAN §15.2): no model on argv; the same page, served
+ * under a per-launch capability token on loopback, with routes that open a
+ * folder (detect the extractor, run it, build both artifacts) and stream the
+ * progress. Stdout then carries exactly one line — `{"port","token"}` — and
+ * the process ends when stdin does. See `app/daemon.ts` and `app/jobs.ts`.
  */
 
 /** The server seam, injectable so tests need no sockets and no built frontend. */
 export interface ServeDeps {
-  readonly assetsDir: typeof navigatorAssetsDir;
+  readonly assetsDir: typeof navigatorAssets;
   readonly startServer: (serverOptions: ArtifactServerOptions) => unknown;
+  readonly startDaemon: (daemonOptions: DaemonOptions) => unknown;
+  /** The daemon's lifetime: the process stdin by default; tests hand it a stream of their own. */
+  readonly stdin: NodeJS.ReadableStream | undefined;
 }
-const REAL_SERVE: ServeDeps = { assetsDir: navigatorAssetsDir, startServer: startArtifactServer };
+const REAL_SERVE: ServeDeps = {
+  assetsDir: navigatorAssets,
+  startServer: startArtifactServer,
+  startDaemon,
+  stdin: process.stdin,
+};
 
 export const NAVIGATOR_ROUTE = "/navigator.json";
 export const CITY_ROUTE = "/city.json";
@@ -44,6 +62,8 @@ export function serveCommand(options: ServeOptions, io: IoSink, deps: ServeDeps 
   // Resolve the assets FIRST: an unbuilt frontend must fail before a large
   // model is loaded, not after.
   const assets = deps.assetsDir();
+
+  if (options.app !== undefined) return appCommand(options, options.app, assets, io, deps);
 
   const source = openAnalysis(options.models, options, io);
   try {
@@ -85,4 +105,41 @@ export function serveCommand(options: ServeOptions, io: IoSink, deps: ServeDeps 
   } finally {
     source.close();
   }
+}
+
+/** The registry file, or an empty registry when none was named. */
+export function registryOf(app: AppOptions): Registry {
+  if (app.extractors === undefined) return [];
+  let text: string;
+  try {
+    text = readFileSync(app.extractors, "utf8");
+  } catch (error) {
+    throw new UsageError(
+      `cannot read the extractor registry ${app.extractors}: ${error instanceof Error ? error.message : String(error)}`,
+      "It is a JSON list of { name, path, extensions[] } entries the shell writes before launching the daemon.",
+      { cause: error },
+    );
+  }
+  return parseRegistry(text, app.extractors);
+}
+
+/**
+ * The daemon: registry validated up front (a bad file is a usage error before
+ * a port is taken), one job runner over `--data-dir`, the server under its
+ * token. The exit code is the command's — the process lives on with the server.
+ */
+function appCommand(options: ServeOptions, app: AppOptions, assets: FrontendAssets, io: IoSink, deps: ServeDeps): ExitCode {
+  const registry = registryOf(app);
+  const runner = createJobRunner({ dataDir: app.dataDir, registry, build: options, io });
+  deps.startDaemon({
+    assets,
+    port: options.port,
+    host: options.host,
+    io,
+    runner,
+    registry,
+    dataDir: app.dataDir,
+    lifetime: { stdin: deps.stdin, signals: true },
+  });
+  return EXIT.OK;
 }

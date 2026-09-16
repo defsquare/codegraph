@@ -11,6 +11,7 @@ One page, built from one graph under one view: the **Navigate** tab (tree and pe
 
 ```
 codegraph serve [model.jsonl...] [--name STR] [--height METRIC] [--height-scale <linear|sqrt|log>] [--footprint METRIC] [--footprint-scale <linear|sqrt|log>] [--carry M1,M2] [--framework <spring>] [--port N] [--host ADDR] [--internal-only] [--declared-only] [--no-cache]
+codegraph serve --app [--data-dir DIR] [--extractors FILE] [--port N] [--host ADDR] [city flags…]
 ```
 
 ## Arguments
@@ -35,7 +36,56 @@ codegraph serve [model.jsonl...] [--name STR] [--height METRIC] [--height-scale 
 | `--internal-only` | Drop stub (external) entities and every edge touching one. | — |
 | `--declared-only` | Keep only `declared` facts; drop derived and dynamic-candidate edges. | — |
 | `--no-cache` | Read the model.jsonl directly; never build or reuse a sibling model.db. | — |
+| `--app` | The desktop app's daemon: no model on argv; bind 127.0.0.1:0 under a per-launch token, print one JSON line {port, token} on stdout, open folders through POST /jobs, exit when stdin closes. | — |
+| `--data-dir DIR` | With --app: where models, their model.db caches, the page's artifacts and the recents live. | the OS application-data directory, `codegraph/` under it |
+| `--extractors FILE` | With --app: the extractor registry, a JSON list of { name, path, extensions[], launch?, env? } — the daemon runs an entry, never a language. | — (only model.jsonl files open) |
 | `-h, --help` | Show this help. | — |
+
+## The app daemon (`--app`)
+
+The same page, served the way the desktop app needs it — and the development
+loop for that app: run it from a checkout and open the URL in a browser.
+
+- **A capability URL, not an open port.** The daemon binds `127.0.0.1:0`
+  (unless `--host`/`--port` say otherwise), prints exactly one line on stdout,
+  `{"port":N,"token":"…"}`, and serves everything under `/<token>/`. Outside
+  the token every route is `404`; a request whose `Origin` header is not the
+  page's own is `403`.
+- **Routes.** The page and its assets; `app` (the registered extractors and
+  the current project); `recent`; `navigator.json` and `city.json` (the
+  current project's artifacts, `404` until one is open); `POST jobs` with
+  `{"src": "<folder or model.jsonl>", "extractor"?: "<name>"}` → `202` with
+  the job, `409` while another runs, `422` when several extractors claim the
+  folder (`candidates`, most files first — the page asks, never guesses),
+  when none does (`seen` extensions), when the name is unknown or the file is
+  not a `model.jsonl`, `404` for a path that is not there; `jobs/current`, a
+  server-sent event stream that replays the current job's events to a
+  subscriber and then streams the rest — `started`, `phase` (`detect`,
+  `extract`, `build`), `progress` (the extractor's own stderr lines), `done`,
+  `failed` (exit code and the last stderr lines) — or `idle` when nothing
+  has run.
+- **The registry** (`--extractors FILE`) is data: `[{ "name": "java", "path":
+  "/…/codegraph-java", "extensions": [".java"], "launch": "exec" }, …]`.
+  `launch` is `exec`, `java` (a jar) or `node` (a script) and is inferred from
+  the path when absent; `env` adds variables to the process. Detection is a
+  census of the folder's file extensions (dot-directories and `node_modules`
+  skipped) against every entry's `extensions`.
+- **`--data-dir`** holds one directory per opened folder — its `model.jsonl`,
+  the `model.db` cache built beside it, `navigator.json`, `city.json` and a
+  `project.json` — plus `recent.json`. Reopening a folder whose claimed files
+  have the same paths, sizes and mtimes skips the extractor; the build is
+  skipped too when the city flags have not changed.
+- **It dies with its parent:** stdin EOF and SIGTERM both close the server
+  and kill a running extractor.
+
+```console
+$ codegraph serve --app --data-dir /tmp/codegraph-data --extractors registry.json
+{"port":40467,"token":"99ef68e1619647f1b30e2ce25fea99e8"}
+```
+
+(the line above is stdout; stderr narrates each job: `job: detect — 16 files
+for java`, `job: extract — running java on …`, `job: build — …`, `job: done —
+src: 137 nodes, 131 dependency rows`.)
 
 ## Exit codes
 

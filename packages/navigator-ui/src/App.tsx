@@ -10,6 +10,18 @@ import { CouplingView } from "./components/CouplingView.js";
 import { CityTab } from "./components/CityTab.js";
 import { ProgressOverlay } from "./components/ProgressOverlay.js";
 import { Loader } from "./components/Loader.js";
+import { AppHome } from "./components/AppHome.js";
+import {
+  fetchRecent,
+  parseJobEvent,
+  probeApp,
+  reduceJob,
+  submitJob,
+  type AppInfo,
+  type JobView,
+  type RecentProject,
+  type SubmitOutcome,
+} from "./app-mode.js";
 
 /**
  * Load ceremony, same order as the city viewer: `?src=URL` (loud) → the
@@ -56,6 +68,13 @@ export function App() {
   const [hideExternals, setHideExternals] = useState(false);
   const [scrollTo, setScrollTo] = useState<number | undefined>(undefined);
   const loadToken = useRef(0);
+  // THE APP FORM (PLAN §15.2): defined when the daemon serves this page. Then
+  // the empty state is the home — recents, the open instruction, a running
+  // job's progress — and the job stream drives reloads.
+  const [app, setApp] = useState<AppInfo | undefined>(undefined);
+  const [recent, setRecent] = useState<readonly RecentProject[]>([]);
+  const [job, setJob] = useState<JobView | undefined>(undefined);
+  const [outcome, setOutcome] = useState<{ src: string; result: SubmitOutcome } | undefined>(undefined);
 
   const begin = useCallback(
     async (task: (onProgress: (p: LoadProgress) => void) => Promise<ModelIndexes>, quiet: boolean) => {
@@ -106,6 +125,57 @@ export function App() {
     const src = new URLSearchParams(window.location.search).get("src");
     void begin((on) => loadFromUrl(src ?? "navigator.json", on), src === null);
   }, [begin]);
+
+  // Is the daemon behind this page? Asked once, quietly: a 404 is the
+  // classic `codegraph serve` or a static host, and nothing changes.
+  useEffect(() => {
+    let alive = true;
+    void probeApp().then((info) => {
+      if (!alive || info === undefined) return;
+      setApp(info);
+      void fetchRecent().then((projects) => {
+        if (alive) setRecent(projects);
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // The job stream, for the whole session: a folder the SHELL opens (menu,
+  // drop) shows its progress here too, and `done` reloads the page's model.
+  // The daemon replays the current job to a (re)connecting subscriber, and
+  // `started` resets the view, so a reconnect never duplicates.
+  useEffect(() => {
+    if (app === undefined) return;
+    const stream = new EventSource("jobs/current");
+    const onEvent = (type: string) => (raw: Event) => {
+      const parsed = parseJobEvent(type, (raw as MessageEvent<string>).data ?? "{}");
+      if (parsed === undefined) return;
+      setJob((current) => reduceJob(current, parsed));
+      if (parsed.event === "started") {
+        setOutcome(undefined);
+        setPhase((current) => (current.kind === "ready" ? { kind: "idle" } : current));
+      }
+      if (parsed.event === "done") {
+        void fetchRecent().then(setRecent);
+        void begin((on) => loadFromUrl("navigator.json", on), false);
+      }
+    };
+    const types = ["idle", "started", "phase", "progress", "done", "failed"] as const;
+    const handlers = types.map((type) => [type, onEvent(type)] as const);
+    for (const [type, handler] of handlers) stream.addEventListener(type, handler);
+    return () => {
+      for (const [type, handler] of handlers) stream.removeEventListener(type, handler);
+      stream.close();
+    };
+  }, [app, begin]);
+
+  /** The page's own `POST jobs`: a typed path, a recent, or the answer to "which extractor?". */
+  const openInApp = useCallback((src: string, extractor?: string) => {
+    setOutcome(undefined);
+    void submitJob({ src, extractor }).then((result) => setOutcome({ src, result }));
+  }, []);
 
   useEffect(() => {
     const over = (event: DragEvent) => event.preventDefault();
@@ -196,6 +266,18 @@ export function App() {
     return <ProgressOverlay progress={phase.progress} />;
   }
   if (phase.kind === "idle" || phase.kind === "error") {
+    if (app !== undefined) {
+      return (
+        <AppHome
+          info={app}
+          recent={recent}
+          job={job}
+          outcome={outcome}
+          loadError={phase.kind === "error" ? phase.message : undefined}
+          onOpen={openInApp}
+        />
+      );
+    }
     return <Loader error={phase.kind === "error" ? phase.message : undefined} onFile={pickFile} />;
   }
   if (ix === undefined) return null;
@@ -235,6 +317,13 @@ export function App() {
           />
           Show externals
         </label>
+        {app !== undefined && (
+          // Back to the home: recents and the open instruction. The shell's
+          // menu opens folders too; this is the page's own way there.
+          <button type="button" className="header-open" onClick={() => setPhase({ kind: "idle" })}>
+            Open…
+          </button>
+        )}
       </header>
       <div className="app-body" hidden={tab !== "navigate"}>
         <TreePanel

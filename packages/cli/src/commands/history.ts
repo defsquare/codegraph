@@ -26,7 +26,7 @@ import { defaultModelPath, type HistoryOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, outLines, type IoSink } from "../io.js";
 import { loadModelFiles } from "../load.js";
-import { startCityServer, vizAssetsDir, type CityServerOptions } from "../serve.js";
+import { startCityServer, vizAssets, type CityServerOptions } from "../serve.js";
 
 /**
  * `codegraph history [history.jsonl] [--report summary|hotspots|authors]
@@ -52,10 +52,10 @@ import { startCityServer, vizAssetsDir, type CityServerOptions } from "../serve.
 
 /** The server seam, injectable so tests need no sockets and no built viz. */
 export interface ServeDeps {
-  readonly assetsDir: typeof vizAssetsDir;
+  readonly assetsDir: typeof vizAssets;
   readonly startServer: (serverOptions: CityServerOptions) => unknown;
 }
-const REAL_SERVE: ServeDeps = { assetsDir: vizAssetsDir, startServer: startCityServer };
+const REAL_SERVE: ServeDeps = { assetsDir: vizAssets, startServer: startCityServer };
 
 export function historyCommand(
   options: HistoryOptions,

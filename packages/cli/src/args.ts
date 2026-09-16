@@ -3,6 +3,7 @@ import { basename, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { FOLD_LEVELS, FRAMEWORK_PROFILES, type FoldLevel } from "@codegraph/analyzer";
 import { METRIC_PREFIXES, SCALES, metricNames } from "@codegraph/city";
+import { defaultDataDir } from "./app/store.js";
 import { UsageError } from "./exit.js";
 
 export { UsageError } from "./exit.js";
@@ -394,8 +395,39 @@ export const SERVE_SPEC: CommandSpec = {
     },
     ...VIEW_OPTIONS,
     NO_CACHE_OPTION,
+    {
+      name: "app",
+      type: "boolean",
+      describe:
+        "The desktop app's daemon: no model on argv; bind 127.0.0.1:0 under a per-launch " +
+        "token, print one JSON line {port, token} on stdout, open folders through POST /jobs, " +
+        "exit when stdin closes.",
+    },
+    {
+      name: "data-dir",
+      type: "string",
+      describe:
+        "With --app: where models, their model.db caches, the page's artifacts and the recents " +
+        "live (default: the OS application-data directory, under codegraph/).",
+      placeholder: "DIR",
+    },
+    {
+      name: "extractors",
+      type: "string",
+      describe:
+        "With --app: the extractor registry, a JSON list of " +
+        "{ name, path, extensions[], launch?, env? } — the daemon runs an entry, never a language.",
+      placeholder: "FILE",
+    },
   ],
 };
+
+/** The options `--app` adds to `serve`: the daemon's data directory and registry. */
+export interface AppOptions {
+  readonly dataDir: string;
+  /** `--extractors FILE`; undefined means an empty registry — only model.jsonl files open. */
+  readonly extractors: string | undefined;
+}
 
 /**
  * `codegraph domain-facts`: the per-type dossier artifact for domain-extraction
@@ -982,10 +1014,12 @@ export interface NavigatorOptions extends ModelInputOptions, ViewOptions, CacheO
 }
 
 export interface ServeOptions extends ModelInputOptions, CityBuildOptions, CacheOptions {
-  /** `--port N`; 0 = an ephemeral port. */
+  /** `--port N`; 0 = an ephemeral port (the default under `--app`). */
   readonly port: number;
-  /** `--host ADDR`; `0.0.0.0` (every interface) by default. */
+  /** `--host ADDR`; `0.0.0.0` (every interface) by default, `127.0.0.1` under `--app`. */
   readonly host: string;
+  /** `--app`: the daemon form; `models` is then empty. */
+  readonly app: AppOptions | undefined;
 }
 
 export interface DomainFactsOptions extends ModelInputOptions, ViewOptions, CacheOptions {
@@ -1350,7 +1384,33 @@ function hostOf(values: ParsedValues, spec: CommandSpec): string {
   return host;
 }
 
-/** `--carry a,b` → ["a","b"]; blanks dropped so `a,,b` is not a metric named "". */
+/** The daemon's default bind address — this machine only. */
+const LOOPBACK = "127.0.0.1";
+
+/**
+ * `--app [--data-dir DIR] [--extractors FILE]`. The two value flags mean
+ * nothing without `--app`, and `--app` takes no model: both are usage errors
+ * rather than silently ignored flags.
+ */
+function appOf(values: ParsedValues, spec: CommandSpec, positionals: readonly string[]): AppOptions | undefined {
+  const dataDir = stringOf(values, "data-dir");
+  const extractors = stringOf(values, "extractors");
+  if (!flagOf(values, "app")) {
+    const stray = dataDir !== undefined ? "--data-dir" : extractors !== undefined ? "--extractors" : undefined;
+    if (stray !== undefined) {
+      throw new UsageError(`${stray} only means something with --app`, usageLine(spec));
+    }
+    return undefined;
+  }
+  if (positionals.length > 0) {
+    throw new UsageError(
+      `--app takes no model (got '${positionals[0] ?? ""}'): the app opens folders through its routes`,
+      "Drop the path, or drop --app to serve a model.",
+    );
+  }
+  return { dataDir: resolve(dataDir ?? defaultDataDir()), extractors };
+}
+
 /** The city's build flags, resolved once for `city` and `serve` alike. */
 function cityBuildOf(values: ParsedValues): CityBuildOptions {
   return {
@@ -1487,8 +1547,11 @@ export function parseInvocation(argv: readonly string[]): Invocation {
   }
 
   validateValues(spec, parsed.values);
-  const models = positionalsOf(spec, parsed.positionals);
   const values = parsed.values;
+  // `serve --app` opens folders through its routes, so no model is defaulted
+  // from the working directory — the one command whose positional is optional.
+  const isApp = spec.name === "serve" && flagOf(values, "app");
+  const models = isApp ? parsed.positionals : positionalsOf(spec, parsed.positionals);
 
   switch (spec.name) {
     case "validate":
@@ -1575,18 +1638,23 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           out: stringOf(values, "out"),
         },
       };
-    case "serve":
+    case "serve": {
+      const app = appOf(values, spec, models);
       return {
         kind: "run",
         command: "serve",
         options: {
-          models,
+          models: app === undefined ? models : [],
           ...cityBuildOf(values),
-          port: portOf(values, spec),
-          host: hostOf(values, spec),
+          // The daemon is loopback-only on an ephemeral port unless told otherwise:
+          // its URL is a capability the shell reads, not an address to announce.
+          port: app !== undefined && stringOf(values, "port") === undefined ? 0 : portOf(values, spec),
+          host: app !== undefined && stringOf(values, "host") === undefined ? LOOPBACK : hostOf(values, spec),
           noCache: flagOf(values, "no-cache"),
+          app,
         },
       };
+    }
     case "domain-facts":
       return {
         kind: "run",

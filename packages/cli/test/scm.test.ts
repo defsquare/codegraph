@@ -257,7 +257,7 @@ describe("codegraph history reports hand-counted numbers", () => {
     const io = captureIo();
     const served: string[] = [];
     const deps: ServeDeps = {
-      assetsDir: () => "/fake/assets",
+      assetsDir: () => ({ label: "/fake/assets", read: () => undefined }),
       startServer: (serverOptions) => {
         served.push(serverOptions.artifact);
         return undefined;

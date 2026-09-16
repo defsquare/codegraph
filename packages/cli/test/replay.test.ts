@@ -134,7 +134,7 @@ describe("codegraph replay", () => {
   it("--serve hands the artifact to the server seam, stdout stays empty", () => {
     const served: string[] = [];
     const deps: ServeDeps = {
-      assetsDir: () => scratch,
+      assetsDir: () => ({ label: scratch, read: () => undefined }),
       startServer: (serverOptions) => served.push(serverOptions.artifact),
     };
     const options: ReplayOptions = {

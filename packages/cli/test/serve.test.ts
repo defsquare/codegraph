@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { captureIo, type CapturedIo } from "../src/io.js";
 import { startArtifactServer, startCityServer } from "../src/serve.js";
+import { directoryAssets } from "../src/assets.js";
 
 /**
  * The real server, on a real ephemeral port, against a FAKE assets directory —
@@ -31,7 +32,7 @@ async function started(
   host = "127.0.0.1",
 ): Promise<{ base: string; io: CapturedIo; bound: string }> {
   const io = captureIo();
-  const server = startCityServer({ artifact: ARTIFACT, assets: fakeAssets(), port: 0, host, io });
+  const server = startCityServer({ artifact: ARTIFACT, assets: directoryAssets(fakeAssets()), port: 0, host, io });
   servers.push(server);
   await new Promise((resolve) => server.once("listening", resolve));
   const address = server.address();
@@ -112,7 +113,7 @@ describe("startArtifactServer: several routes, one server", () => {
     const server = startArtifactServer({
       routes: { "/navigator.json": NAVIGATOR, "/city.json": CITY },
       label: "codegraph",
-      assets: fakeAssets(),
+      assets: directoryAssets(fakeAssets()),
       port: 0,
       host: "127.0.0.1",
       io,
@@ -144,7 +145,7 @@ describe("startArtifactServer: the bind address", () => {
     const server = startArtifactServer({
       routes: { "/navigator.json": ARTIFACT },
       label: "model navigator",
-      assets: fakeAssets(),
+      assets: directoryAssets(fakeAssets()),
       port: 0,
       ...(host === undefined ? {} : { host }),
       io,
@@ -192,7 +193,7 @@ describe("startArtifactServer: the bind address", () => {
     const server = startArtifactServer({
       routes: { "/navigator.json": ARTIFACT },
       label: "model navigator",
-      assets: fakeAssets(),
+      assets: directoryAssets(fakeAssets()),
       port: 0,
       host: "203.0.113.1",
       io,

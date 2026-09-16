@@ -1,10 +1,14 @@
 import { Buffer } from "node:buffer";
-import { existsSync, readFileSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import { existsSync } from "node:fs";
+import { createServer, type Server, type ServerResponse } from "node:http";
 import { createRequire } from "node:module";
-import { dirname, extname, join, normalize, resolve, sep } from "node:path";
+import { dirname, join } from "node:path";
+import { directoryAssets, seaFrontendAssets, serveStatic, type FrontendAssets } from "./assets.js";
 import { UsageError } from "./exit.js";
 import { errLine, type IoSink } from "./io.js";
+import { isSeaImage } from "./sea.js";
+
+export { serveStatic, type FrontendAssets } from "./assets.js";
 
 /**
  * `codegraph serve` / `history --serve` / `replay --serve`: a frontend with
@@ -46,8 +50,22 @@ function reachLine(host: string, port: number): string {
   return `http://${host}:${port}/ (reachable from other machines)`;
 }
 
-/** Where a frontend package's built bundle lives; a usage-shaped error names the fix. */
-function assetsDirFor(packageName: string, distPath: string): string {
+/**
+ * A frontend's built bundle: in the single-executable image its assets under
+ * `<prefix>/` (PLAN §15.3); in a checkout the package's `dist/`, where a
+ * usage-shaped error names the fix when it is not built.
+ */
+function frontendAssetsFor(packageName: string, distPath: string, seaPrefix: string): FrontendAssets {
+  if (isSeaImage()) {
+    const assets = seaFrontendAssets(seaPrefix);
+    if (assets.read("index.html") === undefined) {
+      throw new UsageError(
+        `this codegraph image carries no ${seaPrefix} frontend`,
+        "The single-executable was built without its assets; rebuild it with ./build.sh --sea.",
+      );
+    }
+    return assets;
+  }
   let packagePath: string;
   try {
     packagePath = createRequire(import.meta.url).resolve(`${packageName}/package.json`);
@@ -65,28 +83,16 @@ function assetsDirFor(packageName: string, distPath: string): string {
       `Run 'pnpm --filter ${packageName} build' (or 'pnpm -r build') and retry.`,
     );
   }
-  return assets;
+  return directoryAssets(assets);
 }
 
-export function vizAssetsDir(): string {
-  return assetsDirFor("@codegraph/viz", "packages/viz/dist");
+export function vizAssets(): FrontendAssets {
+  return frontendAssetsFor("@codegraph/viz", "packages/viz/dist", "viz");
 }
 
-export function navigatorAssetsDir(): string {
-  return assetsDirFor("@codegraph/navigator-ui", "packages/navigator-ui/dist");
+export function navigatorAssets(): FrontendAssets {
+  return frontendAssetsFor("@codegraph/navigator-ui", "packages/navigator-ui/dist", "navigator-ui");
 }
-
-const MIME: Readonly<Record<string, string>> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json",
-  ".map": "application/json",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".ico": "image/x-icon",
-  ".woff2": "font/woff2",
-};
 
 export interface ArtifactServerOptions {
   /**
@@ -96,8 +102,8 @@ export interface ArtifactServerOptions {
   readonly routes: Readonly<Record<string, string>>;
   /** What the stderr announcement calls the page, e.g. `city visualizer`. */
   readonly label: string;
-  /** The frontend's static bundle (vizAssetsDir() / navigatorAssetsDir()). */
-  readonly assets: string;
+  /** The frontend's static bundle (vizAssets() / navigatorAssets()). */
+  readonly assets: FrontendAssets;
   /** 0 = ephemeral; the actual port is announced on stderr once listening. */
   readonly port: number;
   /** Bind address; defaults to loopback. `0.0.0.0` = every interface. */
@@ -127,10 +133,10 @@ export function startCityServer(options: CityServerOptions): Server {
  * `--host` fails as EADDRNOTAVAIL — "address not available" alone sends the
  * reader looking at the port, so it names the address and the flag instead.
  */
-function bindFailure(
+export function bindFailure(
   error: NodeJS.ErrnoException,
   host: string,
-  options: ArtifactServerOptions,
+  options: { readonly port: number; readonly label: string },
 ): string {
   if (error.code === "EADDRINUSE") {
     return `codegraph: port ${options.port} is already in use — pick another with --port (0 = any free port).`;
@@ -147,9 +153,23 @@ function bindFailure(
   return `codegraph: the ${options.label} server failed: ${error.message}`;
 }
 
+/**
+ * A JSON body, verbatim, with its exact byte size — the page's loading
+ * pipeline shows a DETERMINATE progress bar while it streams an artifact in.
+ * Never cached: under the app daemon the same route serves a different
+ * project after the next job.
+ */
+export function sendJson(response: ServerResponse, status: number, body: string, method = "GET"): void {
+  response.writeHead(status, {
+    "content-type": "application/json",
+    "content-length": Buffer.byteLength(body, "utf8"),
+    "cache-control": "no-store",
+  });
+  response.end(method === "HEAD" ? undefined : body);
+}
+
 export function startArtifactServer(options: ArtifactServerOptions): Server {
   const { routes, assets, io } = options;
-  const root = resolve(assets);
 
   const server = createServer((request, response) => {
     const method = request.method ?? "GET";
@@ -162,36 +182,10 @@ export function startArtifactServer(options: ArtifactServerOptions): Server {
     // Own keys only: `/constructor` must not fetch Object.prototype's.
     const artifact = Object.hasOwn(routes, pathname) ? routes[pathname] : undefined;
     if (artifact !== undefined) {
-      response.writeHead(200, {
-        "content-type": "application/json",
-        // The exact byte size, so the page's loading pipeline can show a
-        // DETERMINATE progress bar while it streams the artifact in.
-        "content-length": Buffer.byteLength(artifact, "utf8"),
-        "cache-control": "no-store",
-      });
-      response.end(method === "HEAD" ? undefined : artifact);
+      sendJson(response, 200, artifact, method);
       return;
     }
-
-    // Static file, jailed to the assets directory: normalize, then verify the
-    // resolved path is still under root — traversal answers 404, not a file.
-    const relative = normalize(pathname).replace(/^[/\\]+/, "");
-    const file = resolve(root, relative === "" || relative === "." ? "index.html" : relative);
-    if (file !== root && !file.startsWith(root + sep)) {
-      response.writeHead(404).end();
-      return;
-    }
-    let body: Buffer;
-    try {
-      body = readFileSync(file);
-    } catch {
-      response.writeHead(404).end();
-      return;
-    }
-    response.writeHead(200, {
-      "content-type": MIME[extname(file)] ?? "application/octet-stream",
-    });
-    response.end(method === "HEAD" ? undefined : body);
+    serveStatic(assets, pathname, method, response);
   });
 
   const host = options.host ?? LOOPBACK_HOST;

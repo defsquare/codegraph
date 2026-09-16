@@ -13,6 +13,7 @@ import {
 } from "@codegraph/analyzer";
 import type { SnapshotsOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
+import { nodeCommand } from "../sea.js";
 import { errLine, outLines, type IoSink } from "../io.js";
 import { repositoryFacts } from "../repository.js";
 
@@ -358,7 +359,7 @@ export function extractorFor(extractor: string): Extract {
   const lower = extractor.toLowerCase();
   const isJar = lower.endsWith(".jar");
   const isScript = /\.(m|c)?js$/.test(lower);
-  const command = isJar ? "java" : isScript ? process.execPath : resolve(extractor);
+  const command = isJar ? "java" : isScript ? nodeCommand() : resolve(extractor);
   const lead = isJar ? ["-jar", extractor] : isScript ? [resolve(extractor)] : [];
   return (srcDir, modelPath, repository) => {
     const repoFlags =
