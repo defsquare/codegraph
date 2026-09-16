@@ -16,6 +16,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JAVA_DIR="$ROOT/extractors/java"
 CSHARP_DIR="$ROOT/extractors/csharp"
+ELIXIR_DIR="$ROOT/extractors/elixir"
 
 # ---------------------------------------------------------------- output ----
 
@@ -393,13 +394,65 @@ ensure_dotnet() {
   ok "dotnet sdk $have (DOTNET_ROOT=$DOTNET_ROOT)"
 }
 
+# ------------------------------------------------------- beam toolchain -----
+
+have_elixir_extractor() { [ -f "$ELIXIR_DIR/mix.exs" ]; }
+
+# "~> 1.18" from mix.exs -> 1.18
+req_elixir() {
+  local v
+  v="$(sed -n 's/.*elixir: "~> \([0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$ELIXIR_DIR/mix.exs" | head -1)"
+  [ -n "$v" ] || die "cannot read the elixir requirement from $ELIXIR_DIR/mix.exs"
+  printf '%s' "$v"
+}
+
+# Resolve Elixir >= mix.exs's floor with Erlang/OTP beside it, and EXPORT PATH.
+#
+# Search order: `elixir` on PATH, then the user-local install of hex.pm's
+# precompiled builds (~/.local/share/beam/{otp,elixir} — what a machine
+# without sudo gets; see docs/elixir-extractor.md), then asdf/mise shims.
+# Never installed automatically: the commands are printed instead. The
+# escript the build produces embeds Elixir, so only Erlang matters at run
+# time; building and testing need both.
+ensure_erlang() {
+  local want have candidate
+  want="$(req_elixir)"
+  if ! command -v elixir >/dev/null 2>&1; then
+    for candidate in "$HOME/.local/share/beam" ; do
+      if [ -x "$candidate/elixir/bin/elixir" ] && [ -x "$candidate/otp/bin/erl" ]; then
+        export PATH="$candidate/otp/bin:$candidate/elixir/bin:$PATH"; break
+      fi
+    done
+  fi
+  if ! command -v elixir >/dev/null 2>&1; then
+    for candidate in "$HOME/.asdf/shims" "$HOME/.local/share/mise/shims"; do
+      if [ -x "$candidate/elixir" ]; then export PATH="$candidate:$PATH"; break; fi
+    done
+  fi
+  command -v elixir >/dev/null 2>&1 || die \
+    "no Elixir found — the Elixir extractor needs Elixir >= $want on Erlang/OTP 27+ (extractors/elixir/.tool-versions)" \
+    "mise:       mise use -g erlang@27 elixir@1.18" \
+    "asdf:       asdf install erlang 27.3.4 && asdf install elixir 1.18.4-otp-27" \
+    "user-local: precompiled builds from builds.hex.pm into ~/.local/share/beam (docs/elixir-extractor.md)" \
+    "or skip it entirely: $SCRIPT_NAME --ts"
+  command -v escript >/dev/null 2>&1 || die "elixir is on PATH but escript (Erlang/OTP) is not — install Erlang beside it"
+  command -v mix >/dev/null 2>&1 || die "elixir is on PATH but mix is not — is this a runtime-only Elixir?"
+
+  have="$(elixir --version 2>/dev/null | sed -n 's/^Elixir \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -1)"
+  [ -n "$have" ] || die "elixir --version printed no version"
+  if [ "$(printf '%s\n%s\n' "$want" "$have" | sort -t. -k1,1n -k2,2n | head -1)" != "$want" ]; then
+    die "Elixir $have is too old — the extractor needs >= $want (extractors/elixir/mix.exs)"
+  fi
+  ok "elixir $(elixir --version 2>/dev/null | tail -1 | sed 's/^Elixir //')"
+}
+
 # ------------------------------------------------------- shared parsing -----
 
 # Defaults every script shares; each script may add its own flags on top.
 SKIP_INSTALL="no"
 FROZEN="yes"
 AUTO_INSTALL="yes"
-TARGET="all"      # all | ts | java | csharp
+TARGET="all"      # all | ts | java | csharp | elixir
 
 # Returns 0 if it consumed the argument, 1 if the caller should handle it.
 parse_common_flag() {
@@ -407,6 +460,7 @@ parse_common_flag() {
     --ts|--ts-only)     TARGET="ts" ;;
     --java|--java-only) TARGET="java" ;;
     --csharp|--csharp-only) TARGET="csharp" ;;
+    --elixir|--elixir-only) TARGET="elixir" ;;
     --all)              TARGET="all" ;;
     --skip-install)     SKIP_INSTALL="yes" ;;
     --no-frozen)        FROZEN="no" ;;
@@ -419,3 +473,4 @@ parse_common_flag() {
 wants_ts()     { [ "$TARGET" = "all" ] || [ "$TARGET" = "ts" ]; }
 wants_java()   { [ "$TARGET" = "all" ] || [ "$TARGET" = "java" ]; }
 wants_csharp() { [ "$TARGET" = "all" ] || [ "$TARGET" = "csharp" ]; }
+wants_elixir() { [ "$TARGET" = "all" ] || [ "$TARGET" = "elixir" ]; }

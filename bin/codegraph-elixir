@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# The Elixir extractor as a program: `./bin/codegraph-elixir --src DIR --out model.jsonl`.
+#
+# Extensionless on purpose — the name IS the command. It runs the escript
+# `build.sh --elixir` produces beside ITSELF (a git worktree or a moved
+# checkout runs its own dist/), and an escript needs Erlang/OTP on PATH: the
+# jar's JDK. The user-local install `scripts/lib.sh` documents
+# (~/.local/share/beam) is probed when PATH has no `escript`.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bin="$here/../extractors/elixir/dist/codegraph-elixir"
+
+if [ ! -f "$bin" ]; then
+  printf 'codegraph-elixir: extractors/elixir/dist/codegraph-elixir is missing\n' >&2
+  printf 'Run `./build.sh --elixir` in %s and try again.\n' "$(cd "$here/.." && pwd)" >&2
+  exit 1
+fi
+
+if ! command -v escript >/dev/null 2>&1; then
+  for candidate in "$HOME/.local/share/beam/otp/bin" "$HOME/.asdf/shims" "$HOME/.local/share/mise/shims"; do
+    if [ -x "$candidate/escript" ]; then export PATH="$candidate:$PATH"; break; fi
+  done
+fi
+if ! command -v escript >/dev/null 2>&1; then
+  printf 'codegraph-elixir: no `escript` on PATH — the extractor needs Erlang/OTP 27+\n' >&2
+  exit 1
+fi
+
+exec escript "$bin" "$@"

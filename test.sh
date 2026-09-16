@@ -15,6 +15,10 @@
 #              re-extracts fixtures/csharp/src and must reproduce the committed
 #              snapshot byte for byte — the only test that sees the single-file
 #              code path (embedded BCL, no Assembly.Location)
+#   elixir     mix test, then the built ESCRIPT (if build.sh made one)
+#              re-extracts fixtures/elixir/src and must reproduce the committed
+#              snapshot byte for byte — the only test that sees the escript's
+#              own code path (embedded Elixir, the OTP table baked at build)
 #
 # No build is required first: packages/cli/vitest.config.ts aliases the
 # workspace packages to their SOURCE, and the CLI e2e suite builds its own dist
@@ -44,6 +48,8 @@ Options:
   --java, --java-only  only extractors/java (./mvnw test)
   --csharp, --csharp-only
                        only extractors/csharp (dotnet test + published-binary smoke test)
+  --elixir, --elixir-only
+                       only extractors/elixir (mix test + built-escript smoke test)
   --all                everything (default)
   --lint               also run eslint (not part of CI's gate)
   --no-typecheck       skip pnpm -r typecheck
@@ -113,7 +119,7 @@ printf '%scodegraph test%s  %s(%s)%s\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$ROOT" "$
 
 step "toolchain"
 if wants_ts; then check_node; ensure_pnpm; fi
-SKIP_JAVA="no"; SKIP_CSHARP="no"
+SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"
 if wants_java; then
   if have_java_extractor; then ensure_jdk; ensure_mvnw
   else warn "no extractors/java in this checkout — skipping the Java tests"; SKIP_JAVA="yes"; fi
@@ -121,6 +127,10 @@ fi
 if wants_csharp; then
   if have_csharp_extractor; then ensure_dotnet
   else warn "no extractors/csharp in this checkout — skipping the C# tests"; SKIP_CSHARP="yes"; fi
+fi
+if wants_elixir; then
+  if have_elixir_extractor; then ensure_erlang
+  else warn "no extractors/elixir in this checkout — skipping the Elixir tests"; SKIP_ELIXIR="yes"; fi
 fi
 step_done
 
@@ -212,6 +222,24 @@ if wants_csharp && [ "$SKIP_CSHARP" = "no" ]; then
       sh -c "cd '$ROOT' && out=\$(mktemp) && '$bin' --src fixtures/csharp/src --out \"\$out\" --progress none >/dev/null 2>&1 && cmp \"\$out\" fixtures/csharp/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
   else
     warn "no published binary at $CSHARP_DIR/dist/$(host_rid) — run ./build.sh --csharp for the smoke test"
+  fi
+fi
+
+# ---------------------------------------------------------------- elixir ----
+
+if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
+  # `deps.get` fetches the TEST-only dependency (stream_data); the extractor
+  # itself has none. Hex is provisioned non-interactively if missing.
+  phase "elixir extractor tests (mix test)" \
+    sh -c "cd '$ELIXIR_DIR' && mix local.hex --force --if-missing >/dev/null && mix deps.get >/dev/null && mix test"
+
+  # The escript, not `mix run`, must reproduce the snapshot: it is the
+  # artifact users run, with Elixir embedded and the OTP table baked in.
+  if [ -f "$ELIXIR_DIR/dist/codegraph-elixir" ]; then
+    phase "built elixir escript reproduces the snapshot" \
+      sh -c "cd '$ROOT' && out=\$(mktemp) && ./bin/codegraph-elixir --src fixtures/elixir/src --out \"\$out\" --progress none >/dev/null 2>&1 && cmp \"\$out\" fixtures/elixir/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
+  else
+    warn "no escript at $ELIXIR_DIR/dist/codegraph-elixir — run ./build.sh --elixir for the smoke test"
   fi
 fi
 

@@ -14,6 +14,9 @@
 #   C#         : dotnet publish  -> extractors/csharp/dist/<rid>/codegraph-csharp
 #                                   (self-contained single file; --publish-all
 #                                   builds the five-RID matrix from this host)
+#   Elixir     mix escript.build -> extractors/elixir/dist/codegraph-elixir
+#                                   (an escript: Elixir embedded, needs Erlang/OTP
+#                                   on the machine that runs it — bin/codegraph-elixir)
 #
 # Wraps both with the toolchain checks that a bare `pnpm`/`mvnw` invocation
 # skips: Node's floor, the pinned pnpm, and a JDK that non-interactive shells
@@ -42,6 +45,8 @@ Options:
   --java, --java-only  only extractors/java (./mvnw package)
   --csharp, --csharp-only
                        only extractors/csharp (dotnet publish, host RID)
+  --elixir, --elixir-only
+                       only extractors/elixir (mix escript.build)
   --native             Java: also build the GraalVM native binary for THIS
                        platform (extractors/java/dist/<rid>/codegraph-java)
   --publish-all        C#: publish linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64
@@ -82,7 +87,7 @@ printf '%scodegraph build%s  %s(%s)%s\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$ROOT" "
 
 step "toolchain"
 if wants_ts; then check_node; ensure_pnpm; fi
-SKIP_JAVA="no"; SKIP_CSHARP="no"
+SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"
 if wants_java; then
   if have_java_extractor; then
     ensure_jdk; ensure_mvnw
@@ -92,6 +97,10 @@ fi
 if wants_csharp; then
   if have_csharp_extractor; then ensure_dotnet
   else warn "no extractors/csharp in this checkout — skipping the C# build"; SKIP_CSHARP="yes"; fi
+fi
+if wants_elixir; then
+  if have_elixir_extractor; then ensure_erlang
+  else warn "no extractors/elixir in this checkout — skipping the Elixir build"; SKIP_ELIXIR="yes"; fi
 fi
 step_done
 
@@ -186,6 +195,22 @@ if wants_csharp && [ "$SKIP_CSHARP" = "no" ]; then
   fi
 fi
 
+# ---------------------------------------------------------------- elixir ----
+
+if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
+  if [ "$CLEAN" = "yes" ]; then
+    step "clean (elixir)"
+    run rm -rf "$ELIXIR_DIR/dist" "$ELIXIR_DIR/_build"
+    step_done
+  fi
+  step "build elixir extractor (mix escript.build)"
+  ( cd "$ELIXIR_DIR" && run mix local.hex --force --if-missing >/dev/null && run mix escript.build )
+  step_done
+  if [ "$NATIVE" = "yes" ]; then
+    warn "--native for the Elixir extractor (a Burrito binary) is M15c — the escript is the deliverable for now"
+  fi
+fi
+
 # -------------------------------------------------------------- artifacts ---
 
 step "artifacts"
@@ -227,6 +252,9 @@ if wants_csharp && [ "$SKIP_CSHARP" = "no" ]; then
   elif [ "$PUBLISH_ALL" = "yes" ]; then
     for rid in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64; do report_rid "$rid"; done
   else report_rid "$(host_rid)"; fi
+fi
+if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
+  report "$ELIXIR_DIR/dist/codegraph-elixir"
 fi
 [ "$missing" -eq 0 ] || die "$missing expected artifact(s) missing — the build did not produce a usable tree"
 step_done

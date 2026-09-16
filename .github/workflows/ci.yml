@@ -251,6 +251,20 @@ jobs:
           cmp out.jsonl fixtures/typescript/expected/model.jsonl
           echo "byte-identical on ${{ matrix.os }}"
 
+  elixir-test:
+    name: elixir extractor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: extractors/elixir/.tool-versions
+          version-type: strict
+      # The same gate a developer's `./test.sh --elixir` runs: mix test, then
+      # the built escript must reproduce the fixture snapshot byte for byte.
+      - run: ./build.sh --elixir --skip-install --no-auto-install
+      - run: ./test.sh --elixir --skip-install --no-auto-install --no-schemas
+
   release:
     name: github release
     if: startsWith(github.ref, 'refs/tags/v')

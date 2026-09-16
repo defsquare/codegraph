@@ -30,3 +30,8 @@ extractors/csharp/dist/
 *.db
 
 books
+
+# Elixir extractor (Mix): build output, fetched deps, the escript and the Burrito binaries
+extractors/elixir/_build/
+extractors/elixir/deps/
+extractors/elixir/dist/
