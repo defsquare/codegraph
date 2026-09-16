@@ -6,7 +6,7 @@ defmodule CodegraphElixir.Extraction do
   close is dropped and counted, never written dangling and never an abort.
   """
 
-  alias CodegraphElixir.{Corpus, Ids, Otp, Progress, Scope, Stats, Walker}
+  alias CodegraphElixir.{Corpus, Deps, Ids, Otp, Progress, Scope, Stats, Walker}
   alias CodegraphElixir.Model
   alias CodegraphElixir.Model.{Edge, Entity, Key}
 
@@ -18,6 +18,11 @@ defmodule CodegraphElixir.Extraction do
     corpus =
       Progress.phase(progress, "parse", fn -> Corpus.load(options.sources, cwd) end, fn c ->
         "#{length(c.files)} files, #{Enum.count(c.files, &(&1.error != nil))} unparsed"
+      end)
+
+    deps =
+      Progress.phase(progress, "deps", fn -> Deps.load(options.deps, cwd) end, fn d ->
+        "#{map_size(d)} modules' exports"
       end)
 
     walked =
@@ -41,7 +46,8 @@ defmodule CodegraphElixir.Extraction do
           Map.merge(acc, w.imports, fn _, a, b -> a + b end)
         end),
       dynamic_modules_dropped: Enum.sum(Enum.map(walked, & &1.dynamic_modules)),
-      duplicate_keys: Enum.flat_map(walked, & &1.duplicate_keys)
+      duplicate_keys: Enum.flat_map(walked, & &1.duplicate_keys),
+      dropped: Enum.reduce(walked, %{}, fn w, acc -> Map.merge(acc, w.counts, fn _, a, b -> a + b end) end)
     }
 
     # The whitelist: every module the corpus declares, by atom — the first
@@ -53,10 +59,10 @@ defmodule CodegraphElixir.Extraction do
       end)
 
     stats = %Stats{stats | duplicate_modules: duplicates}
+    world = %{whitelist: whitelist, deps: deps, impls: impl_index(whitelist)}
 
     {edges, entities, stubs, stats} =
-      Progress.phase(progress, "edges", fn -> close(raw_edges, entities, whitelist, stats) end, fn {e, _, _,
-                                                                                                    _} ->
+      Progress.phase(progress, "edges", fn -> close(raw_edges, entities, world, stats) end, fn {e, _, _, _} ->
         "#{length(e)} edges"
       end)
 
@@ -70,17 +76,19 @@ defmodule CodegraphElixir.Extraction do
         }
     }
 
-    entities = entities ++ stub_entities
+    entities = mark_owners(entities, edges) ++ stub_entities
     declared = MapSet.new(entities, &Key.index(&1.key))
 
     {closed, unclosable} =
       Enum.split_with(edges, fn edge ->
-        MapSet.member?(declared, Key.index(edge.from)) and MapSet.member?(declared, Key.index(edge.to))
+        MapSet.member?(declared, Key.index(edge.from)) and MapSet.member?(declared, Key.index(edge.to)) and
+          Enum.all?(edge.candidates || [], &MapSet.member?(declared, Key.index(&1)))
       end)
 
     stats = %Stats{
       stats
-      | unclosable: Enum.map(unclosable, &"#{&1.kind} #{Key.render(&1.from)} -> #{Key.render(&1.to)}")
+      | unclosable: Enum.map(unclosable, &"#{&1.kind} #{Key.render(&1.from)} -> #{Key.render(&1.to)}"),
+        emitted: Enum.frequencies_by(closed, & &1.kind)
     }
 
     model = %Model{
@@ -102,79 +110,339 @@ defmodule CodegraphElixir.Extraction do
 
   defp whitelist(declared) do
     declared
-    |> Enum.reduce({%{}, []}, fn {atom, key, file_key}, {map, dups} ->
-      case Map.fetch(map, atom) do
-        {:ok, _} -> {map, [Scope.module_name(atom) | dups]}
-        :error -> {Map.put(map, atom, %{key: key, parent: file_key}), dups}
+    |> Enum.reduce({%{}, []}, fn entry, {map, dups} ->
+      case Map.fetch(map, entry.atom) do
+        {:ok, _} -> {map, [Scope.module_name(entry.atom) | dups]}
+        :error -> {Map.put(map, entry.atom, entry), dups}
       end
     end)
     |> then(fn {map, dups} -> {map, dups |> Enum.reverse() |> Enum.uniq()} end)
   end
 
-  # Close raw targets: a corpus atom → its declared key, else a stub below the
-  # reserved module the OTP table decides. Self-edges are dropped and counted.
-  defp close(raw_edges, entities, whitelist, stats) do
+  # protocol atom → every corpus `defimpl` of it.
+  defp impl_index(whitelist) do
+    whitelist
+    |> Map.values()
+    |> Enum.filter(&(&1.protocol != nil))
+    |> Enum.group_by(& &1.protocol)
+  end
+
+  # ------------------------------------------------------------------ close --
+
+  # Close raw targets against the whole corpus: a declared name → its key, a
+  # shipped or foreign module → the stub module (the C# fold: a stub has no
+  # members), a name that binds nowhere → dropped under its reason.
+  defp close(raw_edges, entities, world, stats) do
     {edges, stubs, stats} =
       Enum.reduce(raw_edges, {[], MapSet.new(), stats}, fn raw, {edges, stubs, stats} ->
-        {from, stubs} = resolve_end(raw.from, whitelist, stubs)
-        {to, stubs} = resolve_end(raw.to, whitelist, stubs)
-
-        stats =
-          case raw.kind do
-            "import" ->
-              if(corpus_target?(raw.to, whitelist),
-                do: stats,
-                else: %Stats{stats | imports_unresolved: stats.imports_unresolved + 1}
-              )
-
-            _ ->
-              stats
-          end
-
         stats = %Stats{stats | references: stats.references + 1}
+        {from, stubs} = resolve_end(raw.from, world, stubs)
 
-        stats =
-          if corpus_target?(raw.to, whitelist),
-            do: stats,
-            else: %Stats{stats | unresolved: stats.unresolved + 1}
+        case resolve_target(raw, world, stubs) do
+          {:ok, to, candidates, stubs, external?} ->
+            stats = %Stats{
+              stats
+              | resolved: stats.resolved + 1,
+                external: stats.external + if(external?, do: 1, else: 0)
+            }
 
-        if Key.index(from) == Key.index(to) do
-          {edges, stubs, %Stats{stats | self_edges_dropped: stats.self_edges_dropped + 1}}
-        else
-          edge = %Edge{kind: raw.kind, from: from, to: to, provenance: raw.provenance, anchor: raw.anchor}
-          {[edge | edges], stubs, stats}
+            stats =
+              if raw.kind == "import" and external?,
+                do: %Stats{stats | imports_unresolved: stats.imports_unresolved + 1},
+                else: stats
+
+            if Key.index(from) == Key.index(to) do
+              {edges, stubs, %Stats{stats | self_edges_dropped: stats.self_edges_dropped + 1}}
+            else
+              edge = %Edge{
+                kind: raw.kind,
+                from: from,
+                to: to,
+                # A candidate set is what makes a dispatch dynamic (METAMODEL.md §1.3).
+                provenance: if(candidates == nil, do: raw.provenance, else: "dynamic-candidate"),
+                anchor: raw.anchor,
+                candidates: candidates,
+                is_read: raw.is_read,
+                is_write: raw.is_write
+              }
+
+              {[edge | edges], stubs, stats}
+            end
+
+          {:kernel, stubs} ->
+            {edges, stubs, %Stats{stats | kernel: stats.kernel + 1}}
+
+          {:drop, reason, stubs} ->
+            {edges, stubs, Stats.drop(stats, reason)}
         end
       end)
 
     {entities, stubs} =
-      Enum.map_reduce(entities, stubs, fn
-        %Entity{attached_to: {:module, atom}} = entity, stubs ->
-          {key, stubs} = resolve_end({:module, atom}, whitelist, stubs)
-          {%Entity{entity | attached_to: key}, stubs}
+      Enum.map_reduce(entities, stubs, fn entity, stubs ->
+        {attached, stubs} =
+          case entity.attached_to do
+            {:module, atom} -> resolve_end({:module, atom}, world, stubs)
+            other -> {other, stubs}
+          end
 
-        entity, stubs ->
-          {entity, stubs}
+        {value, stubs} = close_value(entity.value, world, stubs)
+        {%Entity{entity | attached_to: attached, value: value}, stubs}
       end)
 
     {Enum.reverse(edges), entities, stubs, stats}
   end
 
-  defp corpus_target?({:file_of, atom}, whitelist), do: Map.has_key?(whitelist, atom)
-  defp corpus_target?({:module, atom}, whitelist), do: Map.has_key?(whitelist, atom)
-  defp corpus_target?(%Key{}, _whitelist), do: true
+  # A `type` literal names a module: closed like any reference.
+  defp close_value(nil, _world, stubs), do: {nil, stubs}
 
-  defp resolve_end(%Key{} = key, _whitelist, stubs), do: {key, stubs}
+  defp close_value(%{k: "type", type: {:module, atom}} = literal, world, stubs) do
+    {key, stubs} = resolve_end({:module, atom}, world, stubs)
+    {%{literal | type: key}, stubs}
+  end
 
-  defp resolve_end({:file_of, atom}, whitelist, stubs) do
-    case Map.fetch(whitelist, atom) do
-      {:ok, entity} -> {entity.parent, stubs}
-      :error -> stub(atom, stubs)
+  defp close_value(%{k: "array", items: items} = literal, world, stubs) do
+    {items, stubs} = Enum.map_reduce(items, stubs, &close_value(&1, world, &2))
+    {%{literal | items: items}, stubs}
+  end
+
+  defp close_value(literal, _world, stubs), do: {literal, stubs}
+
+  defp resolve_target(raw, world, stubs) do
+    case raw.to do
+      {:function, module, name, arity} ->
+        resolve_function(module, name, arity, raw, world, stubs)
+
+      {:local, module, name, arity, snapshot} ->
+        resolve_local(module, name, arity, snapshot, world, stubs)
+
+      {:handler, module, {name, arity}} ->
+        resolve_handler(module, name, arity, world, stubs)
+
+      {:attribute, module, name} ->
+        resolve_member(module, :attributes, name, :attribute_unbound, world, stubs)
+
+      {:field, module, name} ->
+        resolve_field(module, name, world, stubs)
+
+      {:file_of, atom} ->
+        resolve_import(atom, world, stubs)
+
+      {:module, atom} ->
+        ok(resolve_end({:module, atom}, world, stubs), world, atom)
+
+      %Key{} = key ->
+        {:ok, key, nil, stubs, false}
     end
   end
 
-  defp resolve_end({:module, atom}, whitelist, stubs) do
-    case Map.fetch(whitelist, atom) do
-      {:ok, entity} -> {entity.key, stubs}
+  defp ok({key, stubs}, world, atom), do: {:ok, key, nil, stubs, not Map.has_key?(world.whitelist, atom)}
+
+  # An import of a NAMESPACE PREFIX no module declares (`alias Plausible.Stats.SQL`
+  # then `SQL.Expression`) is not a dependency on anything: dropped and counted.
+  defp resolve_import(atom, world, stubs) do
+    cond do
+      Map.has_key?(world.whitelist, atom) ->
+        {:ok, Map.fetch!(world.whitelist, atom).file_key, nil, stubs, false}
+
+      Otp.module?(atom) ->
+        {key, stubs} = stub(atom, stubs)
+        {:ok, key, nil, stubs, true}
+
+      prefix?(atom, world) ->
+        {:drop, :prefix_alias, stubs}
+
+      true ->
+        {key, stubs} = stub(atom, stubs)
+        {:ok, key, nil, stubs, true}
+    end
+  end
+
+  defp prefix?(atom, world) do
+    prefix = Atom.to_string(atom) <> "."
+    Enum.any?(world.whitelist, fn {declared, _} -> String.starts_with?(Atom.to_string(declared), prefix) end)
+  end
+
+  # `M.f(args)`: a declared function of a corpus module (a protocol's callback
+  # dispatches to every corpus impl), else the stub module the OTP table or
+  # the deps exports vouch for.
+  defp resolve_function(module, _name, _arity, _raw, _world, stubs)
+       when module in [Kernel, Kernel.SpecialForms],
+       do: {:kernel, stubs}
+
+  defp resolve_function(module, name, arity, raw, world, stubs) do
+    case Map.fetch(world.whitelist, module) do
+      {:ok, %{kind: :protocol} = declared} ->
+        case lookup(declared.functions, name, arity) do
+          nil ->
+            {:drop, :remote_unbound, stubs}
+
+          callback ->
+            candidates =
+              world.impls
+              |> Map.get(module, [])
+              |> Enum.map(&lookup(&1.functions, name, arity))
+              |> Enum.reject(&is_nil/1)
+              |> Enum.sort_by(&Key.sort_key/1)
+
+            if raw.kind == "invocation",
+              do: {:ok, callback, candidates, stubs, false},
+              else: {:ok, callback, nil, stubs, false}
+        end
+
+      {:ok, declared} ->
+        case lookup(declared.functions, name, arity) do
+          nil -> {:drop, :remote_unbound, stubs}
+          key -> {:ok, key, nil, stubs, false}
+        end
+
+      :error ->
+        cond do
+          Otp.module?(module) and Otp.exports?(module, name, arity) ->
+            {key, stubs} = stub(module, stubs)
+            {:ok, key, nil, stubs, true}
+
+          Otp.module?(module) ->
+            {:drop, :otp_unknown, stubs}
+
+          Deps.exports?(world.deps, module, name, arity) or map_size(world.deps) == 0 ->
+            {key, stubs} = stub(module, stubs)
+            {:ok, key, nil, stubs, true}
+
+          true ->
+            {:drop, :deps_unknown, stubs}
+        end
+    end
+  end
+
+  # `f(args)`: the module's own definition, an explicit import that provides
+  # it, Kernel, the sole foreign import that could, else nothing.
+  defp resolve_local(module, name, arity, snapshot, world, stubs) do
+    own =
+      case module && Map.fetch(world.whitelist, module) do
+        {:ok, declared} -> lookup(declared.functions, name, arity)
+        _ -> nil
+      end
+
+    if own do
+      {:ok, own, nil, stubs, false}
+    else
+      scope = %Scope{imports: snapshot.imports, kernel: snapshot.kernel}
+      candidates = Scope.import_candidates(scope, name, arity)
+
+      {found, unknown, stubs} =
+        Enum.reduce_while(candidates, {nil, [], stubs}, fn candidate, {_, unknown, stubs} ->
+          case Map.fetch(world.whitelist, candidate) do
+            {:ok, declared} ->
+              case lookup(declared.functions, name, arity, public: true) do
+                nil -> {:cont, {nil, unknown, stubs}}
+                key -> {:halt, {{key, false}, unknown, stubs}}
+              end
+
+            :error ->
+              cond do
+                Otp.module?(candidate) and Otp.exports?(candidate, name, arity) ->
+                  {key, stubs} = stub(candidate, stubs)
+                  {:halt, {{key, true}, unknown, stubs}}
+
+                Otp.module?(candidate) ->
+                  {:cont, {nil, unknown, stubs}}
+
+                Deps.exports?(world.deps, candidate, name, arity) ->
+                  {key, stubs} = stub(candidate, stubs)
+                  {:halt, {{key, true}, unknown, stubs}}
+
+                map_size(world.deps) == 0 ->
+                  {:cont, {nil, [candidate | unknown], stubs}}
+
+                true ->
+                  {:cont, {nil, unknown, stubs}}
+              end
+          end
+        end)
+
+      cond do
+        found != nil ->
+          {key, external?} = found
+          {:ok, key, nil, stubs, external?}
+
+        Scope.kernel_admits?(scope, name, arity) and Otp.kernel?(name, arity) ->
+          {:kernel, stubs}
+
+        # The sole foreign import that could provide the name — unless a
+        # `use` of a foreign module may have injected it, when nothing
+        # honest can be said (the Ecto schema case).
+        match?([_], unknown) and not injected?(snapshot, world) ->
+          {key, stubs} = stub(hd(unknown), stubs)
+          {:ok, key, nil, stubs, true}
+
+        unknown != [] and injected?(snapshot, world) ->
+          {:drop, :local_injected, stubs}
+
+        unknown != [] ->
+          {:drop, :ambiguous_import, stubs}
+
+        injected?(snapshot, world) ->
+          {:drop, :local_injected, stubs}
+
+        true ->
+          {:drop, :local_unbound, stubs}
+      end
+    end
+  end
+
+  defp injected?(snapshot, world) do
+    Enum.any?(Map.get(snapshot, :uses, []), fn used -> not Map.has_key?(world.whitelist, used) end)
+  end
+
+  defp resolve_handler(module, name, arity, world, stubs) do
+    case Map.fetch(world.whitelist, module) do
+      {:ok, declared} ->
+        case lookup(declared.functions, name, arity) do
+          nil -> {:drop, :handler_unbound, stubs}
+          key -> {:ok, key, [key], stubs, false}
+        end
+
+      :error ->
+        {:drop, :handler_unbound, stubs}
+    end
+  end
+
+  defp resolve_member(module, table, name, reason, world, stubs) do
+    case Map.fetch(world.whitelist, module) do
+      {:ok, declared} ->
+        case Map.fetch(Map.fetch!(declared, table), name) do
+          {:ok, key} -> {:ok, key, nil, stubs, false}
+          :error -> {:drop, reason, stubs}
+        end
+
+      :error ->
+        {:drop, reason, stubs}
+    end
+  end
+
+  # A field of a stub module is nothing to point at: the struct reference already exists.
+  defp resolve_field(module, name, world, stubs) do
+    if Map.has_key?(world.whitelist, module),
+      do: resolve_member(module, :fields, name, :field_unbound, world, stubs),
+      else: {:drop, :field_external, stubs}
+  end
+
+  # Fold-aware: `f/1` written as `def f(a, b \\\\ 1)` is the `f#2` entity.
+  defp lookup(functions, name, arity, opts \\ []) do
+    public_only = Keyword.get(opts, :public, false)
+
+    Enum.find_value(functions, fn {{n, a}, info} ->
+      if n == name and arity <= a and arity >= a - info.defaults and not (public_only and info.private),
+        do: info.key,
+        else: nil
+    end)
+  end
+
+  defp resolve_end(%Key{} = key, _world, stubs), do: {key, stubs}
+
+  defp resolve_end({:module, atom}, world, stubs) do
+    case Map.fetch(world.whitelist, atom) do
+      {:ok, declared} -> {declared.key, stubs}
       :error -> stub(atom, stubs)
     end
   end
@@ -183,6 +451,32 @@ defmodule CodegraphElixir.Extraction do
     origin = if Otp.module?(atom), do: :otp, else: :deps
     {Ids.stub_module_key(origin, atom), MapSet.put(stubs, {origin, atom})}
   end
+
+  # A file whose top level calls or reads is marked so — the marker traits are earned.
+  defp mark_owners(entities, edges) do
+    kinds_by_from =
+      Enum.reduce(edges, %{}, fn edge, acc ->
+        Map.update(acc, Key.index(edge.from), MapSet.new([edge.kind]), &MapSet.put(&1, edge.kind))
+      end)
+
+    Enum.map(entities, fn
+      %Entity{kind: "file"} = entity ->
+        kinds = Map.get(kinds_by_from, Key.index(entity.key), MapSet.new())
+
+        traits =
+          entity.traits
+          |> add_if("TWithInvocations", MapSet.member?(kinds, "invocation"))
+          |> add_if("TWithAccesses", MapSet.member?(kinds, "access"))
+
+        %Entity{entity | traits: traits}
+
+      entity ->
+        entity
+    end)
+  end
+
+  defp add_if(traits, trait, true), do: if(trait in traits, do: traits, else: traits ++ [trait])
+  defp add_if(traits, _trait, false), do: traits
 
   # Pass 4 — the stub discipline: a degraded `module` below its reserved
   # module, which exists only when something points below it.

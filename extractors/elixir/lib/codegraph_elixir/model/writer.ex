@@ -145,6 +145,7 @@ defmodule CodegraphElixir.Model.Writer do
             {"definedIn", entity.defined_in && Enum.map(entity.defined_in, file_ref)},
             {"comments", entity.comments},
             {"metrics", entity.metrics && {:object, sort_pairs(entity.metrics)}},
+            {"value", entity.value && literal(entity.value, ref_of, owner <> ".value")},
             {"anchor", entity.anchor && wire_anchor.(entity.anchor)}
           ]
           |> Enum.reject(fn {_, value} -> value == nil end)
@@ -178,6 +179,8 @@ defmodule CodegraphElixir.Model.Writer do
               do: [],
               else: [{"candidates", Enum.map(edge.candidates, &ref_of.(&1, "edge candidates"))}]
             ) ++
+            if(edge.is_read == nil, do: [], else: [{"isRead", edge.is_read}]) ++
+            if(edge.is_write == nil, do: [], else: [{"isWrite", edge.is_write}]) ++
             [{"anchor", wire_anchor.(edge.anchor)}]
         )
       end)
@@ -196,6 +199,20 @@ defmodule CodegraphElixir.Model.Writer do
   def encode_to_string(model) do
     model |> encode() |> Enum.map(&[&1, "\n"]) |> IO.iodata_to_binary()
   end
+
+  # A literal (METAMODEL.md §1.6): `k` first, then its one field; a `type`
+  # literal's module is a surrogate like every reference.
+  defp literal(%{k: "type", type: key}, ref_of, from),
+    do: {:object, [{"k", "type"}, {"type", ref_of.(key, from)}]}
+
+  defp literal(%{k: "array", items: items}, ref_of, from),
+    do: {:object, [{"k", "array"}, {"items", Enum.map(items, &literal(&1, ref_of, from))}]}
+
+  defp literal(%{k: "unevaluated", source: source}, _ref_of, _from),
+    do: {:object, [{"k", "unevaluated"}, {"source", source}]}
+
+  defp literal(%{k: "null"}, _ref_of, _from), do: {:object, [{"k", "null"}]}
+  defp literal(%{k: k, v: v}, _ref_of, _from), do: {:object, [{"k", k}, {"v", v}]}
 
   defp sorted_distinct(values) do
     values |> Enum.uniq() |> Enum.sort_by(&Key.utf16/1)

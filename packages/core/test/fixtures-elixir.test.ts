@@ -88,7 +88,6 @@ describe("fixtures/elixir/expected/model.jsonl", () => {
     const model = loadSnapshot();
     const create = entity(model, "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.create#2");
     expect(create["signature"]).toBe("create/2");
-    expect(create["parameters"]).toEqual([]);
     expect(create["defaults"]).toBe(1);
     expect(model.entities.some((e) => e.id === "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.create#1")).toBe(false);
     // Two clauses of total/1 are one entity spanning both.
@@ -149,9 +148,9 @@ describe("fixtures/elixir/expected/model.jsonl", () => {
     expect(impl["attachedTo"]).toBe("ex:lib%2Facme_order%2Fmoney.ex/AcmeOrder%2EMoney");
     expect(impl["traits"]).toContain("TAttachedTo");
     const edge = model.edges.find(
-      (e) => e.edge === "interfaceImplementation" && e.from === "ex:lib%2Facme_order%2Fmoney.ex/AcmeOrder%2EMoney",
+      (e) => e.edge === "interfaceImplementation" && e.from === "ex:lib%2Facme_order%2Fmoney.ex/AcmeOrder%2EMoney" && e.to === "ex:<otp>/String%2EChars",
     );
-    expect(edge?.to).toBe("ex:<otp>/String%2EChars");
+    expect(edge?.provenance).toBe("declared");
     expect(edge?.anchor.span).toEqual([16, 18]);
     expect(entity(model, "ex:lib%2Facme_order%2Fpriceable.ex/AcmeOrder%2EPriceable.price#1")["kind"]).toBe("callback");
   });
@@ -161,5 +160,78 @@ describe("fixtures/elixir/expected/model.jsonl", () => {
     const broken = "ex:lib%2Facme_order%2Flegacy%2Fbroken.ex";
     expect(entity(model, broken)["kind"]).toBe("file");
     expect(model.entities.some((e) => (e as unknown as Record<string, unknown>)["parent"] === broken)).toBe(false);
+  });
+
+  it("gives every function its parameters, fields their defaults and attributes their constants (M15b)", () => {
+    const model = loadSnapshot();
+    const create = entity(model, "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.create#2");
+    expect(create["parameters"]).toEqual([
+      "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.create#2#param:reference",
+      "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.create#2#param:opts",
+    ]);
+    const opts = entity(model, "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.create#2#param:opts");
+    expect(opts["kind"]).toBe("parameter");
+    expect(opts["value"]).toEqual({ k: "array", items: [] });
+    // A struct field's default that names a module is a `type` literal, closed against the model.
+    const pricing = entity(model, "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.pricing");
+    expect(pricing["kind"]).toBe("field");
+    expect(pricing["value"]).toEqual({ k: "type", type: "ex:lib%2Facme_order%2Fpricing%2Fstandard.ex/AcmeOrder%2EPricing%2EStandard" });
+    const maxLines = entity(model, "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.@max_lines");
+    expect(maxLines["kind"]).toBe("attribute");
+    expect(maxLines["value"]).toEqual({ k: "number", v: "100" });
+    // Docs are the comments; measures are on files, modules and invocables.
+    expect(create["comments"]).toEqual(["Builds an order, capping the lines."]);
+    expect(create["metrics"]).toEqual({ cyclomatic: 1, sloc: 4 });
+    expect(entity(model, "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.total#1")["metrics"]).toEqual({ cyclomatic: 2, sloc: 6 });
+    expect(entity(model, "ex:lib%2Facme_order%2Forder.ex")["metrics"]).toEqual({ sloc: 25 });
+  });
+
+  it("writes every edge kind of the profile with its provenance and evidence (M15b)", () => {
+    const model = loadSnapshot();
+    const kinds = new Set(model.edges.map((e) => e.edge));
+    for (const kind of ["import", "interfaceImplementation", "invocation", "access", "reference", "throws"]) {
+      expect(kinds, kind).toContain(kind);
+    }
+    const has = (edge: string, from: string, to: string): boolean =>
+      model.edges.some((e) => e.edge === edge && e.from === from && e.to === to);
+    // A call into an external module folds to the stub module (a stub has no members).
+    expect(has("invocation", "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.create#2", "ex:<otp>/Enum")).toBe(true);
+    // A corpus call lands on the arity-keyed function, through a pipe.
+    expect(has("invocation", "ex:lib%2Facme_order%2Fpricing%2Fpremium.ex/AcmeOrder%2EPricing%2EPremium.price#2", "ex:lib%2Facme_order%2Fpricing%2Fstandard.ex/AcmeOrder%2EPricing%2EStandard.discount#2")).toBe(true);
+    // `use X` is a written invocation of X.__using__/1.
+    expect(has("invocation", "ex:lib%2Facme_order%2Fnotifier.ex/AcmeOrder%2ENotifier", "ex:lib%2Facme_order%2Fmacros.ex/AcmeOrder%2EMacros.__using__#1")).toBe(true);
+    // A capture is a reference, a struct field write is an access, an attribute read is an access.
+    expect(has("reference", "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.total#1", "ex:lib%2Facme_order%2Fmoney.ex/AcmeOrder%2EMoney.add#2")).toBe(true);
+    const write = model.edges.find((e) => e.edge === "access" && e.from === "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.create#2" && e.to === "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.lines");
+    expect((write as { isWrite?: boolean } | undefined)?.isWrite).toBe(true);
+    const read = model.edges.find((e) => e.edge === "access" && e.from === "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.add_line#2" && e.to === "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.@max_lines");
+    expect((read as { isRead?: boolean } | undefined)?.isRead).toBe(true);
+    // A raise is a throw site; a `raise "text"` targets RuntimeError below <otp>.
+    expect(has("throws", "ex:lib%2Facme_order%2Forder.ex/AcmeOrder%2EOrder.add_line#2", "ex:lib%2Facme_order%2Ferrors.ex/AcmeOrder%2EErrors%2ETooManyLines")).toBe(true);
+    expect(has("throws", "ex:lib%2Facme_order%2Ferrors.ex/AcmeOrder%2EErrors.fail!#1", "ex:<otp>/RuntimeError")).toBe(true);
+    // `@derive` is a generated implementation.
+    const derive = model.edges.find((e) => e.edge === "interfaceImplementation" && e.to === "ex:<deps>/Jason%2EEncoder");
+    expect(derive?.provenance).toBe("generated");
+  });
+
+  it("reports dynamic dispatch as candidates, never as a guess (METAMODEL §1.3)", () => {
+    const model = loadSnapshot();
+    const protocol = model.edges.find(
+      (e) => e.from === "ex:lib%2Facme_order%2Freporting.ex/AcmeOrder%2EReporting.price_of#1" && e.to === "ex:lib%2Facme_order%2Fpriceable.ex/AcmeOrder%2EPriceable.price#1",
+    );
+    expect(protocol?.provenance).toBe("dynamic-candidate");
+    expect(protocol?.candidates).toEqual([
+      "ex:lib%2Facme_order%2Fpriceable.ex/AcmeOrder%2EPriceable%2EAcmeOrder%2EMoney.price#1",
+      "ex:lib%2Facme_order%2Fpriceable.ex/AcmeOrder%2EPriceable%2EAcmeOrder%2EOrder.price#1",
+      "ex:lib%2Facme_order%2Fpriceable.ex/AcmeOrder%2EPriceable%2EAny.price#1",
+    ]);
+    const handler = model.edges.find(
+      (e) => e.from === "ex:lib%2Facme_order%2Fstock.ex/AcmeOrder%2EStock.reserve#2" && e.to === "ex:lib%2Facme_order%2Fstock.ex/AcmeOrder%2EStock.handle_call#3",
+    );
+    expect(handler?.provenance).toBe("dynamic-candidate");
+    // Every declared edge is a fact: nothing dynamic hides under `declared`.
+    for (const e of model.edges) {
+      if (e.candidates !== undefined) expect(e.provenance, e.from).toBe("dynamic-candidate");
+    }
   });
 });

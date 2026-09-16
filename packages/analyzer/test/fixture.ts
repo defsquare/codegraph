@@ -46,6 +46,19 @@ export function typescriptGraph(): CodeGraph {
   return buildGraph(loadModels(typescriptFixture(), { sources: ["fixtures/typescript"] }).union);
 }
 
+/** The committed M15 snapshot: real parser-as-library output over `fixtures/elixir/src`. */
+const ELIXIR_FIXTURE = fileURLToPath(
+  new URL("../../../fixtures/elixir/expected/model.jsonl", import.meta.url),
+);
+
+export function elixirFixture(): Model {
+  return readModelFileSync(ELIXIR_FIXTURE);
+}
+
+export function elixirGraph(): CodeGraph {
+  return buildGraph(loadModels(elixirFixture(), { sources: ["fixtures/elixir"] }).union);
+}
+
 /** A minimal hand-built model, for shapes the fixture does not contain. */
 export function toyModel(
   entities: readonly Entity[],

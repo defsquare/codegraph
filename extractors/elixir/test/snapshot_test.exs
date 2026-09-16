@@ -79,9 +79,12 @@ defmodule CodegraphElixir.SnapshotTest do
     assert impl.attached_to == money.key
     assert "TAttachedTo" in impl.traits and "TWithImplements" in impl.traits
 
-    edge = Enum.find(model.edges, &(&1.from == money.key and &1.kind == "interfaceImplementation"))
-    assert CodegraphElixir.Model.Key.render(edge.to) == "ex:<otp>/String%2EChars"
-    assert edge.anchor == {"lib/acme_order/money.ex", 16, 18}
+    edges = Enum.filter(model.edges, &(&1.from == money.key and &1.kind == "interfaceImplementation"))
+    targets = Enum.map(edges, &{CodegraphElixir.Model.Key.render(&1.to), &1.provenance})
+    assert {"ex:<otp>/String%2EChars", "declared"} in targets
+    assert {"ex:<deps>/Jason%2EEncoder", "generated"} in targets
+    chars = Enum.find(edges, &(CodegraphElixir.Model.Key.render(&1.to) == "ex:<otp>/String%2EChars"))
+    assert chars.anchor == {"lib/acme_order/money.ex", 16, 18}
 
     # A protocol's impl for a corpus type, written in the protocol's file.
     assert edge?(

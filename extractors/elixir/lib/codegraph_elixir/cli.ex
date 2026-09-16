@@ -57,10 +57,6 @@ defmodule CodegraphElixir.CLI do
         io.stderr.("error: --trace is not implemented yet (PLAN.md §16.5, M15c)\n")
         @exit_unimplemented
 
-      {:ok, %Options{deps: deps}} when deps != nil ->
-        io.stderr.("error: --deps is not implemented yet (PLAN.md §16.4, M15b)\n")
-        @exit_unimplemented
-
       {:ok, options} ->
         extract(options, io, cwd)
     end

@@ -34,7 +34,12 @@ defmodule CodegraphElixir.WalkerTest do
     assert ids["ex:lib%2Fx.ex/Acme%2EFold.h#1"].kind == "function"
     assert ids["ex:lib%2Fx.ex/Acme%2EFold.none#0"].anchor == {"lib/x.ex", 8, 8}
     assert ids["ex:lib%2Fx.ex/Acme%2EFold"].anchor == {"lib/x.ex", 1, 9}
-    assert acc.declared == [{Acme.Fold, ids["ex:lib%2Fx.ex/Acme%2EFold"].key, ids["ex:lib%2Fx.ex"].key}]
+    assert [declared] = acc.declared
+    assert declared.atom == Acme.Fold
+    assert declared.key == ids["ex:lib%2Fx.ex/Acme%2EFold"].key
+    assert declared.file_key == ids["ex:lib%2Fx.ex"].key
+    assert Map.keys(declared.functions) |> Enum.sort() == [f: 2, g: 1, h: 1, is_pos: 1, m: 1, none: 0]
+    assert declared.functions[{:f, 2}].defaults == 1 and declared.functions[{:g, 1}].private
   end
 
   test "nested modules are children of the file and alias their first segment; defimpl is attached" do
@@ -132,7 +137,7 @@ defmodule CodegraphElixir.WalkerTest do
     assert {:file_of, Acme.Conditional} in targets
     refute {:file_of, Should.Not.Count} in targets
     assert acc.imports == %{alias: 5, import: 1, require: 1, use: 1}
-    assert Enum.all?(acc.edges, &(&1.from == Key.module("lib%2Fx.ex")))
+    assert Enum.all?(acc.edges, &(&1.kind != "import" or &1.from == Key.module("lib%2Fx.ex")))
     assert Map.has_key?(by_id(acc), "ex:lib%2Fx.ex/Acme%2EImports.only_in_test#0")
   end
 

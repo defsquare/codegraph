@@ -41,12 +41,11 @@ defmodule CodegraphElixir.CLITest do
     assert stderr =~ "not a directory"
   end
 
-  test "exits 3 for the enrichment flags that are not implemented yet", %{scratch: scratch} do
+  test "exits 3 for the enrichment flag that is not implemented yet", %{scratch: scratch} do
     assert %{code: 3, stderr: stderr} =
              invoke(["--src", fixture_src(), "--trace", Path.join(scratch, "t.jsonl")])
 
     assert stderr =~ "not implemented"
-    assert %{code: 3} = invoke(["--src", fixture_src(), "--deps", scratch])
   end
 
   test "writes the snapshot, keeps stdout empty, and summarises on stderr", %{scratch: scratch} do

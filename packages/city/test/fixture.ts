@@ -36,6 +36,16 @@ export function typescriptGraph(): CodeGraph {
   return buildGraph(loadModels(model, { sources: ["fixtures/typescript"] }).union);
 }
 
+/** The committed M15 snapshot: real parser-as-library output over `fixtures/elixir/src`. */
+const ELIXIR_FIXTURE = fileURLToPath(
+  new URL("../../../fixtures/elixir/expected/model.jsonl", import.meta.url),
+);
+
+export function elixirGraph(): CodeGraph {
+  const model = readModelFileSync(ELIXIR_FIXTURE);
+  return buildGraph(loadModels(model, { sources: ["fixtures/elixir"] }).union);
+}
+
 export function graphOf(entities: readonly Entity[], edges: readonly Edge[] = []): CodeGraph {
   const model: Model = {
     schemaVersion: "1.0.0",

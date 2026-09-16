@@ -6,12 +6,16 @@ defmodule CodegraphElixir.Corpus do
   file the parser rejects is skipped and counted — never fatal.
   """
 
-  alias CodegraphElixir.{ExtractionError, Paths}
+  alias CodegraphElixir.{ExtractionError, Measures, Paths}
 
   defmodule SourceFile do
-    @moduledoc "One corpus file: its root-relative path, source, line count, and quoted AST or parse error."
+    @moduledoc """
+    One corpus file: its root-relative path, source, line count, quoted AST
+    or parse error, the `#` comments by line, and the lines carrying a token
+    (for `sloc`).
+    """
     @enforce_keys [:rel, :full, :source, :lines]
-    defstruct [:rel, :full, :source, :lines, ast: nil, error: nil]
+    defstruct [:rel, :full, :source, :lines, ast: nil, error: nil, comments: %{}, token_lines: MapSet.new()]
   end
 
   defstruct [:root, :root_display, :files]
@@ -50,7 +54,8 @@ defmodule CodegraphElixir.Corpus do
     %__MODULE__{root: root, root_display: root_display, files: files}
   end
 
-  defp walk(directory) do
+  @doc "Every `.ex`/`.exs` below a directory, build output and dependencies skipped."
+  def walk(directory) do
     directory
     |> File.ls!()
     |> Enum.flat_map(fn entry ->
@@ -71,9 +76,22 @@ defmodule CodegraphElixir.Corpus do
     file = %SourceFile{rel: rel, full: full || rel, source: source, lines: line_count(source)}
 
     if String.valid?(source) do
-      case Code.string_to_quoted(source, columns: true, token_metadata: true, file: rel, emit_warnings: false) do
-        {:ok, ast} -> %SourceFile{file | ast: ast}
-        {:error, {meta, message, token}} -> %SourceFile{file | error: format_error(meta, message, token)}
+      case Code.string_to_quoted_with_comments(source,
+             columns: true,
+             token_metadata: true,
+             file: rel,
+             emit_warnings: false
+           ) do
+        {:ok, ast, comments} ->
+          %SourceFile{
+            file
+            | ast: ast,
+              comments: Map.new(comments, fn c -> {c.line, {c.column, c.text}} end),
+              token_lines: Measures.token_lines(source)
+          }
+
+        {:error, {meta, message, token}} ->
+          %SourceFile{file | error: format_error(meta, message, token)}
       end
     else
       %SourceFile{file | error: "not valid UTF-8"}
