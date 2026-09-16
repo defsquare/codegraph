@@ -24,9 +24,9 @@ defmodule CodegraphElixir.Otp do
   @modules :code.all_available()
            |> Enum.filter(fn {_module, file, _loaded} -> shipped?.(file) end)
            |> Enum.map(fn {module, _, _} -> List.to_atom(module) end)
-           # `Any` is the protocol fallback pseudo-type: defined by the
-           # language, never a module on the code path.
-           |> Enum.concat([Any])
+           # The built-in protocol targets that are NOT modules on the code path
+           # (`defimpl P, for: BitString`): defined by the language, like `Any`.
+           |> Enum.concat([Any, BitString, Function, PID, Port, Reference, Tuple])
            |> MapSet.new()
 
   @elixir_version System.version()

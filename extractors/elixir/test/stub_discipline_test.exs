@@ -26,6 +26,14 @@ defmodule CodegraphElixir.StubDisciplineTest do
     File.write!(Path.join(scratch, "lib/sub.ex"), """
     defmodule Enum.Extra.Sub do
     end
+
+    defprotocol Enum.Extra.Size do
+      def size(t)
+    end
+
+    defimpl Enum.Extra.Size, for: [BitString, Tuple, Double] do
+      def size(_), do: 0
+    end
     """)
 
     on_exit(fn -> File.rm_rf!(scratch) end)
@@ -48,8 +56,21 @@ defmodule CodegraphElixir.StubDisciplineTest do
     refute "ex:<deps>/Enum" in ids(model)
   end
 
+  test "a built-in protocol target is what the language ships, a foreign one a dependency", %{model: model} do
+    assert find(model, "ex:<otp>/BitString").is_stub == true
+    assert find(model, "ex:<otp>/Tuple").is_stub == true
+    assert find(model, "ex:<deps>/Double").is_stub == true
+
+    assert edge?(
+             model,
+             "interfaceImplementation",
+             "ex:<otp>/BitString",
+             "ex:lib%2Fsub.ex/Enum%2EExtra%2ESize"
+           )
+  end
+
   test "the summary counts stubs by origin", %{stats: stats} do
-    assert stats.stubs == %{otp: 2, deps: 1}
+    assert stats.stubs == %{otp: 4, deps: 2}
     assert stats.imports_unresolved == 2
   end
 end
