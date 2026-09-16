@@ -170,7 +170,11 @@ Mutually dependent units (a cycle) are explained as one unit. Re-runs redo
 only what changed (Merkle fingerprints over inputs, never over explanation
 text). Needs `OPENROUTER_API_KEY`, or `CLOUDFLARE_API_TOKEN` +
 `CLOUDFLARE_ACCOUNT_ID` [+ `CLOUDFLARE_AI_GATEWAY_ID`], unless `--dry-run` or
-`--estimate`. A run that makes model calls first prints its token estimate on
+`--estimate`. `--model SLUG` overrides the model (default
+`openai/gpt-5.6-luna`, `author/model` form on either provider) for every unit;
+`--rollup-model SLUG` overrides it again for types and modules. The slug is
+part of each record's fingerprint, so a new model re-explains what it covers.
+A run that makes model calls first prints its token estimate on
 stderr and asks `[y/N]`; `--yes` (`-y`) skips the question, and without an
 interactive terminal it is required. Design record: [insights.md](insights.md).
 

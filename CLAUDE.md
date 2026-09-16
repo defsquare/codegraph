@@ -147,6 +147,7 @@ extractors/csharp/dist/linux-x64/codegraph-csharp --src <dir> --out model.jsonl
 ./bin/codegraph explain model.jsonl --src DIR --dry-run   # the walk plan, no call
 ./bin/codegraph explain model.jsonl --src DIR --estimate --price-in 0.10 --price-out 0.60   # tokens in/out + cost, no call
 OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-calls N] [--yes]
+#   [--model SLUG] (default openai/gpt-5.6-luna) [--rollup-model SLUG] (types+modules; defaults to --model)
 #   prints the estimate on stderr and asks [y/N] first; --yes (required without a TTY) skips it
 #   or CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… [--provider cloudflare]
 #   → model.insights.jsonl beside the model; re-runs redo only what changed

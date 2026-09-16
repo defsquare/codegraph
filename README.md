@@ -179,11 +179,14 @@ codegraph replay --store gson.db --history gson-history.jsonl --serve
 codegraph explain gson.jsonl --src ~/src/gson/gson/src/main/java --dry-run   # the plan, no call
 codegraph explain gson.jsonl --src ... --estimate --price-in 0.10 --price-out 0.60   # tokens and cost, no call
 OPENROUTER_API_KEY=… codegraph explain gson.jsonl --src ... --max-calls 50   # shows the estimate, asks [y/N]
+codegraph explain gson.jsonl --src ... --model openai/gpt-5.6-luna --rollup-model anthropic/claude-sonnet-5   # pick the models
 ```
 
 Explanations go to `gson.insights.jsonl` beside the model and never into it.
 Re-running redoes only the units whose inputs changed. On the reference
-fixture a full run was 68 calls and about six cents. Cloudflare AI Gateway is
+fixture a full run was 68 calls and about six cents. `--model` sets the model
+for every unit (default `openai/gpt-5.6-luna`); `--rollup-model` overrides it
+for types and modules only. Switching models re-explains the affected units. Cloudflare AI Gateway is
 the other supported provider.
 
 ### Feed it to something else
