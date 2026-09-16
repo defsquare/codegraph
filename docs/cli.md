@@ -69,7 +69,7 @@ codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
                    [--provider auto|openrouter|cloudflare]
                    [--model SLUG] [--rollup-model SLUG] [--depth N]
                    [--max-calls N] [--scope IDS] [--concurrency N]
-                   [--max-lines N] [--max-scc N] [--force] [--json]
+                   [--max-lines N] [--max-scc N] [--force] [--yes] [--json]
                    [--framework spring] [--internal-only] [--declared-only]
 
 codegraph scm      [repo] [--since DATE] [--out FILE] [--json]
@@ -170,7 +170,9 @@ Mutually dependent units (a cycle) are explained as one unit. Re-runs redo
 only what changed (Merkle fingerprints over inputs, never over explanation
 text). Needs `OPENROUTER_API_KEY`, or `CLOUDFLARE_API_TOKEN` +
 `CLOUDFLARE_ACCOUNT_ID` [+ `CLOUDFLARE_AI_GATEWAY_ID`], unless `--dry-run` or
-`--estimate`. Design record: [insights.md](insights.md).
+`--estimate`. A run that makes model calls first prints its token estimate on
+stderr and asks `[y/N]`; `--yes` (`-y`) skips the question, and without an
+interactive terminal it is required. Design record: [insights.md](insights.md).
 
 ### `scm`
 Mines a repository's git history into a deterministic `history.jsonl`:

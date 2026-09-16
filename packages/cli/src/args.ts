@@ -549,19 +549,27 @@ export const EXPLAIN_SPEC: CommandSpec = {
     {
       name: "price-in",
       type: "string",
-      describe: "Input price in USD per million tokens, for --estimate's cost line.",
+      describe: "Input price in USD per million tokens, for the estimate's cost line.",
       placeholder: "USD",
     },
     {
       name: "price-out",
       type: "string",
-      describe: "Output price in USD per million tokens, for --estimate's cost line.",
+      describe: "Output price in USD per million tokens, for the estimate's cost line.",
       placeholder: "USD",
     },
     {
       name: "force",
       type: "boolean",
       describe: "Re-explain every unit, ignoring records whose fingerprint still matches.",
+    },
+    {
+      name: "yes",
+      type: "boolean",
+      short: "y",
+      describe:
+        "Run without asking. Otherwise a run that makes model calls prints its token estimate " +
+        "and waits for confirmation — which needs an interactive terminal.",
     },
     JSON_OPTION,
   ],
@@ -1011,6 +1019,8 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly priceIn: number | undefined;
   readonly priceOut: number | undefined;
   readonly force: boolean;
+  /** `--yes`: skip the estimate-and-confirm step before a run that makes calls. */
+  readonly yes: boolean;
   readonly json: boolean;
 }
 
@@ -1622,6 +1632,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           priceIn: priceOf(values, "price-in"),
           priceOut: priceOf(values, "price-out"),
           force: flagOf(values, "force"),
+          yes: flagOf(values, "yes"),
           json: flagOf(values, "json"),
         },
       };

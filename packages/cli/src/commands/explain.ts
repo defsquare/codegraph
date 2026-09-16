@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { ModelBuilder, readModelRecordsSync } from "@codegraph/core";
 import { FRAMEWORK_PROFILES, buildDomainFacts, folderFor } from "@codegraph/analyzer";
 import {
@@ -48,9 +49,13 @@ import { resolveView } from "../view.js";
  * at every layer) so an interrupted run is resumed, not repeated. stdout stays
  * empty unless `--dry-run` (the plan) or `--json` (the summary) asks for it.
  *
- * THE SEAM: environment, filesystem, clock and the client factory come in one
- * object, so the whole command runs in-process against a fake model with no
- * network and no disk (test/explain.test.ts).
+ * SPENDING IS CONFIRMED: a run that plans model calls prints its token
+ * estimate on stderr and asks before the first call; `--yes` skips the
+ * question, and with no terminal to ask on the run refuses rather than spends.
+ *
+ * THE SEAM: environment, filesystem, clock, the client factory and the
+ * question come in one object, so the whole command runs in-process against a
+ * fake model with no network and no disk (test/explain.test.ts).
  */
 
 export interface ExplainFs {
@@ -68,6 +73,8 @@ export interface ExplainSeam {
   /** The client for a RESOLVED provider whose variables are all present in `env`. */
   clientFor(provider: Provider, env: Readonly<Record<string, string | undefined>>): LlmClient;
   now(): Date;
+  /** Asks a yes/no question; undefined when there is no interactive terminal to ask on. */
+  readonly confirm: ((question: string) => Promise<boolean>) | undefined;
 }
 
 export function realSeam(): ExplainSeam {
@@ -92,7 +99,18 @@ export function realSeam(): ExplainSeam {
     },
     clientFor: (provider, env) => clientFromEnv(provider, env),
     now: () => new Date(),
+    confirm: process.stdin.isTTY && process.stderr.isTTY ? confirmOnTerminal : undefined,
   };
+}
+
+/** The prompt goes to stderr: stdout is the artifact stream, even when nothing is on it. */
+async function confirmOnTerminal(question: string): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    return /^y(es)?$/iu.test((await rl.question(question)).trim());
+  } finally {
+    rl.close();
+  }
 }
 
 
@@ -143,6 +161,10 @@ export async function explainCommand(
     }
 
     const { complete, provider } = completerFor(plan, options, seam, io);
+    if (!(await confirmed(plan, options, seam, io))) {
+      errLine(io, "aborted: no call was made, nothing was written.");
+      return EXIT.OK;
+    }
     const keyOf = naturalKeys(options.models, io);
     // A run that makes no call (everything reused) keeps saying who served the records.
     const header = headerFor(options, provider ?? previous?.provider, graph.union.langs, view.descriptor.name, view.descriptor.filters);
@@ -469,6 +491,13 @@ function printEstimate(plan: RunPlan, options: ExplainOptions, io: IoSink): void
     );
     return;
   }
+  outLine(io, estimateLines(plan, options).join("\n"));
+}
+
+function estimateLines(plan: RunPlan, options: ExplainOptions): string[] {
+  const { estimates } = plan;
+  const cost = estimatedCost(estimates.promptTokens, estimates.completionTokens, options.priceIn, options.priceOut);
+  const layers = (plan.steps[plan.steps.length - 1]?.unit.layer ?? -1) + 1;
   const lines: string[] = [];
   lines.push(`explain estimate: ${options.models.join(" ")}`);
   const b = estimates.byLevel;
@@ -490,7 +519,28 @@ function printEstimate(plan: RunPlan, options: ExplainOptions, io: IoSink): void
   }
   lines.push("  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages (operation 450, type 650, module 900) per block asked for.");
   lines.push("  not included: repair re-asks, rate-limit retries. Records already in the side-car are reused, not re-sent.");
-  outLine(io, lines.join("\n"));
+  return lines;
+}
+
+/**
+ * The gate before spending: the estimate on stderr, then a question. A run
+ * that plans no call, or `--yes`, passes silently; no terminal and no `--yes`
+ * is a usage error, so a script never spends by accident.
+ */
+async function confirmed(plan: RunPlan, options: ExplainOptions, seam: ExplainSeam, io: IoSink): Promise<boolean> {
+  if (plan.estimates.calls === 0 || options.yes) return true;
+  const { calls, promptTokens, completionTokens } = plan.estimates;
+  if (seam.confirm === undefined) {
+    throw new UsageError(
+      `this run needs ${calls} model call${calls === 1 ? "" : "s"} (~${grouped(promptTokens)} input, ~${grouped(completionTokens)} output tokens) and there is no terminal to confirm on`,
+      "Pass --yes to run without asking, or --estimate to see the volume first.",
+    );
+  }
+  errLines(io, [...estimateLines(plan, options), ""]);
+  const cost = estimatedCost(promptTokens, completionTokens, options.priceIn, options.priceOut);
+  return seam.confirm(
+    `Run ${calls} model call${calls === 1 ? "" : "s"} (~${grouped(promptTokens)} input + ~${grouped(completionTokens)} output tokens${cost === undefined ? "" : `, ~$${cost.toFixed(4)}`})? [y/N] `,
+  );
 }
 
 function summaryLines(out: string, result: Awaited<ReturnType<typeof executeRun>>): string[] {

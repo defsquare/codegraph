@@ -47,10 +47,12 @@ function answer(request: LlmRequest): unknown {
   return cycle === undefined ? block(unitId) : { members: cycle.split(", ").map((id) => ({ id, block: block(id) })) };
 }
 
-function seamWith(env: Record<string, string | undefined>, files = new Map<string, string>()) {
+/** `confirm` answers every question; `null` is a session with no terminal to ask on. */
+function seamWith(env: Record<string, string | undefined>, files = new Map<string, string>(), confirm: boolean | null = true) {
   const client = fakeLlmClient({ respond: answer, usage: () => ({ promptTokens: 100, completionTokens: 20, cost: 0.0001 }) });
   const disk = new Map<string, string>([...SOURCES, ...files]);
   const providers: Provider[] = [];
+  const questions: string[] = [];
   const seam: ExplainSeam = {
     env,
     fs: {
@@ -65,8 +67,15 @@ function seamWith(env: Record<string, string | undefined>, files = new Map<strin
       return client;
     },
     now: () => new Date("2026-09-02T10:00:00.000Z"),
+    confirm:
+      confirm === null
+        ? undefined
+        : (question) => {
+            questions.push(question);
+            return Promise.resolve(confirm);
+          },
   };
-  return { seam, client, disk, providers };
+  return { seam, client, disk, providers, questions };
 }
 
 const CF_ENV = { CLOUDFLARE_API_TOKEN: "cf-token", CLOUDFLARE_ACCOUNT_ID: "acc-1" };
@@ -235,6 +244,53 @@ describe("explain --estimate", () => {
     expect(io.stdout()).toContain("codegraph.explainEstimate/1");
     expect(() => parseInvocation(["explain", FIXTURE, "--estimate", "--price-in", "cheap"])).toThrow(/--price-in must be a non-negative USD amount/u);
     expect(() => parseInvocation(["explain", FIXTURE, "--estimate", "--price-out=-1"])).toThrow(/--price-out must be/u);
+  });
+});
+
+describe("explain confirms before spending", () => {
+  it("prints the token estimate on stderr and asks once before the first call", async () => {
+    const { seam, client, questions } = seamWith({ OPENROUTER_API_KEY: KEY });
+    const io = captureIo();
+    expect(await explainCommand(options(["--out", OUT, "--price-in", "0.10", "--price-out", "0.60"]), io, seam)).toBe(EXIT.OK);
+    expect(questions).toHaveLength(1);
+    expect(questions[0]).toMatch(/^Run 68 model calls \(~[\d ]+ input \+ ~[\d ]+ output tokens, ~\$\d+\.\d{4}\)\? \[y\/N\] $/u);
+    expect(io.stderr()).toMatch(/explain estimate:[\s\S]*total\s+68\s+[\d ]+\s+[\d ]+[\s\S]*wrote /u);
+    expect(io.stdout()).toBe("");
+    expect(client.calls.length).toBeGreaterThan(0);
+  });
+
+  it("a declined run makes no call and writes nothing", async () => {
+    const { seam, client, disk } = seamWith({ OPENROUTER_API_KEY: KEY }, new Map(), false);
+    const io = captureIo();
+    expect(await explainCommand(options(["--out", OUT]), io, seam)).toBe(EXIT.OK);
+    expect(client.calls).toHaveLength(0);
+    expect(disk.has(OUT)).toBe(false);
+    expect(disk.has(`${OUT}.journal`)).toBe(false);
+    expect(io.stderr()).toContain("aborted: no call was made");
+  });
+
+  it("--yes runs without asking, and without a terminal", async () => {
+    const { seam, client, questions } = seamWith({ OPENROUTER_API_KEY: KEY }, new Map(), null);
+    const io = captureIo();
+    expect(await explainCommand(options(["--out", OUT, "-y"]), io, seam)).toBe(EXIT.OK);
+    expect(questions).toHaveLength(0);
+    expect(client.calls.length).toBeGreaterThan(0);
+    expect(io.stderr()).not.toContain("explain estimate:");
+  });
+
+  it("with no terminal and no --yes, refuses with a usage error before any call", async () => {
+    const { seam, client, disk } = seamWith({ OPENROUTER_API_KEY: KEY }, new Map(), null);
+    await expect(explainCommand(options(["--out", OUT]), captureIo(), seam)).rejects.toThrow(/this run needs 68 model calls .* no terminal to confirm on/u);
+    expect(client.calls).toHaveLength(0);
+    expect(disk.has(OUT)).toBe(false);
+  });
+
+  it("a run that plans no call does not ask", async () => {
+    const first = seamWith({ OPENROUTER_API_KEY: KEY });
+    await explainCommand(options(["--out", OUT]), captureIo(), first.seam);
+    const second = seamWith({ OPENROUTER_API_KEY: KEY }, new Map([[OUT, first.disk.get(OUT)!]]), null);
+    expect(await explainCommand(options(["--out", OUT]), captureIo(), second.seam)).toBe(EXIT.OK);
+    expect(second.questions).toHaveLength(0);
   });
 });
 

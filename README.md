@@ -178,7 +178,7 @@ codegraph replay --store gson.db --history gson-history.jsonl --serve
 ```bash
 codegraph explain gson.jsonl --src ~/src/gson/gson/src/main/java --dry-run   # the plan, no call
 codegraph explain gson.jsonl --src ... --estimate --price-in 0.10 --price-out 0.60   # tokens and cost, no call
-OPENROUTER_API_KEY=… codegraph explain gson.jsonl --src ... --max-calls 50
+OPENROUTER_API_KEY=… codegraph explain gson.jsonl --src ... --max-calls 50   # shows the estimate, asks [y/N]
 ```
 
 Explanations go to `gson.insights.jsonl` beside the model and never into it.
@@ -249,8 +249,9 @@ Read these before you commit an afternoon.
   and test sources, or one package split across modules) confuses noClasspath
   resolution; pass such roots in separate runs.
 - **`explain` costs money and needs a network.** It is the only command that
-  does. `--dry-run` and `--estimate` tell you what it would do first, and
-  `--max-calls` caps it.
+  does. `--dry-run` and `--estimate` tell you what it would do first, a real
+  run asks for confirmation after showing the estimate (`--yes` in scripts),
+  and `--max-calls` caps it.
 - **Not a linter.** Codegraph reports structure, coupling and cycles; it does
   not judge style or find bugs.
 - **Runs from a clone.** There is no npm package or binary release yet with `Homebrew` for instance (but it's in the roadmap).

@@ -157,7 +157,11 @@ tokens) are given. Input is the rendered prompts at four characters per token;
 output is one measured block average per block asked for (operation 450, type
 650, module 900 tokens — averages from gpt-5.6-luna on the fixture and gson),
 so a cycle call counts once per member. Repair re-asks and rate-limit retries
-are not counted, and records already in the side-car are not re-sent. `--max-calls N` stops planning calls after N, so what runs is
+are not counted, and records already in the side-car are not re-sent. A real
+run shows that same estimate on stderr and asks for confirmation before the
+first call; `--yes` skips the question, and with no terminal to ask on the run
+is a usage error rather than an unasked spend. A run that plans no call never
+asks. `--max-calls N` stops planning calls after N, so what runs is
 always a dependency-consistent prefix. `--scope IDS` restricts calls to units
 inside the named modules or types; dependencies outside scope are reused when
 already explained and never called. `--concurrency N` runs N calls in flight
