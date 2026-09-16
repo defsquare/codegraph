@@ -51,6 +51,10 @@ codegraph serve    [model.jsonl] [--port N] [--host ADDR] [--name STR]
                    [--carry M1,M2] [--framework spring]
                    [--internal-only] [--declared-only] [--no-cache]
                    # one page: the navigator, with the 3D city as a tab
+codegraph serve    --app [--data-dir DIR] [--extractors FILE] [--port N] [--host ADDR]
+                   [city flags as above]
+                   # the desktop app's daemon: no model on argv, folders open
+                   # through POST /jobs under a per-launch token; exits with stdin
 
 codegraph city     [model.jsonl] [--layout] [--out FILE]
                    [--height METRIC] [--height-scale linear|sqrt|log]
@@ -137,6 +141,42 @@ in navigator* and lands on that type's Navigate entry with its dependencies;
 **Coupling** (ranked metrics). The city's channels are the `city` flags
 below, so the page's city is exactly the artifact `city` would write. The
 server hands out `/navigator.json` and `/city.json`; stdout stays empty.
+
+**`--app`** is the same page as the daemon behind the desktop app (and the
+development loop for it: run it from a checkout, open the URL in a browser).
+No model on argv. It binds `127.0.0.1:0` unless `--host`/`--port` say
+otherwise, prints exactly one JSON line on stdout — `{"port":N,"token":"…"}`
+— and serves every route under `/<token>/`: the page, `app` (the registry
+and the current project), `recent`, `navigator.json`, `city.json`,
+`POST jobs` with `{"src": DIR-or-model.jsonl, "extractor"?: NAME}` and the
+`jobs/current` event stream (`started`, `phase`, `progress` — the
+extractor's own stderr lines — `done`, `failed`; `idle` when nothing runs).
+Anything outside the token is `404`; a request whose `Origin` is not the
+page's own is `403`. One job at a time (`409` while one runs); a folder
+several registered extractors claim is a `422` question the page asks, never
+a guess; a `model.jsonl` opens with no extractor at all. `--extractors FILE`
+is the registry, a JSON list of `{ name, path, extensions: [".java"],
+launch?: exec|java|node, env? }` — the daemon runs an entry under the
+extractor command-line contract and never names a language; without it only
+`model.jsonl` files open. `--data-dir DIR` (default: the OS application-data
+directory, `codegraph/` under it) holds each opened folder's `model.jsonl`,
+its `model.db` cache, the two artifacts and a `project.json`, plus
+`recent.json`; reopening a folder whose claimed files have not changed (path,
+size, mtime) skips the extractor, and the build too when the flags have not.
+The process exits when stdin reaches EOF or on SIGTERM, killing a running
+extractor — the shell holds stdin open and closes it on window close.
+
+**The single-executable image.** `./build.sh --ts --sea` folds the CLI, the
+daemon and both frontends into one Node single-executable,
+`packages/cli/dist-sea/<rid>/codegraph`, for the platform that builds it —
+the desktop app's backend and a `codegraph` that needs no Node installed.
+Every command above works from it unchanged; `serve` and `serve --app` serve
+the page from the image's own assets. A `.js` extractor (`snapshots
+--extractor`, a registry entry with `launch: node`) then runs under the
+`node` on PATH, since the image is not one. Its gates —
+`scripts/sea-smoke.mjs`, run by `test.sh` and CI on every platform — are
+`--version`, `analyze` byte-identical to the ESM build, and `serve --app`
+answering the page.
 
 ### `city`
 Writes the code-city artifact (`city.json`): modules as districts (nested when

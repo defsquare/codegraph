@@ -2578,7 +2578,10 @@ which binds no standard library and passes every test run from sources. Doing
 it means embedding the lib files as assets and a custom `CompilerHost` that
 serves them from memory — a build-and-host change, not a model change — and
 it is worth doing only once someone needs the extractor on a machine without
-Node, which today is nobody who can run the rest of the pipeline.
+Node, which today is nobody who can run the rest of the pipeline — and the
+desktop distribution (§15) does not create that someone: `codegraph-typescript`
+is a Homebrew formula that depends on Homebrew's `node`, so the machine has
+Node without the user managing it, and this package stays exactly as it is.
 
 Wiring into the repo's scripts and CI:
 
@@ -2686,22 +2689,41 @@ built bin on Ubuntu, macOS and Windows runners; codegraph's own model
 audit numbers in the profile notes; `./test.sh` and CI green with the
 TypeScript fixture in every per-fixture suite.
 
-## 15. Phase 12 — The desktop app: one Node binary, three sidecars, a Homebrew cask (M14)
+## 15. Phase 12 — The desktop app: one app, one Node binary, one install per extractor (M14)
 
-Everything a user needs, installed with one command and nothing else on the
-machine — no Node, no JDK, no .NET SDK:
+Everything a user needs, from Homebrew, with nothing to manage on the machine
+— no JDK, no .NET SDK, no Node of one's own. The app is ONE install; every
+language extractor is its OWN install, taken only by those who need it:
 
 ```
-brew install --cask defsquare/tap/codegraph
+brew install --cask defsquare/tap/codegraph            # Codegraph.app + `codegraph`
+brew install defsquare/tap/codegraph-java               # one per language, as needed
+brew install defsquare/tap/codegraph-csharp
+brew install defsquare/tap/codegraph-typescript
+brew install defsquare/tap/codegraph-elixir             # and every extractor to come
 ```
 
-That puts `Codegraph.app` in `/Applications` and `codegraph`, `codegraph-java`,
-`codegraph-csharp` and `codegraph-typescript` on `PATH`. The app opens a
-folder and shows the navigator with the city as a tab — the `codegraph serve`
-page — after running the right extractor; the terminal commands are the same
-binaries the app carries. **The CLI is the backend**: nothing is rewritten, the
-pipeline of §7, §11, §12 and the navigator is called through a long-lived
-process instead of one command line.
+The cask puts `Codegraph.app` in `/Applications` and `codegraph` on `PATH`;
+each formula puts one `codegraph-<language>` command on `PATH`. The app opens
+a folder and shows the navigator with the city as a tab — the `codegraph
+serve` page — after running the right extractor, which it FINDS on the
+machine rather than carries; a folder whose language has no extractor
+installed is answered with the one `brew install` line that fixes it. **The
+CLI is the backend**: nothing is rewritten, the pipeline of §7, §11, §12 and
+the navigator is called through a long-lived process instead of one command
+line.
+
+WHY SPLIT. Every extractor carries its own runtime — a GraalVM image for
+Java, the .NET single-file host for C#, the BEAM for Elixir — and each is
+tens of megabytes per architecture that a user of one language never needs.
+One cask with every extractor inside would grow with each Phase 7+ language
+and re-download all of them on every `brew upgrade` of any one; one formula
+per extractor keeps the app download at the SEA and the shell, lets an
+extractor release on its own cadence, and is the shape Homebrew already has
+for a command on `PATH`. The extractors were designed as separate processes
+under one command-line contract (§13.5, schemas/README.md §8) exactly so
+this could be true: the app needs to know nothing about them but that
+contract and the file extensions they claim.
 
 Locked decisions, each with its reason (the delta table in §18 repeats them):
 
@@ -2710,12 +2732,21 @@ Locked decisions, each with its reason (the delta table in §18 repeats them):
   business logic in Rust: the analyzer, the city and the navigator stay
   TypeScript, and the Rust crate never reads a `model.jsonl`. A Rust rewrite
   of anything under `packages/` is out of scope by construction.
-- **The Node side is ONE binary**, a Node single-executable application (SEA)
-  built from the CLI bundle with the frontends, the TypeScript extractor and
-  the compiler's `lib.*.d.ts` files embedded as assets. It IS `codegraph` in a
-  terminal and the daemon behind the app. A second Node runtime for the
-  TypeScript extractor (110 MB more for 3 MB of code) is refused; §15.3 says
-  how one image is two programs.
+- **The Node side is ONE binary, ONE program**, a Node single-executable
+  application (SEA) built from the CLI bundle with the two frontends embedded
+  as assets. It IS `codegraph` in a terminal and the daemon behind the app.
+  It carries no extractor: the TypeScript extractor is its own install like
+  every other (§15.1), so the image has no dispatch by name and no compiler
+  inside — §15.3.
+- **One install per extractor, each a formula in our tap.** `codegraph-java`,
+  `codegraph-csharp`, `codegraph-typescript`, `codegraph-elixir`… are
+  formulae in `defsquare/homebrew-tap`, one command on `PATH` each, per
+  architecture where the runtime is native, generated by that extractor's own
+  release job. The app bundles none of them and discovers what is installed
+  (§15.4); a language without its extractor is a message naming the install
+  line, never a silent failure. App and extractors version independently and
+  meet on the interchange contract (`schemaVersion`, schemas/) — the same
+  boundary that lets a Go or Python extractor exist without touching the app.
 - **The page comes from the daemon, same origin.** The webview navigates to
   the daemon's loopback URL and fetches `navigator.json`/`city.json` beside it
   — exactly what `codegraph serve` does today (`?src=`/`?city=` and the
@@ -2733,35 +2764,47 @@ Locked decisions, each with its reason (the delta table in §18 repeats them):
   crashed or killed shell cannot leave an orphan holding a model in memory.
   The shell also kills the child on window close; both rules, not one.
 - **Extractors are a registry the shell hands over, as data.** Each entry is
-  `{ name, path, extensions[], launch }` — the §13.5 contract is the only
-  thing the daemon knows about any of them, and the language-blind rule of
-  §13.5 ("there is no `codegraph extract`") holds: the daemon runs a registry
-  entry, it never names a language. Detection is a census of file extensions
-  against `extensions[]`; a tie is a question the page asks, never a guess.
-- **Homebrew: a cask in our own tap, updates through `brew upgrade`.** Tauri
-  produces a `.app` in a DMG, which is what a cask installs; a formula would
-  have to build from source and homebrew-core refuses vendored binaries
-  anyway. The Tauri updater plugin stays off: two update paths disagree
+  `{ name, path, extensions[], launch, env?, install? }` — the §13.5 contract
+  is the only thing the daemon knows about any of them, and the language-blind
+  rule of §13.5 ("there is no `codegraph extract`") holds: the daemon runs a
+  registry entry, it never names a language. Detection is a census of file
+  extensions against `extensions[]`; a tie is a question the page asks, never
+  a guess. The shell writes the registry from what it FINDS (§15.4): an entry
+  it knows but did not find has no `path` and carries `install`, the line to
+  type, and a tree only such entries claim is answered `not-installed` with
+  that line.
+- **Homebrew: a cask for the app, a formula per extractor, one tap, updates
+  through `brew upgrade`.** Tauri produces a `.app` in a DMG, which is what a
+  cask installs and a formula cannot; an extractor is a command on `PATH`,
+  which is what a formula installs — from a prebuilt per-architecture binary,
+  legitimate in our own tap (homebrew-core refuses vendored binaries; a tap
+  does not). The Tauri updater plugin stays off: two update paths disagree
   eventually. Linux ships the Tauri `.deb`/AppImage on the GitHub release and
   Windows the NSIS installer — both built by the existing runner matrix, both
-  outside brew's scope, neither a gate of M14.
+  outside brew's scope, neither a gate of M14; the extractors' binaries for
+  those OSes are already on their own releases (§13.7, §13.10, §14.7).
 
 ### 15.1 What the TypeScript extractor (M13) changes, and what it keeps
 
-M13 landed on `main` before this phase, and three of its decisions are the
-ones M14 has to bend or keep:
+M13 landed on `main` before this phase. With one install per extractor, the
+TypeScript extractor stays exactly the npm package M13 shipped — and its
+Homebrew form is a formula that installs that package under Homebrew's own
+`node`, the way Homebrew ships every Node command (`typescript`, `eslint`…):
 
 | M13 decision | M14 consequence |
 |---|---|
-| `run(args, io, cwd)` in `main.ts` is the extractor as a function with injected I/O, and `cli.ts` is a two-line program | it embeds in the SEA image without a refactor; the tests keep importing `main.ts` |
-| the extractor never imports `@codegraph/*` (boundary test), and the Node side never learns a language (§13.5) | the two programs share an executable IMAGE, never a module graph: the SEA entry dispatches on the invoked name (§15.3) and the CLI still reaches the extractor through `snapshots --extractor <path>` and the registry, as a process |
-| `typescript` stays OUTSIDE the npm bundle so the compiler finds `lib.*.d.ts` beside itself (§14.1, §14.7) | inverted for the SEA — a single file has no "beside itself" — so the trap §14.7 named becomes the work: the 99 lib files (3.1 MB) ride as SEA assets and the `CompilerHost` overlay in `corpus.ts` (already the seam: it spreads `createCompilerHost` and intercepts `fileExists`/`readFile`/`getDefaultLibLocation`) serves them from a virtual `<sea>/lib/` directory. The built-bin `<lib>` test of §14.8 runs a third time, against the SEA |
-| `snapshots --extractor` runs a `.js` under `node` | irrelevant in the app — there is no `node` on PATH and none is needed: the registry entry for TypeScript runs the SEA itself |
-| `npx codegraph-typescript` for anyone with Node 22 | kept as is; the npm package and the SEA are two builds of one source, pinned equal by `cmp` of the fixture snapshot from both |
+| the extractor is an npm package with `typescript` external, run with `npx codegraph-typescript` (§14.7) | KEPT, and it is the Homebrew form too: `Formula/codegraph-typescript.rb` has `depends_on "node"`, installs the published tarball into `libexec` with `std_npm_args` and links `bin/codegraph-typescript`. A ~12 MB download (bundle + compiler) on top of a `node` Homebrew already shares with everything else, instead of a second 110 MB Node image or 12 MB folded into the app for every user |
+| `typescript` stays OUTSIDE the bundle so the compiler finds `lib.*.d.ts` beside itself (§14.1, §14.7) | unchanged — inside `libexec/lib/node_modules/…` the libs ARE beside the compiler; the §14.7 trap (a single file has no "beside itself") never arises because the extractor never becomes a single file. The `<lib>` built-bin test of §14.8 keeps its two runs |
+| the extractor never imports `@codegraph/*` (boundary test), and the Node side never learns a language (§13.5) | unchanged, and now also a packaging fact: the SEA (§15.3) carries no extractor at all; the app reaches TypeScript as it reaches Java — a registry entry, a process |
+| `snapshots --extractor` runs a `.js` under `node` | in the app the registry entry's `path` is the formula's `bin/codegraph-typescript` shim, `launch: exec`; `node` is Homebrew's, never the SEA's |
+| `run(args, io, cwd)` in `main.ts`, `cli.ts` a two-line program | untouched |
 | self-hosting (§14.6) | `apps/desktop/src` joins the `--src` roots of the self-hosting run, and the boundary query gains one row: `@tauri-apps/*` is imported under `apps/desktop` alone |
 
-Size is not a concern: compiler 8.7 MB + lib files 3.1 MB + both frontends
-1.4 MB, inside a runtime of ~110 MB.
+Sizes, so the split is measurable: the app cask downloads the SEA (~110 MB,
+of which both frontends are 1.4 MB) plus the shell; `codegraph-typescript`
+~12 MB plus Homebrew's `node` once; `codegraph-java` and `codegraph-csharp`
+are each their native image per architecture, tens of megabytes a user of
+another language never fetches.
 
 ### 15.2 The daemon: `codegraph serve --app`
 
@@ -2795,32 +2838,27 @@ owns the dialog. Everything above is tested under Vitest with a fake extractor
 including the capability token (a request outside `/<token>/` is `404`, never
 `401` — the route does not exist), the stdin-EOF exit, and the `409`.
 
-### 15.3 One image, two programs: the SEA
+### 15.3 One image, one program: the SEA
 
 - **CommonJS, one file.** A SEA's main script is CommonJS; the CLI bundle is
   ESM with a dynamically imported `explain` chunk. A second tsup target —
-  `format: cjs`, `splitting: false`, `typescript` INLINED, `platform: node` —
-  feeds the SEA; the ESM build stays what `pnpm` users and the npm package
-  run. `node:sqlite` is a built-in and needs nothing.
-- **Dispatch on the invoked name.** The entry reads `basename(process.argv0)`
-  (`argv0` keeps the name a symlink or the cask's `binary … target:` stanza
-  gave it; `execPath` is the resolved file and would not) and runs the CLI
-  under `codegraph`, the extractor under `codegraph-typescript`, with
-  `CODEGRAPH_PROGRAM` as the override for a caller that cannot control the
-  name — the registry entry the shell writes for TypeScript uses it. Anything
-  else is usage error 2 naming both programs. This is a packaging fact, not a
-  dependency: neither program imports the other.
-- **Assets.** `sea-config.json` lists the two frontend `dist/` trees, the 99
-  `lib.*.d.ts` files and `package.json`; `serve.ts` and `corpus.ts` read them
-  through `node:sea`'s `getAsset` behind the same resolver interface the
-  checkout paths use, so the tests exercise one seam.
+  `format: cjs`, `splitting: false`, `platform: node`, the workspace packages
+  inlined — feeds the SEA; the ESM build stays what `pnpm` users run.
+  `node:sqlite` is a built-in and needs nothing. No extractor is in the image
+  (§15.1), so there is no dispatch on the invoked name and no compiler to
+  inline: the entry is the CLI's, unchanged.
+- **Assets.** `sea-config.json` lists the two frontend `dist/` trees and
+  `package.json` (for `--version`); `serve.ts`'s `navigatorAssetsDir` /
+  `vizAssetsDir` gain an asset-backed branch behind the same resolver
+  interface the checkout paths use — `node:sea`'s `isSea()` decides, and the
+  tests exercise one seam with two implementations.
 - **CI.** A `sea` matrix on the five existing runners (the Java native job's
   shape: no cross-compilation, macOS signs on macOS) builds the image and
-  gates it three ways: `codegraph-typescript` on `fixtures/typescript/src`
-  `cmp`-equal to the snapshot (the §14.8 `<lib>` test in its final form),
+  gates it three ways: `codegraph --version` prints the package version,
   `codegraph analyze` on the Java fixture byte-identical to the ESM build's
   output, and `serve --app` answering `/<token>/navigator.json` on the
-  fixture under a fake extractor.
+  fixture under the fake extractor of M14a — the page's assets served from
+  the image, not from a checkout.
 - **macOS.** `postject` breaks Node's signature: `codesign --remove-signature`
   before injection, an ad-hoc signature after (arm64 refuses to run an
   unsigned Mach-O at all), and the real signature comes with the bundle
@@ -2828,8 +2866,9 @@ including the capability token (a request outside `/<token>/` is `404`, never
 
 ### 15.4 The shell: `apps/desktop/` (Tauri 2)
 
-- Sidecars in `tauri.conf.json` `bundle.externalBin`, one file per Rust
-  target triple. The release job renames what the matrix already produces:
+- ONE sidecar in `tauri.conf.json` `bundle.externalBin`: the SEA, one file
+  per Rust target triple. The release job renames what the `sea` matrix
+  produces:
 
   | RID today | triple |
   |---|---|
@@ -2839,15 +2878,36 @@ including the capability token (a request outside `/<token>/` is `404`, never
   | linux-arm64 | aarch64-unknown-linux-gnu |
   | win-x64 | x86_64-pc-windows-msvc |
 
-  Two DMGs, arm64 and Intel, rather than a universal binary: the sidecars are
-  per triple and a universal `.app` would carry both sets.
-- On launch: write the registry (three entries, paths into
-  `Contents/MacOS/`), spawn `codegraph serve --app …` as a sidecar with stdin
-  held open, read the one stdout line, navigate the webview to
+  Two DMGs, arm64 and Intel, rather than a universal binary: the SEA is per
+  triple and a universal `.app` would carry both. No extractor rides in the
+  bundle.
+- **Extractor discovery.** The shell ships a CATALOGUE, `extractors.json` in
+  its resources — one row per extractor codegraph knows: `{ name,
+  extensions[], command, install }` (`codegraph-java`, `[".java"]`, `brew
+  install defsquare/tap/codegraph-java`; and so on for csharp, typescript,
+  elixir…). On launch it looks each `command` up on `PATH` and in the
+  Homebrew prefixes (`/opt/homebrew/bin`, `/usr/local/bin`, the Linuxbrew
+  prefix), then writes the daemon's registry: found → `{ name, path,
+  extensions, launch: "exec" }`; not found → `{ name, extensions, install }`
+  with no `path`. A settings entry lets a user point a row at a binary
+  anywhere (a checkout's `bin/codegraph-typescript`, a jar with `launch:
+  java`). The catalogue is data: a new extractor is one row, no Rust.
+- **The daemon's side of that** (a small M14c change to `registry.ts` and
+  `jobs.ts`): an entry without `path` is legal, counts in the census, and
+  when the only claimants of a tree are such entries `detect` answers
+  `not-installed` — `POST /jobs` → `422 { error: "not-installed",
+  extractors: [{ name, files, install }] }` — and the page shows the line to
+  type with a "Check again" that asks the shell to re-run discovery. A tree
+  claimed by one installed and one missing extractor is still `ambiguous`,
+  and the missing candidate is offered with its install line rather than
+  hidden.
+- On launch: discovery, write the registry, spawn `codegraph serve --app
+  --data-dir <app data> --extractors <registry>` as a sidecar with stdin held
+  open, read the one stdout line, navigate the webview to
   `http://127.0.0.1:<port>/<token>/`. On window close: close stdin, kill the
-  child. The Rust crate is that, a menu (File › Open…, Open Recent) and the
-  drag-and-drop handler, each of which does one `POST /jobs` — a few hundred
-  lines with no dependency on the model.
+  child. The Rust crate is that, the discovery, a menu (File › Open…, Open
+  Recent) and the drag-and-drop handler, each of which does one `POST /jobs`
+  — a few hundred lines with no dependency on the model.
 - **The WebGL gate.** WKWebView is not Chrome. Before anything else in M14c,
   `tauri dev` on the fineract city (the NV milestone's 100 MB artifact) at
   user-facing angles, screenshots reviewed, frame time measured; a failure
@@ -2855,63 +2915,152 @@ including the capability token (a request outside `/<token>/` is `404`, never
   first. WebKitGTK on Linux is known to be fragile with WebGL, one more
   reason Linux is not a gate.
 
-### 15.5 Signing, notarization, the cask
+### 15.5 Signing, notarization, the cask and the formulae
 
 - `tauri build` signs and notarizes from the Apple Developer credentials
   in CI (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
   `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`)
-  with hardened runtime, and signs the sidecars with the same identity. The
-  entitlements file is the bundle's one file and carries the JIT trio —
+  with hardened runtime, and signs the one sidecar with the same identity.
+  The entitlements file is the bundle's one file and carries the JIT trio —
   `com.apple.security.cs.allow-jit`,
   `com.apple.security.cs.allow-unsigned-executable-memory`,
-  `com.apple.security.cs.disable-library-validation` — because two of the
-  four binaries need it: the SEA (V8) and the .NET single-file host
-  (Microsoft's notarization guidance). GraalVM's image is AOT and needs none;
-  being granted them is harmless. If the bundler turns out not to apply the
-  entitlements to sidecars, CI signs them itself with `codesign --options
-  runtime --entitlements` before `tauri build` — a step to verify on the first
+  `com.apple.security.cs.disable-library-validation` — because the SEA (V8)
+  needs it. If the bundler turns out not to apply the entitlements to the
+  sidecar, CI signs it itself with `codesign --options runtime
+  --entitlements` before `tauri build` — a step to verify on the first
   notarized build, not to assume.
 - Two things to confirm on the first signed build, each a CI assertion
   afterwards: `spctl --assess` accepts the DMG's `.app` on a clean machine,
-  and the osx C# publish is truly ONE file (only the linux-x64 dist exists
-  on the dev machine; .NET refuses to embed native libraries in a single
-  file on macOS, and a stray `.dylib` beside the host would not be a sidecar).
+  and `codegraph --version` runs from `/Applications/Codegraph.app/Contents/
+  MacOS/codegraph` under the hardened runtime.
+- **The extractor binaries** are formula downloads, not bundle contents.
+  Homebrew fetches them with `curl`, which sets no quarantine attribute, so
+  Gatekeeper does not assess them; arm64 still refuses an unsigned Mach-O,
+  which the .NET publish and GraalVM both satisfy with an ad-hoc signature
+  today. The macOS release jobs of `codegraph-java` and `codegraph-csharp`
+  nevertheless sign with the Developer ID when the identity is present (the
+  .NET single-file host wants the JIT trio too, per Microsoft's notarization
+  guidance) — a clean-Mac `brew install` of each is the assertion that
+  decides whether notarization of a bare binary is also needed, and the
+  answer goes in the profile notes. The osx C# publish must be truly ONE file
+  (only the linux-x64 dist exists on the dev machine; .NET refuses to embed
+  native libraries in a single file on macOS, and a stray `.dylib` beside the
+  host is not something `bin.install` carries).
 - `defsquare/homebrew-tap`, `Casks/codegraph.rb`: `arch arm:/intel:`, the
-  DMG URL per architecture from the GitHub release, `sha256` per
-  architecture, `app "Codegraph.app"`, and four `binary` stanzas from
-  `Contents/MacOS/` — the fourth, `codegraph-typescript`, is `binary
-  "…/codegraph", target: "codegraph-typescript"`, the §15.3 dispatch by name.
-  `auto_updates false`, a `livecheck` on the release tags. The release job
-  gains a step that rewrites the cask with the new version and hashes and
-  pushes to the tap with a deploy key; the cask is generated, never edited by
-  hand.
+  DMG URL per architecture from the app's GitHub release, `sha256` per
+  architecture, `app "Codegraph.app"`, ONE `binary` stanza —
+  `Contents/MacOS/codegraph`. `auto_updates false`, a `livecheck` on the
+  app's release tags.
+- `Formula/codegraph-java.rb`, `Formula/codegraph-csharp.rb`: `on_arm` /
+  `on_intel` (and `on_linux`) blocks with the binary's URL and `sha256` from
+  THAT extractor's release, `bin.install`, a `test do` that runs
+  `--version` and extracts a two-file fixture written by the test itself;
+  `livecheck` on that extractor's tags. `Formula/codegraph-typescript.rb`:
+  `depends_on "node"`, `url` the npm registry tarball, `system "npm",
+  "install", *std_npm_args`, `bin.install_symlink Dir["#{libexec}/bin/*"]` —
+  Homebrew's standard Node-package formula, the `<lib>` files beside the
+  compiler as §14.7 requires. Every future extractor (`codegraph-elixir`…)
+  adds one formula in the same shape, in its own release job.
+- **Generated, never edited by hand.** Each release job — the app's, and each
+  extractor's — gains a step that rewrites ITS cask or formula with the new
+  version and hashes and pushes to the tap with a deploy key. Versions are
+  independent: the cask and the formulae bump on their own tags, and
+  compatibility is the interchange contract — the daemon validates every
+  model it opens exactly as `serve` does, and a `schemaVersion` the app does
+  not know is a `failed` job whose message names `brew upgrade codegraph` (or
+  the extractor), not a crash.
 
 ### 15.6 Milestone split
 
-- **M14a — the daemon.** `serve --app`, the capability URL, the registry,
-  the job + SSE routes, `--data-dir`, stdin-EOF exit; the page's empty state
-  in `--app` form (recents, progress, the open instruction); Vitest with the
-  fake extractor. Usable without Tauri: `codegraph serve --app` from a
-  checkout plus a browser is the development loop.
-- **M14b — the SEA.** The CJS target, the dispatch by name, the asset
-  resolver in `serve.ts` and the asset lib host in `corpus.ts`, `sea-config`,
-  the five-runner `sea` job with its three gates, the macOS re-signing steps.
-- **M14c — the shell.** `apps/desktop/`, the WebGL gate first, sidecars by
-  triple, launch/close lifecycle, menu, dialog, drag-and-drop, recents;
-  `tauri dev` reviewed as screenshots on the Java fixture and on fineract.
+- **M14a — the daemon** ✅ (2026-09-16). `serve --app [--data-dir DIR]
+  [--extractors FILE]` in `packages/cli/src/app/`: `registry.ts` (the
+  registry as data, `launch` inferred from the path as `snapshots
+  --extractor` does, the extension census, `detect` → one | ambiguous | none,
+  the size-and-mtime tree fingerprint over the files the chosen extractor
+  would read), `store.ts` (`<data-dir>/models/<name>-<hash>/` with
+  `model.jsonl`, the `model.db` `openCache` builds beside it, the two
+  artifacts and `project.json`; `recent.json`; the platform default
+  data dir), `jobs.ts` (one job at a time; `started`/`phase`/`progress`/
+  `done`/`failed` events replayed to a late subscriber; the extractor
+  skipped when the fingerprint has not moved, the build skipped when the
+  build key has not either — a reopen from the recents took 59 ms) and
+  `daemon.ts` (the 32-hex token minted per launch, `/<token>/` routes: the
+  page, `app`, `recent`, `navigator.json`, `city.json`, `POST jobs` →
+  202/409/422/404, `jobs/current` SSE that says `idle` and stays open; an
+  `Origin` that is not the page's own is 403, anything outside the token is
+  404; stdin EOF and SIGTERM close the server and kill a running extractor).
+  Two things the plan did not name and the daemon does: a `POST jobs` whose
+  `src` is a `model.jsonl` builds the page with no extractor, and an empty
+  registry is legal (the dev loop from a checkout needs neither a registry
+  nor a JDK). navigator-ui: `app-mode.ts` (probe by the `codegraph.app/1`
+  kind, typed `submitJob` outcomes, the event reducer) and `AppHome` — the
+  recents, "File › Open… (⌘O), or drop a folder on the window", a path field
+  as the browser dev loop, the three phases with a window on the extractor's
+  stderr, the "which extractor?" question, failures with the exit code and
+  the last stderr lines — plus an "Open…" header button and the
+  `@tauri-apps/*` boundary test. Tests: 19 registry, 17 daemon over real
+  sockets against `test/fake-extractor.mjs` (the §13.5 contract: copies a
+  fixture, two stderr lines, `FAKE_EXTRACTOR_FAIL/SLOW_MS/LOG`), 3 process
+  tests (one stdout line through a real pipe, exit 0 on stdin EOF, exit 2 on
+  a bad registry before binding), 8 serve-command tests, 17 app-mode tests.
+  Driven headlessly on the Java fixture (fake extractor) and a mixed tree
+  (the real TypeScript extractor after the question), screenshots reviewed.
+- **M14b — the SEA** ✅ (2026-09-16). `packages/cli/tsup.config.ts` gains a
+  second target: `src/sea-entry.ts` (the same `run`, no top-level await) →
+  `dist-sea/codegraph.cjs`, CommonJS, `splitting: false`, `noExternal: [/.*/]`,
+  `shims: true`, 2.9 MB with every workspace package and zod inlined and only
+  Node's built-ins external. `src/sea.ts` owns the three image facts through
+  `process.getBuiltinModule("node:sea")` — a static `import "node:sea"` came
+  out of the bundler as `require("sea")`, which the prefix-only builtin does
+  not answer — `isSeaImage()`, `seaAsset(key)`, and `nodeCommand()` (`node`
+  on PATH inside the image, `process.execPath` in a checkout; used by
+  `snapshots --extractor` and the registry's `launch: node`). `src/assets.ts`
+  is the one seam: `FrontendAssets { label, read(relative) }` with
+  `directoryAssets` (jailed) and `keyedAssets`/`seaFrontendAssets(prefix)`
+  (the key space is the jail); `serve.ts`'s `vizAssets()`/`navigatorAssets()`
+  return one or the other, `serveStatic` and both servers read through it,
+  and `version.ts` reads the `package.json` asset before the file beside
+  itself. `scripts/sea-config.mjs` GENERATES `sea-config.json` (every file of
+  both `dist/` trees as `viz/…` and `navigator-ui/…`, plus `package.json`;
+  `useCodeCache`), `scripts/sea-build.mjs` does the seven steps (blob, copy
+  this Node, macOS `codesign --remove-signature`, `postject` with the sentinel
+  fuse and the `NODE_SEA` Mach-O segment, ad-hoc sign) into
+  `dist-sea/<rid>/codegraph[.exe]`, `scripts/sea-smoke.mjs` is the three-gate
+  acceptance (`--version` = the package's, `analyze` deps/cycles/coupling
+  byte-identical to the ESM build, `serve --app` under the fake extractor
+  serving index.html AND its hashed script from the image, opening
+  `fixtures/java/src`, `navigator.json` + laid-out `city.json`, exit 0 on stdin
+  EOF). `./build.sh --ts --sea`, `test.sh`'s phase when the image exists, the
+  five-runner `sea` CI job (`codegraph-cli-<rid>` artifacts, `codegraph-<rid>`
+  on the release). Verified on linux-x64: a 131 MB image, all 13 gate checks
+  green, `node:sqlite` and the model.db cache working inside it. Tests: the
+  asset seam with two sources through one server (27), the config generator,
+  `versionOf`; every existing suite rewired to `FrontendAssets`.
+- **M14c — the shell.** `apps/desktop/`, the WebGL gate first, the one
+  sidecar by triple, launch/close lifecycle, the extractor catalogue and
+  discovery (registry entries without `path`, the daemon's `not-installed`
+  answer and the page's install line with "Check again"), menu, dialog,
+  drag-and-drop, recents; `tauri dev` reviewed as screenshots on the Java
+  fixture and on fineract, and on a folder whose extractor is not installed.
 - **M14d — signed, notarized, in the tap.** The `desktop` job per macOS
   architecture, notarization, the two DMGs on the release beside the raw
-  sidecars, the cask and its bump step; `brew install --cask
-  defsquare/tap/codegraph` on a clean Apple-silicon Mac and a clean Intel Mac
-  opens the app and puts the four commands on PATH.
+  SEA, the cask and its bump step; the three extractor formulae
+  (`codegraph-java`, `codegraph-csharp` per architecture, `codegraph-typescript`
+  on Homebrew's `node`) each with a bump step in its own release job; on a
+  clean Apple-silicon Mac and a clean Intel Mac, `brew install --cask
+  defsquare/tap/codegraph` opens the app and puts `codegraph` on PATH, and
+  `brew install defsquare/tap/codegraph-java defsquare/tap/codegraph-csharp
+  defsquare/tap/codegraph-typescript` puts the three commands beside it.
 
-Definition of done: a clean Mac with Homebrew and nothing else runs the
-install line, opens a Java, a C# and a TypeScript folder from the app and
-sees the city and the navigator; `codegraph analyze`, `codegraph-java`,
-`codegraph-csharp` and `codegraph-typescript` work in a terminal from the
-same install, each reproducing its fixture snapshot byte for byte; the SEA
-job is green on all five runners; `pnpm -r test` green with the daemon and
-resolver seams covered; the WebGL screenshots reviewed.
+Definition of done: a clean Mac with Homebrew and nothing else runs the cask
+line, opens the app, is told on a Java folder which line installs
+`codegraph-java`, runs it, and then opens a Java, a C# and a TypeScript
+folder from the app and sees the city and the navigator; `codegraph analyze`,
+`codegraph-java`, `codegraph-csharp` and `codegraph-typescript` work in a
+terminal from those installs, each reproducing its fixture snapshot byte for
+byte; the SEA job is green on all five runners; `pnpm -r test` green with the
+daemon and resolver seams covered; the WebGL screenshots reviewed; the app
+download carries no extractor.
 
 ---
 
@@ -3388,10 +3537,10 @@ the Elixir fixture in every per-fixture suite.
 | M13a | TypeScript extractor — skeleton | ✅ `extractors/typescript/` (the compiler API as the front end, no build, `typescript` the only runtime dependency — §14); typescript profile v2; walking skeleton → `fixtures/typescript/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; core gate; boundary test; `snapshots --extractor` runs `.js` under `node`; `test.sh --ts` built-bin `cmp` |
 | M13b | TypeScript extractor — model | ✅ members, every edge kind incl. `annotationUse` with written arguments and `throws`, `space` per entity, declaration merging per file, key escaping, JSX invocations, workspace-package resolution without `node_modules`, `sloc` + `cyclomatic`, literals; the full fixture with its README; determinism and stub-discipline tests; the fixture in every per-fixture suite |
 | M13c | TypeScript extractor — self-hosting + audit | ✅ codegraph's own model (24 887 entities / 51 255 edges, 12 s, 96.5 %, zero `<unresolved>`) validate-clean with the package boundaries, the frontend types-only rule and the three import boundaries recovered as graph queries, city and navigator screenshots reviewed; TypeScript 4.9 compiler (52 341 / 120 127, 97.4 %) / nestjs (29 992 / 32 537, 88.6 %) / excalidraw (43 706 / 62 557, 94.4 %) audit with six defects fixed and the causes in the profile notes; `typescript-smoke` on three OSes and `npm-publish` on a tag; `docs/typescript-extractor.md` | `validate`-clean with its package boundaries recovered as a graph query, city and navigator screenshots reviewed; TypeScript 4.9 compiler / nestjs / excalidraw audit with resolution causes in the profile notes; `npx codegraph-typescript`, the three-OS smoke matrix and tagged npm release; `docs/typescript-extractor.md` |
-| M14a | Desktop — the daemon | `codegraph serve --app`: loopback capability URL (`/<token>/`, one stdout JSON line), extractor registry as data with extension-census detection, `POST /jobs` + SSE progress, `--data-dir` cache, exit on stdin EOF; the page's empty state in app form (recents, progress, open instruction); Vitest with a fake extractor |
-| M14b | Desktop — the SEA | one Node single-executable image per OS: CJS single-file bundle, `typescript` inlined, dispatch on the invoked name (`codegraph` / `codegraph-typescript`, `CODEGRAPH_PROGRAM` override), frontends + `lib.*.d.ts` as assets behind one resolver seam, macOS re-signing; five-runner `sea` job with three gates (extractor `cmp`, `analyze` byte-identical to the ESM build, `serve --app` answering) |
-| M14c | Desktop — the shell | `apps/desktop/` (Tauri 2): WebGL gate on fineract reviewed as screenshots FIRST, sidecars by target triple, daemon lifecycle (spawn, read the port line, navigate, close stdin + kill), File › Open… / Open Recent / drag-and-drop each one `POST /jobs`; no `@tauri-apps/*` outside `apps/desktop` (boundary test) |
-| M14d | Desktop — signed, in the tap | notarized `.app` per macOS architecture with the JIT entitlement trio, two DMGs + raw sidecars on the release, `defsquare/homebrew-tap` cask generated by the release job (`app` + four `binary` stanzas, `codegraph-typescript` by `target:`); `brew install --cask defsquare/tap/codegraph` on clean Apple-silicon and Intel Macs opens the app and puts the four commands on PATH, each reproducing its fixture snapshot |
+| M14a | Desktop — the daemon | ✅ `codegraph serve --app [--data-dir DIR] [--extractors FILE]`: loopback capability URL (`/<token>/`, one stdout JSON line, 404 outside it, 403 on a foreign `Origin`), extractor registry as data with extension-census detection (a tie is a 422 question), `POST /jobs` (202/409/422/404) + `jobs/current` SSE with replay, `--data-dir` holding model + model.db + artifacts + recents, extraction skipped on an unchanged tree fingerprint and the build on an unchanged build key, a `model.jsonl` opens with no extractor, exit on stdin EOF/SIGTERM; the page's empty state in app form (recents, three phases + extractor stderr, the open instruction, the "which extractor?" question, failures); 64 tests incl. the fake extractor over real sockets and the real binary as a child; driven headlessly on the Java fixture and the TypeScript extractor, screenshots reviewed |
+| M14b | Desktop — the SEA | ✅ one Node single-executable image per OS, ONE program: `dist-sea/codegraph.cjs` (CJS, everything but built-ins inlined, 2.9 MB) + both frontends and `package.json` as assets, folded into a copy of the building Node by `scripts/sea-build.mjs` (postject, macOS re-signing) → `dist-sea/<rid>/codegraph`; `node:sea` reached via `process.getBuiltinModule`; one `FrontendAssets` seam with a directory and a keyed source; `./build.sh --ts --sea`, `test.sh` gate, five-runner `sea` CI job + release artifacts; `scripts/sea-smoke.mjs` green on linux-x64 (131 MB): `--version`, `analyze` ×3 byte-identical to the ESM build, `serve --app` serving the page from the image and opening the Java fixture |
+| M14c | Desktop — the shell | `apps/desktop/` (Tauri 2): WebGL gate on fineract reviewed as screenshots FIRST, the one sidecar (the SEA) by target triple, daemon lifecycle (spawn, read the port line, navigate, close stdin + kill), the extractor catalogue + discovery on PATH and the Homebrew prefixes writing the registry (missing entries carry `install`, no `path`; the daemon answers `not-installed` and the page shows the line with "Check again"), File › Open… / Open Recent / drag-and-drop each one `POST /jobs`; no `@tauri-apps/*` outside `apps/desktop` (boundary test) |
+| M14d | Desktop — signed, in the tap | notarized `.app` per macOS architecture with the JIT entitlement trio, two DMGs + the raw SEA on the release, `defsquare/homebrew-tap` cask generated by the app's release job (`app` + ONE `binary` stanza) and one formula per extractor generated by that extractor's release job (`codegraph-java`, `codegraph-csharp` per architecture; `codegraph-typescript` on Homebrew's `node`); on clean Apple-silicon and Intel Macs `brew install --cask defsquare/tap/codegraph` opens the app, a Java folder names the install line, and after `brew install defsquare/tap/codegraph-{java,csharp,typescript}` all four commands are on PATH, each reproducing its fixture snapshot |
 | M15a | Elixir extractor — profile + skeleton | `elixir` profile in core (the tenth: the module is the file, a `defmodule` is a `module` kind carrying `TType`, arity is identity, no inheritance/embedding — §16.2); `extractors/elixir/` as a Mix project on the compiler's parser with the embedded OTP table, no runtime dependency (§16); walking skeleton → `fixtures/elixir/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; core gate; escript on `bin/codegraph-elixir`; `build.sh --elixir` / `test.sh --elixir` with the escript `cmp`; `elixir-test` in CI |
 | M15b | Elixir extractor — model | ✅ (2026-09-16) every kind and edge of §16.2: clause and default folds, the four import forms as one edge kind, `defimpl` as an attached named module, `@derive` as `generated`, `use` as import + `__using__` invocation, struct-expansion accesses, protocol and `GenServer` self-call `dynamic-candidate`s, `throws`, `@spec` references, docs as comments; `sloc` + `cyclomatic`, literals; `--deps` (exports only); the full fixture with its README; determinism, stub-discipline, scope and arity suites; the fixture in every per-fixture suite; city and navigator screenshots reviewed. Snapshot 210 entities / 174 edges; 60 ExUnit tests + 3 properties; Plausible re-run: 16 369 entities / 51 736 edges in 5 s, `validate`-clean, 64.7 % of 119 972 sites resolved or Kernel, the rest counted by reason (`local_injected` and `local_unbound` dominate — the macro ceiling `--trace` exists for) |
 | M15c | Elixir extractor — audit + oracles + distribution | ✅ (2026-09-16) `elixir-lang/elixir` `lib` (557 files, 27 061 / 78 564, 17 s, 80.8 %), Phoenix (205, 5 828 / 14 314, 76.7 %) and Plausible (1 256, 16 369 / 43 661, 58.2 %) audited `validate`-clean, byte-identical to core's encoder, the causes in the profile notes; four defects found and fixed (variadic special forms counted as unbound locals, binary specifiers read as calls, repeated head names re-keying parameters, a corpus `use` treated as no injection source); `--explain-dropped` lists every dropped site; `mix codegraph.trace` (a compilation tracer, JSONL events) + `--trace` merging `generated` edges through the closing rules (Phoenix: 16 797 events → 5 895 edges); the `mix xref` witness check (147/148 on Phoenix) and the trace superset check as opt-in real-corpus tests (`CODEGRAPH_CORPUS_ELIXIR`); the Burrito binary (Zig 0.16, `build.sh --elixir --native`, `test.sh` `cmp`), `elixir-smoke` on three OS runners, `elixir-native` on two, `hex-publish` on a tag; README, CLAUDE.md and `docs/elixir-extractor.md` name the extractor. Deferred: the M14 registry entry and cask stanza (M14 is not on main yet), the Windows native binary (needs 7z on the runner) |
@@ -3450,13 +3599,14 @@ the Elixir fixture in every per-fixture suite.
 | Interface members are type-space (M13c) | a `method` or `property` written in an `interface` body carries `space: ["type"]`; the profile licenses both spaces on those kinds | the self-hosting query "frontends depend on model packages for types only" was false with interface members in the value space — `viz` reads `city.roles`, a shape, not a value; an access to an interface member is a dependency on the interface's shape and is erased at runtime like the interface |
 | What an object literal's parts are (M13c) | members of a literal BOUND to a name (`const Ops = {…}`, `static x = {…}`) are entities below the binding; members of an unbound literal (array elements, arguments, return values) are none, and a method written there is keyed positionally like an arrow; a class expression bound to a variable or property IS that binding | 2 260 re-keyed collisions on codegraph's own tests came from `[{hash, time}, {hash, time}]`; an unbound literal is no entity, so its parts cannot be either, while the functions written inside it are still code |
 | Unclosable edges (M13c) | the extractor drops an edge whose endpoint no entity declares, counts it on stderr as `unclosable`, and never aborts | schemas/README.md §5: a producer that cannot close a reference drops it and says so; two audited corpora aborted the write on a dangling constructor before this net existed — zero on every corpus is the goal, and a non-zero count names an id-scheme gap |
-| Desktop shell (M14) | Tauri 2 as window, menu, dialog, drag-and-drop, sidecar lifecycle, bundling and signing — no model logic in Rust | the analyzer, city and navigator exist in TypeScript and are tested there; a Rust rewrite of any of it is a second implementation of a contract that already has one |
-| The Node side of the app (M14) | ONE Node single-executable image: the CLI, the daemon, both frontends, the TypeScript extractor and the compiler's lib files; two programs by invoked name, never by import | a second Node runtime for a 3 MB extractor costs 110 MB; the §13.5 rule (the Node side never learns a language) survives as a packaging fact — the image is shared, the module graphs are not |
-| TypeScript extractor in the SEA (M14) | `typescript` inlined, `lib.*.d.ts` as SEA assets served by the `CompilerHost` overlay; the npm package keeps `typescript` external | a single file has no "beside itself" for the compiler to find its libs — the §14.7 trap, now the work; `cmp` of the fixture from both builds keeps the two forms one extractor |
+| Desktop shell (M14) | Tauri 2 as window, menu, dialog, drag-and-drop, extractor discovery, sidecar lifecycle, bundling and signing — no model logic in Rust | the analyzer, city and navigator exist in TypeScript and are tested there; a Rust rewrite of any of it is a second implementation of a contract that already has one |
+| Distribution granularity (M14) | the app is ONE install (cask: `Codegraph.app` + `codegraph`); every extractor is its OWN install (`codegraph-java`, `codegraph-csharp`, `codegraph-typescript`, `codegraph-elixir`… as formulae in the same tap); the app bundles no extractor and discovers what is installed | each extractor carries its own runtime, tens of MB per architecture a user of another language never needs; one cask with all of them grows with every language and re-downloads all on any upgrade; extractors and app version independently and meet on the interchange contract — the reason the extractors were separate processes under one command line in the first place |
+| The Node side of the app (M14) | ONE Node single-executable image, ONE program: the CLI, the daemon and both frontends; no extractor inside, no dispatch by invoked name | with TypeScript its own install there is nothing to dispatch; the image is the CLI as built, plus assets, and the §13.5 rule (the Node side never learns a language) is a packaging fact with no exception to explain |
+| TypeScript extractor as a formula (M14) | `codegraph-typescript` = the M13 npm package installed by a Homebrew formula with `depends_on "node"` (`std_npm_args`), `typescript` still external | it IS one install per extractor without a second 110 MB Node image: ~12 MB on Homebrew's shared `node`, the shape every Node command has in Homebrew; the libs stay beside the compiler so the §14.7 trap never arises; `npx codegraph-typescript` and the formula are the same tarball |
 | The app's page (M14) | served by the daemon on loopback, same origin, under a per-launch capability token; no Tauri IPC in the page | `navigator-ui` stays Tauri-free and its boundary test stays simple; CORS between the webview origin and loopback never arises; a code model on an open loopback port is readable by any local page |
-| Extractor selection in the app (M14) | a registry `{ name, path, extensions[], launch }` written by the shell; detection by extension census; a tie is asked, never guessed | profiles are data (invariant 8) and so is this: the daemon runs a registry entry under the §13.5 contract and names no language |
+| Extractor selection in the app (M14) | a registry `{ name, path?, extensions[], launch, env?, install? }` written by the shell from a catalogue + discovery on PATH and the Homebrew prefixes; detection by extension census; a tie is asked, never guessed; a tree only a missing extractor claims is `not-installed` with the `brew install` line | profiles are data (invariant 8) and so is this: the daemon runs a registry entry under the §13.5 contract and names no language; an absent extractor is a fact the page states with its remedy, not a silent failure |
 | Daemon lifetime (M14) | exits on stdin EOF and on SIGTERM; the shell also kills it on close | an orphaned daemon keeps a model in memory and a port open after the window is gone; two rules make that impossible rather than unlikely |
-| Homebrew (M14) | a cask in `defsquare/homebrew-tap`, generated by the release job; `brew upgrade` is the update path, the Tauri updater off; Linux and Windows on the release, outside brew | Tauri produces a `.app`, which a cask installs and a formula cannot; homebrew-core refuses vendored binaries; two update mechanisms drift |
+| Homebrew (M14) | one tap, `defsquare/homebrew-tap`: a cask for the app, one formula per extractor, each generated by its own release job; `brew upgrade` is the update path, the Tauri updater off; Linux and Windows on the releases, outside brew | Tauri produces a `.app`, which a cask installs and a formula cannot; a command on PATH is what a formula installs, from a prebuilt binary that is legitimate in our own tap (homebrew-core refuses vendored binaries, a tap does not); two update mechanisms drift |
 | Elixir front end (M15) | the compiler's parser as a library (`Code.string_to_quoted/2`) plus a lexical resolver and an embedded OTP export table; compilation tracers only as the `--trace` enrichment; `mix xref`, tree-sitter-elixir and editor tooling rejected as baselines | binding in Elixir exists only after macro expansion, which needs every dependency present — a Phoenix corpus with no `deps/` fails at its first `use`; the parser needs nothing, so the noClasspath contract is met by construction and the tracer adds `generated` facts where a project still compiles |
 | Elixir host and distribution (M15) | written in Elixir; an escript (Erlang on the machine, Elixir embedded) and a Burrito binary per OS (nothing on the machine); no runtime dependency (Elixir ≥ 1.18 `JSON`) | the quoted AST is the reference form and is reachable only from the BEAM; the escript is the jar and Burrito the native image, so `test.sh` and the M14 registry keep their shapes |
 | Elixir module identity (M15) | the module is the file (the TypeScript rule); a `defmodule` is a `module` kind carrying `TType`, child of its file, nesting an alias not a containment; a module atom's dots are percent-encoded inside the symbol | Elixir has no namespace to contain a module but the file (invariant 5); the module IS the type (struct, behaviour, protocol), so one building per `defmodule` is the honest city; the capitalization rule that would make raw dots injective fails for `defmodule :"a.b"` |

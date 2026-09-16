@@ -142,6 +142,10 @@ cd extractors/csharp && dotnet test -c Release   # needs the .NET 10 SDK (see ex
 extractors/csharp/dist/linux-x64/codegraph-csharp --src <dir> --out model.jsonl
 #   runtime-only or SDK forms (dotnet <dll>, dotnet run): docs/csharp-extractor.md
 
+./build.sh --ts --sea                  # ONE Node single-executable of the CLI + daemon + both frontends
+packages/cli/dist-sea/<rid>/codegraph --version           # for THIS platform only (the image is this Node)
+node packages/cli/scripts/sea-smoke.mjs packages/cli/dist-sea/<rid>/codegraph   # its three gates (test.sh runs it)
+
 ./bin/codegraph-typescript --src <dir> --out model.jsonl   # after `pnpm -r build`; no other toolchain
 ./bin/codegraph-typescript --src packages --src extractors/typescript --out codegraph.jsonl   # self-hosting
 #   docs/typescript-extractor.md; `test.sh --ts` checks the built bundle against fixtures/typescript
@@ -155,6 +159,10 @@ extractors/csharp/dist/linux-x64/codegraph-csharp --src <dir> --out model.jsonl
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
 ./bin/codegraph serve model.jsonl                  # navigator + City tab at http://localhost:4177
 #   binds EVERY interface by default; --host 127.0.0.1 keeps it local
+./bin/codegraph serve --app --data-dir DIR --extractors registry.json   # the desktop app's daemon (M14a)
+#   loopback, ephemeral port, ONE stdout line {"port","token"}; every route under /<token>/;
+#   POST /jobs {src} runs a registry entry (or opens a model.jsonl) and builds the page;
+#   exits when stdin closes. registry.json = [{ name, path, extensions: [".java"], launch?, env? }]
 ./bin/codegraph city model.jsonl --layout --out city.json        # the artifacts alone
 ./bin/codegraph navigator model.jsonl --out navigator.json
 ./bin/codegraph explain model.jsonl --src DIR --dry-run   # the walk plan, no call
