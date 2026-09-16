@@ -155,6 +155,20 @@ if wants_ts; then
     warn "extractors/typescript/dist/cli.js not built — skipping the built-bundle snapshot check (./build.sh --ts)"
   fi
 
+  # The single-executable image (if build.sh --sea made one) must pass its
+  # three gates: --version from the embedded package.json, `analyze`
+  # byte-identical to the ESM build, and `serve --app` answering the page
+  # from the image's own assets — the paths vitest cannot see, because under
+  # vitest node:sea says "not an image" and every asset comes from a directory.
+  image="$ROOT/packages/cli/dist-sea/$(host_rid)/codegraph"
+  [ -x "$image" ] || image="$image.exe"
+  if [ -x "$image" ]; then
+    phase "single-executable image passes its gates" \
+      node "$ROOT/packages/cli/scripts/sea-smoke.mjs" "$image"
+  else
+    warn "no single-executable at packages/cli/dist-sea/$(host_rid) — run ./build.sh --ts --sea for its gates"
+  fi
+
   # Regenerating a committed artifact must change nothing. Only meaningful
   # against a clean working tree: if schemas/ is already edited, the diff would
   # blame this run for the user's own in-progress change.

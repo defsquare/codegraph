@@ -3,6 +3,9 @@
 # would leave it untracked-but-stageable.
 node_modules
 dist/
+# The single-executable image: the CJS bundle, the SEA blob and the injected
+# binary per RID (./build.sh --sea). A release artifact, never source.
+dist-sea/
 *.tsbuildinfo
 coverage/
 .vitest/

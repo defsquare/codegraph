@@ -17,6 +17,11 @@
 #   Elixir     mix escript.build -> extractors/elixir/dist/codegraph-elixir
 #                                   (an escript: Elixir embedded, needs Erlang/OTP
 #                                   on the machine that runs it — bin/codegraph-elixir)
+#   SEA        : --sea           -> packages/cli/dist-sea/<rid>/codegraph
+#                                   (the CLI + daemon + both frontends as ONE
+#                                   Node single-executable — the desktop app's
+#                                   backend, PLAN.md §15.3; HOST platform only,
+#                                   the image IS the Node that builds it)
 #
 # Wraps both with the toolchain checks that a bare `pnpm`/`mvnw` invocation
 # skips: Node's floor, the pinned pnpm, and a JDK that non-interactive shells
@@ -31,6 +36,7 @@ trap on_error ERR
 
 CLEAN="no"
 NATIVE="no"
+SEA="no"
 PUBLISH_ALL="no"
 PUBLISH_RID=""
 
@@ -51,6 +57,9 @@ Options:
                        platform (extractors/java/dist/<rid>/codegraph-java);
                        Elixir: also build the Burrito binary for THIS platform
                        (extractors/elixir/dist/<rid>/codegraph-elixir, needs Zig 0.16)
+                       platform (extractors/java/dist/<rid>/codegraph-java)
+  --sea                TypeScript: also build the single-executable codegraph
+                       image for THIS platform (packages/cli/dist-sea/<rid>/codegraph)
   --publish-all        C#: publish linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64
   --rid <rid>          C#: publish exactly this RID (what the CI matrix calls, one per job)
   --all                everything (default)
@@ -73,6 +82,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --clean)    CLEAN="yes" ;;
     --native)   NATIVE="yes" ;;
+    --sea)      SEA="yes" ;;
     --publish-all) PUBLISH_ALL="yes" ;;
     --rid)
       [ $# -ge 2 ] || usage_error "--rid needs a value"
@@ -117,9 +127,21 @@ if wants_ts; then
     step_done
   fi
 
+  # The website is a Hugo site with its own CI job, not a TypeScript artifact;
+  # a machine whose hugo cannot read its config must not fail THIS build.
   step "build typescript (pnpm -r build)"
-  run pnpm --dir "$ROOT" -r build
+  run pnpm --dir "$ROOT" -r --filter '!@codegraph/website' build
   step_done
+
+  # ONE Node single-executable: the CJS bundle tsup already wrote
+  # (packages/cli/dist-sea/codegraph.cjs) folded into a copy of this very Node
+  # with both frontends and package.json as assets. No cross-compilation — the
+  # image is the runtime that builds it — so CI runs this once per runner.
+  if [ "$SEA" = "yes" ]; then
+    step "build codegraph single-executable ($(host_rid))"
+    run node "$ROOT/packages/cli/scripts/sea-build.mjs" --rid "$(host_rid)"
+    step_done
+  fi
 fi
 
 # ------------------------------------------------------------------ java ----
@@ -245,6 +267,12 @@ if wants_ts; then
   report "$ROOT/packages/navigator-ui/dist/index.html"
   # The TypeScript extractor is a workspace package: built by the same pnpm -r build.
   report "$ROOT/extractors/typescript/dist/cli.js"
+  if [ "$SEA" = "yes" ]; then
+    case "$(host_rid)" in
+      win-*) report "$ROOT/packages/cli/dist-sea/$(host_rid)/codegraph.exe" ;;
+      *)     report "$ROOT/packages/cli/dist-sea/$(host_rid)/codegraph" ;;
+    esac
+  fi
 fi
 if wants_java && [ "$SKIP_JAVA" = "no" ]; then
   report "$JAVA_DIR/target/codegraph-java.jar"

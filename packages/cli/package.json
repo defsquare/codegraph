@@ -7,7 +7,9 @@
   "bin": {
     "codegraph": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -26,6 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "postject": "1.0.0-alpha.6",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

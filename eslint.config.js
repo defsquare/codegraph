@@ -9,6 +9,7 @@ export default tseslint.config(
   {
     ignores: [
       "**/dist/**",
+      "**/dist-sea/**",
       "**/node_modules/**",
       "extractors/**",
       "schemas/**",
@@ -18,6 +19,27 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // Plain-JavaScript scripts (build steps, test fakes) run under Node: give
+  // `no-undef` the runtime's globals, named here rather than pulled from the
+  // `globals` package, which is not a dependency of this workspace.
+  {
+    files: ["**/*.mjs"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+        fetch: "readonly",
+        Response: "readonly",
+        TextDecoder: "readonly",
+        TextEncoder: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setImmediate: "readonly",
+      },
+    },
+  },
   {
     rules: {
       "@typescript-eslint/consistent-type-imports": "error",
