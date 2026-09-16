@@ -1,9 +1,11 @@
 package dev.codegraph.spoon;
 
 import spoon.reflect.CtModel;
+import spoon.reflect.reference.CtArrayTypeReference;
 import spoon.reflect.reference.CtTypeParameterReference;
 import spoon.reflect.reference.CtTypeReference;
 import spoon.reflect.visitor.filter.TypeFilter;
+import spoon.support.SpoonClassNotFoundException;
 
 /**
  * The stderr RESOLUTION SUMMARY required by PLAN.md §5.3, and the number M2 is
@@ -56,11 +58,38 @@ public record ResolutionStats(
         continue;
       }
       total++;
-      if (reference.getTypeDeclaration() != null) {
+      if (resolves(reference)) {
         resolved++;
       }
     }
     return new ResolutionStats(total, resolved, 0, 0, 0, 0);
+  }
+
+  /**
+   * {@code getTypeDeclaration() != null}, except that an array is answered from its
+   * element type: Spoon would build the array's {@code Class} reflectively, which a
+   * native image cannot do for an array class it did not compile in ({@code
+   * float[][]}). Same answer as Spoon on a JVM — {@code ArrayResolutionTest} holds it.
+   */
+  static boolean resolves(CtTypeReference<?> reference) {
+    if (!(reference instanceof CtArrayTypeReference<?> array)) {
+      try {
+        return reference.getTypeDeclaration() != null;
+      } catch (RuntimeException e) {
+        // Spoon failing to build a shadow (Thread.State in a native image) is a
+        // reference it could not resolve — EdgeExtractor already reads it that way.
+        return false;
+      }
+    }
+    if (array.getFactory().Type().get(array.getQualifiedName()) != null) {
+      return true;
+    }
+    try {
+      array.getArrayType().getActualClass();
+      return true;
+    } catch (SpoonClassNotFoundException e) {
+      return false;
+    }
   }
 
   public ResolutionStats withOutput(int entityCount, int stubCount, int edgeCount, int droppedSelfEdges) {

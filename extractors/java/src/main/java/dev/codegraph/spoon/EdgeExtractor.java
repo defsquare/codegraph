@@ -1069,7 +1069,11 @@ public final class EdgeExtractor {
     return safe(() -> EntityIds.forTypeReference(reference));
   }
 
+  /** An array is never an anonymous class, and resolving one would build its Class (see {@link ResolutionStats#resolves}). */
   private static CtType<?> safeTypeDeclaration(CtTypeReference<?> reference) {
+    if (reference instanceof CtArrayTypeReference<?>) {
+      return null;
+    }
     try {
       return reference.getTypeDeclaration();
     } catch (RuntimeException e) {
