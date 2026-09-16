@@ -16,6 +16,9 @@ export const RECENT_KIND = "codegraph.recent/1";
 export interface ExtractorInfo {
   readonly name: string;
   readonly extensions: readonly string[];
+  /** False for an extractor the shell knows but did not find; `install` then says how. */
+  readonly installed: boolean;
+  readonly install?: string | undefined;
 }
 
 export interface JobSummary {
@@ -81,6 +84,8 @@ export async function fetchRecent(fetchImpl: Fetch = fetch): Promise<readonly Re
 export interface Candidate {
   readonly name: string;
   readonly files: number;
+  /** Present when the candidate is not installed: the line that installs it. */
+  readonly install?: string | undefined;
 }
 
 /** What `POST jobs` answered, as the page has to act on it. */
@@ -88,6 +93,7 @@ export type SubmitOutcome =
   | { readonly kind: "accepted"; readonly job: JobSummary }
   | { readonly kind: "busy"; readonly job: JobSummary }
   | { readonly kind: "ambiguous"; readonly candidates: readonly Candidate[] }
+  | { readonly kind: "not-installed"; readonly extractors: readonly (Candidate & { readonly install: string })[] }
   | { readonly kind: "no-extractor"; readonly seen: readonly string[] }
   | { readonly kind: "unknown-extractor"; readonly name: string }
   | { readonly kind: "not-found"; readonly src: string }
@@ -122,6 +128,8 @@ export async function submitJob(
       return { kind: "busy", job: body["job"] as JobSummary };
     case "ambiguous":
       return { kind: "ambiguous", candidates: (body["candidates"] ?? []) as Candidate[] };
+    case "not-installed":
+      return { kind: "not-installed", extractors: (body["extractors"] ?? []) as (Candidate & { install: string })[] };
     case "no-extractor":
       return { kind: "no-extractor", seen: (body["seen"] ?? []) as string[] };
     case "unknown-extractor":

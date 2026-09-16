@@ -35,7 +35,8 @@ export interface DaemonOptions {
   readonly host: string;
   readonly io: IoSink;
   readonly runner: JobRunner;
-  readonly registry: Registry;
+  /** The registry as it currently is — re-read when the shell rewrites it. */
+  readonly registry: () => Registry;
   /** Where the recents file lives. */
   readonly dataDir: string;
   /** What ends the daemon: the shell's stdin (EOF) and the process signals. Tests inject both. */
@@ -112,7 +113,12 @@ export function startDaemon(options: DaemonOptions): Server {
         const current = runner.current;
         sendJson(response, 200, JSON.stringify({
           kind: APP_KIND,
-          extractors: registry.map((entry) => ({ name: entry.name, extensions: entry.extensions })),
+          extractors: registry().map((entry) => ({
+            name: entry.name,
+            extensions: entry.extensions,
+            installed: entry.path !== null,
+            ...(entry.install === undefined ? {} : { install: entry.install }),
+          })),
           current: current === undefined ? null : { ...current.job, state: current.state },
         }), method);
         return;
@@ -161,6 +167,8 @@ export function startDaemon(options: DaemonOptions): Server {
             return sendJson(response, 422, JSON.stringify({ error: "not-a-model", src: outcome.src }));
           case "ambiguous":
             return sendJson(response, 422, JSON.stringify({ error: "ambiguous", candidates: outcome.candidates }));
+          case "not-installed":
+            return sendJson(response, 422, JSON.stringify({ error: "not-installed", extractors: outcome.extractors }));
           case "no-extractor":
             return sendJson(response, 422, JSON.stringify({ error: "no-extractor", seen: outcome.seen }));
           case "unknown-extractor":

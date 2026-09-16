@@ -38,8 +38,11 @@ const BUILD: CityBuildOptions & { noCache: boolean } = {
 };
 
 function registry(env: Readonly<Record<string, string>> = {}): Registry {
-  return [{ name: "java", path: FAKE, extensions: [".java"], launch: "node", env }];
+  return [{ name: "java", path: FAKE, extensions: [".java"], launch: "node", env, install: undefined }];
 }
+
+const INSTALL_LINE = "brew install defsquare/tap/codegraph-elixir";
+const ELIXIR_MISSING = { name: "elixir", path: null, extensions: [".ex"], launch: "exec", env: {}, install: INSTALL_LINE } as const;
 
 function fakeAssets(): string {
   const dir = mkdtempSync(join(tmpdir(), "codegraph-app-assets-"));
@@ -82,10 +85,11 @@ afterAll(async () => {
   );
 });
 
-async function daemon(options: { registry?: Registry; dataDir?: string } = {}): Promise<Daemon> {
+async function daemon(options: { registry?: Registry | (() => Registry); dataDir?: string } = {}): Promise<Daemon> {
   const io = captureIo();
   const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "codegraph-app-data-"));
-  const reg = options.registry ?? registry();
+  const given = options.registry ?? registry();
+  const reg = typeof given === "function" ? given : () => given;
   const runner = createJobRunner({ dataDir, registry: reg, build: BUILD, io });
   const stdin = new PassThrough();
   let onClose: () => void = () => {};
@@ -205,7 +209,7 @@ describe("the daemon's announcement and capability URL", () => {
     const { base } = await daemon();
     expect(await json(await fetch(`${base}/app`))).toEqual({
       kind: "codegraph.app/1",
-      extractors: [{ name: "java", extensions: [".java"] }],
+      extractors: [{ name: "java", extensions: [".java"], installed: true }],
       current: null,
     });
     expect(await json(await fetch(`${base}/recent`))).toEqual({ kind: "codegraph.recent/1", projects: [] });
@@ -314,11 +318,39 @@ describe("POST /jobs: a folder becomes the page", () => {
     expect((await fetch(`${base}/navigator.json`)).status).toBe(200);
   });
 
+  it("answers not-installed with the install line when the tree's extractor is known but absent", async () => {
+    const src = tree({ "lib/a.ex": "", "lib/b.ex": "" });
+    const { base } = await daemon({ registry: [...registry(), ELIXIR_MISSING] });
+    const response = await post(base, { src });
+    expect(response.status).toBe(422);
+    expect(await json(response)).toEqual({
+      error: "not-installed",
+      extractors: [{ name: "elixir", files: 2, install: INSTALL_LINE }],
+    });
+    const app = await json<{ extractors: unknown[] }>(await fetch(`${base}/app`));
+    expect(app.extractors).toEqual([
+      { name: "java", extensions: [".java"], installed: true },
+      { name: "elixir", extensions: [".ex"], installed: false, install: INSTALL_LINE },
+    ]);
+  });
+
+  it("asks the registry again on every request — the shell rewrites it after a rescan", async () => {
+    const src = tree({ "lib/a.ex": "" });
+    let current: Registry = [ELIXIR_MISSING];
+    const { base } = await daemon({ registry: () => current });
+    expect((await post(base, { src })).status).toBe(422);
+    // "Installed" now: the same request, with no restart, runs it.
+    current = [{ ...ELIXIR_MISSING, path: FAKE, launch: "node", install: undefined }];
+    expect((await post(base, { src })).status).toBe(202);
+    expect((await events(base)).at(-1)?.event).toBe("done");
+    expect((await json<{ extractors: { installed: boolean }[] }>(await fetch(`${base}/app`))).extractors[0]?.installed).toBe(true);
+  });
+
   it("asks when several extractors claim the tree, and takes the answer", async () => {
     const src = tree({ "A.java": "", "B.cs": "", "C.cs": "" });
     const both: Registry = [
-      { name: "java", path: FAKE, extensions: [".java"], launch: "node", env: {} },
-      { name: "csharp", path: FAKE, extensions: [".cs"], launch: "node", env: {} },
+      { name: "java", path: FAKE, extensions: [".java"], launch: "node", env: {}, install: undefined },
+      { name: "csharp", path: FAKE, extensions: [".cs"], launch: "node", env: {}, install: undefined },
     ];
     const { base } = await daemon({ registry: both });
     const asked = await post(base, { src });

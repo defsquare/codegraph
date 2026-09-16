@@ -748,6 +748,46 @@ button.twisty:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.home-question-missing,
+.home-extractor-missing {
+  color: var(--paper-faint);
+}
+
+.home-question-missing code,
+.home-install-lines code {
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+  padding: 3px 6px;
+  user-select: all;
+}
+
+.home-not-installed {
+  border-left-color: var(--in);
+}
+
+.home-install-lines {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.home-install-lines li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-install-name {
+  min-width: 120px;
+  color: var(--paper-dim);
+}
+
 .home-job {
   margin: 0 0 16px;
   padding: 12px 14px;

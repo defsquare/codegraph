@@ -18,15 +18,27 @@ import { UsageError } from "../src/exit.js";
  * and never names a language. Detection is a census of file extensions; a tie
  * is a question, never a guess.
  */
-const JAVA: ExtractorEntry = { name: "java", path: "/opt/codegraph-java", extensions: [".java"], launch: "exec", env: {} };
-const CSHARP: ExtractorEntry = { name: "csharp", path: "/opt/codegraph-csharp", extensions: [".cs"], launch: "exec", env: {} };
-const TS: ExtractorEntry = {
+type Installed = ExtractorEntry & { readonly path: string };
+const JAVA: Installed = { name: "java", path: "/opt/codegraph-java", extensions: [".java"], launch: "exec", env: {}, install: undefined };
+const CSHARP: Installed = { name: "csharp", path: "/opt/codegraph-csharp", extensions: [".cs"], launch: "exec", env: {}, install: undefined };
+const TS: Installed = {
   name: "typescript",
   path: "/opt/homebrew/bin/codegraph-typescript",
   extensions: [".ts", ".tsx"],
   launch: "exec",
   env: { NODE_OPTIONS: "--max-old-space-size=8192" },
+  install: undefined,
 };
+/** Known to the shell's catalogue, not found on this machine. */
+const ELIXIR_MISSING: ExtractorEntry = {
+  name: "elixir",
+  path: null,
+  extensions: [".ex", ".exs"],
+  launch: "exec",
+  env: {},
+  install: "brew install defsquare/tap/codegraph-elixir",
+};
+const JAVA_MISSING: ExtractorEntry = { ...JAVA, path: null, install: "brew install defsquare/tap/codegraph-java" };
 
 function tree(files: Readonly<Record<string, string>>): string {
   const root = mkdtempSync(join(tmpdir(), "codegraph-census-"));
@@ -57,11 +69,26 @@ describe("parseRegistry", () => {
     expect(entry?.extensions).toEqual([".ts", ".tsx"]);
   });
 
+  it("accepts an entry without a path when it carries its install line — known, not installed", () => {
+    const [entry] = parseRegistry(
+      JSON.stringify([{ name: "elixir", extensions: [".ex"], install: "brew install defsquare/tap/codegraph-elixir" }]),
+      "r",
+    );
+    expect(entry).toEqual({
+      name: "elixir",
+      path: null,
+      extensions: [".ex"],
+      launch: "exec",
+      env: {},
+      install: "brew install defsquare/tap/codegraph-elixir",
+    });
+  });
+
   it.each([
     ["not json", "{"],
     ["not a list", `{"name":"java"}`],
     ["a missing name", `[{"path":"/x","extensions":[".java"]}]`],
-    ["a missing path", `[{"name":"java","extensions":[".java"]}]`],
+    ["neither a path nor an install line", `[{"name":"java","extensions":[".java"]}]`],
     ["no extensions", `[{"name":"java","path":"/x","extensions":[]}]`],
     ["a duplicate name", `[{"name":"java","path":"/x","extensions":[".java"]},{"name":"java","path":"/y","extensions":[".kt"]}]`],
     ["an unknown launch", `[{"name":"java","path":"/x","extensions":[".java"],"launch":"docker"}]`],
@@ -133,6 +160,41 @@ describe("census + detect", () => {
     const root = tree({ "a.java": "", "b.cs": "" });
     expect(detect(census(root, [JAVA, CSHARP]), [JAVA, CSHARP], "java")).toEqual({ kind: "one", entry: JAVA, files: 1 });
     expect(detect(census(root, [JAVA, CSHARP]), [JAVA, CSHARP], "go")).toEqual({ kind: "unknown", name: "go" });
+  });
+
+  it("answers not-installed, with the install line, when only missing extractors claim the tree", () => {
+    const root = tree({ "lib/a.ex": "", "lib/b.ex": "", "README.md": "" });
+    const registry = [JAVA, ELIXIR_MISSING];
+    expect(detect(census(root, registry), registry)).toEqual({
+      kind: "not-installed",
+      extractors: [{ name: "elixir", files: 2, install: "brew install defsquare/tap/codegraph-elixir" }],
+    });
+  });
+
+  it("still asks when an installed and a missing extractor both claim files, offering the missing one's install line", () => {
+    const root = tree({ "a.java": "", "b.ex": "", "c.ex": "" });
+    const registry = [JAVA, ELIXIR_MISSING];
+    expect(detect(census(root, registry), registry)).toEqual({
+      kind: "ambiguous",
+      candidates: [
+        { name: "elixir", files: 2, install: "brew install defsquare/tap/codegraph-elixir" },
+        { name: "java", files: 1 },
+      ],
+    });
+  });
+
+  it("answers not-installed when the chosen extractor is a missing one", () => {
+    const root = tree({ "a.java": "" });
+    const registry = [JAVA_MISSING];
+    expect(detect(census(root, registry), registry, "java")).toEqual({
+      kind: "not-installed",
+      extractors: [{ name: "java", files: 1, install: "brew install defsquare/tap/codegraph-java" }],
+    });
+  });
+
+  it("counts a missing extractor's files in the census, so its tree is never 'nothing claims this'", () => {
+    const root = tree({ "a.ex": "" });
+    expect(census(root, [ELIXIR_MISSING]).files.map((file) => file.relative)).toEqual(["a.ex"]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { buildNavigator, navigatorToJsonString } from "@codegraph/navigator";
 import { cityToJsonString, layoutCity } from "@codegraph/city";
 import type { AppOptions, ServeOptions } from "../args.js";
@@ -6,7 +6,7 @@ import { startDaemon, type DaemonOptions } from "../app/daemon.js";
 import { createJobRunner } from "../app/jobs.js";
 import { parseRegistry, type Registry } from "../app/registry.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
-import { errLines, type IoSink } from "../io.js";
+import { errLine, errLines, type IoSink } from "../io.js";
 import { openAnalysis } from "../source.js";
 import { navigatorAssets, startArtifactServer, type ArtifactServerOptions, type FrontendAssets } from "../serve.js";
 import { resolveView } from "../view.js";
@@ -124,12 +124,46 @@ export function registryOf(app: AppOptions): Registry {
 }
 
 /**
+ * The registry as a source that follows its file: the shell rewrites it after
+ * a rescan (window focus, a menu action), and the next job sees the result —
+ * the page's "Check again" is a plain retry. Read once up front so a bad file
+ * is a usage error before any port is taken; a later rewrite that does not
+ * parse keeps the last good registry and says so on stderr rather than
+ * killing a daemon the window is already using.
+ */
+export function registrySource(app: AppOptions, io: IoSink): () => Registry {
+  let current = registryOf(app);
+  let seen = mtimeOf(app.extractors);
+  return () => {
+    const now = mtimeOf(app.extractors);
+    if (now === seen) return current;
+    seen = now;
+    try {
+      current = registryOf(app);
+      errLine(io, `registry: reloaded ${app.extractors ?? ""} (${current.length} entries)`);
+    } catch (error) {
+      errLine(io, `registry: ${error instanceof Error ? error.message : String(error)} — keeping the previous entries`);
+    }
+    return current;
+  };
+}
+
+function mtimeOf(path: string | undefined): number {
+  if (path === undefined) return 0;
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return -1;
+  }
+}
+
+/**
  * The daemon: registry validated up front (a bad file is a usage error before
  * a port is taken), one job runner over `--data-dir`, the server under its
  * token. The exit code is the command's — the process lives on with the server.
  */
 function appCommand(options: ServeOptions, app: AppOptions, assets: FrontendAssets, io: IoSink, deps: ServeDeps): ExitCode {
-  const registry = registryOf(app);
+  const registry = registrySource(app, io);
   const runner = createJobRunner({ dataDir: app.dataDir, registry, build: options, io });
   deps.startDaemon({
     assets,

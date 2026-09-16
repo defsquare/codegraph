@@ -14,6 +14,7 @@ import {
   detect,
   launchOf,
   treeFingerprint,
+  type Candidate,
   type Census,
   type ExtractorEntry,
   type Registry,
@@ -82,7 +83,8 @@ export type StartOutcome =
   | { readonly kind: "busy"; readonly job: JobSummary }
   | { readonly kind: "not-found"; readonly src: string }
   | { readonly kind: "not-a-model"; readonly src: string }
-  | { readonly kind: "ambiguous"; readonly candidates: readonly { readonly name: string; readonly files: number }[] }
+  | { readonly kind: "ambiguous"; readonly candidates: readonly Candidate[] }
+  | { readonly kind: "not-installed"; readonly extractors: readonly (Candidate & { readonly install: string })[] }
   | { readonly kind: "no-extractor"; readonly seen: readonly string[] }
   | { readonly kind: "unknown-extractor"; readonly name: string };
 
@@ -110,7 +112,8 @@ export interface JobRunner {
 
 export interface JobRunnerOptions {
   readonly dataDir: string;
-  readonly registry: Registry;
+  /** The registry, asked for on every job: the shell rewrites its file after a rescan. */
+  readonly registry: () => Registry;
   /** The city channels and view — the same flags `serve` takes — plus the cache switch. */
   readonly build: CityBuildOptions & { readonly noCache: boolean };
   readonly io: IoSink;
@@ -125,7 +128,9 @@ interface Plan {
   readonly job: JobSummary;
   readonly src: string;
   /** Present for a folder; absent for a model opened directly. */
-  readonly extraction: { readonly entry: ExtractorEntry; readonly counted: Census; readonly files: number } | undefined;
+  readonly extraction:
+    | { readonly entry: ExtractorEntry & { readonly path: string }; readonly counted: Census; readonly files: number }
+    | undefined;
 }
 
 export function createJobRunner(options: JobRunnerOptions): JobRunner {
@@ -168,11 +173,14 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
     }
     if (!stat.isDirectory()) return { kind: "not-found", src };
 
-    const counted = census(src, options.registry);
-    const decision = detect(counted, options.registry, request.extractor);
+    const registry = options.registry();
+    const counted = census(src, registry);
+    const decision = detect(counted, registry, request.extractor);
     switch (decision.kind) {
       case "ambiguous":
         return { kind: "ambiguous", candidates: decision.candidates };
+      case "not-installed":
+        return { kind: "not-installed", extractors: decision.extractors };
       case "none":
         return { kind: "no-extractor", seen: decision.seen };
       case "unknown":
@@ -187,7 +195,11 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
   }
 
   /** Run the extractor into `modelPath`; resolves with the exit code, rejects only on a spawn failure. */
-  function extract(entry: ExtractorEntry, src: string, modelPath: string): Promise<{ code: number | null; stderr: string[] }> {
+  function extract(
+    entry: ExtractorEntry & { readonly path: string },
+    src: string,
+    modelPath: string,
+  ): Promise<{ code: number | null; stderr: string[] }> {
     const line = launchOf(entry, ["--src", src, "--out", modelPath, "--progress", "plain"]);
     return new Promise((resolvePromise, reject) => {
       const process_ = spawn(line.command, line.args, {

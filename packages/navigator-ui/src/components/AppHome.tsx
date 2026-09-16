@@ -40,7 +40,12 @@ export function AppHome({ info, recent, job, outcome, loadError, onOpen }: AppHo
   const [path, setPath] = useState("");
   const running = job?.state === "running";
   const asked = outcome?.result.kind === "ambiguous" ? { src: outcome.src, candidates: outcome.result.candidates } : undefined;
-  const refused = outcome !== undefined && asked === undefined && outcome.result.kind !== "accepted" ? outcome.result : undefined;
+  const missing =
+    outcome?.result.kind === "not-installed" ? { src: outcome.src, extractors: outcome.result.extractors } : undefined;
+  const refused =
+    outcome !== undefined && asked === undefined && missing === undefined && outcome.result.kind !== "accepted"
+      ? outcome.result
+      : undefined;
 
   return (
     <div className="app app-loader">
@@ -77,12 +82,21 @@ export function AppHome({ info, recent, job, outcome, loadError, onOpen }: AppHo
           </p>
         ) : (
           <p className="home-note">
-            Extractors: {info.extractors.map((extractor) => `${extractor.name} (${extractor.extensions.join(", ")})`).join(" · ")}
+            Extractors:{" "}
+            {info.extractors.map((extractor, index) => (
+              <span key={extractor.name} className={extractor.installed ? "home-extractor" : "home-extractor home-extractor-missing"}>
+                {index > 0 && " · "}
+                {extractor.name} ({extractor.extensions.join(", ")}){extractor.installed ? "" : " — not installed"}
+              </span>
+            ))}
           </p>
         )}
 
         {asked !== undefined && (
           <Question candidates={asked.candidates} onPick={(name) => onOpen(asked.src, name)} />
+        )}
+        {missing !== undefined && (
+          <NotInstalled extractors={missing.extractors} onRetry={() => onOpen(missing.src)} />
         )}
         {refused !== undefined && <p className="loader-error">{describeOutcome(refused)}</p>}
         {loadError !== undefined && <p className="loader-error">{loadError}</p>}
@@ -118,17 +132,67 @@ export function AppHome({ info, recent, job, outcome, loadError, onOpen }: AppHo
   );
 }
 
+/**
+ * "Which extractor?" — one button per installed claimant; a claimant that is
+ * not installed is offered with its install line rather than hidden, so the
+ * answer "the language you meant is the one you have not installed yet" is
+ * visible instead of silently excluded.
+ */
 function Question({ candidates, onPick }: { readonly candidates: readonly Candidate[]; readonly onPick: (name: string) => void }) {
   return (
     <div className="home-question" role="group" aria-label="Which extractor?">
       <p>Several extractors claim this folder. Which one?</p>
       <div className="home-question-choices">
-        {candidates.map((candidate) => (
-          <button key={candidate.name} type="button" className="home-button" onClick={() => onPick(candidate.name)}>
-            {candidate.name} <span className="home-question-count">{candidate.files.toLocaleString()} files</span>
-          </button>
-        ))}
+        {candidates.map((candidate) =>
+          candidate.install === undefined ? (
+            <button key={candidate.name} type="button" className="home-button" onClick={() => onPick(candidate.name)}>
+              {candidate.name} <span className="home-question-count">{candidate.files.toLocaleString()} files</span>
+            </button>
+          ) : (
+            <span key={candidate.name} className="home-question-missing">
+              {candidate.name} <span className="home-question-count">{candidate.files.toLocaleString()} files</span> — not
+              installed: <code>{candidate.install}</code>
+            </span>
+          ),
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The folder's language has no extractor on this machine: the line that
+ * installs it, and "Check again" — a plain retry, since the shell rewrites
+ * the registry whenever it rescans (window focus, its menu) and the daemon
+ * reads the file again on the next request. No IPC in the page.
+ */
+function NotInstalled({
+  extractors,
+  onRetry,
+}: {
+  readonly extractors: readonly (Candidate & { readonly install: string })[];
+  readonly onRetry: () => void;
+}) {
+  return (
+    <div className="home-question home-not-installed" role="group" aria-label="Extractor not installed">
+      <p>
+        {extractors.length === 1
+          ? `This folder needs the ${extractors[0]?.name} extractor, which is not installed.`
+          : "This folder needs an extractor that is not installed."}
+      </p>
+      <ul className="home-install-lines">
+        {extractors.map((extractor) => (
+          <li key={extractor.name}>
+            <span className="home-install-name">
+              {extractor.name} <span className="home-question-count">{extractor.files.toLocaleString()} files</span>
+            </span>
+            <code>{extractor.install}</code>
+          </li>
+        ))}
+      </ul>
+      <button type="button" className="home-button" onClick={onRetry}>
+        Check again
+      </button>
     </div>
   );
 }
@@ -137,6 +201,7 @@ function describeOutcome(outcome: SubmitOutcome): string {
   switch (outcome.kind) {
     case "accepted":
     case "ambiguous":
+    case "not-installed":
       return "";
     case "busy":
       return `A job is already running on ${outcome.job.src}; wait for it to finish.`;

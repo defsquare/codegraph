@@ -33,11 +33,24 @@ describe("probeApp", () => {
     let asked = "";
     const fetchImpl: typeof fetch = async (input) => {
       asked = String(input);
-      return new Response(JSON.stringify({ kind: "codegraph.app/1", extractors: [{ name: "java", extensions: [".java"] }], current: null }));
+      return new Response(
+        JSON.stringify({
+          kind: "codegraph.app/1",
+          extractors: [
+            { name: "java", extensions: [".java"], installed: true },
+            { name: "elixir", extensions: [".ex"], installed: false, install: "brew install defsquare/tap/codegraph-elixir" },
+          ],
+          current: null,
+        }),
+      );
     };
     const info = await probeApp(fetchImpl);
     expect(asked).toBe("app");
-    expect(info).toEqual({ extractors: [{ name: "java", extensions: [".java"] }], current: null });
+    expect(info?.extractors.map((extractor) => [extractor.name, extractor.installed])).toEqual([
+      ["java", true],
+      ["elixir", false],
+    ]);
+    expect(info?.extractors[1]?.install).toBe("brew install defsquare/tap/codegraph-elixir");
   });
 
   it("answers undefined — quietly — for a 404, a wrong kind or no server at all", async () => {
@@ -75,6 +88,11 @@ describe("submitJob", () => {
   it.each([
     [409, { error: "busy", job }, { kind: "busy", job }],
     [422, { error: "ambiguous", candidates: [{ name: "java", files: 3 }] }, { kind: "ambiguous", candidates: [{ name: "java", files: 3 }] }],
+    [
+      422,
+      { error: "not-installed", extractors: [{ name: "elixir", files: 2, install: "brew install x" }] },
+      { kind: "not-installed", extractors: [{ name: "elixir", files: 2, install: "brew install x" }] },
+    ],
     [422, { error: "no-extractor", seen: [".py"] }, { kind: "no-extractor", seen: [".py"] }],
     [422, { error: "unknown-extractor", name: "go" }, { kind: "unknown-extractor", name: "go" }],
     [404, { error: "not-found", src: "/p" }, { kind: "not-found", src: "/p" }],

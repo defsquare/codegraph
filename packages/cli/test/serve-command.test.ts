@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parseInvocation, type ServeOptions } from "../src/args.js";
 import type { DaemonOptions } from "../src/app/daemon.js";
 import { defaultDataDir } from "../src/app/store.js";
-import { CITY_ROUTE, NAVIGATOR_ROUTE, serveCommand } from "../src/commands/serve.js";
+import { CITY_ROUTE, NAVIGATOR_ROUTE, registrySource, serveCommand } from "../src/commands/serve.js";
 import { EXIT, UsageError } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
 import { runSync } from "../src/main.js";
@@ -175,7 +175,7 @@ describe("serve --app: the daemon form", () => {
     const { code, daemons, io } = appTo({ dataDir, extractors: REGISTRY });
     expect(code).toBe(EXIT.OK);
     expect(daemons).toHaveLength(1);
-    expect(daemons[0]?.registry.map((entry) => entry.name)).toEqual(["java"]);
+    expect(daemons[0]?.registry().map((entry) => entry.name)).toEqual(["java"]);
     expect(daemons[0]?.dataDir).toBe(dataDir);
     expect(daemons[0]?.host).toBe("127.0.0.1");
     expect(daemons[0]?.port).toBe(0);
@@ -186,7 +186,24 @@ describe("serve --app: the daemon form", () => {
 
   it("runs with an empty registry when none is named — only model.jsonl files open then", () => {
     const { daemons } = appTo({ dataDir: "/tmp/x", extractors: undefined });
-    expect(daemons[0]?.registry).toEqual([]);
+    expect(daemons[0]?.registry()).toEqual([]);
+  });
+
+  it("follows the registry file: a rewrite is seen by the next call, a broken rewrite keeps the last good one", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "codegraph-serve-reg-")), "registry.json");
+    writeFileSync(file, JSON.stringify([{ name: "java", path: "/opt/codegraph-java", extensions: [".java"] }]));
+    const io = captureIo();
+    const source = registrySource({ dataDir: "/tmp/x", extractors: file }, io);
+    expect(source().map((entry) => entry.name)).toEqual(["java"]);
+    // A different mtime: the file system's clock may be coarse, so set it explicitly.
+    writeFileSync(file, JSON.stringify([{ name: "elixir", extensions: [".ex"], install: "brew install x" }]));
+    utimesSync(file, new Date(Date.now() + 5000), new Date(Date.now() + 5000));
+    expect(source().map((entry) => entry.name)).toEqual(["elixir"]);
+    expect(io.stderr()).toContain("registry: reloaded");
+    writeFileSync(file, "{ not json");
+    utimesSync(file, new Date(Date.now() + 10000), new Date(Date.now() + 10000));
+    expect(source().map((entry) => entry.name)).toEqual(["elixir"]);
+    expect(io.stderr()).toContain("keeping the previous entries");
   });
 
   it("refuses an unreadable or malformed registry as a usage error, before any port is taken", () => {
