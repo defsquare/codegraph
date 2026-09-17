@@ -417,10 +417,106 @@ jobs:
       - run: cargo test --workspace
         working-directory: apps/desktop
 
+  # The desktop bundle (PLAN.md §15.5, M14d): `tauri build` per macOS
+  # architecture — no universal binary, the sidecar is per triple. With the
+  # Apple credentials in the repository's secrets the sidecar and the app are
+  # signed with hardened runtime and the entitlements, and Tauri notarizes;
+  # without them the job still bundles (ad hoc) so a fork or a PR proves the
+  # bundling, and the signed-only assertions are skipped, not faked.
+  desktop-bundle:
+    name: desktop bundle ${{ matrix.rid }}
+    needs: [sea, desktop]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest,   rid: osx-arm64, triple: aarch64-apple-darwin }
+          - { os: macos-15-intel, rid: osx-x64,   triple: x86_64-apple-darwin }
+    env:
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: codegraph-cli-${{ matrix.rid }}
+          path: packages/cli/dist-sea/${{ matrix.rid }}
+      - run: node apps/desktop/scripts/sidecar.mjs --rid ${{ matrix.rid }}
+      # The Developer ID certificate, into a throwaway keychain the runner forgets.
+      - name: import the signing certificate
+        if: env.APPLE_SIGNING_IDENTITY != ''
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/codegraph.keychain-db"
+          password="$(openssl rand -hex 16)"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychain -d user -s "$keychain" login.keychain-db
+      # The sidecar signed by hand with the entitlements BEFORE bundling: the
+      # plan (§15.5) says not to assume the bundler applies them to sidecars.
+      - name: sign the sidecar with the JIT entitlements
+        if: env.APPLE_SIGNING_IDENTITY != ''
+        run: |
+          codesign --force --options runtime --timestamp \
+            --entitlements apps/desktop/src-tauri/entitlements.plist \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            "apps/desktop/src-tauri/binaries/codegraph-${{ matrix.triple }}"
+          codesign --verify --verbose=2 "apps/desktop/src-tauri/binaries/codegraph-${{ matrix.triple }}"
+      # Tauri signs the bundle with APPLE_SIGNING_IDENTITY and notarizes with
+      # APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID when they are set; unset, it
+      # signs ad hoc and skips notarization.
+      - name: tauri build
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm --filter @codegraph/desktop exec tauri build --bundles dmg --target ${{ matrix.triple }}
+      # The two assertions §15.5 names for the first signed build, as CI facts.
+      - name: assess the signed app
+        if: env.APPLE_SIGNING_IDENTITY != ''
+        run: |
+          set -euo pipefail
+          app="$(find apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/macos -name '*.app' -maxdepth 1 | head -1)"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign --display --entitlements - "$app/Contents/MacOS/codegraph" | grep -q allow-jit
+          spctl --assess --type execute --verbose=2 "$app"
+      - name: name the DMG after its RID
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
+          mkdir -p out
+          cp apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/dmg/*.dmg "out/Codegraph-${version}-${{ matrix.rid }}.dmg"
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codegraph-desktop-${{ matrix.rid }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 14
+
   release:
     name: github release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [verify, java, java-native, csharp-smoke, typescript-smoke, sea, desktop]
+    needs: [verify, java, java-native, csharp-smoke, typescript-smoke, sea, desktop, desktop-bundle, npm-publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -457,9 +553,45 @@ jobs:
               esac
             done
           done
+          # The desktop app: two DMGs, already named Codegraph-<version>-<rid>.dmg.
+          for dir in artifacts/codegraph-desktop-*; do
+            [ -d "$dir" ] && cp "$dir"/*.dmg release/
+          done
           (cd release && sha256sum * > SHA256SUMS)
           gh release create "${GITHUB_REF_NAME}" --generate-notes --title "codegraph ${GITHUB_REF_NAME}" release/* \
             || gh release upload "${GITHUB_REF_NAME}" release/* --clobber
+      # The tap (PLAN.md §15.5): the cask and the formulae rendered from this
+      # release's SHA256SUMS and pushed to defsquare/homebrew-tap with a deploy
+      # key. Generated, never edited by hand. Skipped, not failed, when the
+      # repository holds no HOMEBREW_TAP_DEPLOY_KEY. The codegraph-typescript
+      # formula needs the npm tarball's sum, so it is rendered only when the
+      # npm publish happened (the registry answers for this version).
+      - name: render and push the Homebrew tap
+        if: env.HOMEBREW_TAP_DEPLOY_KEY != ''
+        env:
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO || 'defsquare/homebrew-tap' }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          npm_sha=""
+          if curl -fsSL "https://registry.npmjs.org/codegraph-typescript/-/codegraph-typescript-${version}.tgz" -o ts.tgz; then
+            npm_sha="$(sha256sum ts.tgz | cut -d' ' -f1)"
+          fi
+          node scripts/homebrew/render.mjs --version "$version" --sums release/SHA256SUMS \
+            ${npm_sha:+--npm-sha256 "$npm_sha"} --out tap
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "$HOMEBREW_TAP_DEPLOY_KEY" > ~/.ssh/tap_deploy_key && chmod 600 ~/.ssh/tap_deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/tap_deploy_key -o IdentitiesOnly=yes"
+          git clone --depth 1 "git@github.com:${HOMEBREW_TAP_REPO}.git" tap-checkout
+          cp -R tap/. tap-checkout/
+          cd tap-checkout
+          git config user.name "codegraph release"
+          git config user.email "release@codegraph.dev"
+          git add -A
+          git commit -m "codegraph ${version}" || { echo "tap already at ${version}"; exit 0; }
+          git push origin HEAD
 
   npm-publish:
     name: npm publish codegraph-typescript

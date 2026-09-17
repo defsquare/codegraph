@@ -156,6 +156,9 @@ node packages/cli/scripts/sea-smoke.mjs packages/cli/dist-sea/<rid>/codegraph   
 pnpm --filter @codegraph/desktop tauri:dev     # the desktop shell (after --sea): copies the image as the
 #   sidecar, then `tauri dev` — needs Rust + the platform's WebKit (apps/desktop/README.md)
 cd apps/desktop && cargo test -p codegraph-discovery   # the discovery crate alone, no WebKit needed
+node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256 HEX] --out tap
+#   the Homebrew cask + formulae the release job pushes to defsquare/homebrew-tap (docs/distribution.md);
+#   `node --test scripts/homebrew` pins the templates to the release's asset names
 
 ./bin/codegraph-typescript --src <dir> --out model.jsonl   # after `pnpm -r build`; no other toolchain
 ./bin/codegraph-typescript --src packages --src extractors/typescript --out codegraph.jsonl   # self-hosting

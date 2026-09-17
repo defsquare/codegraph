@@ -3087,15 +3087,45 @@ including the capability token (a request outside `/<token>/` is `404`, never
   menu/drop is a dialog that sends the user to the page's path field (the
   page cannot be told what the shell posted without IPC), and the
   `codegraph://rescanned` event is emitted but nothing listens.
-- **M14d — signed, notarized, in the tap.** The `desktop` job per macOS
-  architecture, notarization, the two DMGs on the release beside the raw
-  SEA, the cask and its bump step; the three extractor formulae
-  (`codegraph-java`, `codegraph-csharp` per architecture, `codegraph-typescript`
-  on Homebrew's `node`) each with a bump step in its own release job; on a
-  clean Apple-silicon Mac and a clean Intel Mac, `brew install --cask
-  defsquare/tap/codegraph` opens the app and puts `codegraph` on PATH, and
-  `brew install defsquare/tap/codegraph-java defsquare/tap/codegraph-csharp
-  defsquare/tap/codegraph-typescript` puts the three commands beside it.
+- **M14d — signed, notarized, in the tap** ◐ (2026-09-16; the pipeline and
+  the generators, not yet a release). ci.yml `desktop-bundle` on
+  `macos-latest` (osx-arm64) and `macos-15-intel` (osx-x64): the sidecar from
+  the `sea` artifact, the Developer ID certificate imported into a throwaway
+  keychain, the sidecar signed by CI itself with hardened runtime and the
+  JIT-trio entitlements BEFORE `tauri build` (the plan said not to assume
+  the bundler does it), `tauri build --bundles dmg --target <triple>` (Tauri
+  signs the app and notarizes from `APPLE_ID`/`APPLE_PASSWORD`/
+  `APPLE_TEAM_ID`), then the §15.5 assertions as CI facts — `codesign
+  --verify --deep --strict`, `allow-jit` present on the embedded `codegraph`,
+  `spctl --assess` — and the DMG renamed `Codegraph-<version>-<rid>.dmg`.
+  Every signing step is conditional on `APPLE_SIGNING_IDENTITY`: without
+  the secrets the job bundles ad hoc so a fork or a PR proves the bundling,
+  and the signed-only assertions are skipped, never faked. The `release`
+  job now needs it and `npm-publish`, attaches the two DMGs, and gains the
+  tap step: `scripts/homebrew/render.mjs` renders `Casks/codegraph.rb`
+  (arch arm/intel, one DMG URL + sha256 each, `app` + ONE `binary` stanza,
+  `auto_updates false`, `livecheck` github_latest, a zap of the app data
+  dir), `Formula/codegraph-java.rb` and `codegraph-csharp.rb` (`on_macos`/
+  `on_linux` × `on_arm`/`on_intel` with the asset URL and sum from the
+  release's SHA256SUMS, `bin.install` renaming the asset, a `test do` that
+  extracts a one-file tree) and `Formula/codegraph-typescript.rb` (the npm
+  tarball on `depends_on "node"`, `std_npm_args`, rendered only when the
+  registry answers for the version), then clones the tap over an SSH deploy
+  key and pushes "codegraph <version>" — skipped, not failed, without
+  `HOMEBREW_TAP_DEPLOY_KEY`. A missing sum aborts the render before any file
+  is written. 7 `node --test` cases pin the templates to the release's asset
+  names (a `test.sh` phase). `docs/distribution.md` names every secret, what
+  each job puts on the release, and how to render by hand. Departure from
+  the text above: all four tap files are rendered from ONE `v*` tag by the
+  one release job, not by per-extractor release jobs — the repository has
+  one release workflow today; independent extractor cadence means
+  per-extractor tags, deferred until an extractor needs a release of its
+  own. NOT done, and not doable from here: no Apple credentials, no
+  `defsquare/homebrew-tap` repository, no tagged release from this branch —
+  so no notarized DMG exists, the tap is empty, and the clean-Mac install
+  checks of the definition of done are outstanding. `docs/distribution.md`
+  lists the order: secrets, the tap repository, a `v*` tag, the two clean
+  Macs.
 
 Definition of done: a clean Mac with Homebrew and nothing else runs the cask
 line, opens the app, is told on a Java folder which line installs
@@ -3585,7 +3615,7 @@ the Elixir fixture in every per-fixture suite.
 | M14a | Desktop — the daemon | ✅ `codegraph serve --app [--data-dir DIR] [--extractors FILE]`: loopback capability URL (`/<token>/`, one stdout JSON line, 404 outside it, 403 on a foreign `Origin`), extractor registry as data with extension-census detection (a tie is a 422 question), `POST /jobs` (202/409/422/404) + `jobs/current` SSE with replay, `--data-dir` holding model + model.db + artifacts + recents, extraction skipped on an unchanged tree fingerprint and the build on an unchanged build key, a `model.jsonl` opens with no extractor, exit on stdin EOF/SIGTERM; the page's empty state in app form (recents, three phases + extractor stderr, the open instruction, the "which extractor?" question, failures); 64 tests incl. the fake extractor over real sockets and the real binary as a child; driven headlessly on the Java fixture and the TypeScript extractor, screenshots reviewed |
 | M14b | Desktop — the SEA | ✅ one Node single-executable image per OS, ONE program: `dist-sea/codegraph.cjs` (CJS, everything but built-ins inlined, 2.9 MB) + both frontends and `package.json` as assets, folded into a copy of the building Node by `scripts/sea-build.mjs` (postject, macOS re-signing) → `dist-sea/<rid>/codegraph`; `node:sea` reached via `process.getBuiltinModule`; one `FrontendAssets` seam with a directory and a keyed source; `./build.sh --ts --sea`, `test.sh` gate, five-runner `sea` CI job + release artifacts; `scripts/sea-smoke.mjs` green on linux-x64 (131 MB): `--version`, `analyze` ×3 byte-identical to the ESM build, `serve --app` serving the page from the image and opening the Java fixture |
 | M14c | Desktop — the shell | ◐ `apps/desktop/` (Tauri 2) written and CI-compiled, the WebGL gate on fineract NOT yet run (needs a Mac): the one sidecar (the SEA) by target triple via `scripts/sidecar.mjs`, daemon lifecycle (spawn, read the port line, navigate, close stdin + kill), the extractor catalogue + `codegraph-discovery` (PATH + Homebrew prefixes + settings overrides, 8 tests) writing the registry (missing entries carry `install`, no `path`), the daemon's `not-installed` answer + registry re-read on every request (tested, headless screenshots reviewed), the page's install line with "Check again", File › Open Folder… / Open Recent / Rescan / drag-and-drop each one `POST /jobs`; no `@tauri-apps/*` outside `apps/desktop` (boundary test); remaining: `tauri dev` screenshots on the Java fixture and fineract, the WebGL frame time |
-| M14d | Desktop — signed, in the tap | notarized `.app` per macOS architecture with the JIT entitlement trio, two DMGs + the raw SEA on the release, `defsquare/homebrew-tap` cask generated by the app's release job (`app` + ONE `binary` stanza) and one formula per extractor generated by that extractor's release job (`codegraph-java`, `codegraph-csharp` per architecture; `codegraph-typescript` on Homebrew's `node`); on clean Apple-silicon and Intel Macs `brew install --cask defsquare/tap/codegraph` opens the app, a Java folder names the install line, and after `brew install defsquare/tap/codegraph-{java,csharp,typescript}` all four commands are on PATH, each reproducing its fixture snapshot |
+| M14d | Desktop — signed, in the tap | ◐ pipeline + generators written and tested, no release yet: `desktop-bundle` job per macOS architecture (sidecar signed by CI with the JIT entitlement trio, `tauri build` signing + notarizing from secrets, `codesign`/`spctl` assertions, ad-hoc bundling without secrets), two DMGs + the raw SEA on the release, `scripts/homebrew/render.mjs` rendering the cask (`app` + ONE `binary` stanza) and the three formulae (`codegraph-java`/`-csharp` per architecture from SHA256SUMS, `codegraph-typescript` on Homebrew's `node` from the npm tarball) and the release job pushing them to `defsquare/homebrew-tap` over a deploy key (7 tests, `docs/distribution.md`); outstanding: the Apple credentials and the deploy key in the repository's secrets, the tap repository, a `v*` tag, and the clean Apple-silicon and Intel Mac checks (`brew install --cask defsquare/tap/codegraph` opens the app, a Java folder names the install line, the three extractor formulae put the commands on PATH, each reproducing its fixture snapshot) |
 | M15a | Elixir extractor — profile + skeleton | `elixir` profile in core (the tenth: the module is the file, a `defmodule` is a `module` kind carrying `TType`, arity is identity, no inheritance/embedding — §16.2); `extractors/elixir/` as a Mix project on the compiler's parser with the embedded OTP table, no runtime dependency (§16); walking skeleton → `fixtures/elixir/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; core gate; escript on `bin/codegraph-elixir`; `build.sh --elixir` / `test.sh --elixir` with the escript `cmp`; `elixir-test` in CI |
 | M15b | Elixir extractor — model | ✅ (2026-09-16) every kind and edge of §16.2: clause and default folds, the four import forms as one edge kind, `defimpl` as an attached named module, `@derive` as `generated`, `use` as import + `__using__` invocation, struct-expansion accesses, protocol and `GenServer` self-call `dynamic-candidate`s, `throws`, `@spec` references, docs as comments; `sloc` + `cyclomatic`, literals; `--deps` (exports only); the full fixture with its README; determinism, stub-discipline, scope and arity suites; the fixture in every per-fixture suite; city and navigator screenshots reviewed. Snapshot 210 entities / 174 edges; 60 ExUnit tests + 3 properties; Plausible re-run: 16 369 entities / 51 736 edges in 5 s, `validate`-clean, 64.7 % of 119 972 sites resolved or Kernel, the rest counted by reason (`local_injected` and `local_unbound` dominate — the macro ceiling `--trace` exists for) |
 | M15c | Elixir extractor — audit + oracles + distribution | ✅ (2026-09-16) `elixir-lang/elixir` `lib` (557 files, 27 061 / 78 564, 17 s, 80.8 %), Phoenix (205, 5 828 / 14 314, 76.7 %) and Plausible (1 256, 16 369 / 43 661, 58.2 %) audited `validate`-clean, byte-identical to core's encoder, the causes in the profile notes; four defects found and fixed (variadic special forms counted as unbound locals, binary specifiers read as calls, repeated head names re-keying parameters, a corpus `use` treated as no injection source); `--explain-dropped` lists every dropped site; `mix codegraph.trace` (a compilation tracer, JSONL events) + `--trace` merging `generated` edges through the closing rules (Phoenix: 16 797 events → 5 895 edges); the `mix xref` witness check (147/148 on Phoenix) and the trace superset check as opt-in real-corpus tests (`CODEGRAPH_CORPUS_ELIXIR`); the Burrito binary (Zig 0.16, `build.sh --elixir --native`, `test.sh` `cmp`), `elixir-smoke` on three OS runners, `elixir-native` on two, `hex-publish` on a tag; README, CLAUDE.md and `docs/elixir-extractor.md` name the extractor. Deferred: the M14 registry entry and cask stanza (M14 is not on main yet), the Windows native binary (needs 7z on the runner) |

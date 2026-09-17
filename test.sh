@@ -169,6 +169,12 @@ if wants_ts; then
     warn "no single-executable at packages/cli/dist-sea/$(host_rid) — run ./build.sh --ts --sea for its gates"
   fi
 
+  # The Homebrew tap's generators (scripts/homebrew): the cask and the
+  # formulae the release job renders — a template that drifts from the
+  # release's asset names would break `brew install` for every user.
+  phase "homebrew tap generators (node --test)" \
+    node --test "$ROOT/scripts/homebrew/render.test.mjs"
+
   # The desktop shell's discovery crate (apps/desktop/discovery): pure Rust,
   # no WebKit needed, so it runs wherever cargo does. The Tauri crate itself
   # needs the platform's WebKit and is compiled by CI's `desktop` job.
