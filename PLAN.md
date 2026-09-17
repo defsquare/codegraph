@@ -3120,12 +3120,18 @@ including the capability token (a request outside `/<token>/` is `404`, never
   one release job, not by per-extractor release jobs — the repository has
   one release workflow today; independent extractor cadence means
   per-extractor tags, deferred until an extractor needs a release of its
-  own. NOT done, and not doable from here: no Apple credentials, no
-  `defsquare/homebrew-tap` repository, no tagged release from this branch —
-  so no notarized DMG exists, the tap is empty, and the clean-Mac install
-  checks of the definition of done are outstanding. `docs/distribution.md`
-  lists the order: secrets, the tap repository, a `v*` tag, the two clean
-  Macs.
+  own. 2026-09-17: the tap is https://github.com/defsquare/homebrew-tap —
+  public, already carrying Defsquare's `datagraph` and `specy` formulae
+  under the same "generated, pushed by the tool's own release" rule, and
+  needing `brew trust defsquare/tap` once on newer Homebrew; the generator
+  renders `codegraph-elixir` too (Apple silicon + Linux x64, the platforms
+  `elixir-native` builds) and the release job attaches the Burrito binaries
+  as `codegraph-elixir-<rid>`. NOT done, and not doable from here: the tap
+  deploy key and the Apple credentials are not in the repository's secrets
+  (creating credentials is a maintainer's act — `docs/distribution.md` has
+  the three commands), and no tagged release has run — so no notarized DMG
+  exists, the tap holds no codegraph file yet, and the clean-Mac install
+  checks of the definition of done are outstanding.
 
 Definition of done: a clean Mac with Homebrew and nothing else runs the cask
 line, opens the app, is told on a Java folder which line installs

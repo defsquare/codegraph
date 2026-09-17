@@ -20,6 +20,8 @@ ${HEX(8)}  codegraph-csharp-osx-x64
 ${HEX(9)}  codegraph-csharp-linux-arm64
 ${HEX(0)}  codegraph-csharp-linux-x64
 ${HEX("a")}  codegraph-osx-arm64
+${HEX("e")}  codegraph-elixir-osx-arm64
+${HEX("f")}  codegraph-elixir-linux-x64
 `;
 
 test("parseSums reads sha256sum output, star-marked or not", () => {
@@ -58,6 +60,17 @@ test("a binary formula has the four platform blocks with their own URL and sum, 
   assert.match(csharp, /Hello\.cs/);
 });
 
+test("the Elixir formula lists only the platforms its native job builds, and nothing else", () => {
+  const ruby = binaryFormulaRuby({ name: "elixir", version: "0.1.0", sums: parseSums(SUMS) });
+  assert.match(ruby, /^class CodegraphElixir < Formula$/m);
+  assert.match(ruby, new RegExp(`codegraph-elixir-osx-arm64"\\n\\s+sha256 "${HEX("e")}"`));
+  assert.match(ruby, new RegExp(`codegraph-elixir-linux-x64"\\n\\s+sha256 "${HEX("f")}"`));
+  assert.doesNotMatch(ruby, /osx-x64|linux-arm64/);
+  assert.equal((ruby.match(/on_(arm|intel) do/g) ?? []).length, 2);
+  assert.match(ruby, /hello\.ex/);
+  assert.throws(() => binaryFormulaRuby({ name: "go", version: "0.1.0", sums: {} }), /no binary extractor named go/);
+});
+
 test("a missing sum is an error naming the asset, never a formula with a blank hash", () => {
   const withoutLinuxX64 = parseSums(SUMS.split("\n").filter((line) => !line.endsWith("codegraph-java-linux-x64")).join("\n"));
   assert.throws(
@@ -79,7 +92,12 @@ test("the TypeScript formula is the npm package on Homebrew's node", () => {
 
 test("renderTap lists the cask and the formulae, the TypeScript one only with an npm sum", () => {
   const without = renderTap({ version: "0.1.0", sums: parseSums(SUMS) });
-  assert.deepEqual(Object.keys(without).sort(), ["Casks/codegraph.rb", "Formula/codegraph-csharp.rb", "Formula/codegraph-java.rb"]);
+  assert.deepEqual(Object.keys(without).sort(), [
+    "Casks/codegraph.rb",
+    "Formula/codegraph-csharp.rb",
+    "Formula/codegraph-elixir.rb",
+    "Formula/codegraph-java.rb",
+  ]);
   const withNpm = renderTap({ version: "0.1.0", sums: parseSums(SUMS), npmSha256: HEX("c") });
   assert.ok("Formula/codegraph-typescript.rb" in withNpm);
 });
@@ -93,6 +111,11 @@ test("the CLI writes the files under --out", () => {
     stdio: ["ignore", "ignore", "ignore"],
   });
   assert.deepEqual(readdirSync(join(dir, "tap")).sort(), ["Casks", "Formula"]);
-  assert.deepEqual(readdirSync(join(dir, "tap", "Formula")).sort(), ["codegraph-csharp.rb", "codegraph-java.rb", "codegraph-typescript.rb"]);
+  assert.deepEqual(readdirSync(join(dir, "tap", "Formula")).sort(), [
+    "codegraph-csharp.rb",
+    "codegraph-elixir.rb",
+    "codegraph-java.rb",
+    "codegraph-typescript.rb",
+  ]);
   assert.match(readFileSync(join(dir, "tap", "Casks", "codegraph.rb"), "utf8"), /cask "codegraph"/);
 });

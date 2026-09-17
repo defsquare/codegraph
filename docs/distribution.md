@@ -1,15 +1,19 @@
 # Distribution — Homebrew, the release, and what signs what
 
-Codegraph is installed from one Homebrew tap, `defsquare/homebrew-tap`. The
+Codegraph is installed from one Homebrew tap,
+[defsquare/homebrew-tap](https://github.com/defsquare/homebrew-tap) — the
+tap that already carries Defsquare's other tools (`datagraph`, `specy`). The
 app is ONE install and every language extractor is its OWN install, so a
 user of one language never downloads the runtimes of the others
 (PLAN.md §15):
 
 ```
+brew trust defsquare/tap                                # once: newer Homebrew refuses an untrusted tap
 brew install --cask defsquare/tap/codegraph            # Codegraph.app + `codegraph` on PATH
 brew install defsquare/tap/codegraph-java               # one per language, as needed
 brew install defsquare/tap/codegraph-csharp
 brew install defsquare/tap/codegraph-typescript
+brew install defsquare/tap/codegraph-elixir
 ```
 
 The app finds the extractors that are installed; a folder whose language has
@@ -24,6 +28,7 @@ matter for distribution, and their outputs on the GitHub release:
 |---|---|
 | `java-native` (five runners) | `codegraph-java-<rid>` — the GraalVM native image |
 | `csharp-publish` (five RIDs from Linux) | `codegraph-csharp-<rid>` — the .NET single-file binary |
+| `elixir-native` (ubuntu, macos) | `codegraph-elixir-linux-x64`, `codegraph-elixir-osx-arm64` — the Burrito binary |
 | `sea` (five runners) | `codegraph-<rid>` — the single-executable CLI + daemon + frontends |
 | `desktop-bundle` (two macOS runners) | `Codegraph-<version>-osx-arm64.dmg`, `Codegraph-<version>-osx-x64.dmg` |
 | `npm-publish` | `codegraph-typescript@<version>` on npm (not on the release) |
@@ -48,11 +53,14 @@ node scripts/homebrew/render.mjs --version 0.1.0 --sums release/SHA256SUMS \
   single-executable inside the bundle. `auto_updates false`, a `livecheck`
   on the release tags; `brew upgrade` is the update path, the Tauri updater
   is off.
-- `Formula/codegraph-java.rb`, `Formula/codegraph-csharp.rb`: `on_macos` /
-  `on_linux` × `on_arm` / `on_intel` blocks with the asset URL and sum,
-  `bin.install` renaming the asset to the command, a `test do` that runs
-  `--version` and extracts a one-file tree. A prebuilt binary in a formula is
-  legitimate in our own tap (homebrew-core refuses vendored binaries).
+- `Formula/codegraph-java.rb`, `Formula/codegraph-csharp.rb`,
+  `Formula/codegraph-elixir.rb`: `on_macos` / `on_linux` × `on_arm` /
+  `on_intel` blocks with the asset URL and sum — only the platforms that
+  extractor's job builds (Elixir: Apple silicon and Linux x64 today; Homebrew
+  refuses the others cleanly) — `bin.install` renaming the asset to the
+  command, a `test do` that runs `--version` and extracts a one-file tree. A
+  prebuilt binary in a formula is legitimate in our own tap (homebrew-core
+  refuses vendored binaries).
 - `Formula/codegraph-typescript.rb`: the npm package on Homebrew's `node`
   (`depends_on "node"`, `std_npm_args`), rendered only when the npm publish
   happened for this version.
@@ -73,6 +81,28 @@ never failed, so a fork or a pull request still builds everything unsigned.
 | `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | `desktop-bundle` | the Apple ID, an app-specific password, the team — Tauri notarizes with them |
 | `NPM_TOKEN` | `npm-publish` | publishes `codegraph-typescript` |
 | `HOMEBREW_TAP_DEPLOY_KEY` | `release` | an SSH deploy key with write access to the tap repository (`vars.HOMEBREW_TAP_REPO`, default `defsquare/homebrew-tap`) |
+
+### Wiring the tap deploy key (once, by a maintainer)
+
+The release job pushes to the tap over SSH with a deploy key: its public half
+registered on the tap repository with write access, its private half in this
+repository's secrets. From a machine logged into `gh` with access to both:
+
+```
+ssh-keygen -t ed25519 -N "" -C "codegraph release -> defsquare/homebrew-tap" -f tap_deploy_key
+gh api -X POST repos/defsquare/homebrew-tap/keys \
+  -f title="codegraph release (CI deploy key)" -F key=@tap_deploy_key.pub -F read_only=false
+gh secret set HOMEBREW_TAP_DEPLOY_KEY --repo defsquare/codegraph < tap_deploy_key
+rm tap_deploy_key tap_deploy_key.pub
+```
+
+The tap's README says its formulas are generated and pushed by each tool's
+own release process; codegraph follows that rule — its four formulae and its
+cask are rendered by `scripts/homebrew/render.mjs` and pushed by the
+`release` job, never edited in the tap. Worth adding to the tap's README
+alongside `datagraph` and `specy`: the five install lines above, and that
+`Casks/codegraph.rb` and `Formula/codegraph-*.rb` come from
+[defsquare/codegraph](https://github.com/defsquare/codegraph).
 
 ## What is signed, and how
 
@@ -96,10 +126,10 @@ never failed, so a fork or a pull request still builds everything unsigned.
 
 ## Status
 
-The pipeline and the generators are written and tested; the tap has not yet
-received a release. Reaching the definition of done in PLAN.md §15.6 —
-a clean Mac running the install lines and opening a Java, a C# and a
-TypeScript folder from the app — needs, in order: the Apple credentials and
-the tap deploy key in the repository's secrets, the `defsquare/homebrew-tap`
-repository (an empty repository with `Casks/` and `Formula/` is enough), a
-`v*` tag, and the two clean-Mac checks by hand.
+The pipeline and the generators are written and tested, and the tap
+repository exists (public, with `Formula/` and two other tools), but it has
+not yet received a codegraph release. Reaching the definition of done in
+PLAN.md §15.6 — a clean Mac running the install lines and opening a Java, a
+C# and a TypeScript folder from the app — needs, in order: the tap deploy
+key (above) and the Apple credentials in the repository's secrets, a `v*`
+tag, and the two clean-Mac checks by hand.
