@@ -104,6 +104,43 @@ alongside `datagraph` and `specy`: the five install lines above, and that
 `Casks/codegraph.rb` and `Formula/codegraph-*.rb` come from
 [defsquare/codegraph](https://github.com/defsquare/codegraph).
 
+### Getting the Apple secrets (once, by a maintainer with a Developer Program membership)
+
+1. **The certificate.** On a Mac: Keychain Access › Certificate Assistant ›
+   Request a Certificate From a Certificate Authority (saved to disk), then
+   at developer.apple.com › Certificates add a **Developer ID Application**
+   certificate from that CSR, download the `.cer` and open it so it joins its
+   key. `security find-identity -v -p codesigning` prints the identity
+   string, of the form `Developer ID Application: <name> (<TEAMID>)` — that
+   exact string is `APPLE_SIGNING_IDENTITY`, and the code in parentheses is
+   `APPLE_TEAM_ID`. Neither belongs in this repository: it is public, and
+   both live only in its secrets.
+2. **The `.p12`.** In Keychain Access select the certificate with its private
+   key, File › Export Items, format `.p12`, choose a password
+   (`APPLE_CERTIFICATE_PASSWORD`). `base64 -i DeveloperID.p12 | tr -d '\n'`
+   is `APPLE_CERTIFICATE`.
+3. **Notarization credentials.** `APPLE_ID` is the Apple ID email;
+   `APPLE_PASSWORD` is an *app-specific* password from account.apple.com ›
+   Sign-In and Security (two-factor authentication must be on), never the
+   account password.
+4. **Store them**: `gh secret set <NAME> --repo defsquare/codegraph` for each
+   (with no value it prompts and reads hidden), then delete the local `.p12`
+   and its base64 file.
+5. **Prove it locally before tagging** (optional): export the six variables,
+   `./build.sh --ts --sea`, sign the sidecar as the `desktop-bundle` job does
+   (`codesign --force --options runtime --timestamp --entitlements
+   apps/desktop/src-tauri/entitlements.plist --sign "$APPLE_SIGNING_IDENTITY"
+   apps/desktop/src-tauri/binaries/codegraph-<triple>`), then
+   `pnpm --filter @codegraph/desktop tauri:build` — Tauri submits the app for
+   notarization and waits — and check the result as a user's Mac will:
+   `codesign --verify --deep --strict`, `xcrun stapler validate`,
+   `spctl --assess --type execute` on the `.app`. A rejection's reason is in
+   `xcrun notarytool log <submission-id> --apple-id … --password … --team-id …`.
+
+Tauri notarizes and staples the `.app`; the DMG is the container around it,
+and Gatekeeper checks the app's staple when the cask copies it into
+`/Applications` — the shape Homebrew casks expect.
+
 ## What is signed, and how
 
 - The sidecar (`codegraph`, a Node single-executable) is signed by CI

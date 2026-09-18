@@ -29,8 +29,11 @@ extractors/csharp/dist/
 .vscode/
 *.log
 
-# Agent worktrees and local session state
+# Agent worktrees and local session state. `.remember/` is the session
+# handoff a local hook writes: machine paths, tool caches, in-progress notes —
+# never part of a public repository.
 .claude/
+.remember/
 
 # The SQLite analysis store: a DERIVED, DISPOSABLE cache of a model.jsonl,
 # built beside it on demand and regenerable at any time. Never committed —
