@@ -159,3 +159,27 @@ describe("openRouterClient", () => {
     expect(transport.sent).toHaveLength(1);
   });
 });
+
+describe("a reply cut at the token limit says so", () => {
+  const cut = (content: unknown, finish: Record<string, string>): unknown => ({
+    model: "m",
+    choices: [{ index: 0, ...finish, message: { role: "assistant", content } }],
+    usage: { promptTokens: 120, completionTokens: 4096 },
+  });
+
+  it("names the limit instead of reporting broken JSON or an empty completion, in either casing", () => {
+    expect(() => parseChatResult(cut('{"name":"half a docu', { finishReason: "length" }), "m")).toThrow(/cut at the token limit after 4096 completion tokens/u);
+    expect(() => parseChatResult(cut("", { finish_reason: "length" }), "m")).toThrow(/cut at the token limit/u);
+    try {
+      parseChatResult(cut("{", { finishReason: "length" }), "m");
+    } catch (error) {
+      expect(error).toBeInstanceOf(LlmError);
+      expect((error as LlmError).retryable).toBe(false);
+    }
+  });
+
+  it("a complete document that happens to end at the limit is still an answer", () => {
+    expect(parseChatResult(cut('{"name":"f"}', { finishReason: "length" }), "m").json).toEqual({ name: "f" });
+  });
+});
+

@@ -53,16 +53,30 @@ export function usageOf(raw: unknown): LlmUsage | undefined {
   return { promptTokens, completionTokens, ...(cost === undefined ? {} : { cost }) };
 }
 
-/** A chat-completion result → our response. Throws a non-retryable `LlmError` on an empty or non-JSON reply. */
+/**
+ * A chat-completion result → our response. Throws a non-retryable `LlmError`
+ * on an empty or non-JSON reply — and when the provider says the reply was cut
+ * at the token limit, THAT is the error: "non-JSON" would blame the model for
+ * what the caller's `maxTokens` did.
+ */
 export function parseChatCompletion(result: unknown, requestedModel: string): LlmResponse {
   const shaped = result as {
     model?: unknown;
-    choices?: readonly { message?: { content?: unknown; refusal?: unknown } }[];
+    choices?: readonly { finishReason?: unknown; finish_reason?: unknown; message?: { content?: unknown; refusal?: unknown } }[];
     usage?: unknown;
   } | null;
   const first = shaped?.choices?.[0];
   const text = contentText(first?.message?.content);
+  const usage = usageOf(shaped?.usage);
+  const cutShort = (): LlmError =>
+    new LlmError(
+      `completion cut at the token limit${usage === undefined ? "" : ` after ${usage.completionTokens} completion tokens`} (finish reason: length); raise maxTokens`,
+      undefined,
+      false,
+    );
+  const cut = (first?.finishReason ?? first?.finish_reason) === "length";
   if (text === undefined || text.trim() === "") {
+    if (cut) throw cutShort();
     const refusal = first?.message?.refusal;
     throw new LlmError(
       typeof refusal === "string" && refusal !== "" ? `model refused: ${refusal}` : "model returned an empty completion",
@@ -70,9 +84,14 @@ export function parseChatCompletion(result: unknown, requestedModel: string): Ll
       false,
     );
   }
-  const usage = usageOf(shaped?.usage);
+  let json: unknown;
+  try {
+    json = extractJson(text);
+  } catch (error) {
+    throw cut ? cutShort() : error;
+  }
   return {
-    json: extractJson(text),
+    json,
     text,
     model: typeof shaped?.model === "string" ? shaped.model : requestedModel,
     ...(usage === undefined ? {} : { usage }),
