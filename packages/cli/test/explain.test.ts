@@ -3,7 +3,7 @@ import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { decodeInsights, type InsightRecord } from "@codegraph/insights";
-import { fakeLlmClient, type LlmRequest, type Provider } from "@codegraph/llm";
+import { LlmError, fakeLlmClient, type LlmClient, type LlmRequest, type Provider } from "@codegraph/llm";
 import { EXIT } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
 import { run } from "../src/main.js";
@@ -192,6 +192,128 @@ describe("explain runs the walk against the model client", () => {
     expect(code).toBe(EXIT.OK);
     expect(client.calls.length).toBeLessThanOrEqual(3);
     expect(io.stderr()).toMatch(/\d+ skipped/u);
+  });
+});
+
+describe("explain records what failed, and --retry-failed redoes exactly that", () => {
+  const MODULE = "java:com.acme.order";
+  const CREDITS = "This request requires more credits, or fewer max_tokens. You requested up to 131072 tokens, but can only afford 50350.";
+
+  /** The healthy fake, except that the unit named `unitId` (every unit, when undefined) is refused. */
+  // A refusal about ONE unit (it does not fit), as opposed to CREDITS, which is about the account.
+  const TOO_LONG = "This endpoint's maximum context length is 163840 tokens. However, you requested about 698701 tokens.";
+
+  function refusing(seam: ExplainSeam, client: LlmClient, unitId: string | undefined, status = 400, message = TOO_LONG): ExplainSeam {
+    const broke: LlmClient = {
+      name: client.name,
+      complete: (request) =>
+        unitId === undefined || request.user.startsWith(`# Unit: module ${unitId}\n`)
+          ? client.complete(request).then(() => Promise.reject(new LlmError(message, status, false)))
+          : client.complete(request),
+    };
+    return { ...seam, clientFor: () => broke };
+  }
+
+  async function failedRun() {
+    const first = seamWith({ OPENROUTER_API_KEY: KEY });
+    const io = captureIo();
+    const code = await explainCommand(options(["--out", OUT]), io, refusing(first.seam, first.client, MODULE));
+    return { code, io, text: first.disk.get(OUT)!, calls: first.client.calls.length };
+  }
+
+  it("writes one failure record per failed unit — entity, reason, status — and says how to retry", async () => {
+    const { code, io, text } = await failedRun();
+    expect(code).toBe(EXIT.FINDINGS);
+    const file = decodeInsights(text);
+    expect(file.truncated).toBe(false);
+    expect(file.eof?.counts.failed).toBe(1);
+    expect(file.records.map((r) => r.id)).not.toContain(MODULE);
+    expect(file.failures).toEqual([
+      {
+        t: "f",
+        id: MODULE,
+        key: { lang: "java", module: "com.acme.order", symbol: "" },
+        level: "module",
+        members: [MODULE],
+        model: options([]).rollupModel,
+        reason: { kind: "provider", message: TOO_LONG, status: 400, retryable: false },
+        attempts: 1,
+        calls: 0,
+      },
+    ]);
+    expect(io.stderr()).toContain(`failed: ${MODULE}: ${TOO_LONG}`);
+    expect(io.stderr()).toContain("--retry-failed");
+  });
+
+  it("--retry-failed calls the failed unit and its direct dependents only, and clears the failure", async () => {
+    const { text } = await failedRun();
+    const retry = seamWith({ OPENROUTER_API_KEY: KEY }, new Map([[OUT, text]]));
+    const io = captureIo();
+    const code = await explainCommand(options(["--out", OUT, "--retry-failed"]), io, retry.seam);
+    expect(code).toBe(EXIT.OK);
+    expect(io.stderr()).toContain("retrying 1 failed unit");
+    const units = retry.client.calls.map((c) => /^# Unit: (\w+) (\S+)/u.exec(c.user)?.slice(1, 3).join(" "));
+    expect(units).toContain(`module ${MODULE}`);
+    expect(units.every((u) => u?.startsWith("module "))).toBe(true);
+    const file = decodeInsights(retry.disk.get(OUT)!);
+    expect(file.failures).toEqual([]);
+    expect(file.eof?.counts.failed).toBe(0);
+    expect(file.records.map((r) => r.id)).toContain(MODULE);
+    // Everything else was carried over untouched.
+    const before = new Map(decodeInsights(text).records.map((r) => [r.id, JSON.stringify(r)]));
+    const called = new Set(units.map((u) => u?.split(" ")[1]));
+    for (const r of file.records) if (!called.has(r.id)) expect(JSON.stringify(r)).toBe(before.get(r.id));
+  });
+
+  it("a retry that fails again keeps the record and counts the attempt", async () => {
+    const { text } = await failedRun();
+    const retry = seamWith({ OPENROUTER_API_KEY: KEY }, new Map([[OUT, text]]));
+    const code = await explainCommand(options(["--out", OUT, "--retry-failed"]), captureIo(), refusing(retry.seam, retry.client, MODULE));
+    expect(code).toBe(EXIT.FINDINGS);
+    expect(decodeInsights(retry.disk.get(OUT)!).failures.map((f) => [f.id, f.attempts])).toEqual([[MODULE, 2]]);
+  });
+
+  it("a 402 on the first call aborts the run: one call, one failure, and the way to resume", async () => {
+    const { seam, client, disk } = seamWith({ OPENROUTER_API_KEY: KEY });
+    const io = captureIo();
+    const code = await explainCommand(options(["--out", OUT, "--concurrency", "1"]), io, refusing(seam, client, undefined, 402, CREDITS));
+    expect(code).toBe(EXIT.FINDINGS);
+    expect(client.calls).toHaveLength(1);
+    const file = decodeInsights(disk.get(OUT)!);
+    expect(file.failures).toHaveLength(1);
+    expect(file.failures[0]?.reason.status).toBe(402);
+    expect(file.records.every((r) => r.origin === "template")).toBe(true);
+    expect(io.stderr()).toMatch(/aborted: .* answered 402/u);
+    expect(io.stderr()).toMatch(/67 units were not attempted/u);
+    expect(io.stderr()).toContain("--max-tokens");
+    expect(io.stderr()).not.toContain("with --retry-failed");
+    // A 500 on every call is each unit's own problem: the run goes through all of them.
+    const flaky = seamWith({ OPENROUTER_API_KEY: KEY });
+    await explainCommand(options(["--out", OUT, "--concurrency", "1"]), captureIo(), refusing(flaky.seam, flaky.client, undefined, 500, "upstream error"));
+    expect(flaky.client.calls.length).toBe(68);
+  });
+
+  it("--max-tokens caps every call; without it the provider's default stands", async () => {
+    const capped = seamWith({ OPENROUTER_API_KEY: KEY });
+    await explainCommand(options(["--out", OUT, "--max-tokens", "4096"]), captureIo(), capped.seam);
+    expect(capped.client.calls.length).toBeGreaterThan(0);
+    expect(capped.client.calls.every((c) => c.maxTokens === 4096)).toBe(true);
+    const free = seamWith({ OPENROUTER_API_KEY: KEY });
+    await explainCommand(options(["--out", OUT]), captureIo(), free.seam);
+    expect(free.client.calls.every((c) => c.maxTokens === undefined)).toBe(true);
+    expect(() => options(["--max-tokens", "0"])).toThrow(/--max-tokens/u);
+  });
+
+  it("--retry-failed with nothing to retry makes no call; without a side-car, or with --scope, it is a usage error", async () => {
+    const clean = seamWith({ OPENROUTER_API_KEY: KEY });
+    await explainCommand(options(["--out", OUT]), captureIo(), clean.seam);
+    const again = seamWith({ OPENROUTER_API_KEY: KEY }, new Map([[OUT, clean.disk.get(OUT)!]]));
+    const io = captureIo();
+    expect(await explainCommand(options(["--out", OUT, "--retry-failed"]), io, again.seam)).toBe(EXIT.OK);
+    expect(again.client.calls).toHaveLength(0);
+    expect(io.stderr()).toContain("nothing to retry");
+    await expect(explainCommand(options(["--out", OUT, "--retry-failed"]), captureIo(), seamWith({ OPENROUTER_API_KEY: KEY }).seam)).rejects.toThrow(/no side-car/u);
+    expect(() => options(["--retry-failed", "--scope", MODULE])).toThrow(/--retry-failed/u);
   });
 });
 

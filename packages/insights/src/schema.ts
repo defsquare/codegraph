@@ -174,7 +174,50 @@ export const InsightRecord = z.discriminatedUnion("level", [
 ]);
 export type InsightRecord = z.infer<typeof InsightRecord>;
 
-export const ViewDescriptorSchema = z.object({ name: z.string(), filters: z.array(z.string()) });
+/**
+ * Why a unit has no record: `provider` — the call itself was refused or never
+ * answered (credits, auth, rate limit, transport); `invalid-answer` — the model
+ * answered twice and neither document validated; `error` — anything else.
+ */
+export const FAILURE_KINDS = ["provider", "invalid-answer", "error"] as const;
+export type FailureKind = (typeof FAILURE_KINDS)[number];
+
+export const FailureReason = z.object({
+  kind: z.enum(FAILURE_KINDS),
+  /** The provider's or the validator's own words, verbatim. */
+  message: z.string(),
+  /** The HTTP status, when the provider gave one. */
+  status: z.int().optional(),
+  /** The client's verdict on asking again AT ONCE — a later run may well succeed (credits added). */
+  retryable: z.boolean().optional(),
+});
+export type FailureReason = z.infer<typeof FailureReason>;
+
+/**
+ * A unit that was asked for and left WITHOUT a record. It carries no
+ * timestamp — the body stays diffable — and it lives only until a run explains
+ * the unit: `explain --retry-failed` reads these to know what to redo.
+ */
+export const FailureRecord = z.object({
+  t: z.literal("f"),
+  /** The unit id: its first member's rendered entity id — opaque, never parsed. */
+  id: z.string().min(1),
+  key: RecordKey.optional(),
+  level: z.enum(LEVELS),
+  /** Every entity the unit would have explained, sorted; more than one means a cycle. */
+  members: z.array(z.string().min(1)).min(1),
+  /** The model that was asked. */
+  model: z.string(),
+  reason: FailureReason,
+  /** Consecutive runs that attempted this unit and failed. */
+  attempts: z.int().positive(),
+  /** Calls the last attempt made, and what they cost — spent for nothing. */
+  calls: z.int().nonnegative(),
+  usage: RecordUsage.optional(),
+});
+export type FailureRecord = z.infer<typeof FailureRecord>;
+
+export const ViewDescriptorSchema =z.object({ name: z.string(), filters: z.array(z.string()) });
 
 export const InsightsHeader = z.object({
   t: z.literal("header"),

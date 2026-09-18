@@ -5,6 +5,7 @@ import {
   INSIGHTS_KIND,
   INSIGHTS_METAMODEL,
   PROMPT_VERSION,
+  type FailureRecord,
   type InsightRecord,
   type InsightsEof,
   type InsightsHeader,
@@ -136,5 +137,30 @@ describe("the side-car round-trips and stays sorted", () => {
     } as InsightRecord;
     const sorted = sortRecords([type, op("java:p/Z.z()"), op("java:p/A.f()")]);
     expect(sorted.map((r) => r.id)).toEqual(["java:p/A.f()", "java:p/Z.z()", "java:p/A"]);
+  });
+
+  it("failures sit between the records and the eof, sorted, and round-trip", () => {
+    const failure = (id: string, level: FailureRecord["level"]): FailureRecord => ({
+      t: "f",
+      id,
+      level,
+      members: [id],
+      model: "m",
+      reason: { kind: "provider", message: "This request requires more credits", status: 402, retryable: false },
+      attempts: 1,
+      calls: 0,
+    });
+    const failures = [failure("java:p", "module"), failure("java:p/Z.z()", "operation"), failure("java:p/B.b()", "operation")];
+    const text = encodeInsightsToString(HEADER, [op("java:p/A.f()")], eof(1), failures);
+    expect(encodeInsightsToString(HEADER, [op("java:p/A.f()")], eof(1), [...failures].reverse())).toBe(text);
+    const tags = text.trim().split("\n").map((line) => (JSON.parse(line) as { t: string }).t);
+    expect(tags).toEqual(["header", "i", "f", "f", "f", "eof"]);
+    const file = decodeInsights(text);
+    expect(file.failures.map((f) => f.id)).toEqual(["java:p/B.b()", "java:p/Z.z()", "java:p"]);
+    expect(file.failures[0]).toEqual(failures[2]);
+    // Failures are not records: the truncation check still counts records alone.
+    expect(file.truncated).toBe(false);
+    expect(decodeInsights(encodeInsightsToString(HEADER, [], eof(0))).failures).toEqual([]);
+    expect(() => decodeInsights(`${JSON.stringify(HEADER)}\n{"t":"f","id":"x"}\n`)).toThrow(/invalid failure record/);
   });
 });

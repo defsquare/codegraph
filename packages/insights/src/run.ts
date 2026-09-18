@@ -9,13 +9,15 @@ import {
   responseJsonSchema,
   sccResponseSchema,
   type Block,
+  type FailureReason,
+  type FailureRecord,
   type InsightRecord,
   type JsonSchema,
   type Level,
   type RecordKey,
   type RecordUsage,
 } from "./schema.js";
-import { sortRecords } from "./sidecar.js";
+import { sortFailures, sortRecords } from "./sidecar.js";
 import { templateBlock } from "./template.js";
 
 /**
@@ -30,12 +32,32 @@ import { templateBlock } from "./template.js";
  * to `onRecord` — the CLI's progressive journal write.
  *
  * A malformed answer gets ONE repair re-ask with the validation errors quoted.
- * A unit that still fails is reported and left without a record; its
+ * A unit that still fails is left without a record and gets a FAILURE record
+ * instead — the unit, its entities, the reason — which the side-car keeps
+ * until a later run explains it (`retryScope` in plan.ts). Its
  * dependents run anyway and see it as NOT EXPLAINED — and because a missing
  * dependency is part of their fingerprint, a later run that explains it will
  * redo them. The result set is the same whatever the concurrency: only the
  * order of calls differs.
+ *
+ * ONE FAILURE IS NOT ABOUT ITS UNIT: a 401, 402 or 403 is about the account,
+ * and every later call would get the same answer. The run ABORTS — no further
+ * call starts; templates and reuse still happen — and the units it never
+ * reached are reported as not attempted, never as failed: a failure record
+ * says a unit was asked for.
  */
+
+/** Statuses that condemn every later call too: bad key, no credits, no permission. */
+export const FATAL_STATUSES: readonly number[] = [401, 402, 403];
+
+export interface RunAbort {
+  /** The unit whose call got the fatal answer. */
+  readonly unit: string;
+  readonly reason: FailureReason;
+  /** Planned model-call units that were never started. */
+  readonly notAttempted: number;
+}
+
 
 export interface CompletionRequest {
   readonly model: string;
@@ -51,6 +73,12 @@ export interface Completion {
   readonly usage?: RecordUsage;
 }
 
+/**
+ * May reject. An error carrying a numeric `status` and/or a boolean `retryable`
+ * (the shape of `@codegraph/llm`'s `LlmError`, read structurally — this package
+ * imports no client) is recorded as a `provider` failure with both; a status
+ * in `FATAL_STATUSES` also aborts the run.
+ */
 export type Completer = (request: CompletionRequest) => Promise<Completion>;
 
 export interface StepEvent {
@@ -59,14 +87,16 @@ export interface StepEvent {
   readonly calls: number;
   readonly usage: RunUsage;
   readonly error?: string;
+  /** Skipped because the run had aborted, not by plan. */
+  readonly aborted?: true;
 }
 
 export interface RunHooks {
   readonly concurrency: number;
   readonly onRecord?: (record: InsightRecord, step: PlanStep) => void | Promise<void>;
   readonly onStep?: (event: StepEvent) => void;
-  /** After every layer has settled — where the CLI rewrites the sorted side-car. */
-  readonly onLayer?: (layer: number, records: readonly InsightRecord[]) => void | Promise<void>;
+  /** After every layer has settled — where the CLI rewrites the sorted side-car, failures so far included. */
+  readonly onLayer?: (layer: number, records: readonly InsightRecord[], failures: readonly FailureRecord[]) => void | Promise<void>;
 }
 
 export interface RunOptions {
@@ -75,17 +105,14 @@ export interface RunOptions {
   readonly maxLines: number;
   /** The natural key per entity id, when the caller has it. */
   readonly keyOf?: (id: string) => RecordKey | undefined;
+  /** The side-car's failures from earlier runs: attempts are counted on, unattempted ones carried over. */
+  readonly previousFailures?: readonly FailureRecord[];
 }
 
 export interface RunUsage {
   promptTokens: number;
   completionTokens: number;
   cost: number | undefined;
-}
-
-export interface RunFailure {
-  readonly unit: string;
-  readonly message: string;
 }
 
 export interface RunResult {
@@ -101,7 +128,10 @@ export interface RunResult {
     readonly calls: number;
   };
   readonly usage: RunUsage;
-  readonly failures: readonly RunFailure[];
+  /** Every unit still owed an explanation after this run: failed now, or failed before and not attempted. Sorted. */
+  readonly failures: readonly FailureRecord[];
+  /** Set when a fatal provider answer stopped the run early. */
+  readonly aborted: RunAbort | undefined;
 }
 
 export class RunAborted extends Error {
@@ -126,6 +156,15 @@ function splitUsage(usage: RecordUsage | undefined, parts: number): RecordUsage 
     completionTokens: Math.round(usage.completionTokens / parts),
     ...(usage.cost === undefined ? {} : { cost: usage.cost / parts }),
   };
+}
+
+function reasonOf(error: unknown): FailureReason {
+  const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof RunAborted) return { kind: "invalid-answer", message };
+  const { status, retryable } = (typeof error === "object" && error !== null ? error : {}) as { status?: unknown; retryable?: unknown };
+  const hasStatus = typeof status === "number" && Number.isInteger(status);
+  if (!hasStatus && typeof retryable !== "boolean") return { kind: "error", message };
+  return { kind: "provider", message, ...(hasStatus ? { status } : {}), ...(typeof retryable === "boolean" ? { retryable } : {}) };
 }
 
 function issuesOf(error: z.ZodError): string {
@@ -161,7 +200,18 @@ export async function executeRun(
 ): Promise<RunResult> {
   const live = new Map<string, InsightRecord>(existing);
   const usage: RunUsage = { promptTokens: 0, completionTokens: 0, cost: undefined };
-  const failures: RunFailure[] = [];
+  const failures = new Map<string, FailureRecord>();
+  const previous = new Map((options.previousFailures ?? []).map((failure) => [failure.id, failure]));
+  // Still owed: what failed in this run, plus what failed before and has no record yet.
+  const owed = (): FailureRecord[] =>
+    sortFailures([...failures.values(), ...[...previous.values()].filter((f) => !failures.has(f.id) && carried.has(f.id))]);
+  const carried = new Set<string>();
+  let abort: { unit: string; reason: FailureReason } | undefined;
+  let notAttempted = 0;
+  // Not attempted: an earlier failure of this unit stands until its members have records.
+  const carry = (unit: Unit): void => {
+    if (previous.has(unit.id) && unit.members.some((member) => !live.has(member))) carried.add(unit.id);
+  };
   const counts = { llm: 0, template: 0, reused: 0, failed: 0, skipped: 0, calls: 0 };
   const contextEnv = (): ContextEnv => ({ ...env, records: live, depth: options.depth, maxLines: options.maxLines });
 
@@ -218,11 +268,19 @@ export async function executeRun(
         return;
       case "skip-scope":
       case "skip-budget":
+        carry(unit);
         counts.skipped += 1;
         hooks.onStep?.({ step, outcome: "skipped", calls: 0, usage: stepUsage });
         return;
       case "llm":
         break;
+    }
+    if (abort !== undefined) {
+      carry(unit);
+      counts.skipped += 1;
+      notAttempted += 1;
+      hooks.onStep?.({ step, outcome: "skipped", calls: 0, usage: stepUsage, aborted: true });
+      return;
     }
 
     const pack = contextPackFor(unit, contextEnv());
@@ -261,9 +319,22 @@ export async function executeRun(
       counts.calls += calls;
       addUsage(usage, { promptTokens: stepUsage.promptTokens, completionTokens: stepUsage.completionTokens, ...(stepUsage.cost === undefined ? {} : { cost: stepUsage.cost }) });
       counts.failed += 1;
-      const message = error instanceof Error ? error.message : String(error);
-      failures.push({ unit: unit.id, message });
-      hooks.onStep?.({ step, outcome: "failed", calls, usage: stepUsage, error: message });
+      const reason = reasonOf(error);
+      if (abort === undefined && reason.status !== undefined && FATAL_STATUSES.includes(reason.status)) abort = { unit: unit.id, reason };
+      const key = options.keyOf?.(unit.id);
+      failures.set(unit.id, {
+        t: "f",
+        id: unit.id,
+        ...(key === undefined ? {} : { key }),
+        level: unit.level,
+        members: [...unit.members],
+        model: step.model,
+        reason,
+        attempts: (previous.get(unit.id)?.attempts ?? 0) + 1,
+        calls,
+        ...(stepUsage.promptTokens + stepUsage.completionTokens === 0 ? {} : { usage: { promptTokens: stepUsage.promptTokens, completionTokens: stepUsage.completionTokens, ...(stepUsage.cost === undefined ? {} : { cost: stepUsage.cost }) } }),
+      });
+      hooks.onStep?.({ step, outcome: "failed", calls, usage: stepUsage, error: reason.message });
       return;
     }
     // Only a fully answered unit is recorded: half a cycle would be a lie about the other half.
@@ -294,7 +365,7 @@ export async function executeRun(
       }
     };
     await Promise.all(Array.from({ length: Math.min(width, steps.length) }, worker));
-    await hooks.onLayer?.(layer, sortRecords(live.values()));
+    await hooks.onLayer?.(layer, sortRecords(live.values()), owed());
   }
 
   const records = sortRecords(live.values());
@@ -302,6 +373,7 @@ export async function executeRun(
     records,
     counts: { records: records.length, ...counts },
     usage,
-    failures,
+    failures: owed(),
+    aborted: abort === undefined ? undefined : { ...abort, notAttempted },
   };
 }

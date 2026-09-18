@@ -72,8 +72,10 @@ codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
                    [--estimate [--price-in USD --price-out USD]]
                    [--provider auto|openrouter|cloudflare]
                    [--model SLUG] [--rollup-model SLUG] [--depth N]
-                   [--max-calls N] [--scope IDS] [--concurrency N]
-                   [--max-lines N] [--max-scc N] [--force] [--yes] [--json]
+                   [--max-calls N] [--max-tokens N] [--scope IDS]
+                   [--concurrency N]
+                   [--max-lines N] [--max-scc N] [--force] [--retry-failed]
+                   [--yes] [--json]
                    [--framework spring] [--internal-only] [--declared-only]
 
 codegraph scm      [repo] [--since DATE] [--out FILE] [--json]
@@ -216,7 +218,12 @@ text). Needs `OPENROUTER_API_KEY`, or `CLOUDFLARE_API_TOKEN` +
 part of each record's fingerprint, so a new model re-explains what it covers.
 A run that makes model calls first prints its token estimate on
 stderr and asks `[y/N]`; `--yes` (`-y`) skips the question, and without an
-interactive terminal it is required. Design record: [insights.md](insights.md).
+interactive terminal it is required. A unit that could not be explained exits
+`3` and leaves a failure record (`t:"f"`: entity, reason, HTTP status) in the
+side-car; `--retry-failed` redoes just those units and their direct
+dependents. A `401`/`402`/`403` aborts the run instead of failing every
+remaining unit the same way; `--max-tokens N` caps what one answer may cost,
+which on a prepaid account is what keeps a low balance from refusing every call. Design record: [insights.md](insights.md).
 
 ### `scm`
 Mines a repository's git history into a deterministic `history.jsonl`:

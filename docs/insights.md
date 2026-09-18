@@ -108,6 +108,7 @@ than `--max-scc` is chunked: each chunk sees the others' signatures only.
     {"t":"header","kind":"codegraph.insights/1",…,"metamodel":"specy.domain/3",…}
     {"t":"i","id":…,"level":"operation",…,"block":{…},"fingerprint":…}
     …
+    {"t":"f","id":…,"level":"module","members":[…],"model":…,"reason":{…},"attempts":1,"calls":0}
     {"t":"eof","counts":{…},"usage":{…},"generatedAt":"…"}
 
 Records are sorted by (level, id) and re-serialized through their Zod schema,
@@ -173,6 +174,68 @@ is the intended split.
 
 Records are appended to `<out>.journal` as they arrive and the sorted side-car
 is rewritten at every layer, so an interrupted run resumes where it stopped.
+
+### Failures are records, and a retry reads them
+
+A unit that was asked for and could not be explained used to be a line on
+stderr and a count in the trailer — recognisable afterwards only by the record
+it does not have. It now leaves a **failure record** (`t:"f"`) after the
+insight records, sorted the same way: the unit id, the entities left without a
+record (`members`; several for a cycle), the model asked, and the `reason` —
+`kind` (`provider` when the call itself was refused or never answered,
+`invalid-answer` when two answers in a row failed validation, `error`
+otherwise), the provider's or validator's `message` verbatim, and the HTTP
+`status` and the client's `retryable` verdict when there were any. `attempts`
+counts consecutive failing runs; `calls`/`usage` say what the last attempt
+spent for nothing. No timestamp: the body stays diffable. `insights` reads
+`status`/`retryable` off the thrown error structurally, so it still imports no
+client.
+
+A failure record lives exactly as long as the gap it describes: a run that
+explains the unit drops it, a run that fails again replaces it with
+`attempts + 1`, and a run that did not attempt the unit (`--scope`,
+`--max-calls`) carries it over unchanged. The trailer's `failed` is the number
+of failure records in the body. They are written at every layer boundary with
+the records, so a run interrupted in the middle of a storm of refusals has
+already said what was refused.
+
+`retryable` is about asking again *at once* (that is `withRetry`'s job, inside
+one call). Whether a *later run* can succeed is the operator's call — a `402`
+is `retryable: false` and entirely curable by adding credits — which is why the
+retry is a command, not a loop: `--retry-failed` scopes the plan (`retryScope`)
+to the failed units **plus their direct dependents**. Those were explained with
+the failed unit shown as NOT EXPLAINED, and IN-5 makes them stale the moment it
+exists; nothing further up moves, because a unit hashes its dependencies'
+plan-time fingerprints, which a failure never changed. Everything else is
+`reuse` or `skip-scope`. A plain re-run retries the same units too — it just
+also picks up whatever else is owed (budget-skipped, changed source). The
+retry must repeat the failed run's `--model`/`--depth`/`--max-lines`, which are
+part of every fingerprint; a differing model or depth is noted on stderr, not
+refused — retrying a context-length failure under a larger model is legitimate.
+
+### A failure about the account aborts the run
+
+A `401`, `402` or `403` (`FATAL_STATUSES`) is not about the unit that received
+it: every later call would get the same answer. The first BroadleafCommerce
+run showed what going on regardless costs — credits ran out in walk layer 17
+and the remaining 604 units were each asked and each refused. So the run
+aborts: calls in flight settle, no further call starts, templates and reuse
+still happen, and the side-car is written as usual. The units never reached
+are counted as skipped and reported as *not attempted* — they get **no**
+failure record, because a failure record says a unit was asked for. That is
+why the summary of an aborted run points at a plain re-run, which redoes the
+failures and resumes the rest, rather than at `--retry-failed`, which would
+miss what was never tried.
+
+`--max-tokens N` is the other half of that lesson. With no `max_tokens` on the
+request a provider assumes the model's whole output window (131 072 tokens on
+the run above) and a prepaid account must be able to afford *that* for every
+call — so a balance that would have paid for thousands more 1k-token blocks
+refuses all of them. The cap is not part of the fingerprint: it changes what a
+call may cost, not what it is asked. There is deliberately no default — models
+differ in output window and in how much of it reasoning eats — and an answer
+cut at the cap is reported as exactly that by `@codegraph/llm` (finish reason
+`length`), not as broken JSON.
 
 ## IN-7 · Trivial members are templated
 

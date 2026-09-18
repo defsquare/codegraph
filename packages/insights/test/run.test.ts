@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Edge, Entity } from "@codegraph/core";
 import { buildWalk } from "../src/order.js";
-import { planRun, type PlanEnv, type PlanOptions } from "../src/plan.js";
+import { planRun, retryScope, type PlanEnv, type PlanOptions } from "../src/plan.js";
 import { executeRun, type Completer, type CompletionRequest } from "../src/run.js";
-import type { Block, InsightRecord, ModuleBlock, OperationBlock, TypeBlock } from "../src/schema.js";
+import type { Block, FailureRecord, InsightRecord, ModuleBlock, OperationBlock, TypeBlock } from "../src/schema.js";
 import { createSourceReader, mapReader } from "../src/source.js";
 import { edge, field, graphOf, method, pkg, prepared, type } from "./fixture.js";
 
@@ -57,7 +57,7 @@ function moduleBlock(name: string): ModuleBlock {
 }
 
 /** Answers from the request alone: the unit id is on the first line, the member ids under "Return one entry per id". */
-function fakeCompleter(overrides: { badFirst?: Set<string>; failing?: Set<string> } = {}): Completer & { requests: CompletionRequest[] } {
+function fakeCompleter(overrides: { badFirst?: Set<string>; failing?: Set<string>; throwing?: Map<string, unknown> } = {}): Completer & { requests: CompletionRequest[] } {
   const requests: CompletionRequest[] = [];
   const seenBad = new Set<string>();
   const completer = (async (request: CompletionRequest) => {
@@ -66,6 +66,7 @@ function fakeCompleter(overrides: { badFirst?: Set<string>; failing?: Set<string
     const level = request.schemaName.replace(/^codegraph_/u, "").replace(/_cycle$/u, "");
     const blockFor = (id: string): Block =>
       level === "operation" ? operationBlock(id) : level === "type" ? typeBlock(id) : moduleBlock(id);
+    if (overrides.throwing?.has(unitId)) throw overrides.throwing.get(unitId);
     if (overrides.failing?.has(unitId)) return { json: { nonsense: true }, model: request.model };
     if (overrides.badFirst?.has(unitId) && !seenBad.has(unitId)) {
       seenBad.add(unitId);
@@ -79,12 +80,12 @@ function fakeCompleter(overrides: { badFirst?: Set<string>; failing?: Set<string
   return completer;
 }
 
-async function run(existing: Map<string, InsightRecord>, options: Partial<PlanOptions> = {}, completer = fakeCompleter(), concurrency = 1) {
+async function run(existing: Map<string, InsightRecord>, options: Partial<PlanOptions> = {}, completer = fakeCompleter(), concurrency = 1, previousFailures: readonly FailureRecord[] = []) {
   const { walk, env } = corpus();
   const plan = planRun(walk, existing, env, { ...OPTIONS, ...options });
   const emitted: string[] = [];
   const layers: number[] = [];
-  const result = await executeRun(plan, env, existing, completer, { maxScc: 12, depth: 1, maxLines: 100 }, {
+  const result = await executeRun(plan, env, existing, completer, { maxScc: 12, depth: 1, maxLines: 100, previousFailures }, {
     concurrency,
     onRecord: (r) => void emitted.push(r.id),
     onLayer: (l) => void layers.push(l),
@@ -182,7 +183,7 @@ describe("executeRun", () => {
     expect(hRequests[1]?.user).toContain("## Your previous answer was not valid");
 
     const failed = await run(new Map(), {}, fakeCompleter({ failing: new Set([m("h")]) }));
-    expect(failed.result.failures.map((f) => f.unit)).toEqual([m("h")]);
+    expect(failed.result.failures.map((f) => f.id)).toEqual([m("h")]);
     expect(failed.result.counts.failed).toBe(1);
     expect(failed.result.records.map((r) => r.id)).not.toContain(m("h"));
     // The dependent still ran, saw the gap, and said so.
@@ -214,5 +215,109 @@ describe("executeRun", () => {
       expect(rec?.usage?.promptTokens).toBe(33);
     }
     expect(result.counts.calls).toBe(3);
+  });
+
+  it("a failure is a record: the unit, its entities, the model asked, the reason and what it cost", async () => {
+    // What a provider error looks like from here: an Error carrying `status` and `retryable`.
+    const credits = Object.assign(new Error("This request requires more credits, or fewer max_tokens."), { status: 402, retryable: false });
+    const { result } = await run(new Map(), {}, fakeCompleter({ throwing: new Map([[P, credits]]), failing: new Set([m("h")]) }));
+    expect(result.failures).toEqual([
+      {
+        t: "f",
+        id: m("h"),
+        level: "operation",
+        members: [m("h")],
+        model: "leaf-model",
+        reason: { kind: "invalid-answer", message: expect.stringContaining("invalid answer after repair") as string },
+        attempts: 1,
+        calls: 2,
+      },
+      {
+        t: "f",
+        id: P,
+        level: "module",
+        members: [P],
+        model: "rollup-model",
+        reason: { kind: "provider", message: "This request requires more credits, or fewer max_tokens.", status: 402, retryable: false },
+        attempts: 1,
+        calls: 0,
+      },
+    ]);
+  });
+
+  it("hands the failures so far to the layer hook, so an interrupted run has already written them", async () => {
+    const { walk, env } = corpus();
+    const plan = planRun(walk, new Map(), env, OPTIONS);
+    const seen: string[][] = [];
+    await executeRun(plan, env, new Map(), fakeCompleter({ failing: new Set([m("h")]) }), { maxScc: 12, depth: 1, maxLines: 100 }, {
+      concurrency: 1,
+      onLayer: (_layer, _records, failures) => void seen.push(failures.map((f) => f.id)),
+    });
+    expect(seen[0]).toEqual([m("h")]);
+    expect(seen.at(-1)).toEqual([m("h")]);
+  });
+
+  it("retryScope plans the failed units and their direct dependents, and nothing else", async () => {
+    const failed = await run(new Map(), {}, fakeCompleter({ failing: new Set([m("h")]) }));
+    const existing = new Map(failed.result.records.map((r) => [r.id, r]));
+    const { walk, env } = corpus();
+    const plan = planRun(walk, existing, env, { ...OPTIONS, inScope: retryScope(failed.result.failures, walk) });
+    const status = new Map(plan.steps.map((s) => [s.unit.id, s.status]));
+    expect(status.get(m("h"))).toBe("llm");
+    // g was explained WITHOUT h: stale once h exists.
+    expect(status.get(m("g"))).toBe("llm");
+    // …and so was T, which rolls h up. Nothing further: P hashes T's plan-time fingerprint, which never moved.
+    expect(status.get(T)).toBe("llm");
+    expect(status.get(m("f"))).toBe("reuse");
+    expect(status.get(P)).toBe("reuse");
+
+    const retried = await run(existing, { inScope: retryScope(failed.result.failures, walk) }, fakeCompleter(), 1, failed.result.failures);
+    expect(retried.completer.requests).toHaveLength(3);
+    expect(retried.result.failures).toEqual([]);
+    expect(retried.result.records.map((r) => r.id)).toContain(m("h"));
+  });
+
+  it("a unit that fails again counts its attempts; one that was not attempted keeps its failure", async () => {
+    const first = await run(new Map(), {}, fakeCompleter({ failing: new Set([m("h")]) }));
+    const existing = new Map(first.result.records.map((r) => [r.id, r]));
+    const again = await run(existing, {}, fakeCompleter({ failing: new Set([m("h")]) }), 1, first.result.failures);
+    expect(again.result.failures.map((f) => [f.id, f.attempts])).toEqual([[m("h"), 2]]);
+    // Out of scope this time: not attempted, still without a record — the failure stands as it was.
+    const scoped = await run(existing, { inScope: (u) => u.id === m("g") }, fakeCompleter(), 1, first.result.failures);
+    expect(scoped.result.failures).toEqual(first.result.failures);
+    expect(scoped.result.counts.failed).toBe(0);
+  });
+
+  it("a 401/402/403 aborts the run: nothing further is called, and what was not attempted is not a failure", async () => {
+    const credits = Object.assign(new Error("This request requires more credits"), { status: 402, retryable: false });
+    const steps: string[] = [];
+    const { walk, env } = corpus();
+    const plan = planRun(walk, new Map(), env, OPTIONS);
+    const completer = fakeCompleter({ throwing: new Map([[m("h"), credits]]) });
+    const result = await executeRun(plan, env, new Map(), completer, { maxScc: 12, depth: 1, maxLines: 100 }, {
+      concurrency: 1,
+      onStep: (e) => void steps.push(`${e.step.unit.id} ${e.outcome}${e.aborted === true ? " aborted" : ""}`),
+    });
+    expect(completer.requests).toHaveLength(1);
+    expect(result.failures.map((f) => [f.id, f.reason.status])).toEqual([[m("h"), 402]]);
+    expect(result.aborted).toEqual({ unit: m("h"), reason: { kind: "provider", message: "This request requires more credits", status: 402, retryable: false }, notAttempted: 4 });
+    expect(result.counts).toMatchObject({ failed: 1, skipped: 4, template: 1, calls: 0 });
+    // What needs no call still happens; what needed one is reported as not attempted.
+    expect(result.records.map((r) => r.id)).toEqual([m("getTotal")]);
+    expect(steps).toContain(`${m("g")} skipped aborted`);
+    expect(steps).toContain(`${P} skipped aborted`);
+  });
+
+  it("other statuses fail their unit and the run goes on; an aborted run carries earlier failures it never reached", async () => {
+    const busy = Object.assign(new Error("rate limited"), { status: 429, retryable: true });
+    const ok = await run(new Map(), {}, fakeCompleter({ throwing: new Map([[m("h"), busy]]) }));
+    expect(ok.result.aborted).toBeUndefined();
+    expect(ok.completer.requests).toHaveLength(5);
+
+    const first = await run(new Map(), {}, fakeCompleter({ failing: new Set([m("g")]) }));
+    const denied = Object.assign(new Error("no auth"), { status: 401, retryable: false });
+    const existing = new Map(first.result.records.filter((r) => r.id !== m("h")).map((r) => [r.id, r]));
+    const again = await run(existing, {}, fakeCompleter({ throwing: new Map([[m("h"), denied]]) }), 1, first.result.failures);
+    expect(again.result.failures.map((f) => [f.id, f.attempts])).toEqual([[m("g"), 1], [m("h"), 1]]);
   });
 });

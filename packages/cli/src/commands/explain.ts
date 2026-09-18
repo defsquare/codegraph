@@ -19,7 +19,9 @@ import {
   mergeRecords,
   planRun,
   recordsById,
+  retryScope,
   type Completer,
+  type FailureRecord,
   type InsightRecord,
   type InsightsEof,
   type InsightsHeader,
@@ -46,7 +48,9 @@ import { resolveView } from "../view.js";
  *
  * THE SIDE-CAR IS THE ARTIFACT, and it is a FILE, not stdout: it is written
  * progressively (a journal line per finished record, the sorted file rewritten
- * at every layer) so an interrupted run is resumed, not repeated. stdout stays
+ * at every layer) so an interrupted run is resumed, not repeated. A unit that
+ * could not be explained leaves a FAILURE record there — entity and reason —
+ * and `--retry-failed` takes its scope from those records. stdout stays
  * empty unless `--dry-run` (the plan) or `--json` (the summary) asks for it.
  *
  * SPENDING IS CONFIRMED: a run that plans model calls prints its token
@@ -134,7 +138,20 @@ export async function explainCommand(
 
     const out = options.out ?? sidecarPathFor(options.models[0] ?? "model.jsonl");
     const journal = `${out}.journal`;
-    const { records: existing, header: previous } = loadExisting(out, journal, seam, io);
+    const { records: existing, header: previous, failures: previousFailures } = loadExisting(out, journal, seam, io);
+    if (options.retryFailed) {
+      if (previous === undefined) {
+        throw new UsageError(
+          `--retry-failed found no side-car at ${out}`,
+          "It redoes the failures a previous run recorded there. Pass --out FILE if the side-car is elsewhere, or drop --retry-failed for a first run.",
+        );
+      }
+      if (previousFailures.length === 0) {
+        errLine(io, `nothing to retry: ${out} records no failure.`);
+        return source.clean ? EXIT.OK : EXIT.FINDINGS;
+      }
+      errLines(io, retryLines(previousFailures, previous, options));
+    }
 
     const plan = planRun(walk, existing, env, {
       models: { leaf: options.model, rollup: options.rollupModel },
@@ -143,7 +160,7 @@ export async function explainCommand(
       maxScc: options.maxScc,
       force: options.force,
       maxCalls: options.maxCalls,
-      inScope: scopePredicate(options.scope, graph, units),
+      inScope: options.retryFailed ? retryScope(previousFailures, walk) : scopePredicate(options.scope, graph, units),
     });
 
     if (!source.clean) {
@@ -171,7 +188,7 @@ export async function explainCommand(
     const total = plan.steps.length;
     let done = 0;
 
-    const result = await executeRun(plan, env, existing, complete, { maxScc: options.maxScc, depth: options.depth, maxLines: options.maxLines, ...(keyOf === undefined ? {} : { keyOf }) }, {
+    const result = await executeRun(plan, env, existing, complete, { maxScc: options.maxScc, depth: options.depth, maxLines: options.maxLines, previousFailures, ...(keyOf === undefined ? {} : { keyOf }) }, {
       concurrency: options.concurrency,
       onRecord: (record) => seam.fs.appendFile(journal, encodeJournalLine(record)),
       onStep: (event) => {
@@ -180,24 +197,27 @@ export async function explainCommand(
         const tag = `[${done}/${total}]`;
         const what = `${unit.level} ${unit.id}${unit.members.length > 1 ? ` (+${unit.members.length - 1} in cycle)` : ""}`;
         if (event.outcome === "failed") errLine(io, `${tag} ${what}: FAILED ${event.error ?? ""}`);
+        else if (event.aborted === true) errLine(io, `${tag} ${what}: not attempted (run aborted)`);
         else if (event.step.status === "llm") errLine(io, `${tag} ${what}: ${event.calls} call${event.calls === 1 ? "" : "s"}, ${event.usage.promptTokens}+${event.usage.completionTokens} tokens`);
         else errLine(io, `${tag} ${what}: ${event.step.status}`);
       },
-      onLayer: (_layer, records) => {
-        seam.fs.writeFileAtomic(out, encodeInsightsToString(header, records, eofFor(result0(records.length), seam)));
+      onLayer: (_layer, records, failures) => {
+        seam.fs.writeFileAtomic(out, encodeInsightsToString(header, records, eofFor(result0(records.length, failures.length), seam), failures));
       },
     });
 
-    seam.fs.writeFileAtomic(out, encodeInsightsToString(header, result.records, eofFor(result, seam)));
+    // `failed` in the trailer is the number of failure records in the body, carried-over ones included.
+    const written = { counts: { ...result.counts, failed: result.failures.length }, usage: result.usage };
+    seam.fs.writeFileAtomic(out, encodeInsightsToString(header, result.records, eofFor(written, seam), result.failures));
     seam.fs.remove(journal);
 
     const misses = reader.misses();
     if (misses.length > 0) {
       errLine(io, `warning: ${misses.length} source file${misses.length === 1 ? "" : "s"} not found under ${srcRoot} (first: ${misses[0]}); those units were explained from facts alone.`);
     }
-    errLines(io, summaryLines(out, result));
+    errLines(io, summaryLines(out, result, options));
     if (options.json) {
-      outLine(io, JSON.stringify({ kind: "codegraph.explainSummary/1", out, counts: result.counts, usage: result.usage, failures: result.failures }));
+      outLine(io, JSON.stringify({ kind: "codegraph.explainSummary/1", out, counts: result.counts, usage: result.usage, failures: result.failures, ...(result.aborted === undefined ? {} : { aborted: result.aborted }) }));
     }
     if (result.failures.length > 0) return EXIT.FINDINGS;
     return source.clean ? EXIT.OK : EXIT.FINDINGS;
@@ -206,9 +226,9 @@ export async function explainCommand(
   }
 }
 
-/** Partial totals for the layer-boundary rewrite: only the record count is known cheaply. */
-function result0(records: number): { counts: { records: number; llm: number; template: number; reused: number; failed: number }; usage: RunUsage } {
-  return { counts: { records, llm: 0, template: 0, reused: 0, failed: 0 }, usage: { promptTokens: 0, completionTokens: 0, cost: undefined } };
+/** Partial totals for the layer-boundary rewrite: only the record and failure counts are known cheaply. */
+function result0(records: number, failed: number): { counts: { records: number; llm: number; template: number; reused: number; failed: number }; usage: RunUsage } {
+  return { counts: { records, llm: 0, template: 0, reused: 0, failed }, usage: { promptTokens: 0, completionTokens: 0, cost: undefined } };
 }
 
 export function sidecarPathFor(modelPath: string): string {
@@ -245,9 +265,10 @@ function loadExisting(
   journal: string,
   seam: ExplainSeam,
   io: IoSink,
-): { records: Map<string, InsightRecord>; header: InsightsHeader | undefined } {
+): { records: Map<string, InsightRecord>; header: InsightsHeader | undefined; failures: readonly FailureRecord[] } {
   let base: InsightRecord[] = [];
   let header: InsightsHeader | undefined;
+  let failures: readonly FailureRecord[] = [];
   if (seam.fs.exists(out)) {
     const text = seam.fs.readFile(out);
     if (text !== undefined && text.trim() !== "") {
@@ -255,6 +276,7 @@ function loadExisting(
         const file = decodeInsights(text);
         base = [...file.records];
         header = file.header;
+        failures = file.failures;
         if (file.truncated) errLine(io, `note: ${out} was cut short; its ${base.length} records are reused, the rest redone.`);
       } catch (error) {
         throw new UsageError(
@@ -271,7 +293,29 @@ function loadExisting(
     extra = records;
     errLine(io, `note: resuming from ${journal} (${records.length} record${records.length === 1 ? "" : "s"}${dropped === 0 ? "" : `, ${dropped} unreadable line${dropped === 1 ? "" : "s"} dropped`}).`);
   }
-  return { records: recordsById(mergeRecords(base, extra)), header };
+  return { records: recordsById(mergeRecords(base, extra)), header, failures };
+}
+
+/**
+ * What a retry is about to redo, and a warning when it would not match the
+ * run that failed: model and depth are part of every fingerprint, so a retried
+ * unit explained under others is redone again by the next plain run.
+ */
+function retryLines(failures: readonly FailureRecord[], previous: InsightsHeader, options: ExplainOptions): string[] {
+  const lines = [`retrying ${failures.length} failed unit${failures.length === 1 ? " and its" : "s and their"} direct dependents:`];
+  const byReason = new Map<string, number>();
+  for (const failure of failures) {
+    const reason = `${failure.reason.kind}${failure.reason.status === undefined ? "" : ` ${failure.reason.status}`}: ${failure.reason.message}`;
+    byReason.set(reason, (byReason.get(reason) ?? 0) + 1);
+  }
+  for (const [reason, count] of [...byReason].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 5)) {
+    lines.push(`  ${count} × ${reason.length > 160 ? `${reason.slice(0, 157)}...` : reason}`);
+  }
+  if (byReason.size > 5) lines.push(`  … and ${byReason.size - 5} more reason${byReason.size - 5 === 1 ? "" : "s"}`);
+  const was = `${previous.models.leaf}, ${previous.models.rollup}, depth ${previous.depth}`;
+  const now = `${options.model}, ${options.rollupModel}, depth ${options.depth}`;
+  if (was !== now) lines.push(`note: the side-car was written with ${was}; this retry uses ${now}, so a later run under the old settings redoes these units.`);
+  return lines;
 }
 
 function scopePredicate(
@@ -326,6 +370,7 @@ function completerFor(
       system: request.system,
       user: request.user,
       schema: { name: request.schemaName, jsonSchema: request.jsonSchema },
+      ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
     });
     return { json: response.json, model: response.model, ...(response.usage === undefined ? {} : { usage: response.usage }) };
   };
@@ -543,12 +588,23 @@ async function confirmed(plan: RunPlan, options: ExplainOptions, seam: ExplainSe
   );
 }
 
-function summaryLines(out: string, result: Awaited<ReturnType<typeof executeRun>>): string[] {
+function summaryLines(out: string, result: Awaited<ReturnType<typeof executeRun>>, options: ExplainOptions): string[] {
   const { counts, usage } = result;
   const lines = [
     `wrote ${counts.records} record${counts.records === 1 ? "" : "s"} to ${out} (${counts.llm} explained, ${counts.template} templated, ${counts.reused} reused, ${counts.failed} failed, ${counts.skipped} skipped).`,
     `usage: ${counts.calls} call${counts.calls === 1 ? "" : "s"}, ${usage.promptTokens} prompt + ${usage.completionTokens} completion tokens${usage.cost === undefined ? "" : `, $${usage.cost.toFixed(4)}`}.`,
   ];
-  for (const failure of result.failures) lines.push(`failed: ${failure.unit}: ${failure.message}`);
+  for (const failure of result.failures) lines.push(`failed: ${failure.id}: ${failure.reason.message}`);
+  const { aborted } = result;
+  if (aborted !== undefined) {
+    // Units never reached have no failure record, so --retry-failed would miss them: a plain re-run resumes both.
+    lines.push(`aborted: the provider answered ${aborted.reason.status ?? "?"} for ${aborted.unit} — every later call would get the same answer, so none was made.`);
+    lines.push(`${aborted.notAttempted} unit${aborted.notAttempted === 1 ? " was" : "s were"} not attempted. Once the account is sorted out, run the same command again: it redoes the failures and resumes where this run stopped.`);
+    if (aborted.reason.status === 402 && options.maxTokens === undefined) {
+      lines.push("hint: without --max-tokens the provider prices every call at the model's full output window; a cap (e.g. --max-tokens 16384) lowers the balance a call needs.");
+    }
+  } else if (result.failures.length > 0) {
+    lines.push(`${result.failures.length} failure${result.failures.length === 1 ? " is" : "s are"} recorded in ${out} with the reason. Once it is dealt with, run the same command with --retry-failed to redo just those.`);
+  }
   return lines;
 }

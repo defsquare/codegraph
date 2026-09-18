@@ -2,7 +2,7 @@ import { contextPackFor, type ContextEnv, type ContextPack } from "./context.js"
 import { fingerprintOf } from "./fingerprint.js";
 import type { Unit, WalkPlan } from "./order.js";
 import { estimateCompletionTokens, estimateTokens, renderPrompts, type Prompt } from "./prompt.js";
-import type { InsightRecord, Level } from "./schema.js";
+import type { FailureRecord, InsightRecord, Level } from "./schema.js";
 import type { TemplateKind } from "./units.js";
 
 /**
@@ -101,6 +101,24 @@ export function unitFingerprint(
     missingDependencies: [...missingDependencies].sort(),
     depth,
   });
+}
+
+/**
+ * The scope of a RETRY: the units a side-car recorded as failed, plus their
+ * DIRECT dependents — explained without them, so stale the moment they exist.
+ * Nothing further up moves: a unit hashes its dependencies' plan-time
+ * fingerprints, which a failure never changed. Matching is by member, so a
+ * failure still finds its unit after a re-extraction regrouped a cycle.
+ */
+export function retryScope(failures: readonly FailureRecord[], walk: WalkPlan): (unit: Unit) => boolean {
+  const failed = new Set<string>();
+  for (const failure of failures) {
+    for (const member of failure.members) {
+      const unit = walk.unitOf.get(member);
+      if (unit !== undefined) failed.add(unit.id);
+    }
+  }
+  return (unit) => failed.has(unit.id) || unit.deps.some((dep) => failed.has(dep));
 }
 
 function templateOf(env: PlanEnv, unit: Unit): TemplateKind | undefined {

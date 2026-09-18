@@ -1,4 +1,5 @@
 import {
+  FailureRecord,
   INSIGHTS_KIND,
   InsightRecord,
   InsightsEof,
@@ -8,8 +9,9 @@ import {
 
 /**
  * THE SIDE-CAR FILE: `<model>.insights.jsonl`. One JSON record per line —
- * a header, the records sorted by (level, id), an eof trailer — beside the
- * model and never inside it, so it can be regenerated, switched to another
+ * a header, the records sorted by (level, id), the failures (`t:"f"`, same
+ * order: the units asked for and left without a record, with the reason), an
+ * eof trailer — beside the model and never inside it, so it can be regenerated, switched to another
  * model or deleted without touching `model.jsonl`/`model.db`.
  *
  * DETERMINISTIC BODY. Given the same records the body is the same bytes; the
@@ -27,6 +29,8 @@ export const LEVEL_RANK: Readonly<Record<Level, number>> = { operation: 0, type:
 export interface InsightsFile {
   readonly header: InsightsHeader;
   readonly records: readonly InsightRecord[];
+  /** Units the last runs asked for and could not explain — what `--retry-failed` redoes. */
+  readonly failures: readonly FailureRecord[];
   readonly eof: InsightsEof | undefined;
   /** No eof, or counts disagreeing with it: the file was cut short. */
   readonly truncated: boolean;
@@ -45,6 +49,10 @@ export function compareRecords(a: InsightRecord, b: InsightRecord): number {
 
 export function sortRecords(records: Iterable<InsightRecord>): InsightRecord[] {
   return [...records].sort(compareRecords);
+}
+
+export function sortFailures(failures: Iterable<FailureRecord>): FailureRecord[] {
+  return [...failures].sort((a, b) => LEVEL_RANK[a.level] - LEVEL_RANK[b.level] || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 export function recordsById(records: Iterable<InsightRecord>): Map<string, InsightRecord> {
@@ -69,14 +77,21 @@ export function* encodeInsights(
   header: InsightsHeader,
   records: Iterable<InsightRecord>,
   eof: InsightsEof,
+  failures: Iterable<FailureRecord> = [],
 ): Generator<string> {
   yield JSON.stringify(InsightsHeader.parse(header));
   for (const record of sortRecords(records)) yield encodeRecord(record);
+  for (const failure of sortFailures(failures)) yield JSON.stringify(FailureRecord.parse(failure));
   yield JSON.stringify(InsightsEof.parse(eof));
 }
 
-export function encodeInsightsToString(header: InsightsHeader, records: Iterable<InsightRecord>, eof: InsightsEof): string {
-  return `${[...encodeInsights(header, records, eof)].join("\n")}\n`;
+export function encodeInsightsToString(
+  header: InsightsHeader,
+  records: Iterable<InsightRecord>,
+  eof: InsightsEof,
+  failures: Iterable<FailureRecord> = [],
+): string {
+  return `${[...encodeInsights(header, records, eof, failures)].join("\n")}\n`;
 }
 
 export function encodeJournalLine(record: InsightRecord): string {
@@ -103,6 +118,7 @@ export function decodeInsights(text: string): InsightsFile {
     throw new InsightsFileError(`line 1 is not a ${INSIGHTS_KIND} header: ${header.error.issues[0]?.message ?? "invalid"}`);
   }
   const records: InsightRecord[] = [];
+  const failures: FailureRecord[] = [];
   let eof: InsightsEof | undefined;
   for (let i = 1; i < lines.length; i += 1) {
     const line = lines[i] ?? "";
@@ -119,6 +135,14 @@ export function decodeInsights(text: string): InsightsFile {
       eof = parsed.data;
       continue;
     }
+    if (tag === "f") {
+      const parsed = FailureRecord.safeParse(json);
+      if (!parsed.success) {
+        throw new InsightsFileError(`line ${i + 1}: invalid failure record: ${parsed.error.issues[0]?.message ?? "invalid"}`);
+      }
+      failures.push(parsed.data);
+      continue;
+    }
     const parsed = InsightRecord.safeParse(json);
     if (!parsed.success) {
       throw new InsightsFileError(`line ${i + 1}: invalid insight record: ${parsed.error.issues[0]?.message ?? "invalid"}`);
@@ -128,6 +152,7 @@ export function decodeInsights(text: string): InsightsFile {
   return {
     header: header.data,
     records,
+    failures,
     eof,
     truncated: eof === undefined || eof.counts.records !== records.length,
   };

@@ -8,7 +8,7 @@ Explain every operation, type and module with an LLM, bottom-up, into a side-car
 ## Synopsis
 
 ```
-codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|openrouter|cloudflare>] [--model SLUG] [--rollup-model SLUG] [--depth N] [--max-calls N] [--concurrency N] [--max-lines N] [--max-scc N] [--scope IDS] [--framework <spring>] [--internal-only] [--declared-only] [--no-cache] [--dry-run] [--estimate] [--price-in USD] [--price-out USD] [--force] [--json]
+codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|openrouter|cloudflare>] [--model SLUG] [--rollup-model SLUG] [--depth N] [--max-calls N] [--max-tokens N] [--concurrency N] [--max-lines N] [--max-scc N] [--scope IDS] [--framework <spring>] [--internal-only] [--declared-only] [--no-cache] [--dry-run] [--estimate] [--price-in USD] [--price-out USD] [--force] [--retry-failed] [--json]
 ```
 
 ## Arguments
@@ -40,7 +40,9 @@ codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|op
 | `--estimate` | Print the token volume this run would send and receive (input and output, per level) and make no call. Add --price-in/--price-out for a cost. | — |
 | `--price-in USD` | Input price in USD per million tokens, for --estimate's cost line. | — |
 | `--price-out USD` | Output price in USD per million tokens, for --estimate's cost line. | — |
+| `--max-tokens N` | Cap on the tokens one answer may use (reasoning included). Omitted, the provider assumes the model's full output window and a prepaid account must afford THAT for every call; a block is ~1k tokens, a full cycle call ~12k. An answer cut at the cap fails its unit. | — |
 | `--force` | Re-explain every unit, ignoring records whose fingerprint still matches. | — |
+| `--retry-failed` | Redo only the units the side-car records as failed (its `t:"f"` lines, each with the reason), plus their direct dependents, which were explained without them. Everything else is reused or left alone. Pass the same --model/--depth as the run that failed. Not with --scope. | — |
 | `--json` | Print the same information as a machine-readable JSON object on stdout. | — |
 | `-h, --help` | Show this help. | — |
 
@@ -48,7 +50,9 @@ codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|op
 
 `0` ok · `1` internal error (a bug) · `2` usage error · `3` findings.
 
-`3` when the load was not clean, or when any unit failed to be explained.
+`3` when the load was not clean, or when any unit failed to be explained. Each such unit leaves a [failure record](../../artifacts/insights-jsonl/#f--one-failure-record) in the side-car — entity, reason, HTTP status — and once the cause is dealt with (credits, rate limit, a larger model), the same command with `--retry-failed` redoes just those. With no failure on record it makes no call and exits `0`.
+
+A `401`, `402` or `403` is about the account, not the unit: the run **aborts** — no further call is made, the side-car is still written — and the units it never reached are reported as *not attempted*, without a failure record. Run the same command again (without `--retry-failed`) to redo the failures and resume the rest.
 
 ## Example
 

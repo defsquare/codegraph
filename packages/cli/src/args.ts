@@ -526,6 +526,16 @@ export const EXPLAIN_SPEC: CommandSpec = {
       integer: true,
     },
     {
+      name: "max-tokens",
+      type: "string",
+      describe:
+        "Cap on the tokens one answer may use (reasoning included). Omitted, the provider assumes " +
+        "the model's full output window and a prepaid account must afford THAT for every call; a " +
+        "block is ~1k tokens, a full cycle call ~12k. An answer cut at the cap fails its unit.",
+      placeholder: "N",
+      integer: true,
+    },
+    {
       name: "concurrency",
       type: "string",
       describe: "Model calls in flight at once.",
@@ -594,6 +604,14 @@ export const EXPLAIN_SPEC: CommandSpec = {
       name: "force",
       type: "boolean",
       describe: "Re-explain every unit, ignoring records whose fingerprint still matches.",
+    },
+    {
+      name: "retry-failed",
+      type: "boolean",
+      describe:
+        "Redo only the units the side-car records as failed (its `t:\"f\"` lines, each with the " +
+        "reason), plus their direct dependents, which were explained without them. Everything " +
+        "else is reused or left alone. Pass the same --model/--depth as the run that failed.",
     },
     {
       name: "yes",
@@ -1040,6 +1058,8 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly rollupModel: string;
   readonly depth: number;
   readonly maxCalls: number | undefined;
+  /** `--max-tokens`; undefined = the provider's default (the model's whole output window). */
+  readonly maxTokens: number | undefined;
   readonly concurrency: number;
   readonly maxLines: number;
   readonly maxScc: number;
@@ -1053,6 +1073,8 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly priceIn: number | undefined;
   readonly priceOut: number | undefined;
   readonly force: boolean;
+  /** `--retry-failed`: the scope is the side-car's failure records. */
+  readonly retryFailed: boolean;
   /** `--yes`: skip the estimate-and-confirm step before a run that makes calls. */
   readonly yes: boolean;
   readonly json: boolean;
@@ -1676,6 +1698,12 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         );
       }
       const model = stringOf(values, "model") ?? DEFAULT_EXPLAIN_MODEL;
+      if (flagOf(values, "retry-failed") && stringOf(values, "scope") !== undefined) {
+        throw new UsageError(
+          "--retry-failed and --scope both choose what to explain",
+          "--retry-failed takes its scope from the side-car's failure records; drop --scope, or drop --retry-failed to explain a scope afresh.",
+        );
+      }
       return {
         kind: "run",
         command: "explain",
@@ -1688,6 +1716,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           rollupModel: stringOf(values, "rollup-model") ?? model,
           depth: integerOf(values, "depth") ?? 1,
           maxCalls: integerOf(values, "max-calls"),
+          maxTokens: integerOf(values, "max-tokens"),
           concurrency: integerOf(values, "concurrency") ?? 4,
           maxLines: integerOf(values, "max-lines") ?? 200,
           maxScc: integerOf(values, "max-scc") ?? 12,
@@ -1700,6 +1729,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           priceIn: priceOf(values, "price-in"),
           priceOut: priceOf(values, "price-out"),
           force: flagOf(values, "force"),
+          retryFailed: flagOf(values, "retry-failed"),
           yes: flagOf(values, "yes"),
           json: flagOf(values, "json"),
         },

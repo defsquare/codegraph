@@ -12,8 +12,10 @@ This page is derived from the Zod schemas in `packages/insights/src/schema.ts` a
 ## File layout
 
 ```
-header → i* → eof
+header → i* → f* → eof
 ```
+
+`f` lines are the units a run asked for and could not explain; a side-car with none has no `f` line. A reader that only wants explanations keeps the `t:"i"` lines.
 
 Records are sorted by `(level, id)`, with `operation` before `type` before `module`, and are re-serialized through their Zod schema, so a record built in memory and one read back from disk are the same bytes. **The body carries no timestamp**; only the trailer does. Two runs with the same records are therefore diffable: what changed is what was re-explained.
 
@@ -52,12 +54,36 @@ During a run, finished records are appended one per line to `<out>.journal` and 
 | `usage` | `{promptTokens, completionTokens, cost?}` | |
 | `metadata` | `Record<string, string>` | the metamodel convention's free key/value map |
 
+## `f` — one failure record
+
+A unit left **without** an insight record, and why. It exists exactly as long as the gap: a run that explains the unit drops it, a run that fails again replaces it with `attempts + 1`, a run that did not attempt the unit (`--scope`, `--max-calls`) carries it over. [`explain --retry-failed`](../../cli/explain/) takes its scope from these lines. Sorted like the records; no timestamp.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `t` | `"f"` | |
+| `id` | string | the unit id — its first member's rendered entity id, opaque |
+| `key` | `{lang, module, symbol, disambiguator?}` | that entity's natural key, when known |
+| `level` | `operation` \| `type` \| `module` | |
+| `members` | string[] | every entity the unit would have explained, sorted; more than one means a dependency cycle |
+| `model` | string | the model that was asked |
+| `reason.kind` | `provider` \| `invalid-answer` \| `error` | the call was refused or never answered · two answers in a row failed validation · anything else |
+| `reason.message` | string | the provider's or the validator's own words, verbatim |
+| `reason.status` | integer, optional | the HTTP status, when the provider gave one (`400` the prompt does not fit, `429` rate-limited after every back-off…). `401`/`402`/`403` also abort the run: only the unit that received it gets a record |
+| `reason.retryable` | boolean, optional | the client's verdict on asking again *at once*; a later run may well succeed (credits added) |
+| `attempts` | integer ≥ 1 | consecutive runs that attempted this unit and failed |
+| `calls` | integer ≥ 0 | model calls the last attempt made |
+| `usage` | `{promptTokens, completionTokens, cost?}`, optional | what those calls spent |
+
+```json
+{"t":"f","id":"java:org.broadleafcommerce.core.web.expression.checkout","key":{"lang":"java","module":"org.broadleafcommerce.core.web.expression.checkout","symbol":""},"level":"module","members":["java:org.broadleafcommerce.core.web.expression.checkout"],"model":"openai/gpt-5.6-luna","reason":{"kind":"provider","message":"This request requires more credits, or fewer max_tokens. …","status":402,"retryable":false},"attempts":1,"calls":0}
+```
+
 ## `eof`
 
 | Field | Type | Meaning |
 |---|---|---|
 | `t` | `"eof"` | |
-| `counts` | `{records, llm, template, reused, failed}` | all integers ≥ 0 |
+| `counts` | `{records, llm, template, reused, failed}` | all integers ≥ 0; `failed` is the number of `f` lines |
 | `usage` | `{promptTokens, completionTokens, cost?}` | the run's total |
 | `generatedAt` | ISO-8601 string | the ONLY timestamp in the file |
 
