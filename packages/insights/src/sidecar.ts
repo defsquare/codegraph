@@ -18,10 +18,14 @@ import {
  * only timestamp lives in the trailer. That makes two runs diffable: what
  * changed is what the model re-explained, and nothing else.
  *
- * THE JOURNAL. During a run, finished records are appended one per line to
- * `<out>.journal`; the sorted file is rewritten from base + journal at each
- * layer boundary and at the end. A crash leaves a journal whose last line may
- * be cut — reading it is lenient — while the side-car proper is strict.
+ * AN EXPORT SINCE M16a. `explain` works against the insights store
+ * (store.ts) and writes this file from it, whole, when a run ends; the
+ * encoder here is what `decode → import → export` is measured against.
+ *
+ * THE JOURNAL IS LEGACY. Builds before M16a appended finished records to
+ * `<out>.journal` and rewrote the sorted file at each layer. Nothing writes
+ * one any more; the lenient reader stays so that a journal an older build
+ * left behind — its last line possibly cut — is merged on first contact.
  */
 
 export const LEVEL_RANK: Readonly<Record<Level, number>> = { operation: 0, type: 1, module: 2 };

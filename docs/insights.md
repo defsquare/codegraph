@@ -133,6 +133,62 @@ Strict structured output needs every property required and no extras, so
 `confidence` is clamped on receipt. `schema.test.ts` asserts the generated
 JSON Schema is strict-compatible.
 
+### The side-car is an export: the store is `<model>.insights.db` (M16a)
+
+`explain` does not work against that file. It works against a SQLite store
+beside it, `<model>.insights.db` (PLAN.md §17), and writes the side-car **once,
+atomically, when a run ends** — `[...store.export()]`, the same bytes the
+encoder above produces. `decode → import → export` is the identity for any
+decodable side-car: a fast-check property in `store.test.ts`, and checked on
+BroadleafCommerce's 28 206 records (47.5 MB in, 47.5 MB out, `cmp`-equal; the
+store is 57 MB).
+
+The store is **not a cache**, and every rule `model.db` lives by is inverted
+for it, for one reason — nothing it holds can be recomputed from the model:
+
+| | `model.db` | `<model>.insights.db` |
+|---|---|---|
+| version mismatch | deleted, rebuilt | migrated (a ladder on `PRAGMA user_version`); a NEWER store is refused and its bytes left alone |
+| a SQLite file that is not ours | rebuilt over | refused (`PRAGMA application_id`) |
+| cannot be opened / no SQLite | silently read the `.jsonl` | a usage error naming the file — a second write path is how paid work gets lost |
+| staleness | size + mtime of the model | per record: the fingerprint (IN-5) |
+
+The envelope is columns (`id`, `level`, `fingerprint`, the natural key,
+usage); `block`, `metadata`, `scc` and a failure's `reason` stay JSON text,
+exactly as the side-car spells them — the block's shape moves with
+`PROMPT_VERSION`, and tables per field would make every prompt change a
+migration. `concept` and `confidence` are generated columns over the block, so
+`SELECT id FROM insight WHERE concept = 'aggregate'` is an index lookup. Three
+things the port's tests pin because SQLite would otherwise get them wrong
+silently: **order is decided in JS** (the side-car sorts ids by UTF-16 code
+units, SQLite by UTF-8 bytes — they disagree above U+FFFF); a **column string
+holding U+0000 is refused** (`node:sqlite` reads TEXT back only up to it, so an
+id would come back shorter); and the tables are **rowid tables** (`WITHOUT
+ROWID` keeps kilobyte-wide rows in interior pages: 96 MB against 57 MB on
+Broadleaf, for no faster read).
+
+A `run` table is the one thing the store holds that the side-car does not: one
+row per run — when, which models and provider, counts, usage, why it aborted.
+The trailer only ever knew the last run. It is declared losable: delete the
+`.db`, and the next run re-imports the side-car with everything that was paid
+for and none of the ledger.
+
+**The side-car's three encounters with the store.** *First contact*: a side-car
+(or an older build's `.journal`) with no store beside it is read as before by
+`--dry-run`/`--estimate`, which create nothing, and imported by the first run
+that writes. *After every run*: the store records the exported file's size and
+mtime. *An edit made outside* — a different size or mtime at the next run — is
+**noticed, never obeyed**: a warning names the file and the remedy, the store
+stays the working copy, and the run overwrites the file. `explain --import
+FILE` is the one way a side-car overrides the store; it replaces paid-for
+records, so it asks (or needs `--yes`). `explain --export` writes the side-car
+from the store as it stands — after an interrupted run, or a deleted file —
+and reads no model.
+
+`@codegraph/insights` stays pure: `store.ts` is a port, and `store-sqlite.ts`
+is handed an OPEN database, so the path, the file and `node:sqlite` itself
+(one import site, in the analyzer's `store/sqlite.ts`) stay with the CLI.
+
 ## IN-5 · Fingerprints and incremental runs
 
 Every record carries a sha256 over what it was computed from: the prompt
@@ -172,8 +228,14 @@ the provider's `Retry-After` on a 429 before retrying. `--model` and `--rollup-m
 model; a cheap model for operations and a stronger one for types and modules
 is the intended split.
 
-Records are appended to `<out>.journal` as they arrive and the sorted side-car
-is rewritten at every layer, so an interrupted run resumes where it stopped.
+Every finished **unit** is one committed transaction in the store — all the
+members of a cycle together, never half of one — so an interrupted run resumes
+where it stopped. (Until M16a this was an append-only `<out>.journal` plus a
+rewrite of the whole sorted side-car at every layer: 35 × 47 MB on Broadleaf.
+A journal an older build left behind is merged once, on first contact.) A run
+records its `pid`; the next run finding it unfinished asks whether that process
+is alive — a live one is a usage error (two runs on one store pay twice for
+the same units), a dead one is a note, its records and failures reused.
 
 ### Failures are records, and a retry reads them
 
@@ -195,9 +257,12 @@ A failure record lives exactly as long as the gap it describes: a run that
 explains the unit drops it, a run that fails again replaces it with
 `attempts + 1`, and a run that did not attempt the unit (`--scope`,
 `--max-calls`) carries it over unchanged. The trailer's `failed` is the number
-of failure records in the body. They are written at every layer boundary with
-the records, so a run interrupted in the middle of a storm of refusals has
-already said what was refused.
+of failure records in the body. In the store a failure is a row written **the
+moment it happens** (`onFailure`), deleted in the same transaction that commits
+its unit's records, and the table is replaced by what is still owed when the
+run ends — so a run killed in the middle of a storm of refusals has already
+said what was refused. (The journal never could: it carried records only, and a
+killed run forgot its failures.)
 
 `retryable` is about asking again *at once* (that is `withRetry`'s job, inside
 one call). Whether a *later run* can succeed is the operator's call — a `402`

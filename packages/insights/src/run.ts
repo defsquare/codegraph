@@ -29,7 +29,8 @@ import { templateBlock } from "./template.js";
  *
  * No I/O of its own: the model call is an injected `Completer` (the CLI wraps
  * an `LlmClient`; tests pass a function), and every finished record is handed
- * to `onRecord` — the CLI's progressive journal write.
+ * to `onRecord`, every finished unit to `onUnit` and every failure to
+ * `onFailure` — the CLI's progressive writes to the insights store.
  *
  * A malformed answer gets ONE repair re-ask with the validation errors quoted.
  * A unit that still fails is left without a record and gets a FAILURE record
@@ -94,6 +95,10 @@ export interface StepEvent {
 export interface RunHooks {
   readonly concurrency: number;
   readonly onRecord?: (record: InsightRecord, step: PlanStep) => void | Promise<void>;
+  /** Every record of a finished unit at once — a cycle's members together: what a store commits as ONE transaction. */
+  readonly onUnit?: (records: readonly InsightRecord[], step: PlanStep) => void | Promise<void>;
+  /** A unit asked for and left without a record, the moment it fails — not at the layer boundary. */
+  readonly onFailure?: (failure: FailureRecord, step: PlanStep) => void | Promise<void>;
   readonly onStep?: (event: StepEvent) => void;
   /** After every layer has settled — where the CLI rewrites the sorted side-car, failures so far included. */
   readonly onLayer?: (layer: number, records: readonly InsightRecord[], failures: readonly FailureRecord[]) => void | Promise<void>;
@@ -244,9 +249,12 @@ export async function executeRun(
     } as InsightRecord;
   };
 
-  const emit = async (rec: InsightRecord, step: PlanStep): Promise<void> => {
-    live.set(rec.id, rec);
-    await hooks.onRecord?.(rec, step);
+  const emit = async (unit: readonly InsightRecord[], step: PlanStep): Promise<void> => {
+    for (const rec of unit) {
+      live.set(rec.id, rec);
+      await hooks.onRecord?.(rec, step);
+    }
+    await hooks.onUnit?.(unit, step);
   };
 
   const runStep = async (step: PlanStep): Promise<void> => {
@@ -257,7 +265,7 @@ export async function executeRun(
         const id = unit.members[0] ?? "";
         const op = env.units.operations.get(id)!;
         const block = templateBlock(op, step.template!, env.units.types.get(op.typeId)!);
-        await emit(record(unit, id, block, step.fingerprint, "template", undefined, undefined), step);
+        await emit([record(unit, id, block, step.fingerprint, "template", undefined, undefined)], step);
         counts.template += 1;
         hooks.onStep?.({ step, outcome: "done", calls: 0, usage: stepUsage });
         return;
@@ -322,7 +330,7 @@ export async function executeRun(
       const reason = reasonOf(error);
       if (abort === undefined && reason.status !== undefined && FATAL_STATUSES.includes(reason.status)) abort = { unit: unit.id, reason };
       const key = options.keyOf?.(unit.id);
-      failures.set(unit.id, {
+      const failure: FailureRecord = {
         t: "f",
         id: unit.id,
         ...(key === undefined ? {} : { key }),
@@ -333,12 +341,14 @@ export async function executeRun(
         attempts: (previous.get(unit.id)?.attempts ?? 0) + 1,
         calls,
         ...(stepUsage.promptTokens + stepUsage.completionTokens === 0 ? {} : { usage: { promptTokens: stepUsage.promptTokens, completionTokens: stepUsage.completionTokens, ...(stepUsage.cost === undefined ? {} : { cost: stepUsage.cost }) } }),
-      });
+      };
+      failures.set(unit.id, failure);
+      await hooks.onFailure?.(failure, step);
       hooks.onStep?.({ step, outcome: "failed", calls, usage: stepUsage, error: reason.message });
       return;
     }
     // Only a fully answered unit is recorded: half a cycle would be a lie about the other half.
-    for (const rec of produced) await emit(rec, step);
+    await emit(produced, step);
     counts.llm += produced.length;
     counts.calls += calls;
     addUsage(usage, { promptTokens: stepUsage.promptTokens, completionTokens: stepUsage.completionTokens, ...(stepUsage.cost === undefined ? {} : { cost: stepUsage.cost }) });

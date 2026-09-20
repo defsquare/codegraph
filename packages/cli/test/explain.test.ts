@@ -1,13 +1,15 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { decodeInsights, type InsightRecord } from "@codegraph/insights";
+import { loadSqlite } from "@codegraph/analyzer";
+import { decodeInsights, encodeInsightsToString, insightsStorePathFor, sqliteInsightsStore, type InsightRecord, type InsightsStore } from "@codegraph/insights";
 import { LlmError, fakeLlmClient, type LlmClient, type LlmRequest, type Provider } from "@codegraph/llm";
 import { EXIT } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
 import { run } from "../src/main.js";
-import { explainCommand, sidecarPathFor, type ExplainSeam } from "../src/commands/explain.js";
+import { explainCommand, realSeam, sidecarPathFor, type ExplainSeam } from "../src/commands/explain.js";
 import { parseInvocation } from "../src/args.js";
 
 const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url));
@@ -47,21 +49,53 @@ function answer(request: LlmRequest): unknown {
   return cycle === undefined ? block(unitId) : { members: cycle.split(", ").map((id) => ({ id, block: block(id) })) };
 }
 
+/** The stores of a test "machine": real SQLite, in memory, surviving `close()` so a second run finds them. */
+type Stores = Map<string, InsightsStore>;
+let clock = 0;
+
 /** `confirm` answers every question; `null` is a session with no terminal to ask on. */
-function seamWith(env: Record<string, string | undefined>, files = new Map<string, string>(), confirm: boolean | null = true) {
+function seamWith(
+  env: Record<string, string | undefined>,
+  files = new Map<string, string>(),
+  confirm: boolean | null = true,
+  stores: Stores = new Map(),
+  wrap: (store: InsightsStore) => InsightsStore = (store) => store,
+) {
   const client = fakeLlmClient({ respond: answer, usage: () => ({ promptTokens: 100, completionTokens: 20, cost: 0.0001 }) });
   const disk = new Map<string, string>([...SOURCES, ...files]);
+  const mtimes = new Map<string, number>();
   const providers: Provider[] = [];
   const questions: string[] = [];
+  const alive = new Set<number>();
   const seam: ExplainSeam = {
     env,
     fs: {
       exists: (path) => disk.has(resolve(path)),
       readFile: (path) => disk.get(resolve(path)),
-      appendFile: (path, text) => void disk.set(resolve(path), (disk.get(resolve(path)) ?? "") + text),
-      writeFileAtomic: (path, text) => void disk.set(resolve(path), text),
+      stat: (path) => {
+        const text = disk.get(resolve(path));
+        return text === undefined ? undefined : { size: text.length, mtimeMs: mtimes.get(resolve(path)) ?? 0 };
+      },
+      writeFileAtomic: (path, text) => {
+        disk.set(resolve(path), text);
+        mtimes.set(resolve(path), (clock += 1));
+      },
       remove: (path) => void disk.delete(resolve(path)),
     },
+    stores: {
+      check: () => undefined,
+      exists: (path) => stores.has(resolve(path)),
+      open: (path) => {
+        let store = stores.get(resolve(path));
+        if (store === undefined) {
+          store = sqliteInsightsStore(loadSqlite().open(":memory:"));
+          stores.set(resolve(path), store);
+        }
+        return wrap({ ...store, close: () => undefined });
+      },
+    },
+    pid: 1000,
+    isAlive: (pid) => alive.has(pid),
     clientFor: (provider) => {
       providers.push(provider);
       return client;
@@ -75,7 +109,12 @@ function seamWith(env: Record<string, string | undefined>, files = new Map<strin
             return Promise.resolve(confirm);
           },
   };
-  return { seam, client, disk, providers, questions };
+  /** An edit made outside codegraph: new bytes, a new mtime. */
+  const edit = (path: string, text: string): void => {
+    disk.set(resolve(path), text);
+    mtimes.set(resolve(path), (clock += 1));
+  };
+  return { seam, client, disk, providers, questions, stores, alive, edit };
 }
 
 const CF_ENV = { CLOUDFLARE_API_TOKEN: "cf-token", CLOUDFLARE_ACCOUNT_ID: "acc-1" };
@@ -87,6 +126,7 @@ function options(argv: readonly string[]) {
 }
 
 const OUT = resolve("/virtual/model.insights.jsonl");
+const DB = insightsStorePathFor(OUT);
 
 describe("explain --dry-run", () => {
   it("prints the plan on stdout, needs no key, and is byte-identical across runs", async () => {
@@ -170,7 +210,7 @@ describe("explain runs the walk against the model client", () => {
     expect(body(second.disk.get(OUT)!)).toBe(body(before));
   });
 
-  it("resumes from a journal left by an interrupted run", async () => {
+  it("resumes from a journal left by a run of an older build — merged once, then gone for good", async () => {
     const first = seamWith({ OPENROUTER_API_KEY: KEY });
     await explainCommand(options(["--out", OUT]), captureIo(), first.seam);
     const records = decodeInsights(first.disk.get(OUT)!).records;
@@ -183,6 +223,7 @@ describe("explain runs the walk against the model client", () => {
     const levels = resumed.client.calls.map((c) => c.schema.name);
     expect(levels.every((n) => n !== "codegraph_operation" && n !== "codegraph_operation_cycle")).toBe(true);
     expect(levels.length).toBeGreaterThan(0);
+    expect(resumed.disk.has(`${OUT}.journal`)).toBe(false);
   });
 
   it("--max-calls caps the calls and the rest is reported as skipped", async () => {
@@ -314,6 +355,198 @@ describe("explain records what failed, and --retry-failed redoes exactly that", 
     expect(io.stderr()).toContain("nothing to retry");
     await expect(explainCommand(options(["--out", OUT, "--retry-failed"]), captureIo(), seamWith({ OPENROUTER_API_KEY: KEY }).seam)).rejects.toThrow(/no side-car/u);
     expect(() => options(["--retry-failed", "--scope", MODULE])).toThrow(/--retry-failed/u);
+  });
+});
+
+describe("explain works against the insights store; the side-car is its export (M16a)", () => {
+  const ENV = { OPENROUTER_API_KEY: KEY };
+  const body = (text: string) => text.split("\n").slice(0, -2).join("\n");
+
+  it("a run fills the store beside the side-car, and the side-car IS the store's export", async () => {
+    const { seam, disk, stores } = seamWith(ENV);
+    expect(await explainCommand(options(["--out", OUT, "--yes"]), captureIo(), seam)).toBe(EXIT.OK);
+    const store = stores.get(DB)!;
+    expect(store).toBeDefined();
+    expect(`${[...store.export()].join("\n")}\n`).toBe(disk.get(OUT));
+    expect(store.openRuns()).toEqual([]);
+    expect(store.exported()).toEqual({ path: OUT, size: disk.get(OUT)!.length, mtimeMs: expect.any(Number) as number });
+    expect([...disk.keys()].filter((path) => path.endsWith(".journal"))).toEqual([]);
+  });
+
+  it("a second run reads the STORE: zero calls even with the side-car deleted, which is then written again", async () => {
+    const first = seamWith(ENV);
+    await explainCommand(options(["--out", OUT, "--yes"]), captureIo(), first.seam);
+    const before = first.disk.get(OUT)!;
+    const second = seamWith(ENV, new Map(), true, first.stores);
+    expect(await explainCommand(options(["--out", OUT, "--yes"]), captureIo(), second.seam)).toBe(EXIT.OK);
+    expect(second.client.calls).toHaveLength(0);
+    expect(body(second.disk.get(OUT)!)).toBe(body(before));
+  });
+
+  it("first contact: a side-car with no store beside it is imported, said so, and costs no call", async () => {
+    const first = seamWith(ENV);
+    await explainCommand(options(["--out", OUT, "--yes"]), captureIo(), first.seam);
+    const sidecar = first.disk.get(OUT)!;
+    const fresh = seamWith(ENV, new Map([[OUT, sidecar]]));
+    const io = captureIo();
+    expect(await explainCommand(options(["--out", OUT, "--yes"]), io, fresh.seam)).toBe(EXIT.OK);
+    expect(io.stderr()).toMatch(/imported \d+ records? from .*model\.insights\.jsonl into .*model\.insights\.db/u);
+    expect(fresh.client.calls).toHaveLength(0);
+    expect(fresh.stores.get(DB)!.records()).toHaveLength(decodeInsights(sidecar).records.length);
+    expect(body(fresh.disk.get(OUT)!)).toBe(body(sidecar));
+  });
+
+  it("--dry-run and --estimate read a side-car without creating a store", async () => {
+    const first = seamWith(ENV);
+    await explainCommand(options(["--out", OUT, "--yes"]), captureIo(), first.seam);
+    for (const flag of ["--dry-run", "--estimate"]) {
+      const fresh = seamWith({}, new Map([[OUT, first.disk.get(OUT)!]]));
+      const io = captureIo();
+      expect(await explainCommand(options(["--out", OUT, flag, "--json"]), io, fresh.seam)).toBe(EXIT.OK);
+      expect((JSON.parse(io.stdout()) as { byStatus?: { llm: number }; estimates?: { byStatus: { llm: number } } })).toMatchObject(
+        flag === "--estimate" ? { byStatus: { llm: 0 } } : { estimates: { byStatus: { llm: 0 } } },
+      );
+      expect(fresh.stores.size).toBe(0);
+    }
+  });
+
+  it("a run killed mid-layer keeps what it bought AND what it lost: the next run says so, reuses both, and re-asks nothing it has", async () => {
+    const MODULE = "java:com.acme.order";
+    const stores: Stores = new Map();
+    // The provider refuses one unit (a failure row), then the process dies on the 12th committed unit.
+    let commits = 0;
+    const dying = seamWith(ENV, new Map(), true, stores, (store) => ({
+      ...store,
+      putUnit: (run, unit, records) => {
+        if ((commits += 1) === 12) throw new Error("SIGKILL");
+        store.putUnit(run, unit, records);
+      },
+    }));
+    const refuse = (request: LlmRequest): unknown => {
+      if (request.user.startsWith("# Unit: operation java:com.acme.order/Order.total()")) throw new LlmError("rate limited", 429, true);
+      return answer(request);
+    };
+    dying.seam.clientFor = () => fakeLlmClient({ respond: refuse });
+    await expect(explainCommand(options(["--out", OUT, "--yes", "--concurrency", "1"]), captureIo(), dying.seam)).rejects.toThrow("SIGKILL");
+
+    const store = stores.get(DB)!;
+    expect(store.records()).toHaveLength(11);
+    expect(store.openRuns()).toHaveLength(1);
+    expect(dying.disk.has(OUT)).toBe(false);
+    const lost = store.failures().map((f) => f.id);
+
+    const next = seamWith(ENV, new Map(), true, stores);
+    const io = captureIo();
+    await explainCommand(options(["--out", OUT, "--yes"]), io, next.seam);
+    expect(io.stderr()).toMatch(/interrupted.*11 records/u);
+    expect(store.openRuns()).toEqual([]);
+    const asked = next.client.calls.map((c) => /^# Unit: \w+ (\S+)/u.exec(c.user)?.[1]);
+    const kept = new Set(store.records().filter((r) => r.origin === "llm").map((r) => r.id));
+    expect(asked.length).toBeGreaterThan(0);
+    // What the dead run failed on is asked again; nothing it committed is.
+    for (const id of lost) expect(asked).toContain(id);
+    expect(decodeInsights(next.disk.get(OUT)!).truncated).toBe(false);
+    expect(kept.has(MODULE)).toBe(true);
+  });
+
+  it("refuses to write beside a LIVE run, and says whose", async () => {
+    const first = seamWith(ENV);
+    await explainCommand(options(["--out", OUT, "--yes"]), captureIo(), first.seam);
+    const store = first.stores.get(DB)!;
+    store.beginRun({ header: store.header()!, startedAt: "2026-09-19T08:00:00.000Z", pid: 4242 });
+    const second = seamWith(ENV, new Map(), true, first.stores);
+    second.alive.add(4242);
+    await expect(explainCommand(options(["--out", OUT, "--yes", "--force"]), captureIo(), second.seam)).rejects.toThrow(/pid 4242/u);
+    expect(second.client.calls).toHaveLength(0);
+  });
+
+  it("a side-car edited outside is noticed, never obeyed: the store wins until --import", async () => {
+    const first = seamWith(ENV);
+    await explainCommand(options(["--out", OUT, "--yes"]), captureIo(), first.seam);
+    const original = first.disk.get(OUT)!;
+    const file = decodeInsights(original);
+    const fewer = encodeInsightsToString(file.header, file.records.slice(1), { ...file.eof!, counts: { ...file.eof!.counts, records: file.records.length - 1 } });
+
+    const second = seamWith(ENV, new Map([[OUT, original]]), true, first.stores);
+    second.edit(OUT, fewer);
+    const io = captureIo();
+    await explainCommand(options(["--out", OUT, "--yes"]), io, second.seam);
+    expect(io.stderr()).toMatch(/changed outside codegraph.*--import/su);
+    expect(second.client.calls).toHaveLength(0);
+    expect(body(second.disk.get(OUT)!)).toBe(body(original));
+  });
+
+  it("--import replaces the store with a side-car — asked first when there is something to lose; --export writes it back", async () => {
+    const first = seamWith(ENV);
+    await explainCommand(options(["--out", OUT, "--yes"]), captureIo(), first.seam);
+    const file = decodeInsights(first.disk.get(OUT)!);
+    const fewer = encodeInsightsToString(file.header, file.records.slice(1), { ...file.eof!, counts: { ...file.eof!.counts, records: file.records.length - 1 } });
+    const EDITED = resolve("/virtual/edited.jsonl");
+
+    const declined = seamWith({}, new Map([[EDITED, fewer]]), false, first.stores);
+    const no = captureIo();
+    expect(await explainCommand(options(["--out", OUT, "--import", EDITED]), no, declined.seam)).toBe(EXIT.OK);
+    expect(declined.questions[0]).toMatch(/replace/iu);
+    expect(first.stores.get(DB)!.records()).toHaveLength(file.records.length);
+
+    const scripted = seamWith({}, new Map([[EDITED, fewer]]), null, first.stores);
+    await expect(explainCommand(options(["--out", OUT, "--import", EDITED]), captureIo(), scripted.seam)).rejects.toThrow(/no terminal to confirm on/u);
+
+    const accepted = seamWith({}, new Map([[EDITED, fewer]]), null, first.stores);
+    expect(await explainCommand(options(["--out", OUT, "--import", EDITED, "--yes"]), captureIo(), accepted.seam)).toBe(EXIT.OK);
+    expect(first.stores.get(DB)!.records()).toHaveLength(file.records.length - 1);
+
+    const exporting = seamWith({}, new Map(), null, first.stores);
+    const io = captureIo();
+    expect(await explainCommand(options(["--out", OUT, "--export"]), io, exporting.seam)).toBe(EXIT.OK);
+    expect(exporting.disk.get(OUT)).toBe(fewer);
+    expect(io.stderr()).toMatch(/wrote \d+ records/u);
+    expect(exporting.client.calls).toHaveLength(0);
+  });
+
+  it("--export with no store, and --import of a file that is no side-car, are usage errors", async () => {
+    const empty = seamWith({});
+    await expect(explainCommand(options(["--out", OUT, "--export"]), captureIo(), empty.seam)).rejects.toThrow(/no insights store/u);
+    const junk = seamWith({}, new Map([[resolve("/virtual/junk.jsonl"), "{}\n"]]));
+    await expect(explainCommand(options(["--out", OUT, "--import", "/virtual/junk.jsonl"]), captureIo(), junk.seam)).rejects.toThrow(/not a codegraph\.insights\/1 side-car/u);
+    expect(junk.stores.size).toBe(0);
+  });
+
+  it("on a real disk: one .db and one .jsonl beside each other, nothing else, and a second run that trusts its own export", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "explain-store-"));
+    try {
+      const out = join(dir, "model.insights.jsonl");
+      const runOnDisk = async () => {
+        const client = fakeLlmClient({ respond: answer });
+        const io = captureIo();
+        const code = await explainCommand(options(["--out", out, "--yes"]), io, { ...realSeam(), env: ENV, clientFor: () => client });
+        return { code, calls: client.calls.length, stderr: io.stderr() };
+      };
+      const first = await runOnDisk();
+      expect(first.code).toBe(EXIT.OK);
+      expect(first.calls).toBeGreaterThan(0);
+      expect(readdirSync(dir).sort()).toEqual(["model.insights.db", "model.insights.jsonl"]);
+      const second = await runOnDisk();
+      expect(second.calls).toBe(0);
+      expect(second.stderr).not.toContain("changed outside");
+      expect(readdirSync(dir).sort()).toEqual(["model.insights.db", "model.insights.jsonl"]);
+      // The file on disk is the store's export, byte for byte.
+      const store = sqliteInsightsStore(loadSqlite().open(join(dir, "model.insights.db")));
+      expect(`${[...store.export()].join("\n")}\n`).toBe(readFileSync(out, "utf8"));
+      store.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("a runtime with no SQLite is told before anything is priced or asked", async () => {
+    const { seam, client, questions } = seamWith(ENV);
+    seam.stores.check = () => {
+      throw new Error("SQLite is unavailable in this runtime");
+    };
+    await expect(explainCommand(options(["--out", OUT]), captureIo(), seam)).rejects.toThrow(/needs SQLite/u);
+    expect(client.calls).toHaveLength(0);
+    expect(questions).toEqual([]);
   });
 });
 

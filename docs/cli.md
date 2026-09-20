@@ -207,7 +207,17 @@ such. Deterministic: two runs over one model are byte-identical.
 Walks the graph bottom-up — leaf operations, then callers, then owning types,
 then modules — and asks a language model to explain each unit, feeding every
 prompt the explanations already written for the unit's dependencies. Output is
-the side-car `<model>.insights.jsonl`; `model.jsonl` is never touched.
+the side-car `<model>.insights.jsonl`; `model.jsonl` is never touched. The
+working copy is a SQLite store beside it, `<model>.insights.db` — every
+finished unit is committed as it arrives, so a killed run loses nothing it paid
+for, and the side-car is that store's export, written when a run ends. The
+store is **not a cache** (unlike `model.db` it is never rebuilt: a newer or
+foreign one is a usage error, and there is no fallback without SQLite); a
+side-car with no store beside it is imported by the first run that writes, and
+one edited by hand is warned about and overwritten unless taken with
+`--import FILE` (replaces the store's records; asks, or `--yes`). `--export`
+writes the side-car from the store and stops — after an interrupted run, or a
+deleted file. Neither flag reads the model or needs a key.
 Mutually dependent units (a cycle) are explained as one unit. Re-runs redo
 only what changed (Merkle fingerprints over inputs, never over explanation
 text). Needs `OPENROUTER_API_KEY`, or `CLOUDFLARE_API_TOKEN` +

@@ -40,6 +40,11 @@ extractors/csharp/dist/
 # the .jsonl is the contract, and a binary next to it in git would be a
 # second, undiffable answer to the same question.
 *.db
+# The insights store (<model>.insights.db) is caught by the rule above for the
+# opposite reason — NOT disposable, but binary: its committed, diffable form is
+# the side-car it exports. These two exist only while a run is writing (WAL).
+*.db-wal
+*.db-shm
 
 books
 

@@ -1,30 +1,34 @@
-import { appendFileSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { ModelBuilder, readModelRecordsSync } from "@codegraph/core";
-import { FRAMEWORK_PROFILES, buildDomainFacts, folderFor } from "@codegraph/analyzer";
+import { FRAMEWORK_PROFILES, buildDomainFacts, folderFor, loadSqlite } from "@codegraph/analyzer";
 import {
   INSIGHTS_GENERATOR,
   INSIGHTS_KIND,
   INSIGHTS_METAMODEL,
+  InsightsStoreError,
   PROMPT_VERSION,
   buildWalk,
   collectUnits,
   createSourceReader,
   decodeInsights,
   decodeJournal,
-  encodeInsightsToString,
-  encodeJournalLine,
   executeRun,
+  insightsStorePathFor,
   mergeRecords,
   planRun,
   recordsById,
   retryScope,
+  sqliteInsightsStore,
   type Completer,
   type FailureRecord,
   type InsightRecord,
   type InsightsEof,
+  type InsightsFile,
   type InsightsHeader,
+  type InsightsStore,
+  type OpenRun,
   type PlanEnv,
   type RecordKey,
   type RunPlan,
@@ -46,12 +50,20 @@ import { resolveView } from "../view.js";
  * dossiers — followed by `@codegraph/insights`: units, walk order, plan, run.
  * This file only resolves flags, moves bytes and narrates.
  *
- * THE SIDE-CAR IS THE ARTIFACT, and it is a FILE, not stdout: it is written
- * progressively (a journal line per finished record, the sorted file rewritten
- * at every layer) so an interrupted run is resumed, not repeated. A unit that
- * could not be explained leaves a FAILURE record there — entity and reason —
- * and `--retry-failed` takes its scope from those records. stdout stays
- * empty unless `--dry-run` (the plan) or `--json` (the summary) asks for it.
+ * THE STORE IS THE WORKING COPY (PLAN.md §17): `<model>.insights.db` beside
+ * the side-car. Every finished unit is one committed transaction and every
+ * failure is written when it happens, so an interrupted run is resumed, not
+ * repeated — records AND failures. `--retry-failed` takes its scope from the
+ * store's failure rows. Unlike `model.db` it is NOT a cache: nothing in it can
+ * be recomputed, so it is never rebuilt, never bypassed, and a store this build
+ * must not touch is a usage error naming it.
+ *
+ * THE SIDE-CAR IS THE ARTIFACT, a FILE, not stdout — and it is the store's
+ * EXPORT: written once, atomically, when a run ends (`--export` on demand).
+ * A side-car found with no store beside it is imported on the first run that
+ * writes; one edited outside is noticed and named, and taken only by
+ * `--import`. stdout stays empty unless `--dry-run` (the plan) or `--json`
+ * (the summary) asks for it.
  *
  * SPENDING IS CONFIRMED: a run that plans model calls prints its token
  * estimate on stderr and asks before the first call; `--yes` skips the
@@ -65,15 +77,28 @@ import { resolveView } from "../view.js";
 export interface ExplainFs {
   exists(path: string): boolean;
   readFile(path: string): string | undefined;
-  appendFile(path: string, text: string): void;
+  /** What an outside edit of the side-car is measured by (the M7 staleness test, opposite consequence). */
+  stat(path: string): { size: number; mtimeMs: number } | undefined;
   /** Whole-file replace that a crash cannot leave half-written. */
   writeFileAtomic(path: string, text: string): void;
   remove(path: string): void;
 }
 
+export interface ExplainStores {
+  /** Throws when this runtime has no SQLite — asked BEFORE anything is priced. */
+  check(): void;
+  exists(path: string): boolean;
+  /** Opens the store at `path`, creating it if absent; throws `InsightsStoreError` for one it must not touch. */
+  open(path: string): InsightsStore;
+}
+
 export interface ExplainSeam {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly fs: ExplainFs;
+  readonly stores: ExplainStores;
+  /** This process, recorded on the run so a later one can tell a live writer from a dead one. */
+  readonly pid: number;
+  isAlive(pid: number): boolean;
   /** The client for a RESOLVED provider whose variables are all present in `env`. */
   clientFor(provider: Provider, env: Readonly<Record<string, string | undefined>>): LlmClient;
   now(): Date;
@@ -93,13 +118,43 @@ export function realSeam(): ExplainSeam {
           return undefined;
         }
       },
-      appendFile: (path, text) => appendFileSync(path, text, "utf8"),
+      stat: (path) => {
+        try {
+          const { size, mtimeMs } = statSync(path);
+          return { size, mtimeMs };
+        } catch {
+          return undefined;
+        }
+      },
       writeFileAtomic: (path, text) => {
         const tmp = join(dirname(path), `.${Date.now()}.${process.pid}.tmp`);
         writeFileSync(tmp, text, "utf8");
         renameSync(tmp, path);
       },
       remove: (path) => rmSync(path, { force: true }),
+    },
+    stores: {
+      check: () => void loadSqlite(),
+      exists: (path) => existsSync(path),
+      open: (path) => {
+        const db = loadSqlite().open(path);
+        try {
+          return sqliteInsightsStore(db);
+        } catch (error) {
+          db.close();
+          throw error;
+        }
+      },
+    },
+    pid: process.pid,
+    // EPERM means a process we may not signal: alive, and not ours.
+    isAlive: (pid) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch (error) {
+        return (error as NodeJS.ErrnoException).code === "EPERM";
+      }
     },
     clientFor: (provider, env) => clientFromEnv(provider, env),
     now: () => new Date(),
@@ -123,7 +178,14 @@ export async function explainCommand(
   io: IoSink,
   seam: ExplainSeam = realSeam(),
 ): Promise<ExitCode> {
+  const out = options.out ?? sidecarPathFor(options.models[0] ?? "model.jsonl");
+  const storePath = insightsStorePathFor(out);
+  // Neither reads a model: they move records between the store and its side-car.
+  if (options.exportOnly) return exportOnly(out, storePath, seam, io);
+  if (options.importFrom !== undefined) return importOnly(options.importFrom, out, storePath, options, seam, io);
+
   const source = openAnalysis(options.models, options, io);
+  let store: InsightsStore | undefined;
   try {
     const graph = source.graph();
     const view = resolveView(options);
@@ -136,13 +198,14 @@ export async function explainCommand(
     const reader = createSourceReader((relative) => seam.fs.readFile(join(srcRoot, relative)));
     const env: PlanEnv = { graph, facts, units, reader, unitOf: walk.unitOf };
 
-    const out = options.out ?? sidecarPathFor(options.models[0] ?? "model.jsonl");
     const journal = `${out}.journal`;
-    const { records: existing, header: previous, failures: previousFailures } = loadExisting(out, journal, seam, io);
+    const loaded = loadExisting(out, storePath, journal, seam, io);
+    store = loaded.store;
+    const { records: existing, header: previous, failures: previousFailures } = loaded;
     if (options.retryFailed) {
       if (previous === undefined) {
         throw new UsageError(
-          `--retry-failed found no side-car at ${out}`,
+          `--retry-failed found no insights store at ${storePath} and no side-car at ${out}`,
           "It redoes the failures a previous run recorded there. Pass --out FILE if the side-car is elsewhere, or drop --retry-failed for a first run.",
         );
       }
@@ -177,6 +240,16 @@ export async function explainCommand(
       return source.clean ? EXIT.OK : EXIT.FINDINGS;
     }
 
+    // No SQLite, no explain — said before anything is priced, asked or called (there is no JSONL fallback).
+    try {
+      seam.stores.check();
+    } catch (error) {
+      throw new UsageError(
+        `explain needs SQLite for its store (${storePath}), and this runtime has none`,
+        `Node's SQLite builtin ships from Node 22.5.0 and is absent from builds configured --without-sqlite (${error instanceof Error ? error.message : String(error)}). --dry-run and --estimate still work on a side-car.`,
+        { cause: error },
+      );
+    }
     const { complete, provider } = completerFor(plan, options, seam, io);
     if (!(await confirmed(plan, options, seam, io))) {
       errLine(io, "aborted: no call was made, nothing was written.");
@@ -188,9 +261,23 @@ export async function explainCommand(
     const total = plan.steps.length;
     let done = 0;
 
+    // From here the run WRITES: the store comes to exist, takes in what predates it, and closes what died.
+    store ??= openStore(storePath, seam);
+    const writing = store;
+    if (loaded.legacy !== undefined) {
+      writing.importFile({ ...loaded.legacy, header: loaded.legacy.header ?? header });
+      const stamp = seam.fs.stat(out);
+      if (stamp !== undefined) writing.markExported({ path: out, ...stamp });
+      seam.fs.remove(journal);
+      errLine(io, `note: imported ${loaded.legacy.records.length} record${loaded.legacy.records.length === 1 ? "" : "s"} from ${seam.fs.exists(out) ? out : journal} into ${storePath}; the store is the working copy from now on, the side-car its export.`);
+    }
+    for (const dead of loaded.interrupted) writing.closeRun(dead.id, "interrupted");
+    const run = writing.beginRun({ header, startedAt: seam.now().toISOString(), pid: seam.pid });
+
     const result = await executeRun(plan, env, existing, complete, { maxScc: options.maxScc, depth: options.depth, maxLines: options.maxLines, previousFailures, ...(keyOf === undefined ? {} : { keyOf }) }, {
       concurrency: options.concurrency,
-      onRecord: (record) => seam.fs.appendFile(journal, encodeJournalLine(record)),
+      onUnit: (records, step) => writing.putUnit(run, step.unit.id, records),
+      onFailure: (failure) => writing.fail(run, failure),
       onStep: (event) => {
         done += 1;
         const { unit } = event.step;
@@ -201,15 +288,18 @@ export async function explainCommand(
         else if (event.step.status === "llm") errLine(io, `${tag} ${what}: ${event.calls} call${event.calls === 1 ? "" : "s"}, ${event.usage.promptTokens}+${event.usage.completionTokens} tokens`);
         else errLine(io, `${tag} ${what}: ${event.step.status}`);
       },
-      onLayer: (_layer, records, failures) => {
-        seam.fs.writeFileAtomic(out, encodeInsightsToString(header, records, eofFor(result0(records.length, failures.length), seam), failures));
-      },
     });
 
     // `failed` in the trailer is the number of failure records in the body, carried-over ones included.
     const written = { counts: { ...result.counts, failed: result.failures.length }, usage: result.usage };
-    seam.fs.writeFileAtomic(out, encodeInsightsToString(header, result.records, eofFor(written, seam), result.failures));
-    seam.fs.remove(journal);
+    const { aborted } = result;
+    writing.finishRun(run, {
+      eof: eofFor(written, seam),
+      failures: result.failures,
+      calls: result.counts.calls,
+      ...(aborted === undefined ? {} : { aborted: `${aborted.reason.status ?? aborted.reason.kind}: ${aborted.reason.message}` }),
+    });
+    writeExport(writing, out, seam);
 
     const misses = reader.misses();
     if (misses.length > 0) {
@@ -222,13 +312,108 @@ export async function explainCommand(
     if (result.failures.length > 0) return EXIT.FINDINGS;
     return source.clean ? EXIT.OK : EXIT.FINDINGS;
   } finally {
+    store?.close();
     source.close();
   }
 }
 
-/** Partial totals for the layer-boundary rewrite: only the record and failure counts are known cheaply. */
-function result0(records: number, failed: number): { counts: { records: number; llm: number; template: number; reused: number; failed: number }; usage: RunUsage } {
-  return { counts: { records, llm: 0, template: 0, reused: 0, failed }, usage: { promptTokens: 0, completionTokens: 0, cost: undefined } };
+/** A store this build must not touch (newer, or not ours) is the user's to sort out — named, never replaced. */
+function openStore(storePath: string, seam: ExplainSeam): InsightsStore {
+  try {
+    return seam.stores.open(storePath);
+  } catch (error) {
+    if (!(error instanceof InsightsStoreError)) throw error;
+    throw new UsageError(
+      `${storePath}: ${error.message}`,
+      "The insights store holds explanations that were paid for, so it is never rebuilt. Upgrade codegraph, or pass --out FILE to work beside another side-car.",
+      { cause: error },
+    );
+  }
+}
+
+/** The side-car, whole and atomic, from the store — and the stamp an outside edit is later measured against. */
+function writeExport(store: InsightsStore, out: string, seam: ExplainSeam): void {
+  seam.fs.writeFileAtomic(out, `${[...store.export()].join("\n")}\n`);
+  const stamp = seam.fs.stat(out);
+  if (stamp !== undefined) store.markExported({ path: out, ...stamp });
+}
+
+/** Runs with no end. A live writer is a refusal; a dead one is a resume, closed once this run starts writing. */
+function interruptedRuns(store: InsightsStore, storePath: string, seam: ExplainSeam, io: IoSink): OpenRun[] {
+  const open = store.openRuns();
+  for (const run of open) {
+    if (run.pid !== undefined && run.pid !== seam.pid && seam.isAlive(run.pid)) {
+      throw new UsageError(
+        `another explain (pid ${run.pid}, started ${run.startedAt}) is writing to ${storePath}`,
+        "Two runs on one store would pay twice for the same units. Wait for it, or stop it and run again: what it committed is kept.",
+      );
+    }
+    errLine(io, `note: the run started ${run.startedAt} was interrupted; its ${run.records} record${run.records === 1 ? "" : "s"} and its failures are kept and reused ('--export' writes the side-car as it stands).`);
+  }
+  return open;
+}
+
+function decodeSidecar(path: string, text: string): InsightsFile {
+  try {
+    return decodeInsights(text);
+  } catch (error) {
+    throw new UsageError(
+      `${path} is not a ${INSIGHTS_KIND} side-car: ${error instanceof Error ? error.message : String(error)}`,
+      "Pass --out FILE to write elsewhere, or remove the file to start over.",
+      { cause: error },
+    );
+  }
+}
+
+/** `--export`: the side-car as the store stands — after an interrupted run, or a deleted file. */
+function exportOnly(out: string, storePath: string, seam: ExplainSeam, io: IoSink): ExitCode {
+  if (!seam.stores.exists(storePath)) {
+    throw new UsageError(`--export found no insights store at ${storePath}`, "A run of 'codegraph explain' creates it. Pass --out FILE if the side-car is elsewhere.");
+  }
+  const store = openStore(storePath, seam);
+  try {
+    if (store.isEmpty()) throw new UsageError(`--export: the insights store at ${storePath} is empty`, "Run 'codegraph explain' first.");
+    interruptedRuns(store, storePath, seam, io);
+    writeExport(store, out, seam);
+    const records = store.fingerprints().size;
+    const failed = store.failures().length;
+    errLine(io, `wrote ${records} record${records === 1 ? "" : "s"}${failed === 0 ? "" : ` and ${failed} failure${failed === 1 ? "" : "s"}`} to ${out} from ${storePath}.`);
+    return EXIT.OK;
+  } finally {
+    store.close();
+  }
+}
+
+/** `--import FILE`: the one way a side-car overrides the store. It REPLACES paid-for content, so it asks. */
+async function importOnly(from: string, out: string, storePath: string, options: ExplainOptions, seam: ExplainSeam, io: IoSink): Promise<ExitCode> {
+  const text = seam.fs.readFile(from);
+  if (text === undefined) throw new UsageError(`--import cannot read ${from}`, "Pass the path of a side-car (.insights.jsonl).");
+  const file = decodeSidecar(from, text);
+  const store = openStore(storePath, seam);
+  try {
+    interruptedRuns(store, storePath, seam, io);
+    const held = store.fingerprints().size;
+    if (held > 0 && !options.yes) {
+      if (seam.confirm === undefined) {
+        throw new UsageError(
+          `--import would replace the ${held} record${held === 1 ? "" : "s"} in ${storePath}, and there is no terminal to confirm on`,
+          "Pass --yes to replace them without asking. '--export --out BACKUP' first keeps a copy.",
+        );
+      }
+      if (!(await seam.confirm(`Replace the ${held} record${held === 1 ? "" : "s"} in ${storePath} with the ${file.records.length} of ${from}? [y/N] `))) {
+        errLine(io, "aborted: the store was left as it was.");
+        return EXIT.OK;
+      }
+    }
+    store.importFile(file);
+    // Imported from its own side-car, the two agree: no "changed outside" warning next time.
+    const stamp = resolve(from) === resolve(out) ? seam.fs.stat(out) : undefined;
+    if (stamp !== undefined) store.markExported({ path: out, ...stamp });
+    errLine(io, `imported ${file.records.length} record${file.records.length === 1 ? "" : "s"}${file.failures.length === 0 ? "" : ` and ${file.failures.length} failure${file.failures.length === 1 ? "" : "s"}`} from ${from} into ${storePath}${file.truncated ? " (the file was cut short)" : ""}.`);
+    return EXIT.OK;
+  } finally {
+    store.close();
+  }
 }
 
 export function sidecarPathFor(modelPath: string): string {
@@ -260,40 +445,60 @@ function resolveSourceRoot(
   return root;
 }
 
-function loadExisting(
-  out: string,
-  journal: string,
-  seam: ExplainSeam,
-  io: IoSink,
-): { records: Map<string, InsightRecord>; header: InsightsHeader | undefined; failures: readonly FailureRecord[] } {
-  let base: InsightRecord[] = [];
-  let header: InsightsHeader | undefined;
-  let failures: readonly FailureRecord[] = [];
-  if (seam.fs.exists(out)) {
-    const text = seam.fs.readFile(out);
-    if (text !== undefined && text.trim() !== "") {
-      try {
-        const file = decodeInsights(text);
-        base = [...file.records];
-        header = file.header;
-        failures = file.failures;
-        if (file.truncated) errLine(io, `note: ${out} was cut short; its ${base.length} records are reused, the rest redone.`);
-      } catch (error) {
-        throw new UsageError(
-          `${out} is not a ${INSIGHTS_KIND} side-car: ${error instanceof Error ? error.message : String(error)}`,
-          "Pass --out FILE to write elsewhere, or remove the file to start over.",
-          { cause: error },
-        );
+interface Existing {
+  readonly records: Map<string, InsightRecord>;
+  readonly header: InsightsHeader | undefined;
+  readonly failures: readonly FailureRecord[];
+  /** Open when a store already exists; a run that gets to write opens (creates) it otherwise. */
+  readonly store: InsightsStore | undefined;
+  /** What predates the store — a side-car, an older build's journal — to import once this run writes. */
+  readonly legacy: (Omit<InsightsFile, "header"> & { header: InsightsHeader | undefined }) | undefined;
+  readonly interrupted: readonly OpenRun[];
+}
+
+/**
+ * What is already explained. The STORE when there is one — a side-car beside
+ * it is only checked for an outside edit; otherwise the side-car (and an older
+ * build's journal), read WITHOUT creating a store: `--dry-run` and
+ * `--estimate` write nothing, and the import waits for a run that does.
+ */
+function loadExisting(out: string, storePath: string, journal: string, seam: ExplainSeam, io: IoSink): Existing {
+  const store = seam.stores.exists(storePath) ? openStore(storePath, seam) : undefined;
+  if (store !== undefined && !store.isEmpty()) {
+    try {
+      const interrupted = interruptedRuns(store, storePath, seam, io);
+      const stamp = store.exported();
+      const found = seam.fs.stat(out);
+      if (found !== undefined && (stamp === undefined || stamp.size !== found.size || stamp.mtimeMs !== found.mtimeMs)) {
+        errLine(io, `warning: ${out} changed outside codegraph since it was last exported; the store (${storePath}) is the working copy and this run will overwrite the file.`);
+        errLine(io, `To take the file instead: codegraph explain … --import ${out}`);
       }
+      return { records: recordsById(store.records()), header: store.header(), failures: store.failures(), store, legacy: undefined, interrupted };
+    } catch (error) {
+      store.close();
+      throw error;
     }
+  }
+
+  let base: InsightsFile | undefined;
+  const text = seam.fs.exists(out) ? seam.fs.readFile(out) : undefined;
+  if (text !== undefined && text.trim() !== "") {
+    base = decodeSidecar(out, text);
+    if (base.truncated) errLine(io, `note: ${out} was cut short; its ${base.records.length} records are reused, the rest redone.`);
   }
   let extra: InsightRecord[] = [];
   if (seam.fs.exists(journal)) {
     const { records, dropped } = decodeJournal(seam.fs.readFile(journal) ?? "");
     extra = records;
-    errLine(io, `note: resuming from ${journal} (${records.length} record${records.length === 1 ? "" : "s"}${dropped === 0 ? "" : `, ${dropped} unreadable line${dropped === 1 ? "" : "s"} dropped`}).`);
+    errLine(io, `note: resuming from ${journal}, left by an older codegraph (${records.length} record${records.length === 1 ? "" : "s"}${dropped === 0 ? "" : `, ${dropped} unreadable line${dropped === 1 ? "" : "s"} dropped`}).`);
   }
-  return { records: recordsById(mergeRecords(base, extra)), header, failures };
+  const records = mergeRecords(base?.records ?? [], extra);
+  const legacy =
+    base === undefined && extra.length === 0
+      ? undefined
+      : // Journal records make the trailer's counts stale: imported as cut short, which it was.
+        { header: base?.header, records, failures: base?.failures ?? [], eof: extra.length === 0 ? base?.eof : undefined, truncated: base?.truncated ?? true };
+  return { records: recordsById(records), header: base?.header, failures: base?.failures ?? [], store, legacy, interrupted: [] };
 }
 
 /**

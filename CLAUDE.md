@@ -52,9 +52,11 @@ packages/navigator/  @codegraph/navigator — the navigator MODEL: the browsable
                      provenance and anchor included. Pure computation.
 packages/insights/   @codegraph/insights — the bottom-up EXPLANATION walk: units
                      (operations → types → modules), SCC-condensed walk order,
-                     context packs, prompts, Merkle fingerprints, plan/run, and
-                     the `.insights.jsonl` side-car (Specy domain vocabulary).
-                     Pure computation: source and model calls are injected.
+                     context packs, prompts, Merkle fingerprints, plan/run, the
+                     insights STORE (a port + a SQLite adapter handed an open
+                     database) and its export, the `.insights.jsonl` side-car
+                     (Specy domain vocabulary). Pure computation: source, model
+                     calls and the database are injected.
 packages/llm/        @codegraph/llm — LlmClient + OpenRouter (SDK) + Cloudflare
                      AI Gateway (REST) implementations + a deterministic fake.
                      The ONLY package that may import @openrouter/sdk.
@@ -111,8 +113,14 @@ fixtures/            Reference corpora + expected model.jsonl snapshots.
   imported in exactly one file there (a boundary test scans the workspace);
   `insights`, `core`, `analyzer` and the CLI never open a socket, and every
   test in the workspace runs against the fake client or a fake transport.
-  Explanations live in the side-car `<model>.insights.jsonl`, never in
-  `model.jsonl`/`model.db`.
+  Explanations live in `<model>.insights.db` and its export, the side-car
+  `<model>.insights.jsonl` — never in `model.jsonl`/`model.db`.
+- **The insights store is not a cache.** `model.db` is rebuilt on any doubt
+  because the model says everything it holds; `<model>.insights.db` holds what
+  was PAID for, so it is migrated (never regenerated), a newer or foreign file
+  is refused with its bytes untouched, and there is no silent fallback to the
+  JSONL. `decode → import → export` of a side-car is the identity — a tested
+  property; any change to the store must keep it.
 
 ## Stack
 
@@ -185,7 +193,10 @@ OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-call
 #   [--model SLUG] (default openai/gpt-5.6-luna) [--rollup-model SLUG] (types+modules; defaults to --model)
 #   prints the estimate on stderr and asks [y/N] first; --yes (required without a TTY) skips it
 #   or CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… [--provider cloudflare]
-#   → model.insights.jsonl beside the model; re-runs redo only what changed
+#   → model.insights.db (the working copy: one commit per finished unit) and its export
+#     model.insights.jsonl, both beside the model; re-runs redo only what changed
+./bin/codegraph explain model.jsonl --export               # the side-car from the store (after a killed run); no model read
+./bin/codegraph explain model.jsonl --import FILE [--yes]  # REPLACE the store's records with a side-car's; asks first
 ```
 
 ## Metamodel invariants (violating these is a bug, not a style choice)

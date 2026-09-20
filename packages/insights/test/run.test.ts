@@ -257,6 +257,34 @@ describe("executeRun", () => {
     expect(seen.at(-1)).toEqual([m("h")]);
   });
 
+  it("hands a finished UNIT over whole — every member of a cycle at once — which is what a store commits", async () => {
+    const { walk, env } = corpus([edge("invocation", m("h"), m("f"))]);
+    const plan = planRun(walk, new Map(), env, OPTIONS);
+    const units: { unit: string; ids: string[] }[] = [];
+    const result = await executeRun(plan, env, new Map(), fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100 }, {
+      concurrency: 1,
+      onUnit: (records, step) => void units.push({ unit: step.unit.id, ids: records.map((r) => r.id) }),
+    });
+    expect(units).toContainEqual({ unit: m("f"), ids: [m("f"), m("g"), m("h")] });
+    // Templates are units too; reuse and skips hand nothing over.
+    expect(units.flatMap((u) => u.ids).sort()).toEqual(result.records.map((r) => r.id).sort());
+  });
+
+  it("reports a failure the moment it happens, not at the layer boundary — and never for a unit it did not attempt", async () => {
+    const credits = Object.assign(new Error("no credits"), { status: 402, retryable: false });
+    const { walk, env } = corpus();
+    const plan = planRun(walk, new Map(), env, OPTIONS);
+    const events: string[] = [];
+    const result = await executeRun(plan, env, new Map(), fakeCompleter({ throwing: new Map([[m("h"), credits]]) }), { maxScc: 12, depth: 1, maxLines: 100 }, {
+      concurrency: 1,
+      onFailure: (failure, step) => void events.push(`failed ${failure.id} in ${step.unit.id} (attempt ${failure.attempts})`),
+      onLayer: (layer) => void events.push(`layer ${layer}`),
+    });
+    expect(events[0]).toBe(`failed ${m("h")} in ${m("h")} (attempt 1)`);
+    expect(events.filter((e) => e.startsWith("failed"))).toHaveLength(1);
+    expect(result.aborted?.notAttempted).toBeGreaterThan(0);
+  });
+
   it("retryScope plans the failed units and their direct dependents, and nothing else", async () => {
     const failed = await run(new Map(), {}, fakeCompleter({ failing: new Set([m("h")]) }));
     const existing = new Map(failed.result.records.map((r) => [r.id, r]));

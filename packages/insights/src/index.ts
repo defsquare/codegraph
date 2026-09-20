@@ -3,7 +3,8 @@
  *
  * PURE COMPUTATION: no filesystem, no network. Source text arrives through an
  * injected reader, the model through an injected `Completer`, finished records
- * leave through a hook. The CLI wires those to disk and to `@codegraph/llm`.
+ * leave through a hook, and the store adapter is handed an OPEN database. The
+ * CLI wires those to disk, to Node's SQLite builtin and to `@codegraph/llm`.
  *
  *   ddd.ts          the Specy domain vocabulary, restated
  *   schema.ts       Zod blocks and records → types, validators, strict JSON Schema
@@ -16,7 +17,9 @@
  *   template.ts     blocks for trivial members, no model call
  *   plan.ts         statuses and estimates before spending anything
  *   run.ts          executing a plan layer by layer
- *   sidecar.ts      the `.insights.jsonl` file and its journal
+ *   sidecar.ts      the `.insights.jsonl` file — the store's export
+ *   store.ts        the insights store's port: `<model>.insights.db`, never a cache
+ *   store-sqlite.ts its SQLite adapter, over a database the caller opened
  */
 export * from "./ddd.js";
 export * from "./schema.js";
@@ -30,3 +33,5 @@ export * from "./template.js";
 export * from "./plan.js";
 export * from "./run.js";
 export * from "./sidecar.js";
+export * from "./store.js";
+export * from "./store-sqlite.js";

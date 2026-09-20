@@ -614,6 +614,21 @@ export const EXPLAIN_SPEC: CommandSpec = {
         "else is reused or left alone. Pass the same --model/--depth as the run that failed.",
     },
     {
+      name: "export",
+      type: "boolean",
+      describe:
+        "Write the side-car from the insights store (<model>.insights.db) and stop: no model is " +
+        "read, no call is made. Every run ends with this export; use it after an interrupted one.",
+    },
+    {
+      name: "import",
+      type: "string",
+      describe:
+        "REPLACE the insights store's records with those of a side-car (one edited by hand, or " +
+        "one from another machine) and stop. Asks first when the store holds records; --yes skips it.",
+      placeholder: "FILE",
+    },
+    {
       name: "yes",
       type: "boolean",
       short: "y",
@@ -1073,8 +1088,12 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly priceIn: number | undefined;
   readonly priceOut: number | undefined;
   readonly force: boolean;
-  /** `--retry-failed`: the scope is the side-car's failure records. */
+  /** `--retry-failed`: the scope is the store's failure records. */
   readonly retryFailed: boolean;
+  /** `--export`: write the side-car from the insights store, and nothing else. */
+  readonly exportOnly: boolean;
+  /** `--import FILE`: replace the insights store's content with that side-car, and nothing else. */
+  readonly importFrom: string | undefined;
   /** `--yes`: skip the estimate-and-confirm step before a run that makes calls. */
   readonly yes: boolean;
   readonly json: boolean;
@@ -1704,6 +1723,12 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           "--retry-failed takes its scope from the side-car's failure records; drop --scope, or drop --retry-failed to explain a scope afresh.",
         );
       }
+      if (flagOf(values, "export") && stringOf(values, "import") !== undefined) {
+        throw new UsageError(
+          "--export and --import move the same records in opposite directions",
+          "Run them one after the other: --import FILE replaces the store, --export writes the side-car from it.",
+        );
+      }
       return {
         kind: "run",
         command: "explain",
@@ -1730,6 +1755,8 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           priceOut: priceOf(values, "price-out"),
           force: flagOf(values, "force"),
           retryFailed: flagOf(values, "retry-failed"),
+          exportOnly: flagOf(values, "export"),
+          importFrom: stringOf(values, "import"),
           yes: flagOf(values, "yes"),
           json: flagOf(values, "json"),
         },
