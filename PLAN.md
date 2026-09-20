@@ -2725,7 +2725,7 @@ under one command-line contract (§13.5, schemas/README.md §8) exactly so
 this could be true: the app needs to know nothing about them but that
 contract and the file extensions they claim.
 
-Locked decisions, each with its reason (the delta table in §18 repeats them):
+Locked decisions, each with its reason (the delta table in §19 repeats them):
 
 - **Tauri is the shell, not a runtime.** Window, native menu, folder dialog,
   drag-and-drop, sidecar lifecycle, bundling, signing and notarization. No
@@ -3590,7 +3590,281 @@ the Elixir fixture in every per-fixture suite.
 
 ---
 
-## 17. Milestones
+## 17. Phase 14 — The insights store: `<model>.insights.db` (M16)
+
+Motivation: the insights are the only artefact in the pipeline that is **not a
+pure function of the model** — they are bought, call by call, from a provider
+(`docs/insights.md`). M11 keeps them in one sorted JSONL side-car, which is the
+right shape for what it was built for (a diffable file a Specy skill reads
+whole) and the wrong one for everything that came after: a run that fails
+halfway, a retry, a consumer that wants ONE explanation.
+
+Measured on BroadleafCommerce (`deepseek-v4.1-flash`, 2026-09-18), which is
+why — and which is also why parsing is NOT the argument:
+
+| fact | value | |
+|---|---|---|
+| side-car | 47.5 MB, 28 206 records (24 392 operations / 3 312 types / 502 modules) | 55 % of the bytes are `block` |
+| read + strict decode (Zod per line) | 0.19 s + 0.47 s, **528 MB RSS** | cheap for `explain`, prohibitive for a page that wants one description |
+| encode | 0.36 s, byte-identical to the file read | the round trip M16 must keep |
+| whole-file rewrites per full run | one per Kahn layer: **35 × 47 MB** | `onLayer` → `writeFileAtomic` (explain.ts) |
+| what a crash mid-layer keeps | the records (`.journal`) — **not the failures**: the journal carries `t:"i"` lines only | a killed run forgets what it paid for and lost |
+| what the file remembers of past runs | the LAST run's trailer (`llm 1 043`, $4.70); the 17 271 reused records' runs are gone | total spend is unrecoverable |
+
+The JSONL decode is under a second: M7's argument ("cache the parse") does not
+transfer, and this phase does not claim it. What transfers is the other half
+of M7 — a store is **random access, transactions and queries** — applied to
+the one artefact where losing a write costs money.
+
+**Why not a table in `model.db`?** Because `model.db` is disposable by
+construction (§9.3: *migration is regeneration*; a `DB_VERSION` bump or a
+changed size/mtime deletes the file) and that rule is what keeps the cache
+honest. Insights cannot be regenerated for free. Two lifecycles cannot share a
+file without one of them lying, so they do not share one:
+
+| | `model.db` (M7) | `<model>.insights.db` (M16) |
+|---|---|---|
+| role | derived cache of `model.jsonl` | the working store of what was bought |
+| version mismatch | delete, rebuild | **migrate** (a ladder on `PRAGMA user_version`); a newer file is refused, never touched |
+| staleness | per file: size + mtime | per record: the Merkle fingerprint (unchanged from M11) |
+| will not open | degrade to the `.jsonl`, silently | a usage error naming the file; never overwritten |
+| committed / shared | never | never — the JSONL export is what is committed, diffed and handed to Specy |
+
+Locked decisions, each with its reason (the delta table in §19 repeats them):
+
+- **The db is the working copy; the JSONL becomes its deterministic export.**
+  `<model>.insights.jsonl` keeps its format, its byte-determinism and its
+  place beside the model — written ONCE at the end of a run instead of once
+  per layer. The Specy skill, the fixtures and `git diff` see no change.
+- **The round trip is lossless and is a tested property.** `decode(jsonl) →
+  store → export()` reproduces the input bytes, for header, records and
+  failures. The only db-only state is the `run` history, declared losable:
+  deleting the `.db` and re-importing the JSONL loses the ledger and nothing
+  that was paid for.
+- **`block` stays one JSON text column**, stored as `encodeRecord` normalized
+  it (Zod key order), so the export is a concatenation and not a
+  re-serialization. Its shape moves with `PROMPT_VERSION`; tables per block
+  field would turn every prompt change into a migration. What is queried
+  (`concept`, `confidence`) is a generated column over the JSON — the opposite
+  call from M10b's `entity_metric` rows, for the opposite reason: measures are
+  aggregated, blocks are fetched.
+- **The envelope is columns.** `id`, `level`, `fingerprint`, `origin`,
+  `model`, usage and the natural key `(lang, module, symbol, disambiguator)`
+  carried structurally (invariant 7) — the planner needs `id → fingerprint`
+  for 28 k units and must not pay for 26 MB of blocks to get it.
+- **One transaction per finished unit.** `put(record)` inserts the record and
+  deletes the unit's failure row in the same transaction; a failure is
+  written when it happens, not at the layer boundary. The `.journal`, its
+  lenient decoder and `mergeRecords` are deleted — a crash leaves a database,
+  which is what SQLite is for.
+- **WAL, one writer — by liveness, not by lock.** A run commits per unit, so
+  no SQLite lock spans it and `SQLITE_BUSY` cannot be the refusal. A run
+  records its `pid`; the next one that finds it unfinished asks whether that
+  process is alive: alive is a usage error naming it (today two runs silently
+  interleave one journal), dead is a note and a resume. A reader (`serve`,
+  M16c) is never blocked by a run in progress. A clean close checkpoints, so
+  one file sits beside the model.
+- **`@codegraph/insights` stays pure.** It gains a PORT (`InsightsStore`) and
+  the SQLite adapter behind it, reached through the analyzer's `loadSqlite()`
+  seam — `store/sqlite.ts` remains the only module that names `node:sqlite`
+  (the self-hosting boundary query, M13c). The CLI injects the store through
+  `ExplainSeam` exactly as it injects `fs`; every test runs on `:memory:` or
+  a Map-backed fake.
+- **No SQLite, no explain.** Unlike `model.db` there is no silent fallback:
+  a runtime without `node:sqlite` is told so before the first call is priced.
+  `--export`/`--import` aside, the JSONL is not a second write path — two
+  authoritative copies is how paid work gets lost.
+
+### 17.1 Schema (`INSIGHTS_DB_VERSION = 1`)
+
+As landed (`store-sqlite.ts`, migration 0). Four things differ from the first
+draft of this section, each because a test or a measurement said so:
+
+- **rowid tables.** `WITHOUT ROWID` keeps whole rows in the b-tree's interior
+  pages and a record is a kilobyte or more of block: Broadleaf's store was
+  96 MB that way and is **57 MB** as a rowid table, for no faster read.
+- **no `(level, id)` index for the export order.** The side-car sorts ids by
+  UTF-16 code units; SQLite compares TEXT as UTF-8 bytes; they disagree above
+  U+FFFF (the §16.8 hazard, met again). Order is decided in JS.
+- **a failure's `reason` is JSON text**, `reason_kind`/`status` generated
+  columns. Node's binding reads TEXT back only up to its first U+0000, and a
+  provider's words are verbatim: as JSON they are escapes and survive. A
+  COLUMN string holding U+0000 (an id, a name) is refused at write rather than
+  stored and read back shorter — found by the round-trip property on its
+  second case.
+- **`PRAGMA application_id`** ("CGI1") beside `user_version`: a `model.db`
+  handed over by mistake is refused, not migrated.
+
+```sql
+PRAGMA journal_mode = WAL;  PRAGMA application_id = 0x43474931;  PRAGMA user_version = 1;
+
+CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
+-- header · eof (both JSON, exactly as exported; eof is withdrawn while a run is open)
+-- · exported (path, size, mtime of the last JSONL written — see §17.2)
+
+CREATE TABLE run (
+  id INTEGER PRIMARY KEY, started_at TEXT NOT NULL, finished_at TEXT,
+  pid INTEGER,                       -- the writer, so a later run can tell live from dead
+  provider TEXT, leaf TEXT NOT NULL, rollup TEXT NOT NULL, depth INTEGER NOT NULL,
+  llm INTEGER, template INTEGER, reused INTEGER, failed INTEGER, calls INTEGER,
+  prompt_tokens INTEGER, completion_tokens INTEGER, cost REAL,
+  aborted TEXT                       -- the 401/402/403 reason, or 'interrupted'
+);
+
+CREATE TABLE insight (
+  id TEXT PRIMARY KEY,               -- rendered entity id: an opaque token, never parsed
+  level INTEGER NOT NULL,            -- LEVEL_RANK: 0 operation · 1 type · 2 module
+  kind TEXT NOT NULL, name TEXT, file TEXT,
+  key_lang TEXT, key_module TEXT, key_symbol TEXT, key_disambiguator TEXT,
+  scc TEXT,                          -- JSON array of member ids; NULL off-cycle
+  origin TEXT NOT NULL,              -- llm | template
+  fingerprint TEXT NOT NULL,
+  model TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, cost REAL,
+  metadata TEXT,                     -- JSON map
+  block TEXT NOT NULL,               -- JSON, Zod-normalized key order
+  concept TEXT GENERATED ALWAYS AS (block ->> '$.concept') VIRTUAL,
+  confidence REAL GENERATED ALWAYS AS (block ->> '$.confidence') VIRTUAL,
+  run_id INTEGER REFERENCES run(id)  -- db-only; not exported
+);
+CREATE INDEX insight_concept ON insight(concept) WHERE concept IS NOT NULL;
+CREATE INDEX insight_run     ON insight(run_id)  WHERE run_id IS NOT NULL;
+
+CREATE TABLE failure (               -- FailureRecord; lives until a run explains the unit
+  id TEXT PRIMARY KEY, level INTEGER NOT NULL, members TEXT NOT NULL,
+  key_lang TEXT, key_module TEXT, key_symbol TEXT, key_disambiguator TEXT,
+  model TEXT NOT NULL,
+  reason TEXT NOT NULL,              -- JSON: kind, message (verbatim), status?, retryable?
+  reason_kind TEXT GENERATED ALWAYS AS (reason ->> '$.kind') VIRTUAL,
+  status INTEGER GENERATED ALWAYS AS (reason ->> '$.status') VIRTUAL,
+  attempts INTEGER NOT NULL, calls INTEGER NOT NULL,
+  prompt_tokens INTEGER, completion_tokens INTEGER, cost REAL,
+  run_id INTEGER REFERENCES run(id)
+);
+```
+
+The port, in `packages/insights/src/store.ts` — what `explain` needs and
+nothing a SQL engine would leak. The adapter is handed an OPEN database, so
+the package still touches no file of its own:
+
+```ts
+interface InsightsStore {
+  isEmpty(): boolean;                                  // first contact: import, do not compare
+  header(): InsightsHeader | undefined;
+  eof(): InsightsEof | undefined;                      // undefined while a run is open, or after a kill
+  records(): InsightRecord[];                          // side-car order (M16a's planner input)
+  fingerprints(): Map<string, string>;                 // id → fingerprint, no blocks (M16b's)
+  get(ids: readonly string[]): InsightRecord[];        // what a context pack quotes (M16b's)
+  failures(): FailureRecord[];
+  exported(): ExportStamp | undefined;
+  openRuns(): OpenRun[];                               // no end: still going, or killed — the caller tells which
+  importFile(file: InsightsFile): void;                // REPLACES the content; the ledger is kept
+  closeRun(id: number, aborted: string): void;
+  beginRun(start: RunStart): RunHandle;                // header, caller's clock, pid
+  putUnit(run, unitId, records): void;                 // ONE transaction: a cycle's members in, its failure out
+  fail(run: RunHandle, failure: FailureRecord): void;  // when it happens
+  finishRun(run: RunHandle, end: RunEnd): void;        // trailer + the owed set REPLACES the failure table
+  export(): Iterable<string>;                          // the side-car's lines, in order
+  markExported(stamp: ExportStamp): void;
+  close(): void;
+}
+```
+
+`executeRun` gained the two hooks this needs — `onUnit(records, step)` (a
+finished unit handed over whole; `onRecord` could only say one member at a
+time) and `onFailure(failure, step)` (the moment it happens; `onLayer` could
+only say it a layer late).
+
+### 17.2 The JSONL, from now on
+
+- **First contact.** `explain` finds `<model>.insights.jsonl` and no `.db`:
+  it imports the file strictly (`decodeInsights`, one transaction), says so on
+  stderr, and continues. A truncated file imports what it holds, as today. A
+  leftover `.journal` is merged once, then removed — the last time that code
+  runs.
+- **Every run ends with an export**, atomic, and records the written file's
+  `(size, mtime)` in `meta`.
+- **An edited JSONL is noticed, never obeyed.** At open, a side-car whose
+  size/mtime differ from the recorded export is named in a warning with the
+  remedy (`explain --import FILE`); the db wins until the user says otherwise.
+  The M7 staleness test, reused with the opposite consequence.
+- `explain --export` (to `--out`, by default the side-car's path) and
+  `explain --import FILE` do only that: no graph, no walk, no source root, no
+  provider variables. `--import` REPLACES paid-for records, so it asks like a
+  spending run does — `--yes`, or a terminal to confirm on.
+- **`--dry-run` and `--estimate` create nothing.** With no store they read the
+  side-car as M11 did; the import waits for a run that gets to write (past the
+  confirmation), so declining still means "nothing was written".
+- **Ctrl-C leaves the side-car one run behind the store** — it was one LAYER
+  behind under M11. The next run says so and names `--export`.
+
+### 17.3 Milestone split
+
+- **M16a — the store behind the port (storage swap).** ✅ (2026-09-19) Red
+  first: the round-trip property (`store.test.ts`, fast-check over any
+  side-car the schema admits), which found the U+0000 truncation on its second
+  case. Then `InsightsStore`, the SQLite adapter, first-contact import,
+  `putUnit`/`fail` per step through the new `onUnit`/`onFailure` hooks, export
+  at the end, `--export`/`--import`, the live-writer refusal, the migration
+  ladder with refusal tests for a newer `user_version` and a foreign file
+  (bytes unchanged). `planRun`/`executeRun` keep receiving the in-memory
+  `Map<id, InsightRecord>` — loaded from the store instead of the file — so
+  the diff is the storage and nothing else. The journal WRITER is deleted
+  (`encodeJournalLine`'s caller, `appendFile`, the per-layer rewrite); its
+  READER stays for first contact with an older build's leftovers.
+  Verified on Broadleaf in a scratch directory: 28 206 records imported in
+  2.6 s, exported in 1.9 s, `cmp`-equal to the original 47.5 MB side-car, one
+  57 MB file beside it; `--estimate` under the writing model then plans
+  **0 calls, 17 780 reused** from the store. Not done here: the opt-in
+  `CODEGRAPH_CORPUS_INSIGHTS` test (the check was run by hand).
+- **M16b — lazy reads.** `planRun` runs on `fingerprints()`; `context.ts`
+  fetches the dependency blocks it quotes through `get(ids)`; `executeRun`
+  holds the records of the layer in flight and no more. Gate: a plan
+  byte-identical to M16a's on the fixture and on Broadleaf; `--dry-run` RSS
+  on Broadleaf measured before and after and written here.
+- **M16c — the first reader.** `codegraph insights <model> [--id ID]
+  [--concept aggregate] [--min-confidence X] [--json]` over the store,
+  read-only; then the daemon route the Navigate panel asks for a selected
+  node's description (one `get`, no artifact — `navigator.json` does not
+  grow by 26 MB of prose). The navigator-ui guard learns the route; the page
+  renders with no store present. Design the panel against screenshots before
+  writing it; this step may split.
+
+Tests that pin the decisions: the round trip (above); **crash safety** — kill
+after N `put`s, reopen, N records reused, the failure rows of that run
+present; **failure lifecycle** — a `put` for a failed unit deletes its row,
+`attempts` increments across runs, `--retry-failed` scopes from the table;
+**never disposable** — a newer `user_version` is refused and the file's bytes
+are unchanged, an older one migrates with the row count intact; **one
+writer** — a second store on a running one fails with the usage error;
+**boundaries** — no `node:sqlite` outside `analyzer/store/sqlite.ts`, no
+`insight.id` parsed, `model.db` opened read-only-or-not-at-all by everything
+in this phase.
+
+Definition of done: `explain` on the Java fixture live and on the fake client
+writes a `.insights.jsonl` byte-identical to M11's for the same answers; the
+Broadleaf side-car imports, exports byte-identical, and a `--retry-failed` on
+it runs from the store; no `.journal` is ever created; a run killed mid-layer
+resumes with its records AND its failures; `pnpm -r test`, typecheck and
+`test.sh` green; the numbers of M16b in this section.
+
+### 17.4 Deferred, explicitly
+
+- **Several models side by side.** The model is part of every fingerprint,
+  so a run under another `--model` redoes — and replaces — everything
+  (Broadleaf under the default model: `reuse 0`, 17 809 calls). A key of
+  `(id, model)` would keep both and let them be compared; it changes the
+  export contract (which one is THE side-car?) and waits for a use.
+- **Insights in the desktop app's `--data-dir`** (M14a) — the store sits
+  beside the model there as everywhere; running `explain` from the app is its
+  own question (a provider key in a GUI).
+- **Full-text search over descriptions** (FTS5) — `node:sqlite` builds carry
+  it, no reader asks for it yet.
+- **History of a record** (what the previous model said) — the `run` ledger
+  says when and for how much; the superseded text is not kept.
+
+---
+
+## 18. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -3625,8 +3899,11 @@ the Elixir fixture in every per-fixture suite.
 | M15a | Elixir extractor — profile + skeleton | `elixir` profile in core (the tenth: the module is the file, a `defmodule` is a `module` kind carrying `TType`, arity is identity, no inheritance/embedding — §16.2); `extractors/elixir/` as a Mix project on the compiler's parser with the embedded OTP table, no runtime dependency (§16); walking skeleton → `fixtures/elixir/expected/model.jsonl` byte-identical to core's encoder and profile-valid with zero issues; core gate; escript on `bin/codegraph-elixir`; `build.sh --elixir` / `test.sh --elixir` with the escript `cmp`; `elixir-test` in CI |
 | M15b | Elixir extractor — model | ✅ (2026-09-16) every kind and edge of §16.2: clause and default folds, the four import forms as one edge kind, `defimpl` as an attached named module, `@derive` as `generated`, `use` as import + `__using__` invocation, struct-expansion accesses, protocol and `GenServer` self-call `dynamic-candidate`s, `throws`, `@spec` references, docs as comments; `sloc` + `cyclomatic`, literals; `--deps` (exports only); the full fixture with its README; determinism, stub-discipline, scope and arity suites; the fixture in every per-fixture suite; city and navigator screenshots reviewed. Snapshot 210 entities / 174 edges; 60 ExUnit tests + 3 properties; Plausible re-run: 16 369 entities / 51 736 edges in 5 s, `validate`-clean, 64.7 % of 119 972 sites resolved or Kernel, the rest counted by reason (`local_injected` and `local_unbound` dominate — the macro ceiling `--trace` exists for) |
 | M15c | Elixir extractor — audit + oracles + distribution | ✅ (2026-09-16) `elixir-lang/elixir` `lib` (557 files, 27 061 / 78 564, 17 s, 80.8 %), Phoenix (205, 5 828 / 14 314, 76.7 %) and Plausible (1 256, 16 369 / 43 661, 58.2 %) audited `validate`-clean, byte-identical to core's encoder, the causes in the profile notes; four defects found and fixed (variadic special forms counted as unbound locals, binary specifiers read as calls, repeated head names re-keying parameters, a corpus `use` treated as no injection source); `--explain-dropped` lists every dropped site; `mix codegraph.trace` (a compilation tracer, JSONL events) + `--trace` merging `generated` edges through the closing rules (Phoenix: 16 797 events → 5 895 edges); the `mix xref` witness check (147/148 on Phoenix) and the trace superset check as opt-in real-corpus tests (`CODEGRAPH_CORPUS_ELIXIR`); the Burrito binary (Zig 0.16, `build.sh --elixir --native`, `test.sh` `cmp`), `elixir-smoke` on three OS runners, `elixir-native` on two, `hex-publish` on a tag; README, CLAUDE.md and `docs/elixir-extractor.md` name the extractor. Deferred: the M14 registry entry and cask stanza (M14 is not on main yet), the Windows native binary (needs 7z on the runner) |
+| M16a | Insights store — the storage swap | ✅ (2026-09-19) `<model>.insights.db` (§17) as `explain`'s working copy behind an `InsightsStore` port in `@codegraph/insights`, its SQLite adapter handed an open database (the analyzer's `loadSqlite()` stays the one load site — the hygiene guard caught three comments naming the specifier); one transaction per finished unit and failures written when they happen (`onUnit`/`onFailure` in `executeRun`); the journal writer and the per-layer 47 MB rewrite deleted; the side-car an atomic deterministic export at the end of a run, imported on first contact by the first run that WRITES (`--dry-run`/`--estimate` create nothing), an outside edit warned about and never obeyed; `--export`, `--import FILE` (asks); a run records its pid — a live writer is refused, a dead one resumed with its records AND its failures; a migration ladder on `user_version` + `application_id`, a newer or foreign file refused with its bytes unchanged; round trip byte-identical as a fast-check property and on Broadleaf (28 206 records, 47.5 MB, `cmp`-equal; store 57 MB — 96 MB before `WITHOUT ROWID` was measured and dropped); 18 store tests + 2 run-hook tests + 11 CLI tests incl. a real-disk run |
+| M16b | Insights store — lazy reads | `planRun` on `id → fingerprint` alone, context packs fetching the blocks they quote by id, `executeRun` holding one layer; plans byte-identical to M16a's on the fixture and on Broadleaf; `--dry-run` RSS on Broadleaf (528 MB to decode the side-car today) measured before and after |
+| M16c | Insights store — the first reader | `codegraph insights <model>` (by id, concept, confidence; read-only) and the daemon route serving a selected node's description to the Navigate panel — `navigator.json` does not grow; the page renders with no store present; screenshots reviewed |
 
-## 18. Decisions made in this plan (deltas vs. the design doc)
+## 19. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -3704,3 +3981,9 @@ the Elixir fixture in every per-fixture suite.
 | Injection source (M15c) | any `use` — corpus or foreign — makes the module's unbound locals `local_injected`, and refuses the sole-import attribution | a corpus macro's `__using__` is as opaque to the parser as a dependency's: the standard library's own tests `use ExUnit.Case` |
 | Native binary entry (M15c) | the Burrito release runs the CLI from `Application.start/2` on `:init.get_plain_arguments/0` when `__BURRITO_BIN_PATH` is set, and halts; Burrito itself is a build-only dependency; the escript never starts the application (`app: nil`) | Burrito boots through `elixir start_cli`, which would parse `--src` as Elixir's own options; halting from the application's start pre-empts it without a runtime dependency on Burrito |
 | Elixir oracles (M15) | on a corpus that compiles, `mix xref graph` must equal the baseline's module-level import layer and the `--trace` edge set must be a superset of the baseline's; both as opt-in real-corpus tests | the cross-validation rule ("the richer extractor is the oracle, any gap is a missed case") gets two oracles the language ships for free — the first extractor whose ceiling is measured rather than estimated |
+| Insights storage (M16) | a store of its own, `<model>.insights.db`, beside the model — never a table in `model.db` | `model.db` is disposable by construction (a version bump or a changed mtime deletes it) and that rule keeps the cache honest; insights are bought, not derived, so the first regeneration would silently discard paid work — two lifecycles cannot share a file |
+| Insights store lifecycle (M16) | migrated, never regenerated: a ladder on `PRAGMA user_version`; a newer file is refused and left untouched; no fallback when SQLite is absent | the exact inverse of the M7 rule, for the inverse reason: nothing the file holds can be recomputed from the model; a silent JSONL fallback would be a second authoritative copy, which is how paid work gets lost |
+| The side-car after M16 | `<model>.insights.jsonl` keeps its format and byte-determinism as the store's export, written once per run; imported on first contact; an edit made outside is warned about (size + mtime against the recorded export) and taken only by `--import`; the round trip is a tested bijection, the `run` ledger the only losable state | the Specy skill, the fixtures and `git diff` are built on that file; a binary db is none of committable, diffable or portable |
+| Insight blocks in the store (M16) | one JSON text column holding the Zod-normalized bytes; the envelope (id, level, fingerprint, natural key, usage) as columns; `concept`/`confidence` as generated columns | the block's shape moves with `PROMPT_VERSION`, so tables per field would make every prompt change a migration; storing the normalized text makes the export a concatenation; blocks are fetched, not aggregated — the opposite of M10b's measures, hence the opposite storage |
+| Run durability (M16) | one transaction per finished UNIT (a cycle's members in together, its failure row out), failures written when they happen, WAL; ONE writer, decided by the recorded pid's liveness — alive is refused, dead is resumed; the journal writer deleted, its reader kept for first contact | the journal carried records only, so a killed run forgot its failures; a second concurrent `explain` interleaved one journal silently; a run that commits per unit holds no lock across itself, so `SQLITE_BUSY` could never be the refusal |
+| Insights store physical shape (M16a) | rowid tables; order decided in JS, never by `ORDER BY id`; a failure's `reason` as JSON text; a column string holding U+0000 refused at write; `application_id` beside `user_version` | each one measured or found by a test: `WITHOUT ROWID` cost 96 MB against 57 MB on Broadleaf; SQLite orders TEXT by UTF-8 bytes and the side-car by UTF-16 units; Node's binding reads TEXT only up to its first U+0000 (the round-trip property's second case) — an id read back shorter is worse than a refusal; a `model.db` handed over by mistake must not be migrated |
