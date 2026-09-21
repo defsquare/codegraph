@@ -6,6 +6,8 @@ description: "See the structure of a codebase you did not write — even one tha
 
 Codegraph extracts a dependency model from sources alone, with no build, and lets you query it, walk it as a 3D city, browse every dependency to its source line, replay its history, and have it explained bottom-up. The [landing page](/) says why; these pages say how.
 
+New to a codebase and wondering where to start? [Discovering a codebase](/docs/discover/) is a guided walk in six questions, from what is there to what it means, with the commands that answer each one today.
+
 The documentation is in four parts, each for a different moment:
 
 {{< cards >}}
@@ -33,7 +35,7 @@ The [first tutorial](/docs/tutorials/first-city/) walks through every step.
 
 ## Limitations, up front
 
-- **Two languages today: Java and C#.** Nine language profiles exist on paper; the shipped extractors are Spoon for Java (needs a JDK 17+) and Roslyn for C# (needs the .NET 10 SDK to build; the binary it produces needs nothing). A Clojure adapter is next.
+- **Three languages today: Java, C# and TypeScript.** Nine language profiles exist on paper; the shipped extractors are [Spoon for Java](/docs/reference/java-extractor/) (needs a JDK 17+), [Roslyn for C#](/docs/reference/csharp-extractor/) (needs the .NET 10 SDK to build; the binary it produces needs nothing) and [the compiler API for TypeScript](/docs/reference/typescript-extractor/) (Node 22, nothing else). A Clojure adapter is next.
 - **No build means imperfect resolution.** Without a classpath some references stay unresolved; they become stubs, honest but still gaps. Keep one package to one source root per run.
 - **`explain` costs money and needs a network.** It is the only command that does; `--dry-run` and `--estimate` come first.
 - **Not a linter.** Codegraph reports structure, coupling and cycles, not style or bugs.

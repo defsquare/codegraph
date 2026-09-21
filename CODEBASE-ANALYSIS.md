@@ -103,6 +103,38 @@ history, and this method holds the static graph beside it.
 Seven viewpoints. Each row is one question, the evidence that answers it, the
 artifact that carries the answer, and the viewpoint that consumes it next.
 
+# Structure and elements
+What is here, how big (SLOC), how branchy (Cyclomatic complexity), how tangled? (SCC)
+
+What's the volume of elements?
+What's the proportion of each modules and classes? is there any outliers regarding size and/or complexity?
+Complexity is subjective but it can be approached with sloc, cyclomatic complexity and _Strongly Connected Components_ (SCC)
+
+# Boundaries and style
+What's the overall structure?
+How is it cut, which style, do the cuts hold?
+Architecture style? (layer, hexagonal, etc.) What patterns are used? What technology stack (language, framework, libraries, tools (WTX))
+How the folder and package structure maps to this style?
+What's the external systems around the considered system (inbound, downstream systems that depends on the considered system, and outbound : upstream systems the considered one depends on to do its job) What are the data flow?
+
+# Activity
+Where does the effort go, who does it, what changes together?
+Which complex code is worked on often? Which co-changes have no structural explanation?
+Theses metrics, along with the history analysis (see [history join](https://codegraph.biz/docs/how-to/history-joins/)), shows us the "hotspots" that we'll focus on first.
+
+# Stimuli and flows
+What reacts to the outside world? what elements of the code are entry-point to the outside world (REST API or Web Controller, message listener, etc) or to time, and what does each reaction reach? 
+What are the call chain for each stimuli? 
+
+# Meaning
+What does each unit do, in domain words?
+Separate the technical logic from the domain logic, and the concepts associated to each logic. 
+
+# Domain
+Which part of this codebase relates to domain structure and behavior, clearly separated from technical concerns (linked to either applicative or infrastructure concerns, if we apply the hexagonal architecture lens)
+What is the domain model underlying the code? using a [structured domain-driven metamodel]()
+
+
 | # | Viewpoint | Question | Evidence | Artifact | Feeds |
 |---|---|---|---|---|---|
 | V1 | **Terrain** | What is here, how big, how branchy, how tangled? | `model.jsonl`: entities, edges, `sloc`, `cyclomatic`, SCCs | city, cycles report, coupling report | V3, V4, V5 |

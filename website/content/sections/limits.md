@@ -7,9 +7,9 @@ more:
   doc: "explanation/extracting-without-compiling/"
 ---
 
-### Two languages today: Java and C#.
+### Three languages today: Java, C# and TypeScript.
 
-Nine language profiles exist on paper; the shipped extractors are Spoon for Java and Roslyn for C#. A Clojure adapter is next, and the interchange contract is published so an extractor in any language can conform.
+Nine language profiles exist on paper; the shipped extractors are Spoon for Java, Roslyn for C# and the compiler API for TypeScript. A Clojure adapter is next, and the interchange contract is published so an extractor in any language can conform.
 
 ### No build means imperfect resolution.
 

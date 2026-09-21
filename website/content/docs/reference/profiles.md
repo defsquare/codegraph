@@ -22,16 +22,16 @@ A profile licenses an entity by the rule `required(kind) ⊆ traits ⊆ required
 | `lang` | Language | Kinds | Edge kinds | Notes |
 |---|---|---|---|---|
 | `clj` | Clojure | 10 | 5 | 13 |
-| `csharp` | C# | 14 | 6 | 7 |
+| `csharp` | C# | 15 | 8 | 20 |
 | `go` | Go | 10 | 6 | 9 |
 | `java` | Java | 12 | 8 | 15 |
 | `js` | JavaScript | 8 | 5 | 13 |
 | `php` | PHP | 12 | 8 | 10 |
 | `python` | Python | 9 | 6 | 10 |
 | `rust` | Rust | 13 | 5 | 12 |
-| `ts` | TypeScript | 13 | 6 | 14 |
+| `ts` | TypeScript | 14 | 8 | 27 |
 
-A profile that is specified but has no shipped extractor is complete, not deficient: the profile is the contract an extractor is written against. Today only `java` has one.
+A profile that is specified but has no shipped extractor is complete, not deficient: the profile is the contract an extractor is written against. Today `java`, `csharp` and `ts` have one: see the [Java](/docs/reference/java-extractor/), [C#](/docs/reference/csharp-extractor/) and [TypeScript](/docs/reference/typescript-extractor/) extractor pages.
 
 ## Clojure — `clj`
 

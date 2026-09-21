@@ -1,7 +1,7 @@
 ---
 title: Exit codes
 linkTitle: Exit codes
-weight: 10
+weight: 12
 ---
 
 Four codes. CI must be able to tell "the tool broke" from "the model is bad", so those two are never the same number.

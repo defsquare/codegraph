@@ -59,6 +59,10 @@ menu:
       name: Explanation
       pageRef: /docs/explanation
       weight: 4
+    - identifier: discover
+      name: Discover
+      pageRef: /docs/discover
+      weight: 5
     - name: Landing page
       weight: 7
       url: "/"
@@ -107,6 +111,8 @@ params:
             doc: "reference/"
           - name: "Explanation"
             doc: "explanation/"
+          - name: "Discovering a codebase"
+            doc: "discover/"
       - heading: "Project"
         links:
           - name: "Source on GitHub"

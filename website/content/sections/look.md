@@ -2,7 +2,6 @@
 title: "What does it look like?"
 weight: 1
 lead: "A visual representation of your code: packages are districts, classes are buildings, dependencies are arcs between roofs."
-cmd: "codegraph serve gson.jsonl"
 more:
   name: "Read the tutorial on reading a city"
   doc: "tutorials/reading-the-city/"
