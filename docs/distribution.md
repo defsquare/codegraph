@@ -127,11 +127,16 @@ alongside `datagraph` and `specy`: the five install lines above, and that
    (with no value it prompts and reads hidden), then delete the local `.p12`
    and its base64 file.
 5. **Prove it locally before tagging** (optional): export the six variables,
-   `./build.sh --ts --sea`, sign the sidecar as the `desktop-bundle` job does
-   (`codesign --force --options runtime --timestamp --entitlements
-   apps/desktop/src-tauri/entitlements.plist --sign "$APPLE_SIGNING_IDENTITY"
+   `./build.sh --ts --sea` (→ `packages/cli/dist-sea/<rid>/codegraph`), place
+   it as the sidecar (`node apps/desktop/scripts/sidecar.mjs` copies it to
+   `apps/desktop/src-tauri/binaries/codegraph-<triple>`), sign that copy as
+   the `desktop-bundle` job does (`codesign --force --options runtime
+   --timestamp --entitlements apps/desktop/src-tauri/entitlements.plist --sign
+   "$APPLE_SIGNING_IDENTITY"
    apps/desktop/src-tauri/binaries/codegraph-<triple>`), then
-   `pnpm --filter @codegraph/desktop tauri:build` — Tauri submits the app for
+   `pnpm --filter @codegraph/desktop exec tauri build --bundles dmg` — NOT
+   `tauri:build`, which re-runs `sidecar.mjs` and overwrites the signed copy
+   with the unsigned image. Tauri submits the app for
    notarization and waits — and check the result as a user's Mac will:
    `codesign --verify --deep --strict`, `xcrun stapler validate`,
    `spctl --assess --type execute` on the `.app`. A rejection's reason is in
