@@ -25,6 +25,7 @@ one deployment.
 | `assets/css/colors_and_type.css` | the design system's token layer, copied from the Defsquare Design System project |
 | `assets/css/landing.css` | layout only — every colour, size and space is a token |
 | `static/fonts/` | IBM Plex Sans Condensed, self-hosted. EB Garamond and Fira Code come from Google Fonts, as the design system specifies |
+| `static/city/` | the live cities: one laid-out `<corpus>-city.json` per corpus (committed) beside the `@codegraph/viz` bundle `pnpm run viz` copies in (gitignored). `/city/?src=<corpus>-city.json` opens one; the landing's corpora tabs embed them in iframes |
 | `static/img/` | the codegraph logo (four variants), the generated city, the Defsquare logo, the favicon |
 | `themes/hextra/` | the documentation theme, a git submodule |
 

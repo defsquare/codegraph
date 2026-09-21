@@ -1,17 +1,19 @@
 # The website — the landing page at / and the documentation at /docs/, one
 # Hugo site (Hextra vendored as a git submodule) — built with the same pinned
-# Hugo version a developer runs locally. Independent of the Node toolchain,
-# and of ci.yml: it runs only when website/ changes, and ci.yml ignores
-# website/, so a docs-only commit builds the site and nothing else.
+# Hugo version a developer runs locally, after the viz bundle it embeds at
+# /city/ (so it needs pnpm, and a change to packages/viz is a change to the
+# site). Independent of ci.yml: it runs only when the site's inputs change,
+# and ci.yml ignores website/, so a docs-only commit builds the site and
+# nothing else.
 
 name: website
 
 on:
   push:
     branches: [main]
-    paths: ["website/**", ".github/workflows/website.yml"]
+    paths: ["website/**", "packages/viz/**", ".github/workflows/website.yml"]
   pull_request:
-    paths: ["website/**", ".github/workflows/website.yml"]
+    paths: ["website/**", "packages/viz/**", ".github/workflows/website.yml"]
 
 permissions:
   contents: read
@@ -29,7 +31,16 @@ jobs:
         with:
           hugo-version: "0.165.0"
           extended: true
-      - run: cd website && hugo --minify --gc
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # builds the viz bundle into static/city/ (the live city at /city/), then hugo
+      - run: pnpm --filter @codegraph/website build
       - uses: actions/upload-artifact@v4
         with:
           name: website
