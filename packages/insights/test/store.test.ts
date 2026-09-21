@@ -18,7 +18,7 @@ import {
   type TypeBlock,
 } from "../src/schema.js";
 import { decodeInsights, encodeInsightsToString } from "../src/sidecar.js";
-import { INSIGHTS_APPLICATION_ID, INSIGHTS_DB_VERSION, InsightsStoreError, insightsStorePathFor } from "../src/store.js";
+import { INSIGHTS_APPLICATION_ID, INSIGHTS_DB_VERSION, INSIGHT_ANSWER_KIND, InsightsStoreError, answerInsight, insightsStorePathFor } from "../src/store.js";
 import { storeBook, summaryOf } from "../src/records.js";
 import { sqliteInsightsStore } from "../src/store-sqlite.js";
 
@@ -298,6 +298,124 @@ describe("export streams (M16b): the side-car never has to exist in memory", () 
     expect(exportOf(store)).toBe(sidecar);
     expect(widest).toBeGreaterThan(0);
     expect(widest).toBeLessThanOrEqual(500);
+  });
+});
+
+describe("a reader's questions (M16c): projections, never blocks — and a store opened read-only", () => {
+  const module_ = (id: string, context: string | null): InsightRecord => ({
+    t: "i", id, level: "module", kind: "package", origin: "llm", fingerprint: FP,
+    block: { ...MODULE, boundedContextHint: context === null ? null : { name: context, rationale: "r" } },
+  });
+  const typed = (id: string, concept: TypeBlock["concept"], confidence: number, extra: Partial<InsightRecord> = {}): InsightRecord =>
+    ({ ...type(id), block: { ...TYPE, concept, confidence, description: `About ${id}.` }, ...extra }) as InsightRecord;
+  const seeded = () => {
+    const store = memory();
+    store.importFile(decodeInsights(encodeInsightsToString(HEADER, [
+      op("o/a", { origin: "template" }), op("o/b"),
+      typed("t/Order", "aggregate", 0.9, { name: "Order", file: "Order.java", model: "m-served" }), typed("t/Money", "valueType", 0.4), typed("t/Line", "entity", 0.7),
+      module_("m/order", "Ordering"),
+    ], eof(6, 1), [failure("o/x")])));
+    return store;
+  };
+
+  it("query() filters on the envelope and the generated columns, in side-car order, without a block in sight", () => {
+    const store = seeded();
+    expect(store.query({ concept: "aggregate" })).toEqual([
+      { id: "t/Order", level: "type", kind: "class", name: "Order", file: "Order.java", origin: "llm", model: "m-served", confidence: 0.9, description: "About t/Order.", concept: "aggregate" },
+    ]);
+    expect(store.query({ level: "type" }).map((r) => r.id)).toEqual(["t/Line", "t/Money", "t/Order"]);
+    expect(store.query({ level: "type", maxConfidence: 0.7 }).map((r) => r.id)).toEqual(["t/Line", "t/Money"]);
+    expect(store.query({ minConfidence: 0.7, maxConfidence: 0.9 }).map((r) => r.id)).toEqual(["t/Line", "t/Order"]);
+    expect(store.query({ ids: ["t/Money", "nope", "o/a"] }).map((r) => r.id)).toEqual(["o/a", "t/Money"]);
+    expect(store.query({ level: "type", limit: 2 }).map((r) => r.id)).toEqual(["t/Line", "t/Money"]);
+    expect(store.query({}).length).toBe(6);
+  });
+
+  it("a row's concept is THE label a prompt would quote — one rule, whoever asks", () => {
+    const store = seeded();
+    const byId = new Map(store.query({}).map((r) => [r.id, r.concept]));
+    expect(byId.get("o/b")).toBe("owned by entity");
+    expect(byId.get("m/order")).toBe("context: Ordering");
+    for (const row of store.query({})) expect(row.concept).toBe(store.summary(row.id)?.concept);
+  });
+
+  it("stats() counts what was bought: by level, by origin, by type concept, and what is owed", () => {
+    expect(seeded().stats()).toEqual({
+      records: 6,
+      failures: 1,
+      byLevel: { operation: 2, type: 3, module: 1 },
+      byOrigin: { llm: 5, template: 1 },
+      byConcept: { aggregate: 1, entity: 1, valueType: 1 },
+      usage: { promptTokens: 0, completionTokens: 0 },
+    });
+    // What the records that exist cost, from their own usage — it survives an import, the ledger does not.
+    const paid = memory();
+    paid.importFile(decodeInsights(encodeInsightsToString(HEADER, [
+      op("o/a", { usage: { promptTokens: 100, completionTokens: 20, cost: 0.001 } }),
+      op("o/b", { usage: { promptTokens: 50, completionTokens: 5 } }),
+      op("o/c", { origin: "template" }),
+    ], eof(3))));
+    expect(paid.stats().usage).toEqual({ promptTokens: 150, completionTokens: 25, cost: 0.001 });
+  });
+
+  it("runs() is the ledger the side-car never had: every run, oldest first, with what it spent", () => {
+    const store = seeded();
+    const first = store.beginRun({ header: HEADER, startedAt: "2026-09-19T10:00:00.000Z", pid: 1 });
+    store.finishRun(first, { eof: eof(6), failures: [], calls: 12 });
+    const second = store.beginRun({ header: { ...HEADER, models: { leaf: "a", rollup: "b" } }, startedAt: "2026-09-20T10:00:00.000Z" });
+    store.closeRun(second.id, "interrupted");
+    expect(store.runs()).toEqual([
+      { id: first.id, startedAt: "2026-09-19T10:00:00.000Z", finishedAt: "2026-09-19T00:00:00.000Z", provider: "openrouter", models: { leaf: "m", rollup: "m" }, depth: 1, counts: { llm: 6, template: 0, reused: 0, failed: 0, calls: 12 }, usage: { promptTokens: 10, completionTokens: 2, cost: 0.001 }, aborted: undefined },
+      { id: second.id, startedAt: "2026-09-20T10:00:00.000Z", finishedAt: "2026-09-20T10:00:00.000Z", provider: "openrouter", models: { leaf: "a", rollup: "b" }, depth: 1, counts: undefined, usage: undefined, aborted: "interrupted" },
+    ]);
+  });
+
+  it("answerInsight(): what a page is told about ONE id — the record, why there is none, or that nobody asked", () => {
+    const store = seeded();
+    const found = answerInsight(store, "t/Order");
+    expect(found).toEqual({ kind: INSIGHT_ANSWER_KIND, id: "t/Order", status: "explained", record: store.get(["t/Order"])[0] });
+    // A member of a failed unit is answered with the unit's failure, not with silence.
+    const cycle = memory();
+    cycle.importFile(decodeInsights(encodeInsightsToString(HEADER, [], eof(0, 1), [failure("o/x", { members: ["o/x", "o/y"] })])));
+    expect(answerInsight(cycle, "o/y")).toEqual({ kind: INSIGHT_ANSWER_KIND, id: "o/y", status: "failed", failure: failure("o/x", { members: ["o/x", "o/y"] }) });
+    expect(answerInsight(store, "never/asked")).toEqual({ kind: INSIGHT_ANSWER_KIND, id: "never/asked", status: "unknown" });
+  });
+
+  describe("read-only", () => {
+    let dir: string | undefined;
+    afterEach(() => {
+      if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+      dir = undefined;
+    });
+
+    it("reads a store without writing a byte to it, and refuses to write through it", () => {
+      dir = mkdtempSync(join(tmpdir(), "insights-ro-"));
+      const path = join(dir, "model.insights.db");
+      const writer = sqliteInsightsStore(loadSqlite().open(path));
+      writer.importFile(decodeInsights(encodeInsightsToString(HEADER, [op("o/a")], eof(1))));
+      writer.close();
+      const before = readFileSync(path);
+
+      // An ordinary connection that SQLite itself forbids to write (query_only). A read-only FILE handle would
+      // do too, but it may not clean up after itself and strands -wal/-shm beside the model.
+      const reader = sqliteInsightsStore(loadSqlite().open(path), { readOnly: true });
+      expect(reader.query({}).map((r) => r.id)).toEqual(["o/a"]);
+      expect(reader.stats().records).toBe(1);
+      expect(() => reader.importFile(decodeInsights(encodeInsightsToString(HEADER, [], eof(0))))).toThrow(/readonly/u);
+      expect(() => reader.beginRun({ header: HEADER, startedAt: "t" })).toThrow(/readonly/u);
+      reader.close();
+      expect(readFileSync(path).equals(before)).toBe(true);
+      expect(readdirSync(dir)).toEqual(["model.insights.db"]);
+    });
+
+    it("an empty or foreign file is refused read-only too — a reader never creates a store", () => {
+      dir = mkdtempSync(join(tmpdir(), "insights-ro-"));
+      const path = join(dir, "other.db");
+      const db = loadSqlite().open(path);
+      db.exec("CREATE TABLE entity (id INTEGER PRIMARY KEY)");
+      db.close();
+      expect(() => sqliteInsightsStore(loadSqlite().open(path, { readOnly: true }), { readOnly: true })).toThrow(/not an insights store/u);
+    });
   });
 });
 

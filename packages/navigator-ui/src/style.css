@@ -382,6 +382,114 @@ button.twisty:hover {
   color: var(--paper-faint);
 }
 
+/*
+ * A language model's reading of the node — the one thing on this page that is
+ * not extracted from the source. It wears the inference colour, as a
+ * non-declared dependency row does: an inference never looks like a fact.
+ */
+.insight {
+  margin-top: 12px;
+  padding: 8px 0 2px 12px;
+  border-left: 2px solid var(--inference);
+  max-width: 900px;
+}
+
+.insight-byline {
+  margin: 0 0 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  font-size: 11px;
+  color: var(--paper-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.insight-byline strong {
+  color: var(--paper);
+}
+
+.insight-badge {
+  font-size: 10px;
+  color: var(--inference);
+  border: 1px solid var(--inference);
+  border-radius: 2px;
+  padding: 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.insight-concept {
+  font-family: var(--mono);
+  color: var(--paper);
+}
+
+.insight-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--paper);
+  white-space: pre-line;
+}
+
+.insight-failed {
+  border-left-color: var(--paper-faint);
+}
+
+.insight-failed .insight-badge {
+  color: var(--paper-dim);
+  border-color: var(--paper-faint);
+}
+
+.insight-reason {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--paper-dim);
+  overflow-wrap: anywhere;
+}
+
+.insight-facts {
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.insight-facts summary {
+  cursor: pointer;
+  color: var(--paper-dim);
+}
+
+.insight-facts summary:hover {
+  color: var(--paper);
+}
+
+.insight-facts dl {
+  margin: 8px 0 0;
+  display: grid;
+  gap: 6px;
+  /* A JPA entity lists thirty fields: the reading scrolls, the dependency rows below stay in reach. */
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.insight-facts dl > div {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 12px;
+}
+
+.insight-facts dt {
+  color: var(--paper-faint);
+}
+
+.insight-facts dd {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+  color: var(--paper-dim);
+  overflow-wrap: anywhere;
+}
+
 .pane-tabs {
   display: flex;
   gap: 2px;

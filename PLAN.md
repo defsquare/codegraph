@@ -3868,13 +3868,54 @@ only say it a layer late).
     `explain` rebuilds the whole model (78 017 entities, ~156 MB, 2.5 s) to
     label records with `(lang, module, symbol)`. Not a records problem; see
     §17.4.
-- **M16c — the first reader.** `codegraph insights <model> [--id ID]
-  [--concept aggregate] [--min-confidence X] [--json]` over the store,
-  read-only; then the daemon route the Navigate panel asks for a selected
-  node's description (one `get`, no artifact — `navigator.json` does not
-  grow by 26 MB of prose). The navigator-ui guard learns the route; the page
-  renders with no store present. Design the panel against screenshots before
-  writing it; this step may split.
+- **M16c — the first reader.** ✅ (2026-09-21) Two readers, one rule each.
+
+  *The store as a reader sees it.* `sqliteInsightsStore(db, { readOnly: true })`
+  migrates nothing and lets SQLite refuse every write (`PRAGMA query_only`); a
+  store not already at this build's version is refused, not brought to it. It
+  is handed an ORDINARY connection, not a read-only file handle: the first
+  attempt was the latter, and it stranded `-wal`/`-shm` beside the model — a
+  read-only handle on a WAL database may not clean up after itself. The port
+  gains what a reader asks and none of it reads a block: `query()` (level,
+  concept, confidence range, ids, limit → ROWS: envelope + description + the
+  same `conceptLabel` a prompt quotes), `stats()` (by level / origin / type
+  concept, what is owed, and the records' OWN usage — which survives an import
+  where the run ledger does not), `runs()` (the ledger), and `answerInsight()`
+  — explained / failed / unknown — the one rule both readers below answer by.
+
+  *`codegraph insights [model.jsonl]`.* One question per invocation: the
+  summary (no flag), a tab-separated list (`--level`, `--concept`,
+  `--min/--max-confidence`, `--limit`), one explanation whole (`--id`; an id
+  that FAILED is answered with why, exit 3), `--failures`, `--runs`; `--json`
+  is one kind-tagged document each. It opens the store and nothing else — the
+  model path only says WHICH store (`--store FILE` otherwise), and it does not
+  import `explain.ts`, whose module graph is the provider SDK. On Broadleaf:
+  0.14–0.18 s and ~81 MB (Node's floor) for any question over 28 206 records,
+  the store's hash unchanged and no file beside it.
+
+  *The Navigate panel.* `codegraph serve` gains its ONE route that is not an
+  artifact — `/insight.json?id=…`, a lookup (`ArtifactServerOptions.lookups`)
+  over a reader opened on first request, so a store `explain` creates while
+  the page is open is found; `--insights FILE` names it, the default is beside
+  the first model. No store, a foreign one, an id nobody explained: 404, and
+  the page shows nothing. `navigator-ui` restates the answer's kind as a
+  literal pinned by a test and imports `@codegraph/insights` not even for
+  types (a second boundary test); the loader asks once per id and stops asking
+  a server that answers the route with HTML (the app daemon, a static host,
+  Vite). The block renders GENERICALLY (`blockFacts`): its shape moves with
+  the prompt version, and a panel naming fields would lag every change.
+  **An inference never looks like a fact:** the block wears the page's
+  `--inference` colour and a badge in the family of `DERIVED` /
+  `DYNAMIC-CANDIDATE`, names the model and its claimed confidence, and says
+  `templated` when no model was involved. Reviewed as screenshots on Broadleaf
+  (`ProductImpl`, the `catalog.domain` package), which is where the opened
+  fact list earned its `max-height`: a JPA entity lists thirty fields.
+
+  Left out, deliberately: **operations.** A navigator member node carries no
+  entity id (the artifact would double — NV), and ids are never constructed
+  (invariant 7), so the panel explains types and modules; `codegraph insights
+  --id` reaches an operation's record. And the desktop daemon serves no
+  insights yet (§17.4).
 
 Tests that pin the decisions: the round trip (above); **crash safety** — kill
 after N `put`s, reopen, N records reused, the failure rows of that run
@@ -3956,7 +3997,7 @@ resumes with its records AND its failures; `pnpm -r test`, typecheck and
 | M15c | Elixir extractor — audit + oracles + distribution | ✅ (2026-09-16) `elixir-lang/elixir` `lib` (557 files, 27 061 / 78 564, 17 s, 80.8 %), Phoenix (205, 5 828 / 14 314, 76.7 %) and Plausible (1 256, 16 369 / 43 661, 58.2 %) audited `validate`-clean, byte-identical to core's encoder, the causes in the profile notes; four defects found and fixed (variadic special forms counted as unbound locals, binary specifiers read as calls, repeated head names re-keying parameters, a corpus `use` treated as no injection source); `--explain-dropped` lists every dropped site; `mix codegraph.trace` (a compilation tracer, JSONL events) + `--trace` merging `generated` edges through the closing rules (Phoenix: 16 797 events → 5 895 edges); the `mix xref` witness check (147/148 on Phoenix) and the trace superset check as opt-in real-corpus tests (`CODEGRAPH_CORPUS_ELIXIR`); the Burrito binary (Zig 0.16, `build.sh --elixir --native`, `test.sh` `cmp`), `elixir-smoke` on three OS runners, `elixir-native` on two, `hex-publish` on a tag; README, CLAUDE.md and `docs/elixir-extractor.md` name the extractor. Deferred: the M14 registry entry and cask stanza (M14 is not on main yet), the Windows native binary (needs 7z on the runner) |
 | M16a | Insights store — the storage swap | ✅ (2026-09-19) `<model>.insights.db` (§17) as `explain`'s working copy behind an `InsightsStore` port in `@codegraph/insights`, its SQLite adapter handed an open database (the analyzer's `loadSqlite()` stays the one load site — the hygiene guard caught three comments naming the specifier); one transaction per finished unit and failures written when they happen (`onUnit`/`onFailure` in `executeRun`); the journal writer and the per-layer 47 MB rewrite deleted; the side-car an atomic deterministic export at the end of a run, imported on first contact by the first run that WRITES (`--dry-run`/`--estimate` create nothing), an outside edit warned about and never obeyed; `--export`, `--import FILE` (asks); a run records its pid — a live writer is refused, a dead one resumed with its records AND its failures; a migration ladder on `user_version` + `application_id`, a newer or foreign file refused with its bytes unchanged; round trip byte-identical as a fast-check property and on Broadleaf (28 206 records, 47.5 MB, `cmp`-equal; store 57 MB — 96 MB before `WITHOUT ROWID` was measured and dropped); 18 store tests + 2 run-hook tests + 11 CLI tests incl. a real-disk run |
 | M16b | Insights store — lazy reads | ✅ (2026-09-20) a `RecordSource` keeps a plan's question (`fingerprint`, no block) apart from a prompt's (`summary`: description + the Specy word, projected in SQL and pinned equal to the in-memory rule by a property, read once however often quoted); a `RecordBook`'s `put` is the store's commit, so `executeRun` holds no record; the export streams 500 records at a time into ~1 MB writes. Every plan — reuse-all, `--force` (17 809 prompts quoting the store), the fixture — and every exported record `cmp`-equal to M16a's. Records held by a plan: 68 MB → 7 MB (27 MB with every summary quoted); a 0-call run 1 094 MB · 37 s → 936 MB · 10.6 s, the time being `synchronous = NORMAL` undoing M16a's fsync per templated unit. Stated plainly in §17.3: `--dry-run` peak RSS did NOT move (676 → 686 MB) — the graph is ~580 MB of it, the records never were the cost; a first cut that re-read a whole record per quote was byte-identical and twice as slow (1 521 MB), which is why the gate measures and does not only compare |
-| M16c | Insights store — the first reader | `codegraph insights <model>` (by id, concept, confidence; read-only) and the daemon route serving a selected node's description to the Navigate panel — `navigator.json` does not grow; the page renders with no store present; screenshots reviewed |
+| M16c | Insights store — the first reader | ✅ (2026-09-21) the store opened as a READER (`query_only` on an ordinary connection — a read-only file handle stranded `-wal`/`-shm` beside the model; no migration, an older or foreign store refused) with `query`/`stats`/`runs` projecting rows, never blocks, and `answerInsight` (explained / failed / unknown) as the one rule both readers share; `codegraph insights` — summary, tab-separated lists by level / concept / confidence, one explanation whole (`--id`, a failed id answered with why, exit 3), `--failures`, `--runs`, `--json` — opening the store and nothing else, not even `explain.ts` (the provider SDK): 0.14–0.18 s and ~81 MB on Broadleaf's 28 206 records, the store's hash unchanged; `codegraph serve`'s one lookup route `/insight.json?id=…` (`--insights FILE`, reader opened on first request, 404 and a silent page when there is nothing) and the Navigate panel's explanation block for types and modules — kind restated and pinned, `@codegraph/insights` not imported even for types, block rendered generically, asked once per id, and marked as an INFERENCE in the page's own colour and badge family; screenshots reviewed on Broadleaf. Operations wait on member ids the navigator artifact does not carry |
 
 ## 19. Decisions made in this plan (deltas vs. the design doc)
 

@@ -29,6 +29,7 @@ export const COMMAND_NAMES = [
   "serve",
   "domain-facts",
   "explain",
+  "insights",
   "scm",
   "snapshots",
   "history",
@@ -419,6 +420,14 @@ export const SERVE_SPEC: CommandSpec = {
         "{ name, path, extensions[], launch?, env? } — the daemon runs an entry, never a language.",
       placeholder: "FILE",
     },
+    {
+      name: "insights",
+      type: "string",
+      describe:
+        "The insights store behind the page's explanation panel (what 'codegraph explain' wrote). " +
+        "Default: <model>.insights.db beside the first model; with none, the page simply shows no explanations.",
+      placeholder: "FILE",
+    },
   ],
 };
 
@@ -635,6 +644,85 @@ export const EXPLAIN_SPEC: CommandSpec = {
       describe:
         "Run without asking. Otherwise a run that makes model calls prints its token estimate " +
         "and waits for confirmation — which needs an interactive terminal.",
+    },
+    JSON_OPTION,
+  ],
+};
+
+/** `insights --level` values: the three levels of the walk, as the side-car spells them. */
+export const INSIGHT_LEVELS = ["operation", "type", "module"] as const;
+export type InsightLevel = (typeof INSIGHT_LEVELS)[number];
+
+/**
+ * `codegraph insights`: the first READER of the insights store (PLAN.md §17.3,
+ * M16c). It opens `<model>.insights.db` and nothing else — not the model, not
+ * the side-car, no provider — so the positional only says WHICH store.
+ */
+export const INSIGHTS_SPEC: CommandSpec = {
+  name: "insights",
+  summary: "Query what `explain` has written: a summary, a list, one explanation, the run ledger.",
+  positional: {
+    name: "model.jsonl",
+    describe: "The model whose insights store (<model>.insights.db, beside it) to read. The model itself is not opened.",
+    variadic: false,
+    required: false,
+    defaultPath: defaultModelPath,
+  },
+  options: [
+    {
+      name: "store",
+      type: "string",
+      describe: "Read this store instead of the one beside the model (explain --out FILE puts it at FILE with .db for .jsonl).",
+      placeholder: "FILE",
+    },
+    {
+      name: "id",
+      type: "string",
+      describe:
+        "Print ONE explanation in full — envelope, description, block — for this entity id, exactly as the model " +
+        "renders it. An id that failed is answered with the reason (exit 3).",
+      placeholder: "ID",
+    },
+    {
+      name: "level",
+      type: "string",
+      describe: "List the records of one level.",
+      choices: INSIGHT_LEVELS,
+    },
+    {
+      name: "concept",
+      type: "string",
+      describe: "List the TYPES the model classified as this domain concept (aggregate, entity, valueType, repository…).",
+      placeholder: "NAME",
+    },
+    {
+      name: "min-confidence",
+      type: "string",
+      describe: "List records whose confidence is at least this (0 to 1).",
+      placeholder: "X",
+    },
+    {
+      name: "max-confidence",
+      type: "string",
+      describe: "List records whose confidence is at most this — what deserves a second look.",
+      placeholder: "X",
+    },
+    {
+      name: "limit",
+      type: "string",
+      describe: "Stop a list after N rows (side-car order: operations, types, modules, by id).",
+      placeholder: "N",
+      integer: true,
+    },
+    {
+      name: "failures",
+      type: "boolean",
+      describe: "List the units still owed an explanation, with the reason each one failed.",
+    },
+    {
+      name: "runs",
+      type: "boolean",
+      describe: "Print the run ledger, oldest first: when, which models, what each run explained and spent.",
     },
     JSON_OPTION,
   ],
@@ -969,6 +1057,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   SERVE_SPEC,
   DOMAIN_FACTS_SPEC,
   EXPLAIN_SPEC,
+  INSIGHTS_SPEC,
   SCM_SPEC,
   SNAPSHOTS_SPEC,
   HISTORY_SPEC,
@@ -1053,6 +1142,8 @@ export interface ServeOptions extends ModelInputOptions, CityBuildOptions, Cache
   readonly host: string;
   /** `--app`: the daemon form; `models` is then empty. */
   readonly app: AppOptions | undefined;
+  /** `--insights FILE`: the insights store behind the explanation panel; undefined = beside the first model. */
+  readonly insights: string | undefined;
 }
 
 export interface DomainFactsOptions extends ModelInputOptions, ViewOptions, CacheOptions {
@@ -1096,6 +1187,24 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly importFrom: string | undefined;
   /** `--yes`: skip the estimate-and-confirm step before a run that makes calls. */
   readonly yes: boolean;
+  readonly json: boolean;
+}
+
+/** What `insights` prints: exactly one of these, decided by the flags. */
+export type InsightsMode = "summary" | "list" | "one" | "failures" | "runs";
+
+export interface InsightsOptions {
+  /** The model path the store sits beside; never opened. */
+  readonly model: string;
+  /** `--store FILE`; undefined = `<model>.insights.db`. */
+  readonly store: string | undefined;
+  readonly mode: InsightsMode;
+  readonly id: string | undefined;
+  readonly level: InsightLevel | undefined;
+  readonly concept: string | undefined;
+  readonly minConfidence: number | undefined;
+  readonly maxConfidence: number | undefined;
+  readonly limit: number | undefined;
   readonly json: boolean;
 }
 
@@ -1197,6 +1306,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
   | { readonly kind: "run"; readonly command: "navigator"; readonly options: NavigatorOptions }
   | { readonly kind: "run"; readonly command: "serve"; readonly options: ServeOptions }
+  | { readonly kind: "run"; readonly command: "insights"; readonly options: InsightsOptions }
   | { readonly kind: "run"; readonly command: "domain-facts"; readonly options: DomainFactsOptions }
   | { readonly kind: "run"; readonly command: "explain"; readonly options: ExplainOptions }
   | { readonly kind: "run"; readonly command: "scm"; readonly options: ScmOptions }
@@ -1378,6 +1488,16 @@ function priceOf(values: ParsedValues, name: string): number | undefined {
     throw new UsageError(`--${name} must be a non-negative USD amount per million tokens, got '${raw}'`, "Example: --price-in 0.10 --price-out 0.60");
   }
   return price;
+}
+
+function confidenceOf(values: ParsedValues, name: string): number | undefined {
+  const raw = stringOf(values, name);
+  if (raw === undefined) return undefined;
+  const confidence = Number(raw);
+  if (raw.trim() === "" || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+    throw new UsageError(`--${name} must be a number between 0 and 1, got '${raw}'`, "A record's confidence is the model's own, clamped to [0, 1]. Example: --max-confidence 0.5");
+  }
+  return confidence;
 }
 
 function levelOf(values: ParsedValues): FoldLevel {
@@ -1693,6 +1813,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           host: app !== undefined && stringOf(values, "host") === undefined ? LOOPBACK : hostOf(values, spec),
           noCache: flagOf(values, "no-cache"),
           app,
+          insights: stringOf(values, "insights"),
         },
       };
     }
@@ -1758,6 +1879,37 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           exportOnly: flagOf(values, "export"),
           importFrom: stringOf(values, "import"),
           yes: flagOf(values, "yes"),
+          json: flagOf(values, "json"),
+        },
+      };
+    }
+    case "insights": {
+      const id = stringOf(values, "id");
+      const filters = ["level", "concept", "min-confidence", "max-confidence", "limit"].filter((name) => stringOf(values, name) !== undefined);
+      // One question per invocation: the four shapes print different things.
+      const asked = [id === undefined ? undefined : "--id", flagOf(values, "failures") ? "--failures" : undefined, flagOf(values, "runs") ? "--runs" : undefined, filters.length === 0 ? undefined : `--${filters[0] ?? ""}`].filter(
+        (flag): flag is string => flag !== undefined,
+      );
+      if (asked.length > 1) {
+        throw new UsageError(
+          `${asked.join(" and ")} ask different questions`,
+          "Pass one of: --id ID (one explanation), a list filter (--level, --concept, --min/--max-confidence), --failures, --runs — or none, for the summary.",
+        );
+      }
+      const mode: InsightsMode = id !== undefined ? "one" : flagOf(values, "failures") ? "failures" : flagOf(values, "runs") ? "runs" : filters.length > 0 ? "list" : "summary";
+      return {
+        kind: "run",
+        command: "insights",
+        options: {
+          model: models[0] as string,
+          store: stringOf(values, "store"),
+          mode,
+          id,
+          level: stringOf(values, "level") as InsightLevel | undefined,
+          concept: stringOf(values, "concept"),
+          minConfidence: confidenceOf(values, "min-confidence"),
+          maxConfidence: confidenceOf(values, "max-confidence"),
+          limit: integerOf(values, "limit"),
           json: flagOf(values, "json"),
         },
       };

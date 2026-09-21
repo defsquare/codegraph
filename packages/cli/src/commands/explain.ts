@@ -42,6 +42,7 @@ import { clientFromEnv, resolveProvider, type LlmClient, type Provider } from "@
 import type { ExplainOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, errLines, outLine, type IoSink } from "../io.js";
+import { sidecarPathFor } from "../insights-paths.js";
 import { openAnalysis } from "../source.js";
 import { resolveView } from "../view.js";
 
@@ -108,6 +109,8 @@ export interface ExplainSeam {
   /** Asks a yes/no question; undefined when there is no interactive terminal to ask on. */
   readonly confirm: ((question: string) => Promise<boolean>) | undefined;
 }
+
+export { sidecarPathFor };
 
 export function realSeam(): ExplainSeam {
   return {
@@ -438,9 +441,6 @@ async function importOnly(from: string, out: string, storePath: string, options:
   }
 }
 
-export function sidecarPathFor(modelPath: string): string {
-  return modelPath.endsWith(".jsonl") ? `${modelPath.slice(0, -".jsonl".length)}.insights.jsonl` : `${modelPath}.insights.jsonl`;
-}
 
 /**
  * `--src`, or the model's recorded root. Probed against the first anchor so a

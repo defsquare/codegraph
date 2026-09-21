@@ -218,9 +218,16 @@ codegraph explain gson.jsonl --src ~/src/gson/gson/src/main/java --dry-run   # t
 codegraph explain gson.jsonl --src ... --estimate --price-in 0.10 --price-out 0.60   # tokens and cost, no call
 OPENROUTER_API_KEY=… codegraph explain gson.jsonl --src ... --max-calls 50   # shows the estimate, asks [y/N]
 codegraph explain gson.jsonl --src ... --model openai/gpt-5.6-luna --rollup-model anthropic/claude-sonnet-5   # pick the models
+codegraph insights gson.jsonl                          # what was bought: records, concepts, what is owed, the spend
+codegraph insights gson.jsonl --concept aggregate      # the types the model read as aggregates
+codegraph insights gson.jsonl --max-confidence 0.5     # what deserves a second look
+codegraph insights gson.jsonl --id 'java:com.google.gson/Gson'   # one explanation, whole
 ```
 
-Explanations go to `gson.insights.jsonl` beside the model and never into it.
+Explanations go to `gson.insights.db` beside the model — every finished unit
+committed as it arrives, so a killed run loses nothing it paid for — and to
+its export, `gson.insights.jsonl`; never into the model. `codegraph serve`
+shows them on the selected type or module, marked as a model's inference.
 Re-running redoes only the units whose inputs changed. On the reference
 fixture a full run was 68 calls and about six cents. `--model` sets the model
 for every unit (default `openai/gpt-5.6-luna`); `--rollup-model` overrides it

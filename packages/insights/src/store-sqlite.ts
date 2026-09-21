@@ -14,11 +14,16 @@ import {
   INSIGHTS_DB_VERSION,
   InsightsStoreError,
   type ExportStamp,
+  type InsightQuery,
+  type InsightRow,
+  type InsightStats,
   type InsightsStore,
   type OpenRun,
   type RunEnd,
   type RunHandle,
+  type RunRow,
   type RunStart,
+  type StoreOpenOptions,
 } from "./store.js";
 
 /**
@@ -131,16 +136,28 @@ function pragma(db: SqliteDatabase, name: string): number {
 }
 
 /** Refuse before writing a byte: a store that is not ours, or is from a later build, is left as found. */
-function migrate(db: SqliteDatabase): void {
+function migrate(db: SqliteDatabase, readOnly: boolean): void {
   const version = pragma(db, "user_version");
   const tables = Number(db.prepare("SELECT count(*) AS n FROM sqlite_master").get()?.["n"] ?? 0);
   if (tables > 0 && pragma(db, "application_id") !== INSIGHTS_APPLICATION_ID) {
     throw new InsightsStoreError("this SQLite file is not an insights store (it holds other tables and carries no insights application id)");
   }
+  if (readOnly) {
+    // A reader brings nothing up to date: an empty file is not a store, and an older one waits for a run to migrate it.
+    if (tables === 0) throw new InsightsStoreError("this file is not an insights store (it is empty)");
+    if (version < INSIGHTS_DB_VERSION) {
+      throw new InsightsStoreError(`this insights store is at version ${version} and this build reads ${INSIGHTS_DB_VERSION}; any 'codegraph explain' run on it migrates it`);
+    }
+  }
   if (version > INSIGHTS_DB_VERSION) {
     throw new InsightsStoreError(
       `this insights store was written by a newer codegraph (store version ${version}, this build reads up to ${INSIGHTS_DB_VERSION}); it was left untouched`,
     );
+  }
+  // A reader runs no migration and sets nothing that lands in the file; SQLite enforces the rest.
+  if (readOnly) {
+    db.exec("PRAGMA query_only = ON; PRAGMA busy_timeout = 5000;");
+    return;
   }
   // synchronous = NORMAL is WAL's intended setting: a commit survives the PROCESS dying (kill, OOM, Ctrl-C —
   // what a long run actually meets) without an fsync per unit; only a power cut can lose the last few commits,
@@ -218,8 +235,8 @@ function failureOf(row: SqliteRow): FailureRecord {
   );
 }
 
-export function sqliteInsightsStore(db: SqliteDatabase): InsightsStore {
-  migrate(db);
+export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOptions = {}): InsightsStore {
+  migrate(db, options.readOnly === true);
 
   const insertInsight = db.prepare(`INSERT OR REPLACE INTO insight (${INSIGHT_COLUMNS}, run_id) VALUES (${"?, ".repeat(18)}?)`);
   const insertFailure = db.prepare(`INSERT OR REPLACE INTO failure (${FAILURE_COLUMNS}, run_id) VALUES (${"?, ".repeat(14)}?)`);
@@ -316,6 +333,95 @@ export function sqliteInsightsStore(db: SqliteDatabase): InsightsStore {
     return index.map((entry) => entry[0]);
   };
 
+  const ROW_COLUMNS =
+    "id, level, kind, name, file, origin, model, confidence, block -> '$.description' AS description, block -> '$.owner' AS owner, block -> '$.concept' AS block_concept, block -> '$.boundedContextHint.name' AS context";
+  const rowOf = (row: SqliteRow): InsightRow => {
+    const level = LEVELS[Number(row["level"])] as Level;
+    return {
+      id: row["id"] as string,
+      level,
+      kind: row["kind"] as string,
+      name: text(row, "name"),
+      file: text(row, "file"),
+      origin: row["origin"] as InsightRow["origin"],
+      model: text(row, "model"),
+      confidence: Number(row["confidence"]),
+      description: jsonString(row["description"]) ?? "",
+      concept: conceptLabel(level, { owner: jsonString(row["owner"]), concept: jsonString(row["block_concept"]), context: jsonString(row["context"]) }),
+    };
+  };
+
+  const query = (q: InsightQuery): InsightRow[] => {
+    const where: string[] = [];
+    const params: SqliteValue[] = [];
+    if (q.level !== undefined) {
+      where.push("level = ?");
+      params.push(LEVEL_RANK[q.level]);
+    }
+    if (q.concept !== undefined) {
+      where.push("concept = ?");
+      params.push(q.concept);
+    }
+    if (q.minConfidence !== undefined) {
+      where.push("confidence >= ?");
+      params.push(q.minConfidence);
+    }
+    if (q.maxConfidence !== undefined) {
+      where.push("confidence <= ?");
+      params.push(q.maxConfidence);
+    }
+    // `ids` in chunks, like get(); no ids means one statement over the filter alone.
+    const chunks: (readonly string[] | undefined)[] = [];
+    if (q.ids === undefined) chunks.push(undefined);
+    else for (let start = 0; start < q.ids.length; start += GET_CHUNK) chunks.push(q.ids.slice(start, start + GET_CHUNK));
+    const rows: InsightRow[] = [];
+    for (const chunk of chunks) {
+      const clauses = chunk === undefined ? where : [...where, `id IN (${chunk.map(() => "?").join(", ")})`];
+      const sql = `SELECT ${ROW_COLUMNS} FROM insight${clauses.length === 0 ? "" : ` WHERE ${clauses.join(" AND ")}`}`;
+      for (const row of db.prepare(sql).iterate(...params, ...(chunk ?? []))) rows.push(rowOf(row));
+    }
+    // Side-car order, decided in JS (see the header); the limit cuts AFTER it.
+    rows.sort((a, b) => LEVEL_RANK[a.level] - LEVEL_RANK[b.level] || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    return q.limit === undefined ? rows : rows.slice(0, q.limit);
+  };
+
+  const stats = (): InsightStats => {
+    const byLevel = { operation: 0, type: 0, module: 0 };
+    for (const row of db.prepare("SELECT level, count(*) AS n FROM insight GROUP BY level").all()) byLevel[LEVELS[Number(row["level"])] as Level] = Number(row["n"]);
+    const byOrigin = { llm: 0, template: 0 };
+    for (const row of db.prepare("SELECT origin, count(*) AS n FROM insight GROUP BY origin").all()) byOrigin[row["origin"] as "llm" | "template"] = Number(row["n"]);
+    const concepts = db.prepare("SELECT concept, count(*) AS n FROM insight WHERE concept IS NOT NULL GROUP BY concept").all();
+    const byConcept = Object.fromEntries(concepts.map((row) => [row["concept"] as string, Number(row["n"])] as const).sort((a, b) => (a[0] < b[0] ? -1 : 1)));
+    const spent = db.prepare("SELECT total(prompt_tokens) AS p, total(completion_tokens) AS c, sum(cost) AS cost FROM insight").get();
+    const cost = spent === undefined ? undefined : number(spent, "cost");
+    return {
+      records: byLevel.operation + byLevel.type + byLevel.module,
+      failures: Number(db.prepare("SELECT count(*) AS n FROM failure").get()?.["n"] ?? 0),
+      byLevel,
+      byOrigin,
+      byConcept,
+      usage: { promptTokens: Number(spent?.["p"] ?? 0), completionTokens: Number(spent?.["c"] ?? 0), ...(cost === undefined ? {} : { cost }) },
+    };
+  };
+
+  const runs = (): RunRow[] =>
+    db.prepare("SELECT * FROM run ORDER BY id").all().map((row) => {
+      const cost = number(row, "cost");
+      const promptTokens = number(row, "prompt_tokens");
+      const llm = number(row, "llm");
+      return {
+        id: Number(row["id"]),
+        startedAt: row["started_at"] as string,
+        finishedAt: text(row, "finished_at"),
+        provider: text(row, "provider"),
+        models: { leaf: row["leaf"] as string, rollup: row["rollup"] as string },
+        depth: Number(row["depth"]),
+        counts: llm === undefined ? undefined : { llm, template: number(row, "template") ?? 0, reused: number(row, "reused") ?? 0, failed: number(row, "failed") ?? 0, calls: number(row, "calls") },
+        usage: promptTokens === undefined ? undefined : { promptTokens, completionTokens: number(row, "completion_tokens") ?? 0, ...(cost === undefined ? {} : { cost }) },
+        aborted: text(row, "aborted"),
+      };
+    });
+
   const records = (): InsightRecord[] => {
     const out: InsightRecord[] = [];
     for (const row of db.prepare(`SELECT ${INSIGHT_COLUMNS} FROM insight`).iterate()) out.push(recordOf(row));
@@ -341,6 +447,9 @@ export function sqliteInsightsStore(db: SqliteDatabase): InsightsStore {
     eof,
     records,
     failures,
+    query,
+    stats,
+    runs,
 
     fingerprints() {
       const out = new Map<string, string>();

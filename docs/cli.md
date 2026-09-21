@@ -75,8 +75,13 @@ codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
                    [--max-calls N] [--max-tokens N] [--scope IDS]
                    [--concurrency N]
                    [--max-lines N] [--max-scc N] [--force] [--retry-failed]
-                   [--yes] [--json]
+                   [--export | --import FILE] [--yes] [--json]
                    [--framework spring] [--internal-only] [--declared-only]
+
+codegraph insights [model.jsonl] [--store FILE] [--json]
+                   [--id ID | --failures | --runs |
+                    --level operation|type|module --concept NAME
+                    --min-confidence X --max-confidence X --limit N]
 
 codegraph scm      [repo] [--since DATE] [--out FILE] [--json]
 
@@ -143,6 +148,15 @@ in navigator* and lands on that type's Navigate entry with its dependencies;
 **Coupling** (ranked metrics). The city's channels are the `city` flags
 below, so the page's city is exactly the artifact `city` would write. The
 server hands out `/navigator.json` and `/city.json`; stdout stays empty.
+
+When `explain` has been run, a selected type or module also shows **what the
+model wrote about it** — the description, the domain concept, the model and
+its claimed confidence, and the structured block on demand — marked as an LLM
+inference in the same colour and badge family as a `derived` dependency, never
+as an extracted fact. That comes from the server's one route that is not an
+artifact, `/insight.json?id=…`, looked up in `<model>.insights.db` beside the
+first model (or `--insights FILE`) when asked for. With no store the route
+answers 404 and the page looks exactly as it did.
 
 **`--app`** is the same page as the daemon behind the desktop app (and the
 development loop for it: run it from a checkout, open the URL in a browser).
@@ -234,6 +248,35 @@ side-car; `--retry-failed` redoes just those units and their direct
 dependents. A `401`/`402`/`403` aborts the run instead of failing every
 remaining unit the same way; `--max-tokens N` caps what one answer may cost,
 which on a prepaid account is what keeps a low balance from refusing every call. Design record: [insights.md](insights.md).
+
+### `insights`
+Asks the insights store what `explain` has written — and opens nothing else:
+not the model (its path only says *which* store; `--store FILE` names one
+directly), not the side-car, no provider. Any question over tens of thousands
+of records is an index lookup, a fraction of a second. One question per
+invocation:
+
+- no flag — the summary: records by level, explained vs templated, the models
+  and provider, types by domain concept, what is owed, what these records cost
+  (from their own usage, so it survives an import) and the run ledger's total;
+- `--level operation|type|module`, `--concept NAME` (types: `aggregate`,
+  `entity`, `valueType`, `repository`…), `--min-confidence X` /
+  `--max-confidence X` (what deserves a second look), `--limit N` — a list,
+  one tab-separated line per record: id, concept, confidence, the
+  description's first line. Made for `cut`, `sort` and a spreadsheet;
+- `--id ID` — one explanation whole: envelope, description, block. An id that
+  was asked for and **failed** is answered with the reason, exit `3`; an id the
+  store has never heard of is a usage error;
+- `--failures` — the units still owed, with the reason each failed;
+- `--runs` — the ledger, oldest first: when, which models, what each run
+  explained and spent.
+
+`--json` makes each answer one kind-tagged document (`codegraph.insightsSummary/1`,
+`…List/1`, `…Failures/1`, `…Runs/1`; `--id --json` is the record exactly as the
+side-car carries it). The command writes nothing: the store is opened as a
+reader, a missing one is a usage error rather than a file that appears, and one
+written by a newer codegraph — or a SQLite file that is not an insights store —
+is named and left alone.
 
 ### `scm`
 Mines a repository's git history into a deterministic `history.jsonl`:

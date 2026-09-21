@@ -1,8 +1,10 @@
-import { mkdtempSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { loadSqlite } from "@codegraph/analyzer";
+import { INSIGHTS_GENERATOR, INSIGHTS_KIND, INSIGHTS_METAMODEL, PROMPT_VERSION, sqliteInsightsStore, type InsightRecord } from "@codegraph/insights";
 import { parseInvocation, type ServeOptions } from "../src/args.js";
 import type { DaemonOptions } from "../src/app/daemon.js";
 import { defaultDataDir } from "../src/app/store.js";
@@ -11,6 +13,7 @@ import { EXIT, UsageError } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
 import { runSync } from "../src/main.js";
 import type { FrontendAssets } from "../src/assets.js";
+import type { ArtifactServerOptions } from "../src/serve.js";
 
 /**
  * `codegraph serve` over the committed Spoon output: ONE page, TWO artifacts.
@@ -40,12 +43,15 @@ function options(overrides: Partial<ServeOptions> = {}): ServeOptions {
     port: 4177,
     host: "0.0.0.0",
     app: undefined,
+    insights: undefined,
     ...overrides,
   };
 }
 
 interface StartedServer {
   routes: Readonly<Record<string, string>>;
+  lookups: ArtifactServerOptions["lookups"];
+  onClose: ArtifactServerOptions["onClose"];
   assets: string;
   port: number;
   host: string | undefined;
@@ -61,6 +67,8 @@ function serveTo(overrides: Partial<ServeOptions> = {}) {
     startServer: (serverOptions) => {
       started.push({
         routes: serverOptions.routes,
+        lookups: serverOptions.lookups,
+        onClose: serverOptions.onClose,
         assets: serverOptions.assets.label,
         port: serverOptions.port,
         host: serverOptions.host,
@@ -302,5 +310,44 @@ describe("city and navigator no longer serve: one command does", () => {
     const io = captureIo();
     expect(runSync([command, FIXTURE, "--serve"], io)).toBe(EXIT.USAGE);
     expect(io.stderr()).toContain("--serve");
+  });
+});
+
+describe("serve hands the page ONE lookup: a selected node's explanation (M16c)", () => {
+  it("registers /insight.json beside the two artifacts, and a model nobody explained answers 404 — no file created", () => {
+    const { started } = serveTo();
+    const lookup = started[0]?.lookups?.["/insight.json"];
+    expect(lookup).toBeTypeOf("function");
+    // The fixture has no store beside it: quiet, and asking must not make one.
+    expect(lookup?.(new URLSearchParams({ id: "java:com.acme.order/Order" })).status).toBe(404);
+    expect(existsSync(FIXTURE.replace(/\.jsonl$/u, ".insights.db"))).toBe(false);
+    expect(Object.keys(started[0]?.routes ?? {}).sort()).toEqual(["/city.json", "/navigator.json"]);
+    started[0]?.onClose?.();
+  });
+
+  it("--insights FILE names the store; the default is <model>.insights.db beside the FIRST model", () => {
+    const dir = mkdtempSync(join(tmpdir(), "serve-insights-"));
+    try {
+      const db = join(dir, "elsewhere.insights.db");
+      const store = sqliteInsightsStore(loadSqlite().open(db));
+      const record: InsightRecord = {
+        t: "i", id: "java:com.acme.order/Order", level: "module", kind: "package", origin: "llm", fingerprint: "a".repeat(64),
+        block: { name: "o", description: "Ordering.", apis: [], spis: [], dependsOn: [], concepts: [], boundedContextHint: null, sharedKernelHint: null, ubiquitousLanguage: [], confidence: 0.5 },
+      };
+      const run = store.beginRun({
+        header: { t: "header", kind: INSIGHTS_KIND, generatedBy: INSIGHTS_GENERATOR, promptVersion: PROMPT_VERSION, metamodel: INSIGHTS_METAMODEL, models: { leaf: "m", rollup: "m" }, depth: 1, source: { paths: [], langs: [], view: { name: "all", filters: [] } } },
+        startedAt: "t",
+      });
+      store.putUnit(run, record.id, [record]);
+      store.close();
+
+      const { started } = serveTo({ insights: db });
+      const answer = started[0]?.lookups?.["/insight.json"]?.(new URLSearchParams({ id: record.id }));
+      expect(answer?.status).toBe(200);
+      expect(JSON.parse(answer?.body ?? "{}")).toMatchObject({ status: "explained", record: { block: { description: "Ordering." } } });
+      started[0]?.onClose?.();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

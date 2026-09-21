@@ -210,6 +210,35 @@ side-car never exists in memory. What this buys is bounded, and PLAN.md §17.3
 says so with the numbers: the records were ~10 % of `explain`'s memory on
 Broadleaf, the graph the rest.
 
+**The store's readers (M16c).** A reader gets the store with `{ readOnly:
+true }`: no migration, and SQLite itself refuses every write (`PRAGMA
+query_only`). It is handed an ordinary connection rather than a read-only file
+handle, because the latter — the first attempt — may not clean up after itself
+and stranded `-wal`/`-shm` beside the model. What a reader asks never reads a
+block: `query()` returns ROWS (envelope, description, and the same
+`conceptLabel` a prompt quotes — one rule, whoever asks), `stats()` counts by
+level, origin and type concept and sums the records' own usage (which survives
+an import; the run ledger does not), `runs()` is the ledger, and
+`answerInsight(store, id)` is the three-way answer every reader gives about one
+id: *explained* (the record), *failed* (the unit's failure — matched by member,
+so every member of a failed cycle is answered), or *unknown*. "No explanation"
+is two different facts, and only one of them is silence.
+
+Two readers exist. `codegraph insights` (cli.md) opens the store and nothing
+else — not the model, not `explain.ts`, whose module graph is the provider SDK.
+And `codegraph serve` answers `/insight.json?id=…`, its one route that is not an
+artifact: tens of megabytes of prose do not belong in `navigator.json`, so a
+selected node's explanation is looked up when asked for, over a reader opened on
+first request (a store `explain` creates while the page is open is found). The
+page restates the answer's `kind` as a literal pinned by a test, imports this
+package not even for types, renders the block generically (its shape moves with
+`PROMPT_VERSION`), asks once per id, and treats every absence — no store, no
+such route, nobody asked — as nothing to show. What it does show wears the
+page's inference colour and says who wrote it and how sure it claimed to be:
+everything else on that page is extracted from source, and this is not.
+Operations are not shown: a navigator member node carries no entity id, and
+ids are never constructed.
+
 `@codegraph/insights` stays pure: `store.ts` is a port, and `store-sqlite.ts`
 is handed an OPEN database, so the path, the file and `node:sqlite` itself
 (one import site, in the analyzer's `store/sqlite.ts`) stay with the CLI.

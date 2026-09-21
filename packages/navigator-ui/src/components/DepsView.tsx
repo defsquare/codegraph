@@ -3,6 +3,7 @@ import type { DepRole, NavigatorModel } from "@codegraph/navigator";
 import type { ModelIndexes } from "../model/indexes.js";
 import { ancestorsOf } from "../model/indexes.js";
 import { DEP_PAGE_SIZE, depPage, depsForSelection, type DepGroup, type MemberGroup } from "../model/grouping.js";
+import { InsightPanel } from "./InsightPanel.js";
 
 /**
  * The fan-in / fan-out view: what points AT the selected node, and what it
@@ -251,6 +252,8 @@ export function DepsView({ ix, selection, onNavigate }: DepsViewProps) {
             <span className="anchor">{anchorText(ix.model, node.anchor)}</span>
           )}
         </div>
+        {/* Types and modules carry their entity id; a member does not (the artifact would double). */}
+        {node.id !== undefined && <InsightPanel id={node.id} />}
         {showByMember && (
           <nav className="pane-tabs">
             <button

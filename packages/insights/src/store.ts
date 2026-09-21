@@ -1,4 +1,4 @@
-import type { FailureRecord, InsightRecord, InsightsEof, InsightsHeader } from "./schema.js";
+import type { FailureRecord, InsightRecord, InsightsEof, InsightsHeader, Level, Origin, RecordUsage } from "./schema.js";
 import type { RecordSummary } from "./records.js";
 import type { InsightsFile } from "./sidecar.js";
 
@@ -68,6 +68,73 @@ export interface RunEnd {
   readonly aborted?: string;
 }
 
+/** A reader's filter (M16c). Every field narrows; none reads a block. */
+export interface InsightQuery {
+  readonly ids?: readonly string[];
+  readonly level?: Level;
+  /** A TYPE's concept, as the block spells it (`aggregate`, `valueType`…) — the indexed column. */
+  readonly concept?: string;
+  readonly minConfidence?: number;
+  readonly maxConfidence?: number;
+  /** Applied AFTER side-car ordering. */
+  readonly limit?: number;
+}
+
+/** What a list shows of a record: the envelope and the summary, never the block. */
+export interface InsightRow {
+  readonly id: string;
+  readonly level: Level;
+  readonly kind: string;
+  readonly name: string | undefined;
+  readonly file: string | undefined;
+  readonly origin: Origin;
+  readonly model: string | undefined;
+  readonly confidence: number;
+  readonly description: string;
+  /** The label a prompt quotes (`conceptLabel`): one rule, whoever asks. */
+  readonly concept: string | undefined;
+}
+
+export interface InsightStats {
+  readonly records: number;
+  readonly failures: number;
+  readonly byLevel: Readonly<Record<Level, number>>;
+  readonly byOrigin: Readonly<Record<Origin, number>>;
+  /** Types only, by the block's `concept`; sorted by key. */
+  readonly byConcept: Readonly<Record<string, number>>;
+  /**
+   * What the records that EXIST cost, summed from their own usage — so it
+   * survives an import, which the run ledger does not. Less than was spent:
+   * a replaced record's and a failed call's tokens are in the ledger only.
+   */
+  readonly usage: RecordUsage;
+}
+
+/** One line of the ledger: what the side-car's single trailer could never say. */
+export interface RunRow {
+  readonly id: number;
+  readonly startedAt: string;
+  readonly finishedAt: string | undefined;
+  readonly provider: string | undefined;
+  readonly models: { readonly leaf: string; readonly rollup: string };
+  readonly depth: number;
+  /** Undefined for a run that never finished. */
+  readonly counts: { readonly llm: number; readonly template: number; readonly reused: number; readonly failed: number; readonly calls: number | undefined } | undefined;
+  readonly usage: RecordUsage | undefined;
+  readonly aborted: string | undefined;
+}
+
+export interface StoreOpenOptions {
+  /**
+   * For a READER (`codegraph insights`, the daemon): no migration, not a byte
+   * written — SQLite itself refuses (`query_only`) — and a store that is not
+   * already at this build's version is refused rather than brought to it.
+   * Hand it an ordinary connection: a read-only FILE handle may not clean up
+   * after itself and strands `-wal`/`-shm` beside the model.
+   */
+  readonly readOnly?: boolean;
+}
+
 export interface InsightsStore {
   /** Nothing imported, no run begun: a side-car found beside it is imported, not compared. */
   isEmpty(): boolean;
@@ -83,6 +150,11 @@ export interface InsightsStore {
   /** The records that exist among `ids`, in side-car order. */
   get(ids: readonly string[]): InsightRecord[];
   failures(): FailureRecord[];
+  /** Rows matching a reader's filter, in side-car order. */
+  query(query: InsightQuery): InsightRow[];
+  stats(): InsightStats;
+  /** The ledger, oldest first. */
+  runs(): RunRow[];
   exported(): ExportStamp | undefined;
   openRuns(): OpenRun[];
 
@@ -101,6 +173,28 @@ export interface InsightsStore {
   export(): Iterable<string>;
   markExported(stamp: ExportStamp): void;
   close(): void;
+}
+
+/**
+ * WHAT A PAGE IS TOLD ABOUT ONE ID (M16c) — the navigator's explanation panel
+ * asks this of `codegraph serve`. Three answers, because "no explanation" is
+ * two different facts: the unit was asked for and FAILED (say why), or nobody
+ * ever asked (say nothing). The frontend restates `kind` as a literal and a
+ * test pins the two equal, as it does for the navigator artifact.
+ */
+export const INSIGHT_ANSWER_KIND = "codegraph.insight/1";
+
+export type InsightAnswer =
+  | { readonly kind: typeof INSIGHT_ANSWER_KIND; readonly id: string; readonly status: "explained"; readonly record: InsightRecord }
+  | { readonly kind: typeof INSIGHT_ANSWER_KIND; readonly id: string; readonly status: "failed"; readonly failure: FailureRecord }
+  | { readonly kind: typeof INSIGHT_ANSWER_KIND; readonly id: string; readonly status: "unknown" };
+
+export function answerInsight(store: InsightsStore, id: string): InsightAnswer {
+  const record = store.get([id])[0];
+  if (record !== undefined) return { kind: INSIGHT_ANSWER_KIND, id, status: "explained", record };
+  // Matched by member: a failed cycle is one failure row, and every one of its members is owed.
+  const failure = store.failures().find((candidate) => candidate.id === id || candidate.members.includes(id));
+  return failure === undefined ? { kind: INSIGHT_ANSWER_KIND, id, status: "unknown" } : { kind: INSIGHT_ANSWER_KIND, id, status: "failed", failure };
 }
 
 /** `X.insights.jsonl` → `X.insights.db`: the store sits beside the side-car it exports. */

@@ -6,6 +6,8 @@ import { startDaemon, type DaemonOptions } from "../app/daemon.js";
 import { createJobRunner } from "../app/jobs.js";
 import { parseRegistry, type Registry } from "../app/registry.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
+import { INSIGHT_ROUTE, insightLookup } from "../insight-route.js";
+import { storePathForModel } from "../insights-paths.js";
 import { errLine, errLines, type IoSink } from "../io.js";
 import { openAnalysis } from "../source.js";
 import { navigatorAssets, startArtifactServer, type ArtifactServerOptions, type FrontendAssets } from "../serve.js";
@@ -28,6 +30,11 @@ import { navigatorWarnings } from "./navigator.js";
  * command only resolves flags, loads models and hands the server two JSON
  * routes — `/navigator.json` and `/city.json`, each exactly the file the
  * respective command's `--out` would have written.
+ *
+ * ONE ROUTE IS NOT AN ARTIFACT: `/insight.json?id=…`, a selected node's
+ * explanation, looked up in `<model>.insights.db` when asked for (M16c). No
+ * store means a 404 the page ignores — a model nobody explained looks exactly
+ * as it did.
  *
  * Stdout stays empty: the server is the destination. Warnings and the reach
  * announcement are stderr. The command returns at once; the live server is
@@ -89,11 +96,15 @@ export function serveCommand(options: ServeOptions, io: IoSink, deps: ServeDeps 
       ...cityWarnings(built, city),
     ]);
 
+    // Beside the FIRST model, like explain's default; --insights names it otherwise. Opened on first request.
+    const insights = insightLookup(options.insights ?? storePathForModel(options.models[0] ?? ""));
     deps.startServer({
       routes: {
         [NAVIGATOR_ROUTE]: navigatorToJsonString(navigator),
         [CITY_ROUTE]: cityToJsonString(city),
       },
+      lookups: { [INSIGHT_ROUTE]: insights.handle },
+      onClose: () => insights.close(),
       label: "codegraph",
       assets,
       port: options.port,

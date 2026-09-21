@@ -26,6 +26,7 @@
     "react-window": "^1.8.11"
   },
   "devDependencies": {
+    "@codegraph/insights": "workspace:*",
     "@types/cytoscape": "^3.31.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

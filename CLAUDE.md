@@ -72,7 +72,10 @@ packages/navigator-ui/ @codegraph/navigator-ui — React model navigator, five
                      panel opens it in Navigate), Graph (Cytoscape+fcose
                      dependency graph, module/type modes), Cycles (the
                      artifact's precomputed tangle report), Coupling (ranked
-                     metrics). Reads navigator.json + city.json (guard-enforced).
+                     metrics). Reads navigator.json + city.json (guard-enforced),
+                     plus ONE lookup, `insight.json?id=…`: the selected type's or
+                     module's LLM explanation, shown as an inference, never a fact.
+                     It imports @codegraph/insights not even for types.
                      The ONLY package that may import react and cytoscape; the
                      city comes through @codegraph/viz, never through three.
                      Vite app, no library.
@@ -197,6 +200,11 @@ OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-call
 #     model.insights.jsonl, both beside the model; re-runs redo only what changed
 ./bin/codegraph explain model.jsonl --export               # the side-car from the store (after a killed run); no model read
 ./bin/codegraph explain model.jsonl --import FILE [--yes]  # REPLACE the store's records with a side-car's; asks first
+./bin/codegraph insights model.jsonl                       # the store's summary: records, concepts, what is owed, spend
+./bin/codegraph insights model.jsonl --concept aggregate   # a list (also --level, --min/--max-confidence, --limit)
+./bin/codegraph insights model.jsonl --id ID               # one explanation whole; --failures, --runs, --json
+#   reads <model>.insights.db and NOTHING else (not the model, no provider); writes nothing
+./bin/codegraph serve model.jsonl --insights FILE          # the explanation panel's store, if not beside the model
 ```
 
 ## Metamodel invariants (violating these is a bug, not a style choice)

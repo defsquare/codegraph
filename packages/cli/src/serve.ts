@@ -100,6 +100,14 @@ export interface ArtifactServerOptions {
    * fetches `/navigator.json` and `/city.json`; a replay page only `/city.json`.
    */
   readonly routes: Readonly<Record<string, string>>;
+  /**
+   * Absolute route → a JSON answer computed PER REQUEST from the query string.
+   * The exception, not the rule: an artifact is built once and served verbatim;
+   * a lookup exists for what cannot be (`/insight.json`, see insight-route.ts).
+   */
+  readonly lookups?: Readonly<Record<string, (query: URLSearchParams) => { readonly status: number; readonly body: string }>>;
+  /** Runs when the server closes: whatever a lookup holds open is released here. */
+  readonly onClose?: () => void;
   /** What the stderr announcement calls the page, e.g. `city visualizer`. */
   readonly label: string;
   /** The frontend's static bundle (vizAssets() / navigatorAssets()). */
@@ -170,6 +178,7 @@ export function sendJson(response: ServerResponse, status: number, body: string,
 
 export function startArtifactServer(options: ArtifactServerOptions): Server {
   const { routes, assets, io } = options;
+  const lookups = options.lookups ?? {};
 
   const server = createServer((request, response) => {
     const method = request.method ?? "GET";
@@ -177,7 +186,8 @@ export function startArtifactServer(options: ArtifactServerOptions): Server {
       response.writeHead(405, { allow: "GET, HEAD" }).end();
       return;
     }
-    const pathname = decodeURIComponent((request.url ?? "/").split("?")[0] ?? "/");
+    const [rawPath = "/", rawQuery = ""] = (request.url ?? "/").split("?", 2);
+    const pathname = decodeURIComponent(rawPath);
 
     // Own keys only: `/constructor` must not fetch Object.prototype's.
     const artifact = Object.hasOwn(routes, pathname) ? routes[pathname] : undefined;
@@ -185,10 +195,17 @@ export function startArtifactServer(options: ArtifactServerOptions): Server {
       sendJson(response, 200, artifact, method);
       return;
     }
+    const lookup = Object.hasOwn(lookups, pathname) ? lookups[pathname] : undefined;
+    if (lookup !== undefined) {
+      const answer = lookup(new URLSearchParams(rawQuery));
+      sendJson(response, answer.status, answer.body, method);
+      return;
+    }
     serveStatic(assets, pathname, method, response);
   });
 
   const host = options.host ?? LOOPBACK_HOST;
+  if (options.onClose !== undefined) server.on("close", options.onClose);
 
   server.on("error", (error: NodeJS.ErrnoException) => {
     errLine(io, bindFailure(error, host, options));
