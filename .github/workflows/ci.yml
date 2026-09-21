@@ -275,11 +275,11 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
         with:
           version-file: extractors/elixir/.tool-versions
           version-type: strict
-      - uses: actions/checkout@v4
       # The escript, from the repo root with the RELATIVE --src the snapshot
       # was made with; `cmp` is the whole cross-OS gate: the model is bytes.
       # (`escript` runs the file on every OS; the bash wrapper is Unix-only.)
