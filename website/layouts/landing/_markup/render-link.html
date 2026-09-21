@@ -2,3 +2,4 @@
        carrying `hx:` utility classes, which this page cannot style. */ -}}
 {{- $external := hasPrefix .Destination "http" -}}
 <a href="{{ .Destination | safeURL }}"{{ with .Title }} title="{{ . }}"{{ end }}{{ if $external }} target="_blank" rel="noopener"{{ end }}>{{ .Text | safeHTML }}</a>
+{{- /* The file's final newline would render as a space before punctuation. */ -}}

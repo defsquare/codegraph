@@ -170,6 +170,12 @@ img { max-width: 100%; height: auto; }
 .footer__grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: var(--space-8); }
 .footer__about p { color: #d1d5db; font-size: var(--text-lg); max-width: 40ch; margin: var(--space-6) 0 0; }
 .footer__about img { height: 2rem; width: auto; display: block; }
+/* Block, so no line box adds descender space under the logo; fit-content, so
+   the clickable box is the logo's and not the column's full width. */
+.footer__logo { display: block; width: fit-content; }
+/* Same grey as the sentence around it, so the underline is what marks it. */
+.footer__about a { color: inherit; text-decoration: underline; text-underline-offset: 0.2em; }
+.footer__about a:hover { color: var(--color-bg); }
 .footer__col h4 {
   font-family: var(--font-body);
   font-size: var(--text-sm);

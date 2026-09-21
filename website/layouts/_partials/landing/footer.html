@@ -4,8 +4,13 @@
     <div class="footer__grid">
       <div class="footer__about">
         {{ with $footer.about }}
-          <img src="{{ .logo | relURL }}" alt="{{ .alt }}" width="221" height="54">
-          <p>{{ .text }}</p>
+          {{/* A new tab, like the external link in the sentence below it. */}}
+          <a class="footer__logo" href="{{ .url }}" target="_blank" rel="noopener">
+            <img src="{{ .logo | relURL }}" alt="{{ .alt }}" width="221" height="54">
+          </a>
+          {{/* Markdown, so the studio's name can carry its link; markdownify
+                drops the <p> of a single paragraph, hence the explicit one. */}}
+          <p>{{ .text | markdownify }}</p>
         {{ end }}
       </div>
       {{ range $footer.columns }}
