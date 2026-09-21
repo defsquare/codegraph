@@ -33,11 +33,11 @@ corpora:
   lead: "Run end to end on"
   items:
     - name: "google/gson"
-      note: "3,600 entities"
+      city: "city/?help=0&src=gson-city.json"
     - name: "apache/commons-lang"
-      note: "15,000 entities"
+      city: "city/?help=0&src=apache-common-lang-city.json"
     - name: "spring-petclinic"
-      note: "framework wiring"
+      city: "city/?help=0&src=spring-petclinic-city.json"
     - name: "apache/fineract"
-      note: "127 MB model"
+      city: "city/?help=0&src=fineract-loan-city.json"
 ---

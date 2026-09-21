@@ -38,7 +38,7 @@ img { max-width: 100%; height: auto; }
   gap: var(--space-12) var(--space-16);
   align-items: start;
 }
-.intro .corpora { grid-column: 1 / -1; }
+.intro .corpora { grid-column: 1 / -1; min-width: 0; } /* a grid item grows to its content otherwise, and the tab row would never scroll */
 .intro__display {
   font-family: var(--font-title);
   font-weight: var(--weight-regular);
@@ -103,14 +103,26 @@ img { max-width: 100%; height: auto; }
   padding: var(--space-8) 0;
   border-top: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-4) var(--space-12);
 }
-.corpora__lead { font-size: var(--text-lg); color: var(--color-fg-muted); margin: 0; }
-.corpora__item { font-family: var(--font-mono); font-size: var(--text-lg); color: var(--color-primary-300); }
+/* One row, never wrapped: past the page width the tabs scroll sideways. */
+.corpora__tabs {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-12);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+}
+.corpora__lead { font-size: var(--text-lg); color: var(--color-fg-muted); margin: 0; white-space: nowrap; }
+.corpora__item { font-family: var(--font-mono); font-size: var(--text-lg); color: var(--color-primary-300); cursor: pointer; white-space: nowrap; padding-bottom: var(--space-1); }
 .corpora__item small { font-family: var(--font-body); color: var(--color-fg-subtle); margin-left: var(--space-2); }
+/* Tabs without JavaScript: a radio per corpus, its label the tab; the panels
+   are paired to their radio by the :has() rules the template generates. */
+.corpora__radio { position: absolute; opacity: 0; width: 0; height: 0; }
+.corpora__radio:checked + .corpora__item { color: var(--color-accent); border-bottom: 2px solid var(--color-accent); }
+.corpora__radio:focus-visible + .corpora__item { outline: 2px solid var(--color-accent); outline-offset: 4px; }
+.corpora__panel { display: none; margin-top: var(--space-6); }
+.corpora__frame { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; background: var(--color-primary-900, #000); }
+.corpora__note { margin: 0; color: var(--color-fg-muted); }
 
 /* Essay rows: the design system's asymmetric two-column split. */
 .row {

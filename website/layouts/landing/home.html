@@ -27,10 +27,26 @@
 
     {{ with .Params.corpora }}
       <div class="corpora" aria-label="Corpora codegraph was verified on">
-        <p class="corpora__lead">{{ .lead }}</p>
-        {{ range .items }}
-          <span class="corpora__item">{{ .name }}<small>{{ .note }}</small></span>
+        <div class="corpora__tabs">
+          <p class="corpora__lead">{{ .lead }}</p>
+          {{ $checked := false }}
+          {{ range $i, $c := .items }}
+            <input class="corpora__radio" type="radio" name="corpus" id="corpus-{{ $i }}"{{ if and .city (not $checked) }} checked{{ $checked = true }}{{ end }}>
+            <label class="corpora__item" for="corpus-{{ $i }}">{{ .name }}<small>{{ .note }}</small></label>
+          {{ end }}
+        </div>
+        {{ range $i, $c := .items }}
+          <div class="corpora__panel" id="corpus-panel-{{ $i }}">
+            {{ with .city }}
+              <iframe class="corpora__frame" src="{{ . | relURL }}" loading="lazy" title="The code city of {{ $c.name }}"></iframe>
+            {{ else }}
+              <p class="corpora__note">{{ .name }}: {{ .note }}.</p>
+            {{ end }}
+          </div>
         {{ end }}
+        {{/* The tab row scrolls on its own, so a panel is no longer the sibling of
+             its label: one :has() rule per corpus pairs them, generated here. */}}
+        <style>{{ range $i, $c := .items }}.corpora:has(#corpus-{{ $i }}:checked) #corpus-panel-{{ $i }}{display:block}{{ end }}</style>
       </div>
     {{ end }}
   </section>
