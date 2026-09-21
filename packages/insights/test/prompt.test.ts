@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { contextPackFor, type ContextEnv } from "../src/context.js";
 import { buildWalk } from "../src/order.js";
 import { estimateTokens, renderPrompts } from "../src/prompt.js";
+import { memoryBook } from "../src/records.js";
 import type { InsightRecord, OperationBlock } from "../src/schema.js";
 import { createSourceReader, mapReader } from "../src/source.js";
 import { edge, graphOf, method, pkg, prepared, type } from "./fixture.js";
@@ -50,7 +51,7 @@ function corpus() {
     facts,
     units,
     reader,
-    records: new Map(records.map((r) => [r.id, r])),
+    records: memoryBook(records),
     unitOf: plan.unitOf,
     depth,
     maxLines: 200,
@@ -136,7 +137,7 @@ describe("cycle prompts", () => {
     const graph = graphOf(entities, edges);
     const { facts, units } = prepared(graph);
     const plan = buildWalk(units, graph);
-    const env: ContextEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map())), records: new Map(), unitOf: plan.unitOf, depth: 1, maxLines: 50 };
+    const env: ContextEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map())), records: memoryBook(), unitOf: plan.unitOf, depth: 1, maxLines: 50 };
     return contextPackFor(plan.unitOf.get(m("c0"))!, env);
   }
 

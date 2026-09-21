@@ -7,6 +7,7 @@ import {
   LEVELS,
   type Level,
 } from "./schema.js";
+import { conceptLabel, type RecordSummary } from "./records.js";
 import { LEVEL_RANK, sortFailures, sortRecords, type InsightsFile } from "./sidecar.js";
 import {
   INSIGHTS_APPLICATION_ID,
@@ -109,7 +110,10 @@ const INSIGHT_COLUMNS =
 const FAILURE_COLUMNS =
   "id, level, members, key_lang, key_module, key_symbol, key_disambiguator, model, reason, attempts, calls, prompt_tokens, completion_tokens, cost";
 
-/** SQLite's default host-parameter ceiling is far above this; a chunk keeps `get()` independent of it. */
+/**
+ * SQLite's default host-parameter ceiling is far above this; a chunk keeps
+ * `get()` independent of it — and is the most records `export()` ever holds.
+ */
 const GET_CHUNK = 500;
 
 /** A column value; a string is checked for the one character the binding cannot read back. */
@@ -138,7 +142,10 @@ function migrate(db: SqliteDatabase): void {
       `this insights store was written by a newer codegraph (store version ${version}, this build reads up to ${INSIGHTS_DB_VERSION}); it was left untouched`,
     );
   }
-  db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
+  // synchronous = NORMAL is WAL's intended setting: a commit survives the PROCESS dying (kill, OOM, Ctrl-C —
+  // what a long run actually meets) without an fsync per unit; only a power cut can lose the last few commits,
+  // never the file. Measured on Broadleaf: 9 892 templated units, 37 s of fsync at FULL.
+  db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
   for (let from = version; from < INSIGHTS_DB_VERSION; from += 1) {
     db.exec("BEGIN IMMEDIATE");
     try {
@@ -265,6 +272,50 @@ export function sqliteInsightsStore(db: SqliteDatabase): InsightsStore {
     );
   };
 
+  /** One statement per arity, prepared on first use: a prompt asks for ONE record, an export for chunks. */
+  const selectByIds = new Map<number, ReturnType<SqliteDatabase["prepare"]>>();
+  const get = (ids: readonly string[]): InsightRecord[] => {
+    const out: InsightRecord[] = [];
+    for (let start = 0; start < ids.length; start += GET_CHUNK) {
+      const chunk = ids.slice(start, start + GET_CHUNK);
+      let statement = selectByIds.get(chunk.length);
+      if (statement === undefined) {
+        statement = db.prepare(`SELECT ${INSIGHT_COLUMNS} FROM insight WHERE id IN (${chunk.map(() => "?").join(", ")})`);
+        selectByIds.set(chunk.length, statement);
+      }
+      for (const row of statement.all(...chunk)) out.push(recordOf(row));
+    }
+    return sortRecords(out);
+  };
+
+  // `->`, not `->>`: the JSON text keeps U+0000 and lone surrogates as ESCAPES, which a TEXT value would not survive.
+  const selectSummary = db.prepare(
+    "SELECT level, block -> '$.description' AS description, block -> '$.owner' AS owner, block -> '$.concept' AS concept, block -> '$.boundedContextHint.name' AS context FROM insight WHERE id = ?",
+  );
+  const jsonString = (value: unknown): string | undefined => {
+    if (typeof value !== "string") return undefined;
+    const parsed = JSON.parse(value) as unknown;
+    return typeof parsed === "string" ? parsed : undefined;
+  };
+  const summary = (id: string): RecordSummary | undefined => {
+    const row = selectSummary.get(id);
+    if (row === undefined) return undefined;
+    const level = LEVELS[Number(row["level"])] as Level;
+    return {
+      description: jsonString(row["description"]) ?? "",
+      concept: conceptLabel(level, { owner: jsonString(row["owner"]), concept: jsonString(row["concept"]), context: jsonString(row["context"]) }),
+    };
+  };
+
+  /** Every id in SIDE-CAR order — decided here, in JS (see the header) — without reading a block. */
+  const orderedIds = (): string[] => {
+    const statement = db.prepare("SELECT id, level FROM insight");
+    statement.setReturnArrays(true);
+    const index = [...(statement.iterate() as unknown as Iterable<[string, number]>)];
+    index.sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    return index.map((entry) => entry[0]);
+  };
+
   const records = (): InsightRecord[] => {
     const out: InsightRecord[] = [];
     for (const row of db.prepare(`SELECT ${INSIGHT_COLUMNS} FROM insight`).iterate()) out.push(recordOf(row));
@@ -299,15 +350,8 @@ export function sqliteInsightsStore(db: SqliteDatabase): InsightsStore {
       return out;
     },
 
-    get(ids) {
-      const out: InsightRecord[] = [];
-      for (let start = 0; start < ids.length; start += GET_CHUNK) {
-        const chunk = ids.slice(start, start + GET_CHUNK);
-        const rows = db.prepare(`SELECT ${INSIGHT_COLUMNS} FROM insight WHERE id IN (${chunk.map(() => "?").join(", ")})`).all(...chunk);
-        for (const row of rows) out.push(recordOf(row));
-      }
-      return sortRecords(out);
-    },
+    summary,
+    get,
 
     exported() {
       return meta("exported") as ExportStamp | undefined;
@@ -381,7 +425,11 @@ export function sqliteInsightsStore(db: SqliteDatabase): InsightsStore {
       const h = header();
       if (h === undefined) throw new InsightsStoreError("the insights store is empty: there is nothing to export");
       yield JSON.stringify(h);
-      for (const record of records()) yield JSON.stringify(record);
+      // A chunk of consecutive ids at a time: the side-car never has to exist in memory (M16b).
+      const ids = orderedIds();
+      for (let start = 0; start < ids.length; start += GET_CHUNK) {
+        for (const record of get(ids.slice(start, start + GET_CHUNK))) yield JSON.stringify(record);
+      }
       for (const failure of failures()) yield JSON.stringify(failure);
       const e = eof();
       if (e !== undefined) yield JSON.stringify(e);

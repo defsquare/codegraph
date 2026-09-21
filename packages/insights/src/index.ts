@@ -17,6 +17,7 @@
  *   template.ts     blocks for trivial members, no model call
  *   plan.ts         statuses and estimates before spending anything
  *   run.ts          executing a plan layer by layer
+ *   records.ts      what is already explained, as the walk reads it: fingerprints apart from blocks
  *   sidecar.ts      the `.insights.jsonl` file — the store's export
  *   store.ts        the insights store's port: `<model>.insights.db`, never a cache
  *   store-sqlite.ts its SQLite adapter, over a database the caller opened
@@ -31,6 +32,7 @@ export * from "./prompt.js";
 export * from "./fingerprint.js";
 export * from "./template.js";
 export * from "./plan.js";
+export * from "./records.js";
 export * from "./run.js";
 export * from "./sidecar.js";
 export * from "./store.js";

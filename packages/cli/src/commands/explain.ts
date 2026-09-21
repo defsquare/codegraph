@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { ModelBuilder, readModelRecordsSync } from "@codegraph/core";
@@ -16,11 +16,12 @@ import {
   decodeJournal,
   executeRun,
   insightsStorePathFor,
+  memoryBook,
   mergeRecords,
   planRun,
-  recordsById,
   retryScope,
   sqliteInsightsStore,
+  storeBook,
   type Completer,
   type FailureRecord,
   type InsightRecord,
@@ -31,6 +32,8 @@ import {
   type OpenRun,
   type PlanEnv,
   type RecordKey,
+  type RecordSource,
+  type StoreBook,
   type RunPlan,
   type RunUsage,
   type Unit,
@@ -79,8 +82,8 @@ export interface ExplainFs {
   readFile(path: string): string | undefined;
   /** What an outside edit of the side-car is measured by (the M7 staleness test, opposite consequence). */
   stat(path: string): { size: number; mtimeMs: number } | undefined;
-  /** Whole-file replace that a crash cannot leave half-written. */
-  writeFileAtomic(path: string, text: string): void;
+  /** Whole-file replace that a crash cannot leave half-written — fed line by line, so the file never has to exist in memory. */
+  writeLinesAtomic(path: string, lines: Iterable<string>): void;
   remove(path: string): void;
 }
 
@@ -126,9 +129,25 @@ export function realSeam(): ExplainSeam {
           return undefined;
         }
       },
-      writeFileAtomic: (path, text) => {
+      writeLinesAtomic: (path, lines) => {
         const tmp = join(dirname(path), `.${Date.now()}.${process.pid}.tmp`);
-        writeFileSync(tmp, text, "utf8");
+        const fd = openSync(tmp, "w");
+        try {
+          // About a megabyte per write: a syscall per line would be 28 000 of them on Broadleaf.
+          let batch: string[] = [];
+          let size = 0;
+          for (const line of lines) {
+            batch.push(line, "\n");
+            if ((size += line.length + 1) >= 1 << 20) {
+              writeSync(fd, batch.join(""));
+              batch = [];
+              size = 0;
+            }
+          }
+          if (batch.length > 0) writeSync(fd, batch.join(""));
+        } finally {
+          closeSync(fd);
+        }
         renameSync(tmp, path);
       },
       remove: (path) => rmSync(path, { force: true }),
@@ -201,7 +220,7 @@ export async function explainCommand(
     const journal = `${out}.journal`;
     const loaded = loadExisting(out, storePath, journal, seam, io);
     store = loaded.store;
-    const { records: existing, header: previous, failures: previousFailures } = loaded;
+    const { header: previous, failures: previousFailures } = loaded;
     if (options.retryFailed) {
       if (previous === undefined) {
         throw new UsageError(
@@ -216,7 +235,7 @@ export async function explainCommand(
       errLines(io, retryLines(previousFailures, previous, options));
     }
 
-    const plan = planRun(walk, existing, env, {
+    const plan = planRun(walk, loaded.book, env, {
       models: { leaf: options.model, rollup: options.rollupModel },
       depth: options.depth,
       maxLines: options.maxLines,
@@ -273,10 +292,13 @@ export async function explainCommand(
     }
     for (const dead of loaded.interrupted) writing.closeRun(dead.id, "interrupted");
     const run = writing.beginRun({ header, startedAt: seam.now().toISOString(), pid: seam.pid });
+    // The run reads and writes THE STORE: a finished unit is committed by the book's put, and a later prompt
+    // reads its dependencies back from there. No record is held here (M16b).
+    const book: StoreBook = loaded.storeBook ?? storeBook(writing);
+    book.begin(run);
 
-    const result = await executeRun(plan, env, existing, complete, { maxScc: options.maxScc, depth: options.depth, maxLines: options.maxLines, previousFailures, ...(keyOf === undefined ? {} : { keyOf }) }, {
+    const result = await executeRun(plan, env, book, complete, { maxScc: options.maxScc, depth: options.depth, maxLines: options.maxLines, previousFailures, ...(keyOf === undefined ? {} : { keyOf }) }, {
       concurrency: options.concurrency,
-      onUnit: (records, step) => writing.putUnit(run, step.unit.id, records),
       onFailure: (failure) => writing.fail(run, failure),
       onStep: (event) => {
         done += 1;
@@ -333,7 +355,7 @@ function openStore(storePath: string, seam: ExplainSeam): InsightsStore {
 
 /** The side-car, whole and atomic, from the store — and the stamp an outside edit is later measured against. */
 function writeExport(store: InsightsStore, out: string, seam: ExplainSeam): void {
-  seam.fs.writeFileAtomic(out, `${[...store.export()].join("\n")}\n`);
+  seam.fs.writeLinesAtomic(out, store.export());
   const stamp = seam.fs.stat(out);
   if (stamp !== undefined) store.markExported({ path: out, ...stamp });
 }
@@ -446,7 +468,10 @@ function resolveSourceRoot(
 }
 
 interface Existing {
-  readonly records: Map<string, InsightRecord>;
+  /** What the plan reads: the store's fingerprints (blocks on demand), or a side-car held in memory. */
+  readonly book: RecordSource;
+  /** The same book when it IS the store's — the run then writes through it rather than scanning fingerprints twice. */
+  readonly storeBook: StoreBook | undefined;
   readonly header: InsightsHeader | undefined;
   readonly failures: readonly FailureRecord[];
   /** Open when a store already exists; a run that gets to write opens (creates) it otherwise. */
@@ -473,7 +498,8 @@ function loadExisting(out: string, storePath: string, journal: string, seam: Exp
         errLine(io, `warning: ${out} changed outside codegraph since it was last exported; the store (${storePath}) is the working copy and this run will overwrite the file.`);
         errLine(io, `To take the file instead: codegraph explain … --import ${out}`);
       }
-      return { records: recordsById(store.records()), header: store.header(), failures: store.failures(), store, legacy: undefined, interrupted };
+      const book = storeBook(store);
+      return { book, storeBook: book, header: store.header(), failures: store.failures(), store, legacy: undefined, interrupted };
     } catch (error) {
       store.close();
       throw error;
@@ -498,7 +524,7 @@ function loadExisting(out: string, storePath: string, journal: string, seam: Exp
       ? undefined
       : // Journal records make the trailer's counts stale: imported as cut short, which it was.
         { header: base?.header, records, failures: base?.failures ?? [], eof: extra.length === 0 ? base?.eof : undefined, truncated: base?.truncated ?? true };
-  return { records: recordsById(records), header: base?.header, failures: base?.failures ?? [], store, legacy, interrupted: [] };
+  return { book: memoryBook(records), storeBook: undefined, header: base?.header, failures: base?.failures ?? [], store, legacy, interrupted: [] };
 }
 
 /**

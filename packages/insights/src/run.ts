@@ -3,6 +3,7 @@ import { contextPackFor, type ContextEnv } from "./context.js";
 import type { Unit } from "./order.js";
 import { unitFingerprint, type PlanEnv, type PlanStep, type RunPlan } from "./plan.js";
 import { renderPrompts, type Prompt } from "./prompt.js";
+import { bookOf, type RecordBook } from "./records.js";
 import {
   BLOCKS,
   clampConfidence,
@@ -17,7 +18,7 @@ import {
   type RecordKey,
   type RecordUsage,
 } from "./schema.js";
-import { sortFailures, sortRecords } from "./sidecar.js";
+import { sortFailures } from "./sidecar.js";
 import { templateBlock } from "./template.js";
 
 /**
@@ -26,6 +27,11 @@ import { templateBlock } from "./template.js";
  * flight inside a layer. Prompts are rendered HERE, against the records
  * produced so far, so a dependency explained a moment ago is already in its
  * dependent's prompt.
+ *
+ * IT HOLDS NO RECORD (M16b). What is explained lives in a `RecordBook`
+ * (records.ts): a finished unit is `put` there, and a later unit's prompt reads
+ * its dependencies back from there — the store, on a real corpus, so a run's
+ * memory is its graph and the layer in flight, not everything ever explained.
  *
  * No I/O of its own: the model call is an injected `Completer` (the CLI wraps
  * an `LlmClient`; tests pass a function), and every finished record is handed
@@ -100,8 +106,8 @@ export interface RunHooks {
   /** A unit asked for and left without a record, the moment it fails — not at the layer boundary. */
   readonly onFailure?: (failure: FailureRecord, step: PlanStep) => void | Promise<void>;
   readonly onStep?: (event: StepEvent) => void;
-  /** After every layer has settled — where the CLI rewrites the sorted side-car, failures so far included. */
-  readonly onLayer?: (layer: number, records: readonly InsightRecord[], failures: readonly FailureRecord[]) => void | Promise<void>;
+  /** After every layer has settled, with what is still owed. Not the records: handing them over would hold them all. */
+  readonly onLayer?: (layer: number, failures: readonly FailureRecord[]) => void | Promise<void>;
 }
 
 export interface RunOptions {
@@ -121,7 +127,11 @@ export interface RunUsage {
 }
 
 export interface RunResult {
-  /** Existing records carried over plus everything produced, sorted. */
+  /**
+   * Existing records carried over plus everything produced, sorted — read from
+   * the book ON ACCESS, materializing every record. A test's convenience; a
+   * run over a store never touches it (`counts.records` is the book's size).
+   */
   readonly records: readonly InsightRecord[];
   readonly counts: {
     readonly records: number;
@@ -198,12 +208,14 @@ function parseAnswer(level: Level, prompt: Prompt, json: unknown): { blocks: Map
 export async function executeRun(
   plan: RunPlan,
   env: PlanEnv,
-  existing: ReadonlyMap<string, InsightRecord>,
+  existing: RecordBook | ReadonlyMap<string, InsightRecord>,
   complete: Completer,
   options: RunOptions,
   hooks: RunHooks,
 ): Promise<RunResult> {
-  const live = new Map<string, InsightRecord>(existing);
+  // A map is copied into a book of its own; a book (the store) is written to.
+  const book = bookOf(existing);
+  const explained = (id: string): boolean => book.fingerprint(id) !== undefined;
   const usage: RunUsage = { promptTokens: 0, completionTokens: 0, cost: undefined };
   const failures = new Map<string, FailureRecord>();
   const previous = new Map((options.previousFailures ?? []).map((failure) => [failure.id, failure]));
@@ -215,10 +227,10 @@ export async function executeRun(
   let notAttempted = 0;
   // Not attempted: an earlier failure of this unit stands until its members have records.
   const carry = (unit: Unit): void => {
-    if (previous.has(unit.id) && unit.members.some((member) => !live.has(member))) carried.add(unit.id);
+    if (previous.has(unit.id) && unit.members.some((member) => !explained(member))) carried.add(unit.id);
   };
   const counts = { llm: 0, template: 0, reused: 0, failed: 0, skipped: 0, calls: 0 };
-  const contextEnv = (): ContextEnv => ({ ...env, records: live, depth: options.depth, maxLines: options.maxLines });
+  const contextEnv: ContextEnv = { ...env, records: book, depth: options.depth, maxLines: options.maxLines };
 
   const describe = (id: string): { kind: string; name: string | undefined; file: string | undefined } => {
     const op = env.units.operations.get(id);
@@ -250,10 +262,9 @@ export async function executeRun(
   };
 
   const emit = async (unit: readonly InsightRecord[], step: PlanStep): Promise<void> => {
-    for (const rec of unit) {
-      live.set(rec.id, rec);
-      await hooks.onRecord?.(rec, step);
-    }
+    // Put first: once it returns, every later prompt can quote this unit.
+    await book.put(step.unit.id, unit);
+    for (const rec of unit) await hooks.onRecord?.(rec, step);
     await hooks.onUnit?.(unit, step);
   };
 
@@ -291,12 +302,12 @@ export async function executeRun(
       return;
     }
 
-    const pack = contextPackFor(unit, contextEnv());
+    const pack = contextPackFor(unit, contextEnv);
     const prompts = renderPrompts(pack, options.maxScc);
     // The run-time fingerprint: a dependency that failed is missing too.
     const missing = unit.deps.filter((d) => {
       const dep = env.unitOf.get(d);
-      return dep === undefined || dep.members.some((member) => !live.has(member));
+      return dep === undefined || dep.members.some((member) => !explained(member));
     });
     const fingerprint = unitFingerprint(pack, step.model, options.depth, unit.deps.map((d) => plan.fingerprints.get(d) ?? ""), missing);
     const produced: InsightRecord[] = [];
@@ -375,13 +386,14 @@ export async function executeRun(
       }
     };
     await Promise.all(Array.from({ length: Math.min(width, steps.length) }, worker));
-    await hooks.onLayer?.(layer, sortRecords(live.values()), owed());
+    await hooks.onLayer?.(layer, owed());
   }
 
-  const records = sortRecords(live.values());
   return {
-    records,
-    counts: { records: records.length, ...counts },
+    get records() {
+      return book.all();
+    },
+    counts: { records: book.size(), ...counts },
     usage,
     failures: owed(),
     aborted: abort === undefined ? undefined : { ...abort, notAttempted },

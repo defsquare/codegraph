@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Edge, Entity } from "@codegraph/core";
 import { buildWalk } from "../src/order.js";
 import { planRun, retryScope, type PlanEnv, type PlanOptions } from "../src/plan.js";
+import { memoryBook, type RecordBook } from "../src/records.js";
 import { executeRun, type Completer, type CompletionRequest } from "../src/run.js";
 import type { Block, FailureRecord, InsightRecord, ModuleBlock, OperationBlock, TypeBlock } from "../src/schema.js";
 import { createSourceReader, mapReader } from "../src/source.js";
@@ -92,6 +93,93 @@ async function run(existing: Map<string, InsightRecord>, options: Partial<PlanOp
   });
   return { plan, result, emitted, layers, completer };
 }
+
+/** A book that counts what is asked of it: `fingerprint` is free, `summary` reads (a projection of) a block. */
+function spyBook(records: Iterable<InsightRecord> = []) {
+  const inner = memoryBook(records);
+  const gets: string[] = [];
+  const puts: string[] = [];
+  let alls = 0;
+  const book: RecordBook = {
+    fingerprint: (id) => inner.fingerprint(id),
+    summary: (id) => {
+      gets.push(id);
+      return inner.summary(id);
+    },
+    size: () => inner.size(),
+    put: (unitId, unit) => {
+      puts.push(unitId);
+      return inner.put(unitId, unit);
+    },
+    all: () => {
+      alls += 1;
+      return inner.all();
+    },
+  };
+  return { book, gets, puts, alls: () => alls };
+}
+
+describe("lazy reads (M16b): a block is read only when a prompt quotes it", () => {
+  it("a plan that reuses everything decides on fingerprints alone — not one block is read", async () => {
+    const first = await run(new Map());
+    const { walk, env } = corpus();
+    const spy = spyBook(first.result.records);
+    const plan = planRun(walk, spy.book, env, OPTIONS);
+    expect(plan.estimates.byStatus.llm).toBe(0);
+    expect(plan.estimates.byStatus.reuse).toBeGreaterThan(0);
+    expect(spy.gets).toEqual([]);
+  });
+
+  it("a plan from a book equals the plan from the same records as a map", async () => {
+    const first = await run(new Map());
+    const { walk, env } = corpus();
+    const records = new Map(first.result.records.map((r) => [r.id, r]));
+    // Drop one leaf: its dependents are re-planned, and their prompts quote what is left.
+    records.delete(m("h"));
+    const fromMap = planRun(walk, records, env, OPTIONS);
+    const fromBook = planRun(walk, memoryBook(records.values()), env, OPTIONS);
+    expect(JSON.stringify(fromBook.steps)).toBe(JSON.stringify(fromMap.steps));
+    expect(fromBook.estimates).toEqual(fromMap.estimates);
+  });
+
+  it("a run that reuses everything reads no block, commits only its templates, and keeps no record of its own", async () => {
+    const first = await run(new Map());
+    const { walk, env } = corpus();
+    const spy = spyBook(first.result.records);
+    const plan = planRun(walk, spy.book, env, OPTIONS);
+    const result = await executeRun(plan, env, spy.book, fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100 }, { concurrency: 1 });
+    expect(spy.gets).toEqual([]);
+    expect(spy.puts).toEqual([m("getTotal")]);
+    expect(result.counts.records).toBe(first.result.records.length);
+    // `records` materializes every record: a convenience the CLI never touches.
+    expect(spy.alls()).toBe(0);
+    expect(result.records.map((r) => r.id)).toEqual(first.result.records.map((r) => r.id));
+    expect(spy.alls()).toBe(1);
+  });
+
+  it("a cold run asks the book only for what its prompts quote — a unit's dependencies and parts — after they were put", async () => {
+    const { walk, env } = corpus();
+    const spy = spyBook();
+    const plan = planRun(walk, spy.book, env, OPTIONS);
+    const planGets = spy.gets.length;
+    await executeRun(plan, env, spy.book, fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100 }, { concurrency: 1 });
+    const asked = new Set(spy.gets.slice(planGets));
+    // g quotes h, f quotes g, T quotes its operations, p quotes T. Nobody quotes the module or f's caller.
+    expect([...asked].sort()).toEqual([T, m("f"), m("g"), m("getTotal"), m("h")].sort());
+    expect(spy.puts).toEqual([m("getTotal"), m("h"), m("g"), m("f"), T, P]);
+  });
+
+  it("the layer hook hands over what is owed, not every record so far", async () => {
+    const { walk, env } = corpus();
+    const plan = planRun(walk, new Map(), env, OPTIONS);
+    const seen: unknown[][] = [];
+    await executeRun(plan, env, new Map(), fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100 }, {
+      concurrency: 1,
+      onLayer: (...args) => void seen.push(args),
+    });
+    expect(seen.every((args) => args.length === 2 && typeof args[0] === "number" && Array.isArray(args[1]))).toBe(true);
+  });
+});
 
 describe("planRun", () => {
   it("templates the getter, plans one call per other unit, and estimates tokens", () => {
@@ -251,7 +339,7 @@ describe("executeRun", () => {
     const seen: string[][] = [];
     await executeRun(plan, env, new Map(), fakeCompleter({ failing: new Set([m("h")]) }), { maxScc: 12, depth: 1, maxLines: 100 }, {
       concurrency: 1,
-      onLayer: (_layer, _records, failures) => void seen.push(failures.map((f) => f.id)),
+      onLayer: (_layer, failures) => void seen.push(failures.map((f) => f.id)),
     });
     expect(seen[0]).toEqual([m("h")]);
     expect(seen.at(-1)).toEqual([m("h")]);

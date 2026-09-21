@@ -185,6 +185,31 @@ records, so it asks (or needs `--yes`). `explain --export` writes the side-car
 from the store as it stands — after an interrupted run, or a deleted file —
 and reads no model.
 
+**What the walk reads of the store (M16b).** Not records — two narrower
+questions, because they cost differently (`records.ts`). A *plan* asks
+`fingerprint(id)` of every unit to decide `reuse`, and reads no block: one scan
+of `(id, fingerprint)`, 7 MB on Broadleaf where the records are 68. A *prompt*
+asks `summary(id)` of each dependency and part it quotes — the block's
+`description` and the Specy word for it (`owned by aggregate`, the type's
+concept, `context: Pricing`) — and only for a unit about to be sent: a
+`DependencySummary`'s `summary`/`concept` are memoized getters, so building a
+pack (which every plan does for every unit, its fingerprint needs the facts)
+touches nothing. That is sound because the fingerprint hashes part *ids*, never
+their text (IN-5). The store projects the summary in SQL (`block ->
+'$.description'` — `->`, which keeps U+0000 as a JSON escape) and feeds the
+same `conceptLabel` the in-memory path uses; a fast-check property pins the two
+equal. The book keeps a summary once read: a popular callee is quoted by
+thousands of callers, and re-reading a whole record per quote — the first cut —
+was byte-identical and cost 1.5 GB and twice the time on Broadleaf.
+
+A run `put`s each finished unit into the same book, and backed by the store
+that put *is* the commit: `executeRun` holds no record, and a later unit's
+prompt reads its dependencies back from where they were committed. The export
+streams — ids sorted in JS, then 500 consecutive records at a time — so the
+side-car never exists in memory. What this buys is bounded, and PLAN.md §17.3
+says so with the numbers: the records were ~10 % of `explain`'s memory on
+Broadleaf, the graph the rest.
+
 `@codegraph/insights` stays pure: `store.ts` is a port, and `store-sqlite.ts`
 is handed an OPEN database, so the path, the file and `node:sqlite` itself
 (one import site, in the analyzer's `store/sqlite.ts`) stay with the CLI.
@@ -230,7 +255,11 @@ is the intended split.
 
 Every finished **unit** is one committed transaction in the store — all the
 members of a cycle together, never half of one — so an interrupted run resumes
-where it stopped. (Until M16a this was an append-only `<out>.journal` plus a
+where it stopped. The store runs WAL with `synchronous = NORMAL`: a commit
+survives the process dying (a kill, an OOM, Ctrl-C — what a long run meets)
+without an fsync per unit; only a power cut can lose the last few commits,
+never the file. At `FULL`, Broadleaf's 9 892 templated units cost 37 s of
+fsync on a run that made no call. (Until M16a this was an append-only `<out>.journal` plus a
 rewrite of the whole sorted side-car at every layer: 35 × 47 MB on Broadleaf.
 A journal an older build left behind is merged once, on first contact.) A run
 records its `pid`; the next run finding it unfinished asks whether that process

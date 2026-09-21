@@ -3752,8 +3752,9 @@ interface InsightsStore {
   header(): InsightsHeader | undefined;
   eof(): InsightsEof | undefined;                      // undefined while a run is open, or after a kill
   records(): InsightRecord[];                          // side-car order (M16a's planner input)
-  fingerprints(): Map<string, string>;                 // id → fingerprint, no blocks (M16b's)
-  get(ids: readonly string[]): InsightRecord[];        // what a context pack quotes (M16b's)
+  fingerprints(): Map<string, string>;                 // id → fingerprint, no blocks — all a plan reads (M16b)
+  summary(id: string): RecordSummary | undefined;      // what a prompt quotes, projected in SQL (M16b)
+  get(ids: readonly string[]): InsightRecord[];        // whole records: the export's chunks, M16c's reader
   failures(): FailureRecord[];
   exported(): ExportStamp | undefined;
   openRuns(): OpenRun[];                               // no end: still going, or killed — the caller tells which
@@ -3816,11 +3817,57 @@ only say it a layer late).
   57 MB file beside it; `--estimate` under the writing model then plans
   **0 calls, 17 780 reused** from the store. Not done here: the opt-in
   `CODEGRAPH_CORPUS_INSIGHTS` test (the check was run by hand).
-- **M16b — lazy reads.** `planRun` runs on `fingerprints()`; `context.ts`
-  fetches the dependency blocks it quotes through `get(ids)`; `executeRun`
-  holds the records of the layer in flight and no more. Gate: a plan
-  byte-identical to M16a's on the fixture and on Broadleaf; `--dry-run` RSS
-  on Broadleaf measured before and after and written here.
+- **M16b — lazy reads.** ✅ (2026-09-20) What is already explained is read
+  through a `RecordSource` (`records.ts`) that keeps two questions apart
+  because they cost differently: a PLAN asks `fingerprint(id)` of every unit
+  and reads no block; a PROMPT asks `summary(id)` of what it quotes — the
+  description and the Specy word, two short strings — and only for a unit
+  about to be sent (`DependencySummary.summary/concept` are memoized getters,
+  sound because the fingerprint hashes part IDS, never their text). A
+  `RecordBook` is also where a run `put`s a finished unit; backed by the store
+  (`storeBook`) the put IS the commit, so `executeRun` holds no record at all
+  and `RunResult.records` materializes only on access (tests). The export
+  streams: ids sorted in JS, then 500 consecutive records at a time, written
+  in ~1 MB batches (`writeLinesAtomic`) — the side-car never exists in memory.
+
+  The first cut asked the store for the whole RECORD per quoted dependency.
+  Every gate was byte-identical and it was wrong: a popular callee is quoted
+  by thousands of callers, and with every prompt rendered Broadleaf went from
+  681 MB · 7.3 s to **1 521 MB · 15.1 s**. The prompt needs a projection, so
+  the store serves one — `block -> '$.description'` (`->`, not `->>`: the JSON
+  text keeps U+0000 as an escape) fed to the SAME `conceptLabel` the in-memory
+  path uses, pinned equal by a fast-check property — and the book keeps it
+  once read.
+
+  Gate, on Broadleaf (28 206 records), every plan and every exported record
+  `cmp`-equal to M16a's — reuse-all, `--force` (17 809 prompts quoting the
+  store) and the fixture:
+
+  | | M16a | M16b |
+  |---|---|---|
+  | records held by a plan (heap, GC forced) | 68 MB, 723 ms to load | **7 MB**, 68 ms (fingerprints) |
+  | … with EVERY summary quoted | — | 27 MB |
+  | the export | 47 MB string + a second copy of every record | 500 records at a time |
+  | `--dry-run`, all reused (peak RSS · wall) | 676 MB · 6.4 s | 686 MB · 5.5 s |
+  | `--dry-run --force`, every prompt rendered | 681 MB · 7.3 s | 706 MB · 7.6 s |
+  | a real run, 0 calls, with export | 1 094 MB · 37 s | 936 MB · 10.6 s |
+
+  **What the numbers say, plainly: peak RSS did not move at `--dry-run`, and
+  could not have.** The records were 68 MB of a process whose graph, facts and
+  walk are ~580 MB; §17's motivation table quoted 528 MB for decoding the
+  side-car, which was the JSONL text plus Zod's garbage — a cost M16a had
+  already removed by not reading the file. M16b's gain is the one in the first
+  three rows, it scales with the corpus, and a reader (M16c) inherits it; it
+  is not a smaller `explain`. Two things the measuring found that ARE:
+  - the 37 s → 10.6 s is `PRAGMA synchronous = NORMAL` (WAL's intended
+    setting), not laziness: M16a made each of the 9 892 templated units —
+    recomputed on every run — a durable commit with its own fsync. A kill, an
+    OOM or Ctrl-C still loses nothing; only a power cut can lose the last few
+    commits, never the file.
+  - the real run's remaining ~250 MB over a dry run is `naturalKeys()`:
+    `explain` rebuilds the whole model (78 017 entities, ~156 MB, 2.5 s) to
+    label records with `(lang, module, symbol)`. Not a records problem; see
+    §17.4.
 - **M16c — the first reader.** `codegraph insights <model> [--id ID]
   [--concept aggregate] [--min-confidence X] [--json]` over the store,
   read-only; then the daemon route the Navigate panel asks for a selected
@@ -3849,6 +3896,14 @@ resumes with its records AND its failures; `pnpm -r test`, typecheck and
 
 ### 17.4 Deferred, explicitly
 
+- **A run that changes nothing should cost a dry run** (found measuring M16b;
+  Broadleaf, 0 calls: 10.6 s and 936 MB against 5.5 s and 686 MB). Two causes,
+  both outside the records: (1) a templated unit is recomputed AND re-committed
+  on every run — 9 892 of them; one whose stored fingerprint already matches
+  could be counted and left alone, which changes no plan; (2) `naturalKeys()`
+  rebuilds the model to label records, when the keys are needed only for units
+  about to be written and `model.db` already holds them (`entity_key`). With
+  both, a no-op run writes nothing and reads no model twice.
 - **Several models side by side.** The model is part of every fingerprint,
   so a run under another `--model` redoes — and replaces — everything
   (Broadleaf under the default model: `reuse 0`, 17 809 calls). A key of
@@ -3900,7 +3955,7 @@ resumes with its records AND its failures; `pnpm -r test`, typecheck and
 | M15b | Elixir extractor — model | ✅ (2026-09-16) every kind and edge of §16.2: clause and default folds, the four import forms as one edge kind, `defimpl` as an attached named module, `@derive` as `generated`, `use` as import + `__using__` invocation, struct-expansion accesses, protocol and `GenServer` self-call `dynamic-candidate`s, `throws`, `@spec` references, docs as comments; `sloc` + `cyclomatic`, literals; `--deps` (exports only); the full fixture with its README; determinism, stub-discipline, scope and arity suites; the fixture in every per-fixture suite; city and navigator screenshots reviewed. Snapshot 210 entities / 174 edges; 60 ExUnit tests + 3 properties; Plausible re-run: 16 369 entities / 51 736 edges in 5 s, `validate`-clean, 64.7 % of 119 972 sites resolved or Kernel, the rest counted by reason (`local_injected` and `local_unbound` dominate — the macro ceiling `--trace` exists for) |
 | M15c | Elixir extractor — audit + oracles + distribution | ✅ (2026-09-16) `elixir-lang/elixir` `lib` (557 files, 27 061 / 78 564, 17 s, 80.8 %), Phoenix (205, 5 828 / 14 314, 76.7 %) and Plausible (1 256, 16 369 / 43 661, 58.2 %) audited `validate`-clean, byte-identical to core's encoder, the causes in the profile notes; four defects found and fixed (variadic special forms counted as unbound locals, binary specifiers read as calls, repeated head names re-keying parameters, a corpus `use` treated as no injection source); `--explain-dropped` lists every dropped site; `mix codegraph.trace` (a compilation tracer, JSONL events) + `--trace` merging `generated` edges through the closing rules (Phoenix: 16 797 events → 5 895 edges); the `mix xref` witness check (147/148 on Phoenix) and the trace superset check as opt-in real-corpus tests (`CODEGRAPH_CORPUS_ELIXIR`); the Burrito binary (Zig 0.16, `build.sh --elixir --native`, `test.sh` `cmp`), `elixir-smoke` on three OS runners, `elixir-native` on two, `hex-publish` on a tag; README, CLAUDE.md and `docs/elixir-extractor.md` name the extractor. Deferred: the M14 registry entry and cask stanza (M14 is not on main yet), the Windows native binary (needs 7z on the runner) |
 | M16a | Insights store — the storage swap | ✅ (2026-09-19) `<model>.insights.db` (§17) as `explain`'s working copy behind an `InsightsStore` port in `@codegraph/insights`, its SQLite adapter handed an open database (the analyzer's `loadSqlite()` stays the one load site — the hygiene guard caught three comments naming the specifier); one transaction per finished unit and failures written when they happen (`onUnit`/`onFailure` in `executeRun`); the journal writer and the per-layer 47 MB rewrite deleted; the side-car an atomic deterministic export at the end of a run, imported on first contact by the first run that WRITES (`--dry-run`/`--estimate` create nothing), an outside edit warned about and never obeyed; `--export`, `--import FILE` (asks); a run records its pid — a live writer is refused, a dead one resumed with its records AND its failures; a migration ladder on `user_version` + `application_id`, a newer or foreign file refused with its bytes unchanged; round trip byte-identical as a fast-check property and on Broadleaf (28 206 records, 47.5 MB, `cmp`-equal; store 57 MB — 96 MB before `WITHOUT ROWID` was measured and dropped); 18 store tests + 2 run-hook tests + 11 CLI tests incl. a real-disk run |
-| M16b | Insights store — lazy reads | `planRun` on `id → fingerprint` alone, context packs fetching the blocks they quote by id, `executeRun` holding one layer; plans byte-identical to M16a's on the fixture and on Broadleaf; `--dry-run` RSS on Broadleaf (528 MB to decode the side-car today) measured before and after |
+| M16b | Insights store — lazy reads | ✅ (2026-09-20) a `RecordSource` keeps a plan's question (`fingerprint`, no block) apart from a prompt's (`summary`: description + the Specy word, projected in SQL and pinned equal to the in-memory rule by a property, read once however often quoted); a `RecordBook`'s `put` is the store's commit, so `executeRun` holds no record; the export streams 500 records at a time into ~1 MB writes. Every plan — reuse-all, `--force` (17 809 prompts quoting the store), the fixture — and every exported record `cmp`-equal to M16a's. Records held by a plan: 68 MB → 7 MB (27 MB with every summary quoted); a 0-call run 1 094 MB · 37 s → 936 MB · 10.6 s, the time being `synchronous = NORMAL` undoing M16a's fsync per templated unit. Stated plainly in §17.3: `--dry-run` peak RSS did NOT move (676 → 686 MB) — the graph is ~580 MB of it, the records never were the cost; a first cut that re-read a whole record per quote was byte-identical and twice as slow (1 521 MB), which is why the gate measures and does not only compare |
 | M16c | Insights store — the first reader | `codegraph insights <model>` (by id, concept, confidence; read-only) and the daemon route serving a selected node's description to the Navigate panel — `navigator.json` does not grow; the page renders with no store present; screenshots reviewed |
 
 ## 19. Decisions made in this plan (deltas vs. the design doc)

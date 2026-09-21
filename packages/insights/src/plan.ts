@@ -2,6 +2,7 @@ import { contextPackFor, type ContextEnv, type ContextPack } from "./context.js"
 import { fingerprintOf } from "./fingerprint.js";
 import type { Unit, WalkPlan } from "./order.js";
 import { estimateCompletionTokens, estimateTokens, renderPrompts, type Prompt } from "./prompt.js";
+import { sourceOf, type RecordSource } from "./records.js";
 import type { FailureRecord, InsightRecord, Level } from "./schema.js";
 import type { TemplateKind } from "./units.js";
 
@@ -16,6 +17,9 @@ import type { TemplateKind } from "./units.js";
  *   skip-budget  `--max-calls` is spent; this and every later call is skipped,
  *                so what does run is always a dependency-consistent prefix
  *   llm          a model call (several, for a cycle larger than `--max-scc`)
+ *
+ * `existing` is a RecordSource (records.ts) — the store, on a real corpus — or
+ * a plain map of records, which is copied into one.
  *
  * Fingerprints are exact here — they depend on inputs and on dependency
  * fingerprints, never on explanation text — so `reuse` is decided correctly
@@ -128,11 +132,12 @@ function templateOf(env: PlanEnv, unit: Unit): TemplateKind | undefined {
 
 export function planRun(
   walk: WalkPlan,
-  existing: ReadonlyMap<string, InsightRecord>,
+  existing: RecordSource | ReadonlyMap<string, InsightRecord>,
   env: PlanEnv,
   options: PlanOptions,
 ): RunPlan {
-  const contextEnv: ContextEnv = { ...env, records: existing, depth: options.depth, maxLines: options.maxLines };
+  const records = sourceOf(existing);
+  const contextEnv: ContextEnv = { ...env, records, depth: options.depth, maxLines: options.maxLines };
   const fingerprints = new Map<string, string>();
   const steps: PlanStep[] = [];
   const byLevel: Record<Level, LevelEstimate> = {
@@ -160,7 +165,8 @@ export function planRun(
     const template = templateOf(env, unit);
     const reusable =
       !options.force &&
-      unit.members.every((id) => existing.get(id)?.fingerprint === fingerprint);
+      // Fingerprints alone: a plan that reuses everything reads no block (M16b).
+      unit.members.every((id) => records.fingerprint(id) === fingerprint);
 
     let status: StepStatus;
     let prompts: readonly Prompt[] = [];

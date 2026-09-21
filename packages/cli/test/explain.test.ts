@@ -76,8 +76,8 @@ function seamWith(
         const text = disk.get(resolve(path));
         return text === undefined ? undefined : { size: text.length, mtimeMs: mtimes.get(resolve(path)) ?? 0 };
       },
-      writeFileAtomic: (path, text) => {
-        disk.set(resolve(path), text);
+      writeLinesAtomic: (path, lines) => {
+        disk.set(resolve(path), [...lines].map((line) => `${line}\n`).join(""));
         mtimes.set(resolve(path), (clock += 1));
       },
       remove: (path) => void disk.delete(resolve(path)),

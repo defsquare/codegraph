@@ -19,6 +19,7 @@ import {
 } from "../src/schema.js";
 import { decodeInsights, encodeInsightsToString } from "../src/sidecar.js";
 import { INSIGHTS_APPLICATION_ID, INSIGHTS_DB_VERSION, InsightsStoreError, insightsStorePathFor } from "../src/store.js";
+import { storeBook, summaryOf } from "../src/records.js";
 import { sqliteInsightsStore } from "../src/store-sqlite.js";
 
 const memory = () => sqliteInsightsStore(loadSqlite().open(":memory:"));
@@ -83,9 +84,9 @@ const usageArb = fc.record(
 const keyArb = fc.record({ lang: text, module: text, symbol: text, disambiguator: text }, { requiredKeys: ["lang", "module", "symbol"] });
 const confidence = fc.double({ noNaN: true, noDefaultInfinity: true });
 const blockArb = {
-  operation: fc.record({ name: wild, description: wild, confidence, domainTerms: fc.array(wild, { maxLength: 3 }) }).map((b) => ({ ...OPERATION, ...b })),
-  type: fc.record({ name: text, description: text, confidence, identity: fc.option(text, { nil: null }) }).map((b) => ({ ...TYPE, ...b })),
-  module: fc.record({ name: text, description: text, confidence, sharedKernelHint: fc.option(text, { nil: null }) }).map((b) => ({ ...MODULE, ...b })),
+  operation: fc.record({ name: wild, description: wild, confidence, domainTerms: fc.array(wild, { maxLength: 3 }), owner: fc.constantFrom("entity", "aggregate", "unknown") }).map((b) => ({ ...OPERATION, ...b })),
+  type: fc.record({ name: text, description: wild, confidence, identity: fc.option(text, { nil: null }), concept: fc.constantFrom("entity", "aggregate", "valueType") }).map((b) => ({ ...TYPE, ...b })),
+  module: fc.record({ name: text, description: wild, confidence, sharedKernelHint: fc.option(text, { nil: null }), boundedContextHint: fc.option(fc.record({ name: wild, rationale: wild }), { nil: null }) }).map((b) => ({ ...MODULE, ...b })),
 };
 const strip = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 
@@ -189,6 +190,114 @@ describe("reads that do not pay for blocks", () => {
     const store = sqliteInsightsStore(db);
     store.importFile(decodeInsights(encodeInsightsToString(HEADER, [type("t/A"), op("o/a")], eof(2))));
     expect(db.prepare("SELECT id, confidence FROM insight WHERE concept = 'aggregate'").all()).toEqual([{ id: "t/A", confidence: 0.9 }]);
+  });
+});
+
+describe("storeBook (M16b): the walk reads the store, one record at a time", () => {
+  const seeded = () => {
+    const db = loadSqlite().open(":memory:");
+    const store = sqliteInsightsStore(db);
+    store.importFile(decodeInsights(encodeInsightsToString(HEADER, [type("t/A"), op("o/a"), op("o/b", { fingerprint: "b".repeat(64) })], eof(3))));
+    return { db, store };
+  };
+
+  it("answers fingerprints from one scan and summaries by point lookup; an unknown id is undefined for both", () => {
+    const { store } = seeded();
+    const book = storeBook(store);
+    expect(book.size()).toBe(3);
+    expect(book.fingerprint("o/b")).toBe("b".repeat(64));
+    expect(book.fingerprint("nope")).toBeUndefined();
+    expect(book.summary("t/A")).toEqual({ description: "A type.", concept: "aggregate" });
+    expect(book.summary("o/a")).toEqual({ description: "Does f.", concept: "owned by entity" });
+    expect(book.summary("nope")).toBeUndefined();
+    expect(book.all().map((r) => r.id)).toEqual(["o/a", "o/b", "t/A"]);
+  });
+
+  it("a summary is read ONCE however often it is quoted — a popular callee is in thousands of prompts", () => {
+    // Spied BEFORE the store exists: it prepares its point lookup once, when it is created.
+    const db = loadSqlite().open(":memory:");
+    let reads = 0;
+    const prepare = db.prepare.bind(db);
+    db.prepare = (sql: string) => {
+      const statement = prepare(sql);
+      if (!sql.includes("block -> '$.description'")) return statement;
+      const get = statement.get.bind(statement);
+      statement.get = (...params) => {
+        reads += 1;
+        return get(...params);
+      };
+      return statement;
+    };
+    const store = sqliteInsightsStore(db);
+    store.importFile(decodeInsights(encodeInsightsToString(HEADER, [op("o/a")], eof(1))));
+    const book = storeBook(store);
+    for (let i = 0; i < 1000; i += 1) book.summary("o/a");
+    expect(reads).toBe(1);
+  });
+
+  it("the store's summary IS the record's: what SQL projects equals what JS would, for any record", () => {
+    fc.assert(
+      fc.property(fc.uniqueArray(text.filter((s) => s !== ""), { minLength: 1, maxLength: 6 }).chain((ids) => fc.tuple(...ids.map(recordArb))), (records) => {
+        const store = memory();
+        try {
+          store.importFile(decodeInsights(encodeInsightsToString(HEADER, records, eof(records.length))));
+          for (const record of records) expect(store.summary(record.id)).toEqual(summaryOf(record));
+          expect(store.summary("\u0001 no such id")).toBeUndefined();
+        } finally {
+          store.close();
+        }
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("put() is the store's commit: refused before a run begins, visible to the very next read after", () => {
+    const { store } = seeded();
+    const book = storeBook(store);
+    expect(() => book.put("o/c", [op("o/c")])).toThrow(/no run/u);
+    const run = store.beginRun({ header: HEADER, startedAt: "t" });
+    book.begin(run);
+    store.fail(run, failure("o/c"));
+    void book.put("o/c", [op("o/c", { fingerprint: "c".repeat(64) })]);
+    expect(book.fingerprint("o/c")).toBe("c".repeat(64));
+    expect(book.summary("o/c")).toEqual({ description: "Does f.", concept: "owned by entity" });
+    expect(book.size()).toBe(4);
+    expect(store.failures()).toEqual([]);
+    // Re-explaining a unit replaces, it does not grow the book.
+    void book.put("o/a", [op("o/a", { fingerprint: "d".repeat(64) })]);
+    expect(book.size()).toBe(4);
+    expect(store.fingerprints().get("o/a")).toBe("d".repeat(64));
+  });
+});
+
+describe("export streams (M16b): the side-car never has to exist in memory", () => {
+  it("yields the same bytes across chunk boundaries, in side-car order, reading a bounded slice at a time", () => {
+    const db = loadSqlite().open(":memory:");
+    const store = sqliteInsightsStore(db);
+    // Ids whose UTF-16 and UTF-8 orders disagree, spread over several chunks of each level.
+    const many = [
+      ...Array.from({ length: 1300 }, (_, i) => op(`o/${i % 2 === 0 ? "\u{1F600}" : "～"}${String(i).padStart(4, "0")}`)),
+      ...Array.from({ length: 700 }, (_, i) => type(`t/${String(i).padStart(4, "0")}`)),
+    ];
+    const sidecar = encodeInsightsToString(HEADER, many, eof(many.length, 1), [failure("o/x")]);
+    store.importFile(decodeInsights(sidecar));
+
+    let widest = 0;
+    const prepare = db.prepare.bind(db);
+    db.prepare = (sql: string) => {
+      const statement = prepare(sql);
+      if (!/SELECT .*\bblock\b.* FROM insight/su.test(sql)) return statement;
+      const all = statement.all.bind(statement);
+      statement.all = (...params) => {
+        const rows = all(...params);
+        widest = Math.max(widest, rows.length);
+        return rows;
+      };
+      return statement;
+    };
+    expect(exportOf(store)).toBe(sidecar);
+    expect(widest).toBeGreaterThan(0);
+    expect(widest).toBeLessThanOrEqual(500);
   });
 });
 

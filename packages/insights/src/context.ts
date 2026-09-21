@@ -12,7 +12,8 @@ import {
 } from "@codegraph/analyzer";
 import { digestOf } from "./fingerprint.js";
 import type { Unit } from "./order.js";
-import type { InsightRecord, Level } from "./schema.js";
+import type { RecordSource, RecordSummary } from "./records.js";
+import type { Level } from "./schema.js";
 import type { SourceReader, SourceSlice } from "./source.js";
 import type { UnitSet } from "./units.js";
 
@@ -28,6 +29,13 @@ import type { UnitSet } from "./units.js";
  * dependencies' summaries (one line each); deeper repeats the nesting. A
  * dependency with no record yet (out of scope, or failed) is shown as such —
  * a fact the model must not paper over.
+ *
+ * A SUMMARY IS READ WHEN A PROMPT READS IT (M16b). A pack is built for every
+ * unit of every plan — its fingerprint needs the facts — but only a unit that
+ * is about to be sent has its prompt rendered. So `summary` and `concept` are
+ * memoized getters over the record source: building a pack reads no block,
+ * and a re-run that reuses everything never touches one. The fingerprint
+ * reads neither (it hashes part IDS), which is what makes that sound.
  */
 
 export interface DependencySummary {
@@ -111,7 +119,7 @@ export interface ContextEnv {
   readonly facts: DomainFacts;
   readonly units: UnitSet;
   readonly reader: SourceReader;
-  readonly records: ReadonlyMap<EntityId, InsightRecord>;
+  readonly records: RecordSource;
   readonly unitOf: ReadonlyMap<EntityId, Unit>;
   readonly depth: number;
   readonly maxLines: number;
@@ -154,17 +162,6 @@ export function renderAnnotation(fact: AnnotationFact): string {
   return fact.arguments.length === 0 ? `@${name}` : `@${name}(${renderArguments(fact.arguments)})`;
 }
 
-function conceptOf(record: InsightRecord): string | undefined {
-  switch (record.level) {
-    case "operation":
-      return record.block.owner === "unknown" ? undefined : `owned by ${record.block.owner}`;
-    case "type":
-      return record.block.concept;
-    case "module":
-      return record.block.boundedContextHint?.name === undefined ? undefined : `context: ${record.block.boundedContextHint.name}`;
-  }
-}
-
 /** The summaries of one unit's members, nested to `depth` through the unit graph. */
 function summariesOf(env: ContextEnv, unit: Unit, depth: number, seen: ReadonlySet<string>): DependencySummary[] {
   const nextSeen = new Set(seen).add(unit.id);
@@ -175,18 +172,35 @@ function summariesOf(env: ContextEnv, unit: Unit, depth: number, seen: ReadonlyS
           return dep === undefined ? [] : summariesOf(env, dep, depth - 1, nextSeen);
         })
       : [];
-  return unit.members.map((id) => {
-    const record = env.records.get(id);
-    return {
-      id,
-      level: unit.level,
-      name: displayName(env.graph, id),
-      summary: record?.block.description ?? "",
-      concept: record === undefined ? undefined : conceptOf(record),
-      missing: record === undefined,
-      children,
-    };
-  });
+  return unit.members.map((id) => lazySummary(env, id, unit.level, children));
+}
+
+/** `missing` costs a fingerprint lookup; `summary`/`concept` ask the source once, on first use. */
+function lazySummary(env: ContextEnv, id: EntityId, level: Level, children: readonly DependencySummary[]): DependencySummary {
+  let read = false;
+  let quoted: RecordSummary | undefined;
+  const quote = (): RecordSummary | undefined => {
+    if (!read) {
+      quoted = env.records.summary(id);
+      read = true;
+    }
+    return quoted;
+  };
+  return {
+    id,
+    level,
+    name: displayName(env.graph, id),
+    get summary() {
+      return quote()?.description ?? "";
+    },
+    get concept() {
+      return quote()?.concept;
+    },
+    get missing() {
+      return env.records.fingerprint(id) === undefined;
+    },
+    children,
+  };
 }
 
 function commentsOf(graph: CodeGraph, id: EntityId): readonly string[] {

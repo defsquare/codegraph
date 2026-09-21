@@ -1,4 +1,5 @@
 import type { FailureRecord, InsightRecord, InsightsEof, InsightsHeader } from "./schema.js";
+import type { RecordSummary } from "./records.js";
 import type { InsightsFile } from "./sidecar.js";
 
 /**
@@ -77,6 +78,8 @@ export interface InsightsStore {
   records(): InsightRecord[];
   /** id → fingerprint, without reading a block. */
   fingerprints(): Map<string, string>;
+  /** What a prompt quotes of one record, projected WITHOUT reading the rest of its block. */
+  summary(id: string): RecordSummary | undefined;
   /** The records that exist among `ids`, in side-car order. */
   get(ids: readonly string[]): InsightRecord[];
   failures(): FailureRecord[];
