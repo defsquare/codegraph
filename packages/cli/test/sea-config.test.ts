@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { hostRid } from "../scripts/sea-build.mjs";
+import { hostRid, seaUnsupported } from "../scripts/sea-build.mjs";
 import { filesBelow, repositorySeaConfig, seaConfig, SEA_FUSE } from "../scripts/sea-config.mjs";
 
 /**
@@ -67,5 +67,15 @@ describe("seaConfig", () => {
     expect(hostRid("linux", "x64")).toBe("linux-x64");
     expect(hostRid("linux", "arm64")).toBe("linux-arm64");
     expect(hostRid("win32", "x64")).toBe("win-x64");
+  });
+
+  it("refuses a Node compiled without single-executable support, naming the way out", () => {
+    // Homebrew's node is such a build: `--experimental-sea-config` only prints "disabled".
+    const reason = seaUnsupported({ single_executable_application: false }, "/opt/homebrew/bin/node");
+    expect(reason).toContain("/opt/homebrew/bin/node");
+    expect(reason).toContain("CODEGRAPH_SEA_NODE");
+    expect(seaUnsupported({ single_executable_application: true }, "/usr/local/bin/node")).toBeUndefined();
+    // Older Nodes do not report the variable at all; absence is not a refusal.
+    expect(seaUnsupported({}, "/usr/local/bin/node")).toBeUndefined();
   });
 });

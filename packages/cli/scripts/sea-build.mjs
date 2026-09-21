@@ -28,6 +28,15 @@ export function hostRid(platform = process.platform, arch = process.arch) {
   return `${os}-${arch === "arm64" ? "arm64" : "x64"}`;
 }
 
+/** Why this Node cannot build an image, or undefined. Homebrew compiles node without SEA. */
+export function seaUnsupported(variables = process.config.variables, execPath = process.execPath) {
+  if (variables.single_executable_application !== false) return undefined;
+  return (
+    `${execPath} was compiled without single-executable support (Homebrew's node is) — ` +
+    "install an official Node from https://nodejs.org/download/release/ and point CODEGRAPH_SEA_NODE at its binary"
+  );
+}
+
 function run(command, args, label) {
   const result = spawnSync(command, args, { stdio: "inherit" });
   if (result.status !== 0) {
@@ -40,6 +49,8 @@ function say(text) {
 }
 
 export async function buildSea({ rid = hostRid(), outDir = join(CLI_DIR, "dist-sea") } = {}) {
+  const unsupported = seaUnsupported();
+  if (unsupported) throw new Error(unsupported);
   const bundle = join(outDir, "codegraph.cjs");
   if (!existsSync(bundle)) {
     throw new Error(`${bundle} is missing — run 'pnpm --filter @codegraph/cli build' first`);

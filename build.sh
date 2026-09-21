@@ -59,7 +59,10 @@ Options:
                        (extractors/elixir/dist/<rid>/codegraph-elixir, needs Zig 0.16)
                        platform (extractors/java/dist/<rid>/codegraph-java)
   --sea                TypeScript: also build the single-executable codegraph
-                       image for THIS platform (packages/cli/dist-sea/<rid>/codegraph)
+                       image for THIS platform (packages/cli/dist-sea/<rid>/codegraph).
+                       The image is a copy of the Node that builds it, which must
+                       be an official build: CODEGRAPH_SEA_NODE=/path/to/bin/node
+                       replaces a `node` compiled without SEA (Homebrew's)
   --publish-all        C#: publish linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64
   --rid <rid>          C#: publish exactly this RID (what the CI matrix calls, one per job)
   --all                everything (default)
@@ -139,7 +142,9 @@ if wants_ts; then
   # image is the runtime that builds it — so CI runs this once per runner.
   if [ "$SEA" = "yes" ]; then
     step "build codegraph single-executable ($(host_rid))"
-    run node "$ROOT/packages/cli/scripts/sea-build.mjs" --rid "$(host_rid)"
+    # The image IS the Node that runs this script, and Homebrew's node is compiled
+    # without SEA: CODEGRAPH_SEA_NODE names an official build to use instead.
+    run "${CODEGRAPH_SEA_NODE:-node}" "$ROOT/packages/cli/scripts/sea-build.mjs" --rid "$(host_rid)"
     step_done
   fi
 fi
