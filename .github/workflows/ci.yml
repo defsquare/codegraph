@@ -483,19 +483,22 @@ jobs:
           codesign --verify --verbose=2 "apps/desktop/src-tauri/binaries/codegraph-${{ matrix.triple }}"
       # Tauri signs the bundle with APPLE_SIGNING_IDENTITY and notarizes with
       # APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID when they are set; unset, it
-      # signs ad hoc and skips notarization.
+      # signs ad hoc and skips notarization. `app` is requested alongside `dmg`
+      # because the bundler deletes an .app it only built as the DMG's input,
+      # and the assertions below inspect the .app. Cargo's target directory is
+      # the workspace's (apps/desktop/target), not the crate's.
       - name: tauri build
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: pnpm --filter @codegraph/desktop exec tauri build --bundles dmg --target ${{ matrix.triple }}
+        run: pnpm --filter @codegraph/desktop exec tauri build --bundles app,dmg --target ${{ matrix.triple }}
       # The two assertions §15.5 names for the first signed build, as CI facts.
       - name: assess the signed app
         if: env.APPLE_SIGNING_IDENTITY != ''
         run: |
           set -euo pipefail
-          app="$(find apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/macos -name '*.app' -maxdepth 1 | head -1)"
+          app="$(find apps/desktop/target/${{ matrix.triple }}/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
           codesign --verify --deep --strict --verbose=2 "$app"
           codesign --display --entitlements - "$app/Contents/MacOS/codegraph" | grep -q allow-jit
           spctl --assess --type execute --verbose=2 "$app"
@@ -504,7 +507,7 @@ jobs:
           set -euo pipefail
           version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
           mkdir -p out
-          cp apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/dmg/*.dmg "out/Codegraph-${version}-${{ matrix.rid }}.dmg"
+          cp apps/desktop/target/${{ matrix.triple }}/release/bundle/dmg/*.dmg "out/Codegraph-${version}-${{ matrix.rid }}.dmg"
           ls -la out
       - uses: actions/upload-artifact@v4
         with:

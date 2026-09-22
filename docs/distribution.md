@@ -134,7 +134,9 @@ alongside `datagraph` and `specy`: the five install lines above, and that
    --timestamp --entitlements apps/desktop/src-tauri/entitlements.plist --sign
    "$APPLE_SIGNING_IDENTITY"
    apps/desktop/src-tauri/binaries/codegraph-<triple>`), then
-   `pnpm --filter @codegraph/desktop exec tauri build --bundles dmg` — NOT
+   `pnpm --filter @codegraph/desktop exec tauri build --bundles app,dmg` (the
+   `.app` is requested too, or the bundler deletes it once the DMG holds it;
+   both land under `apps/desktop/target/<triple>/release/bundle/`) — NOT
    `tauri:build`, which re-runs `sidecar.mjs` and overwrites the signed copy
    with the unsigned image. Tauri submits the app for
    notarization and waits — and check the result as a user's Mac will:

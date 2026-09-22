@@ -3093,7 +3093,7 @@ including the capability token (a request outside `/<token>/` is `404`, never
   the `sea` artifact, the Developer ID certificate imported into a throwaway
   keychain, the sidecar signed by CI itself with hardened runtime and the
   JIT-trio entitlements BEFORE `tauri build` (the plan said not to assume
-  the bundler does it), `tauri build --bundles dmg --target <triple>` (Tauri
+  the bundler does it), `tauri build --bundles app,dmg --target <triple>` (Tauri
   signs the app and notarizes from `APPLE_ID`/`APPLE_PASSWORD`/
   `APPLE_TEAM_ID`), then the §15.5 assertions as CI facts — `codesign
   --verify --deep --strict`, `allow-jit` present on the embedded `codegraph`,
