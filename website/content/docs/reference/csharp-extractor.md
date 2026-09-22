@@ -7,12 +7,16 @@ weight: 10
 `codegraph-csharp` 0.1.0 — the Roslyn-based C# extractor. A .NET 10 project in `extractors/csharp/`, published as one self-contained binary per OS. It never opens a `.sln` or `.csproj`: **every `*.cs` under the roots is parsed into one compilation** and bound against a copy of the .NET base class library that travels inside the extractor. No MSBuild, no restore, no build; a missing NuGet package is a stub, not a failure. It emits [`model.jsonl`](/docs/reference/model-jsonl/) and nothing else: all trait, profile and validation logic lives in `@codegraph/core`.
 
 ```bash
+brew install defsquare/tap/codegraph-csharp           # macOS, Linux; or the release's codegraph-csharp-<platform>
+codegraph-csharp --src <dir> --out model.jsonl
+
+# from a clone
 ./build.sh --csharp                                   # publish the host's binary → extractors/csharp/dist/<rid>/codegraph-csharp
 ./build.sh --csharp --publish-all                     # linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64 — all from one host
 extractors/csharp/dist/osx-arm64/codegraph-csharp --src <dir> --out model.jsonl
 ```
 
-Building needs the .NET 10 SDK (see `extractors/csharp/README.md`); the binary it produces needs nothing installed.
+The binary needs nothing installed; building it needs the .NET 10 SDK (see `extractors/csharp/README.md`).
 
 ## Three ways to run it
 
@@ -24,7 +28,7 @@ They produce the same bytes for the same corpus; pick by what the machine has.
 | the .NET **runtime** (no SDK) | `dotnet codegraph-csharp.dll` from a framework-dependent publish (`dotnet publish src/Codegraph.CSharp -c Release -o DIR`, about 15 MB; copy the directory whole) | .NET 10 runtime; the extractor rolls forward to any newer major |
 | the .NET **SDK** | `dotnet run --project extractors/csharp/src/Codegraph.CSharp -c Release -- --src DIR --out model.jsonl` | .NET 10 SDK |
 
-A downloaded binary is unsigned: on macOS run `xattr -d com.apple.quarantine codegraph-csharp` once; on Windows SmartScreen warns once. Non-interactive shells do not see a login shell's `PATH`, so a script that calls `dotnet` should `export DOTNET_ROOT=~/.dotnet; export PATH=$DOTNET_ROOT:$PATH` first, or call the self-contained binary.
+A binary a browser downloaded is quarantined on macOS: run `xattr -d com.apple.quarantine codegraph-csharp` once (Homebrew fetches with `curl`, which sets no quarantine); on Windows SmartScreen warns once. Non-interactive shells do not see a login shell's `PATH`, so a script that calls `dotnet` should `export DOTNET_ROOT=~/.dotnet; export PATH=$DOTNET_ROOT:$PATH` first, or call the self-contained binary.
 
 ## Synopsis
 

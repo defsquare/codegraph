@@ -19,26 +19,28 @@ The documentation is in four parts, each for a different moment:
 
 ## Sixty-second start
 
-Node 22+, pnpm and a JDK 17+ on `PATH`. Codegraph runs from a clone today.
+One Homebrew tap: the app and the command in one install, each language's
+extractor in its own. No JDK, no .NET, nothing else to install.
 
 ```bash
-git clone https://github.com/defsquare/codegraph.git && cd codegraph
-pnpm install && pnpm -r build
-(cd extractors/java && ./mvnw -B package)
+brew install --cask defsquare/tap/codegraph                  # Codegraph.app + the `codegraph` command
+brew install defsquare/tap/codegraph-java                    # the Java extractor, a native image
 
-java -jar extractors/java/target/codegraph-java.jar --src ~/src/gson/gson/src/main/java --out gson.jsonl
-./bin/codegraph validate gson.jsonl
-./bin/codegraph serve gson.jsonl --host 127.0.0.1            # http://localhost:4177
+codegraph-java --src ~/src/gson/gson/src/main/java --out gson.jsonl
+codegraph validate gson.jsonl
+codegraph serve gson.jsonl --host 127.0.0.1                  # http://localhost:4177
 ```
 
-The [first tutorial](/docs/tutorials/first-city/) walks through every step.
+The [first tutorial](/docs/tutorials/first-city/) walks through every step;
+[Install](/docs/how-to/install/) has the Linux and Windows lines, the other
+extractors, and the build from a clone.
 
 ## Limitations, up front
 
-- **Three languages today: Java, C# and TypeScript.** Nine language profiles exist on paper; the shipped extractors are [Spoon for Java](/docs/reference/java-extractor/) (needs a JDK 17+), [Roslyn for C#](/docs/reference/csharp-extractor/) (needs the .NET 10 SDK to build; the binary it produces needs nothing) and [the compiler API for TypeScript](/docs/reference/typescript-extractor/) (Node 22, nothing else). A Clojure adapter is next.
+- **Four languages today: Java, C#, TypeScript and Elixir.** Nine language profiles exist on paper; the shipped extractors are [Spoon for Java](/docs/reference/java-extractor/), [Roslyn for C#](/docs/reference/csharp-extractor/), [the compiler API for TypeScript](/docs/reference/typescript-extractor/) and [the compiler's parser for Elixir](https://github.com/defsquare/codegraph/blob/main/docs/elixir-extractor.md). Each is a self-contained binary; the TypeScript one runs on Node 22. A Clojure adapter is next.
 - **No build means imperfect resolution.** Without a classpath some references stay unresolved; they become stubs, honest but still gaps. Keep one package to one source root per run.
 - **`explain` costs money and needs a network.** It is the only command that does; `--dry-run` and `--estimate` come first.
 - **Not a linter.** Codegraph reports structure, coupling and cycles, not style or bugs.
-- **Runs from a clone.** No npm package or binary release yet.
+- **Platform coverage is uneven.** macOS gets the app and every extractor from the tap; Linux gets the extractors from Homebrew and the command as a release download; Windows gets release binaries for the command, Java and C#, and `npx` for TypeScript. The Elixir extractor is built for Apple silicon and Linux x64 only.
 
 Source: [github.com/defsquare/codegraph](https://github.com/defsquare/codegraph). License: [MIT](https://github.com/defsquare/codegraph/blob/main/LICENSE).

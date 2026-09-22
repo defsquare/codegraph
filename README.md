@@ -43,25 +43,51 @@ Plus the plumbing you need to trust the answers: `validate` for the model,
 
 ## Quick start
 
-You need **Node 22+** and **pnpm** (`corepack enable pnpm`) for codegraph
-itself, plus the toolchain of the extractor you intend to run: a **JDK 17+**
-for Java, the **.NET 10 SDK** for C#, nothing more for TypeScript. Codegraph
-is not on npm yet; you run it from a clone.
+Codegraph is installed from one Homebrew tap. The app and the `codegraph`
+command are one install; every language extractor is its own, so a user of
+one language never downloads the runtimes of the others:
+
+```bash
+brew install --cask defsquare/tap/codegraph      # Codegraph.app + the `codegraph` command (macOS)
+brew install defsquare/tap/codegraph-java        # then one line per language you extract
+brew install defsquare/tap/codegraph-csharp
+brew install defsquare/tap/codegraph-typescript
+brew install defsquare/tap/codegraph-elixir
+```
+
+If a recent Homebrew answers *Refusing to load formula … from untrusted tap*,
+run `brew trust defsquare/tap` once and retry. Nothing else is needed: the
+Java extractor is a GraalVM native image, the C# one carries the .NET runtime
+and the base class library, the Elixir one carries Erlang and Elixir, and the
+TypeScript one is the `codegraph-typescript` npm package on Homebrew's Node
+(`npx codegraph-typescript` runs it anywhere Node 22 is).
+
+On **Linux**, Homebrew installs the extractors the same way; the `codegraph`
+command is the `codegraph-linux-x64` or `-arm64` asset of the
+[latest release](https://github.com/defsquare/codegraph/releases/latest),
+made executable and put on `PATH`. On **Windows**, the same release carries
+`codegraph-win-x64.exe`, `codegraph-java-win-x64.exe` and
+`codegraph-csharp-win-x64.exe`. What a release holds and how the tap is
+rendered from it is in [`docs/distribution.md`](docs/distribution.md).
+
+To work on codegraph itself, run it from a clone instead — Node 22+, pnpm
+(`corepack enable pnpm`), then the toolchain of each extractor you build:
 
 ```bash
 git clone https://github.com/defsquare/codegraph.git && cd codegraph
-pnpm install && pnpm -r build
-(cd extractors/java && ./mvnw -B package)        # Java: the wrapper, no local Maven needed
-./build.sh --csharp                              # C#: needs the .NET 10 SDK, see below
+pnpm install && pnpm -r build                    # the CLI (bin/codegraph) and the TypeScript extractor
+(cd extractors/java && ./mvnw -B package)        # Java: a JDK 17+; the wrapper, no local Maven needed
+./build.sh --csharp                              # C#: the .NET 10 SDK
+./build.sh --elixir                              # Elixir: Erlang/OTP 27 + Elixir
 ln -s "$PWD/bin/codegraph" ~/.local/bin/codegraph   # optional, works from a symlink
 ```
 
 Now point it at some Java. Any tree of `.java` files works; it does not have
-to build.
+to build, and no JDK is needed.
 
 ```bash
 # 1. extract: sources in, one model file out (no compilation)
-java -jar extractors/java/target/codegraph-java.jar --src ~/src/gson/gson/src/main/java --out gson.jsonl
+codegraph-java --src ~/src/gson/gson/src/main/java --out gson.jsonl
 
 # 2. is the model sound?
 codegraph validate gson.jsonl
@@ -78,38 +104,33 @@ command completes in about twelve seconds.
 binds every interface, which is convenient on a LAN and wrong for a sensitive
 codebase.
 
-TypeScript needs no other toolchain: the extractor is the compiler used as a
-library, and it reads a tree that neither builds nor has `node_modules`.
+TypeScript: the extractor is the compiler used as a library, and it reads a
+tree that neither builds nor has `node_modules`. Node 22 is its only
+requirement, so `npx` is enough where Homebrew is not.
 
 ```bash
-./bin/codegraph-typescript --src ~/src/some-app/src --out app.jsonl
-./bin/codegraph-typescript --src packages --src extractors/typescript --out codegraph.jsonl   # codegraph on itself
+codegraph-typescript --src ~/src/some-app/src --out app.jsonl
+npx codegraph-typescript --src packages --src extractors/typescript --out codegraph.jsonl   # codegraph on itself
 ```
 
-Elixir needs Erlang/OTP on the machine and nothing else: the extractor is the
-compiler's parser used as a library, shipped as an escript, and it reads a
-tree that neither compiles nor has its `deps/` fetched.
+Elixir: the extractor is the compiler's parser used as a library, and it
+reads a tree that neither compiles nor has its `deps/` fetched. The binary
+carries Erlang and Elixir (Apple silicon and Linux x64 today).
 
 ```bash
-./build.sh --elixir                                              # mix escript.build
-./bin/codegraph-elixir --src ~/src/some-app --out app.jsonl
-./bin/codegraph-elixir --src ~/src/some-app --deps ~/src/some-app/deps --out app.jsonl   # dependency exports
-./bin/codegraph-elixir --src ~/src/some-app --trace ~/src/some-app/codegraph-trace.jsonl --out app.jsonl
+codegraph-elixir --src ~/src/some-app --out app.jsonl
+codegraph-elixir --src ~/src/some-app --deps ~/src/some-app/deps --out app.jsonl   # dependency exports
+codegraph-elixir --src ~/src/some-app --trace ~/src/some-app/codegraph-trace.jsonl --out app.jsonl
 #   the trace: what the compiler bound after macro expansion — `mix codegraph.trace` inside the project
 ```
 
-For C#, the extractor is a Roslyn program that reads `*.cs` directly: no
+C#: the extractor is a Roslyn program that reads `*.cs` directly: no
 solution, no project file, no MSBuild, and a missing NuGet package is a stub
-rather than a build failure. Building it needs the **.NET 10 SDK**:
+rather than a build failure. The binary carries the runtime, the compiler and
+the base class library, so the machine needs no .NET at all:
 
 ```bash
-# a user-local SDK, if the machine has none — a login shell's PATH is not
-# visible to non-interactive shells, so export it:
-curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0 --install-dir ~/.dotnet
-export DOTNET_ROOT="$HOME/.dotnet"; export PATH="$DOTNET_ROOT:$PATH"
-
-./build.sh --csharp                                       # → extractors/csharp/dist/<rid>/codegraph-csharp
-extractors/csharp/dist/linux-x64/codegraph-csharp --src ~/src/eShop/src --out eshop.jsonl
+codegraph-csharp --src ~/src/eShop/src --out eshop.jsonl
 ```
 
 Running it asks less than building it, and the three forms produce the same
@@ -117,18 +138,18 @@ bytes for the same corpus:
 
 | The machine has | Run it as | Install |
 |---|---|---|
-| nothing | the self-contained binary `./build.sh --csharp` produced, about 64 MB with the runtime, the compiler and the base class library inside | nothing |
+| nothing | the self-contained binary from the tap or the release, about 64 MB | nothing |
 | the .NET 10 **runtime** | `dotnet codegraph-csharp.dll` from a framework-dependent publish, about 15 MB, produced once by someone with the SDK | .NET 10 runtime |
-| the .NET 10 **SDK** | `dotnet run` from source, or a dev build | .NET 10 SDK |
+| the .NET 10 **SDK** | `dotnet run` from source, or `./build.sh --csharp` in a clone | .NET 10 SDK |
 
 The binary is built with invariant globalization, so a minimal Linux
 container needs no `libicu`.
 [`docs/csharp-extractor.md`](docs/csharp-extractor.md) has the rest: the five
 platforms `./build.sh --csharp --publish-all` cross-publishes from one host,
-and the one-time macOS quarantine and Windows SmartScreen notes.
+and the one-time quarantine note for a binary a browser downloaded.
 
-Both extractors take the same flags and exit codes (`schemas/README.md` §8),
-so every command below works on either model.
+Every extractor takes the same flags and exit codes (`schemas/README.md` §8),
+so every command below works on any model.
 
 ## Usage
 
@@ -269,7 +290,11 @@ Read these before you commit an afternoon.
   and `--max-calls` caps it.
 - **Not a linter.** Codegraph reports structure, coupling and cycles; it does
   not judge style or find bugs.
-- **Runs from a clone.** There is no npm package or binary release yet with `Homebrew` for instance (but it's in the roadmap).
+- **Platform coverage is uneven.** macOS gets the app and every extractor
+  from the tap. Linux gets the extractors from Homebrew and the `codegraph`
+  command as a release download. Windows gets release binaries for the
+  command, Java and C#, and `npx` for TypeScript. The Elixir extractor is
+  built for Apple silicon and Linux x64 only.
 - **Big models want memory.** A 100 MB model loads in the navigator in about
   a second, but the extractor and the analyzer are single-process Node and
   JVM tools; a monorepo of millions of lines is untested, we tested with Fineract that is close to 1M sloc (874 kSLOC precisely).
@@ -281,6 +306,7 @@ Read these before you commit an afternoon.
   (any state)  (Java: Spoon)  (the contract)      (TypeScript)      city.json ──▶ 3D city
                (C#: Roslyn)
                (TS: the compiler API)
+               (Elixir: the parser)
                                    │                                navigator.json ──▶ navigator
                               schemas/*.json                        model.db ──▶ SQL, time
                             (published JSON Schema)                 *.insights.jsonl ──▶ explanations
@@ -320,6 +346,7 @@ so a model file has one direction of truth. The full reference is
 - [`docs/csharp-extractor.md`](docs/csharp-extractor.md) — running the C# extractor: the self-contained binary, the .NET runtime alone, or the SDK from source
 - [`docs/typescript-extractor.md`](docs/typescript-extractor.md) — running the TypeScript extractor, how it resolves without a build, reading its summary
 - [`docs/elixir-extractor.md`](docs/elixir-extractor.md) — running the Elixir extractor, the OTP table and the stub discipline, the dropped-site reasons, `--deps` and the `--trace` enrichment
+- [`docs/distribution.md`](docs/distribution.md) — the Homebrew tap, what a tagged release produces, what is signed and how
 - [`docs/navigator.md`](docs/navigator.md) — the navigator's design
 - [`docs/insights.md`](docs/insights.md) — the explanation walk's design
 - [`PLAN.md`](PLAN.md) — milestones, decisions and their rationale
@@ -346,8 +373,10 @@ about known code shows up as a diff.
 | LLM explanations (`explain`) | done |
 | Second language extractor (C#, Roslyn): one self-contained binary per OS, byte-identity smoke tests in CI on five platforms, audited on Humanizer, dotnet/eShop and OrchardCore | done |
 | Third language extractor (TypeScript, the compiler API): no build, no `node_modules`, self-hosting — codegraph's own package boundaries recovered as graph queries; byte-identity smoke tests on three OSes; audited on TypeScript 4.9's compiler, nestjs and excalidraw | done |
+| Fourth language extractor (Elixir, the compiler's parser): no compile, no `deps/`, the OTP export table baked in, `mix codegraph.trace` for what the compiler bound after macro expansion | done |
+| Desktop app (Tauri, macOS, signed and notarized) over the single-executable `codegraph` daemon | done |
+| Releases: one binary per platform on a GitHub release, the Homebrew tap (app cask + one formula per extractor), `codegraph-typescript` on npm | done (v0.1.0) |
 | Clojure extractor (clj-kondo) | next |
-| Published releases (npm, extractor jar) | planned |
 | Project website and documentation site | planned, see [`WEBSITE.md`](WEBSITE.md) |
 
 ## Contributing

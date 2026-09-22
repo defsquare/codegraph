@@ -7,14 +7,16 @@ weight: 8
 `codegraph snapshots` extracts a repository at chosen revisions and appends each
 frame to one `model.db`. That store is what `timeline` and `replay` read.
 
-**Before you start:** a git clone of the repository, the extractor jar, and a JDK
-on `PATH`. The command runs `java -jar` once per revision, so budget accordingly.
+**Before you start:** a git clone of the repository and the extractor of its
+language, given to `--extractor` as a path: the installed `codegraph-java`
+binary, a `.jar` (run with `java -jar`, so a JDK on `PATH`), or a `.js`. The
+command runs it once per revision, so budget accordingly.
 
 ## Choose the sampling
 
 ```bash
 # releases as keyframes — usually what you want
-codegraph snapshots ~/src/gson --jar extractors/java/target/codegraph-java.jar \
+codegraph snapshots ~/src/gson --extractor "$(command -v codegraph-java)" \
   --tags --src gson/src/main/java --store gson.db
 
 # or every Nth first-parent commit, oldest first; the tip is always included

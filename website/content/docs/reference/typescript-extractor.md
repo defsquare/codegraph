@@ -7,14 +7,16 @@ weight: 11
 `codegraph-typescript` 0.1.0 — the TypeScript extractor on the compiler API. A pnpm workspace package in `extractors/typescript/`, whose only runtime dependency is `typescript` itself: the same package that ships `tsc`, whose checker binds everything it can and tolerates everything it cannot. **Every `*.ts` under the roots goes into one program**; a `tsconfig.json` is read for resolution options only; nothing is built, no `tsc` is run, and a package that is not installed is a stub, not a failure. It emits [`model.jsonl`](/docs/reference/model-jsonl/) and nothing else: all trait, profile and validation logic lives in `@codegraph/core`.
 
 ```bash
-pnpm install && pnpm -r build
-./bin/codegraph-typescript --src <dir> --out model.jsonl
+npx codegraph-typescript --src <dir> --out model.jsonl          # the npm package; Node 22, nothing else
+brew install defsquare/tap/codegraph-typescript                  # the same package on Homebrew's node
+codegraph-typescript --src <dir> --out model.jsonl
 
-# codegraph on itself: the workspace's packages, by name, with nothing built
+# from a clone — codegraph on itself: the workspace's packages, by name, with nothing built
+pnpm install && pnpm -r build
 ./bin/codegraph-typescript --src packages --src extractors/typescript --out codegraph.jsonl
 ```
 
-The launcher runs the bundle at `extractors/typescript/dist/cli.js`. The bundle leaves `typescript` outside itself on purpose: the compiler locates its `lib.*.d.ts` files beside its own `typescript.js`, so a bundle that inlined it would bind no standard library and every `Array` would become an `<unresolved>` stub. Node 22 is the only other requirement; `npx codegraph-typescript` will be the no-clone form once the package is published.
+The package and the launcher both run the bundle at `dist/cli.js`. The bundle leaves `typescript` outside itself on purpose: the compiler locates its `lib.*.d.ts` files beside its own `typescript.js`, so a bundle that inlined it would bind no standard library and every `Array` would become an `<unresolved>` stub. Node 22 is the only other requirement.
 
 ## Synopsis
 

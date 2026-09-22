@@ -4,24 +4,28 @@ linkTitle: Java extractor
 weight: 9
 ---
 
-`codegraph-java` 0.2.0 — the Spoon-based Java extractor. A separate Maven project in `extractors/java/`, JDK 17+, running Spoon in **noClasspath mode**, so the sources need not compile and no dependency jars are needed. It emits [`model.jsonl`](/docs/reference/model-jsonl/) and nothing else: all trait, profile and validation logic lives in `@codegraph/core`.
+`codegraph-java` 0.1.0 — the Spoon-based Java extractor. A separate Maven project in `extractors/java/`, running Spoon in **noClasspath mode**, so the sources need not compile and no dependency jars are needed. It emits [`model.jsonl`](/docs/reference/model-jsonl/) and nothing else: all trait, profile and validation logic lives in `@codegraph/core`.
+
+The released form is a GraalVM native image that carries the Java API distilled from `ct.sym`, so the machine needs no JDK:
 
 ```bash
-cd extractors/java && ./mvnw -B package     # `mvn` is not installed; use the wrapper
-java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
+brew install defsquare/tap/codegraph-java     # macOS, Linux; or the release's codegraph-java-<platform>
+codegraph-java --src <dir> --out model.jsonl
 ```
 
-A JDK must be on `PATH`; non-interactive shells do not source sdkman:
+From a clone, the jar is the same extractor and takes the same flags; building and running it needs a JDK 17+ on `PATH` (non-interactive shells do not source sdkman):
 
 ```bash
 export JAVA_HOME=$HOME/.sdkman/candidates/java/25.0.4-tem
 export PATH=$JAVA_HOME/bin:$PATH
+cd extractors/java && ./mvnw -B package     # `mvn` is not installed; use the wrapper
+java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 ```
 
 ## Synopsis
 
 ```
-java -jar codegraph-java.jar [--src <dir>…] [--out <file>]
+codegraph-java [--src <dir>…] [--out <file>]
 ```
 
 ## Options

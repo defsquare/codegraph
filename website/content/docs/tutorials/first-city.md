@@ -11,10 +11,10 @@ clicking.
 
 **What you need.**
 
-- codegraph installed from a clone and built — see [Install](/docs/how-to/install/).
-  You will use the `codegraph` command and the extractor jar it builds.
-- A JDK 17 or newer on `PATH`. Check with `java -version`.
-- `git`, and about 50 MB of disk for the clone.
+- codegraph and its Java extractor installed — see [Install](/docs/how-to/install/).
+  You will use the `codegraph` and `codegraph-java` commands. No JDK is
+  needed: the extractor is a native image.
+- `git`, and about 50 MB of disk for the clone of gson.
 
 **How long.** About 15 minutes, most of it the clone.
 
@@ -23,7 +23,7 @@ is the whole point: it works the same on code that no longer builds.
 
 ```mermaid
 flowchart LR
-  A[gson sources] --> B[extractor jar]
+  A[gson sources] --> B[codegraph-java]
   B --> C[gson.jsonl]
   C --> D[codegraph serve]
   D --> E[the city in your browser]
@@ -38,12 +38,9 @@ source trees.
 mkdir -p ~/codegraph-tutorial && cd ~/codegraph-tutorial
 ```
 
-The extractor is a jar, not a command. Point a shell variable at it once so the
-lines below stay readable — replace the path with your own clone:
-
-```bash
-JAR=~/src/codegraph/extractors/java/target/codegraph-java.jar
-```
+If you built the extractor from a clone instead of installing it, read
+`codegraph-java` below as `java -jar path/to/codegraph-java.jar`; the flags
+are the same.
 
 ## 2. Get a corpus
 
@@ -59,7 +56,7 @@ git clone --depth 1 --branch gson-parent-2.14.0 https://github.com/google/gson g
 One source root, one model file.
 
 ```bash
-java -jar "$JAR" --src gson-2.14.0/gson/src/main/java --out gson.jsonl
+codegraph-java --src gson-2.14.0/gson/src/main/java --out gson.jsonl
 ```
 
 The extractor prints its resolution summary on stderr:

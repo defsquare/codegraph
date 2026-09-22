@@ -30,8 +30,7 @@ Point `--src` at a source root, the directory where the package hierarchy
 starts, not the repository root:
 
 ```bash
-java -jar extractors/java/target/codegraph-java.jar \
-  --src ~/src/app/src/main/java --out app.jsonl
+codegraph-java --src ~/src/app/src/main/java --out app.jsonl
 ```
 
 ```text

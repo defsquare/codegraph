@@ -27,15 +27,16 @@ uses them first.
 
 This tutorial uses the committed reference fixture rather than a real library:
 it is 13 files, it never leaves your machine, and it is small enough that a full
-plan fits on one screen. Point `--src` at the fixture inside your codegraph
-clone:
+plan fits on one screen. The fixture lives in the codegraph repository, so
+point `--src` at it inside a checkout — a shallow clone is enough, nothing in
+it needs building:
 
 ```bash
 cd ~/codegraph-tutorial
-JAR=~/src/codegraph/extractors/java/target/codegraph-java.jar
-SRC=~/src/codegraph/fixtures/java/src
+git clone --depth 1 https://github.com/defsquare/codegraph.git codegraph
+SRC=codegraph/fixtures/java/src
 
-java -jar "$JAR" --src "$SRC" --out order.jsonl
+codegraph-java --src "$SRC" --out order.jsonl
 ```
 
 ```text

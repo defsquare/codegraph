@@ -9,8 +9,9 @@ nothing else — no build, no jars, no classpath. This guide covers choosing the
 source root, reading the resolution summary, and the one decision a multi-module
 repository forces on you.
 
-**Before you start:** a built `codegraph-java.jar` and a JDK on `PATH`
-(see [Install](/docs/how-to/install/)).
+**Before you start:** the `codegraph-java` command on `PATH` (see
+[Install](/docs/how-to/install/)); a jar you built yourself runs as
+`java -jar codegraph-java.jar` with the same flags.
 
 ## Extract one source root
 
@@ -18,8 +19,7 @@ repository forces on you.
    under, not the repository root.
 
    ```bash
-   java -jar extractors/java/target/codegraph-java.jar \
-     --src fixtures/java/src --out acme.jsonl
+   codegraph-java --src fixtures/java/src --out acme.jsonl
    ```
 
    `stdout` carries only the roots and the model path, so it is safe to capture.
@@ -79,7 +79,7 @@ be. The choice matters, so make it deliberately.
 resolves across every root it was given:
 
 ```bash
-java -jar codegraph-java.jar --src modA --src modB --out both.jsonl
+codegraph-java --src modA --src modB --out both.jsonl
 ```
 
 ```text
@@ -122,7 +122,7 @@ If you want the city and the navigator to link back to a hosted repository, hand
 the extractor the facts — it runs no git itself:
 
 ```bash
-java -jar codegraph-java.jar --src src/main/java --out gson.jsonl \
+codegraph-java --src src/main/java --out gson.jsonl \
   --repo-remote https://github.com/google/gson \
   --repo-commit b3f4ca2 --repo-root gson/src/main/java
 ```

@@ -8,7 +8,7 @@ Extract a repo at sampled revisions into a temporal store (model.db).
 ## Synopsis
 
 ```
-codegraph snapshots [repo] --jar FILE [--every N] [--tags] [--store FILE] [--src DIR] [--json]
+codegraph snapshots [repo] --extractor FILE [--every N] [--tags] [--store FILE] [--src DIR] [--json]
 ```
 
 ## Arguments
@@ -21,7 +21,8 @@ codegraph snapshots [repo] --jar FILE [--every N] [--tags] [--store FILE] [--src
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--jar FILE` | The codegraph-java extractor jar, run with `java -jar` at every revision. | *required* |
+| `--extractor FILE` | The extractor run at every revision, as a path: a `.jar` (run with `java -jar`), a `.js` (run with `node`), or an executable such as the installed `codegraph-java` (`$(command -v codegraph-java)`) or `codegraph-csharp`. All honour the extractor command-line contract. | *required* |
+| `--jar FILE` | Alias of `--extractor`, kept for the form `--jar codegraph-java.jar`. | — |
 | `--every N` | Snapshot every Nth first-parent commit, oldest first; the tip is always included. | — |
 | `--tags` | Snapshot the commits the repo's tags point at instead (releases as keyframes). | — |
 | `--store FILE` | The temporal store to append to; defaults to <repo>-model.db. | — |

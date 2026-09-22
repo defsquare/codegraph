@@ -102,12 +102,12 @@ first hours of reading.
 
 ## What you need
 
-- Node 22+, pnpm, and the codegraph CLI built from a clone: see
-  [Install](/docs/how-to/install/).
-- A JDK 17+ for the [Java extractor](/docs/reference/java-extractor/); nothing
-  beyond Node for the [TypeScript one](/docs/reference/typescript-extractor/);
-  a published binary, or the .NET 10 SDK to build it, for the
-  [C# one](/docs/reference/csharp-extractor/).
+- The `codegraph` command and the extractor of your language, both from the
+  Homebrew tap: see [Install](/docs/how-to/install/). The
+  [Java](/docs/reference/java-extractor/) and
+  [C#](/docs/reference/csharp-extractor/) extractors are self-contained
+  binaries; the [TypeScript one](/docs/reference/typescript-extractor/) runs
+  on Node 22.
 - `sqlite3` on your path for the ad-hoc queries. Any SQLite client works;
   DuckDB and Datasette are shown in [Query model.db](/docs/how-to/query-model-db/).
 - For step 3, a git clone with its history, not an exported tree.

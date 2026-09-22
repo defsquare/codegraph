@@ -9,8 +9,11 @@ pipeline can fail on findings about your code without failing on a bug in
 codegraph. This guide wires `validate` and `analyze --report cycles` into a job
 and keeps the model as an artifact.
 
-**Before you start:** a job that can produce a `model.jsonl` (a JDK and the
-extractor jar for Java) and the `codegraph` CLI on `PATH`.
+**Before you start:** a job that can produce a `model.jsonl` and the
+`codegraph` command on `PATH`. Both are single binaries on the
+[release](https://github.com/defsquare/codegraph/releases/latest) —
+`codegraph-linux-x64` and `codegraph-java-linux-x64` for a Linux runner — so
+the job needs no Node and no JDK; see [Install](/docs/how-to/install/).
 
 ## The exit codes the gate reads
 
@@ -27,7 +30,7 @@ extractor jar for Java) and the `codegraph` CLI on `PATH`.
    prints them to `stdout`.
 
    ```bash
-   java -jar codegraph-java.jar --src src/main/java --out model.jsonl --progress plain
+   codegraph-java --src src/main/java --out model.jsonl --progress plain
    codegraph validate model.jsonl
    ```
 
@@ -89,7 +92,7 @@ codegraph analyze model.jsonl --report cycles --level type --json > cycles.json
 model:
   stage: check
   script:
-    - java -jar codegraph-java.jar --src src/main/java --out model.jsonl --progress plain
+    - codegraph-java --src src/main/java --out model.jsonl --progress plain
     - codegraph validate model.jsonl
     - codegraph analyze model.jsonl --report cycles --json > cycles.json
   artifacts:

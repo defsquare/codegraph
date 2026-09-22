@@ -262,14 +262,13 @@ re-extract the *model* at sampled revisions, so the replay knows about classes
 rather than files.
 
 `codegraph snapshots` drives it: a throwaway `git worktree` per revision, the
-extractor jar run inside it, one frame appended to a temporal store. Your main
-checkout is never touched. Sample either every Nth first-parent commit or the
+extractor run inside it, one frame appended to a temporal store. Your main
+checkout is never touched. `--extractor` takes a path, so give it the
+installed binary's; sample either every Nth first-parent commit or the
 commits the tags point at:
 
 ```bash
-JAR=~/src/codegraph/extractors/java/target/codegraph-java.jar
-
-codegraph snapshots gson --jar "$JAR" --every 200 --src gson/src/main/java --store gson-time.db
+codegraph snapshots gson --extractor "$(command -v codegraph-java)" --every 200 --src gson/src/main/java --store gson-time.db
 ```
 
 ```text
