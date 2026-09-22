@@ -170,10 +170,12 @@ and Gatekeeper checks the app's staple when the cask copies it into
 
 ## Status
 
-The pipeline and the generators are written and tested, and the tap
-repository exists (public, with `Formula/` and two other tools), but it has
-not yet received a codegraph release. Reaching the definition of done in
-PLAN.md §15.6 — a clean Mac running the install lines and opening a Java, a
-C# and a TypeScript folder from the app — needs, in order: the tap deploy
-key (above) and the Apple credentials in the repository's secrets, a `v*`
-tag, and the two clean-Mac checks by hand.
+`v0.1.0` (2026-09-22) was the first tagged release: the GitHub release holds
+every asset of the table above, and the tap received `Casks/codegraph.rb`
+and the Java, C# and Elixir formulae from the release workflow. The
+`codegraph-typescript` formula is still absent: the repository holds no
+`NPM_TOKEN`, so the npm publish was skipped and there is no tarball sum to
+render. Adding the secret and re-running the tag's workflow fills that gap.
+What remains of the definition of done in PLAN.md §15.6 is the clean-Mac
+check by hand: the install lines, then a Java, a C# and a TypeScript folder
+opened from the app.
