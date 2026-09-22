@@ -1,0 +1,37 @@
+# The website — the landing page at / and the documentation at /docs/, one
+# Hugo site (Hextra vendored as a git submodule) — built with the same pinned
+# Hugo version a developer runs locally. Independent of the Node toolchain,
+# and of ci.yml: it runs only when website/ changes, and ci.yml ignores
+# website/, so a docs-only commit builds the site and nothing else.
+
+name: website
+
+on:
+  push:
+    branches: [main]
+    paths: ["website/**", ".github/workflows/website.yml"]
+  pull_request:
+    paths: ["website/**", ".github/workflows/website.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  website:
+    name: website (hugo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: "0.165.0"
+          extended: true
+      - run: cd website && hugo --minify --gc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website
+          path: website/public
+          retention-days: 7
