@@ -14,3 +14,9 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+
+# Proc-macros are dylibs rustc dlopen()s. With tauri's 12.0 deployment target,
+# the post-link `strip -S` misaligns their string table and macOS 27's dyld
+# refuses them (E0463 "can't find crate"). Build-time only: the app is unaffected.
+[profile.release.build-override]
+strip = false
