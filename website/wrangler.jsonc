@@ -1,0 +1,15 @@
+// The Cloudflare Worker that serves the built site: static assets only, no
+// script. Workers Builds runs from this directory, `pnpm run build` (the viz
+// bundle into static/city/, then Hugo into public/), then `wrangler deploy`
+// on main and `wrangler versions upload` on any other branch — both read
+// this file, so neither needs an --assets argument.
+{
+  "$schema": "https://developers.cloudflare.com/schema/wrangler.json",
+  "name": "codegraph",
+  "compatibility_date": "2026-09-21",
+  "assets": {
+    "directory": "./public",
+    // Hugo emits 404.html; serve it with a 404 status instead of the root.
+    "not_found_handling": "404-page"
+  }
+}
