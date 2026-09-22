@@ -630,11 +630,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter codegraph-typescript build
       # `npx codegraph-typescript` for anyone with Node 22 (PLAN.md §14.7).
-      # Skipped, not failed, when the repository holds no NPM_TOKEN: the
-      # GitHub release above is the release; npm is the convenience.
-      - name: publish with provenance
-        if: env.NPM_TOKEN != ''
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: cd extractors/typescript && pnpm publish --provenance --access public --no-git-checks
+      # No token: npmjs.com trusts this workflow's OIDC identity (the trusted
+      # publisher configured once on the package — docs/distribution.md), which
+      # needs npm ≥ 11.5.1, newer than the one Node 22 ships; provenance comes
+      # with it. `pnpm pack` rewrites the `catalog:` ranges, then npm itself
+      # publishes the tarball, so the OIDC exchange is npm's own. A fork (no
+      # trusted publisher) fails here but keeps its release: npm is the
+      # convenience, the GitHub release is the release.
+      - run: npm install -g npm@latest && npm --version
+      - name: publish with provenance (trusted publishing)
+        continue-on-error: true
+        run: |
+          cd extractors/typescript
+          pnpm pack
+          npm publish codegraph-typescript-*.tgz --access public --provenance

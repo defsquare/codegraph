@@ -4,10 +4,26 @@
   "license": "MIT",
   "type": "module",
   "description": "codegraph extractor for TypeScript: the compiler API as the front end, no build and no node_modules required — emits model.jsonl",
+  "homepage": "https://github.com/defsquare/codegraph/blob/main/docs/typescript-extractor.md",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/defsquare/codegraph.git",
+    "directory": "extractors/typescript"
+  },
+  "bugs": "https://github.com/defsquare/codegraph/issues",
+  "keywords": [
+    "codegraph",
+    "typescript",
+    "dependency-graph",
+    "static-analysis",
+    "code-city"
+  ],
   "bin": {
     "codegraph-typescript": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": ">=22"
   },

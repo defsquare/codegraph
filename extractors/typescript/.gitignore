@@ -1,0 +1,3 @@
+
+# pnpm pack output, published by the release workflow, never committed.
+/codegraph-typescript-*.tgz

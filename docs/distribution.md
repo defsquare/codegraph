@@ -79,8 +79,34 @@ never failed, so a fork or a pull request still builds everything unsigned.
 | `APPLE_CERTIFICATE_PASSWORD` | `desktop-bundle` | its password |
 | `APPLE_SIGNING_IDENTITY` | `desktop-bundle` | `Developer ID Application: <name> (<team>)` — its presence switches signing on |
 | `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | `desktop-bundle` | the Apple ID, an app-specific password, the team — Tauri notarizes with them |
-| `NPM_TOKEN` | `npm-publish` | publishes `codegraph-typescript` |
 | `HOMEBREW_TAP_DEPLOY_KEY` | `release` | an SSH deploy key with write access to the tap repository (`vars.HOMEBREW_TAP_REPO`, default `defsquare/homebrew-tap`) |
+
+The npm publish of `codegraph-typescript` reads no secret: it uses npm's
+[trusted publishing](https://docs.npmjs.com/trusted-publishers) — npmjs.com
+trusts the OIDC identity of this repository's `ci.yml` and issues a
+short-lived token to that run, with provenance attached. Nothing to rotate.
+
+### Wiring npm trusted publishing (once, by a maintainer)
+
+The trusted publisher is configured on the package's page, so the package
+must exist first: the first version is published by hand, from a checkout
+with `npm login` done (`pnpm pack` in `extractors/typescript`, then
+`npm publish codegraph-typescript-<version>.tgz --access public`). Then, on
+npmjs.com → the package → Settings → Trusted publishing → GitHub Actions:
+
+| Field | Value |
+|---|---|
+| Organization or user | `defsquare` |
+| Repository | `codegraph` |
+| Workflow filename | `ci.yml` |
+| Environment name | leave empty (the job uses none) |
+
+Then under Settings → Publishing access choose "Require two-factor
+authentication and disallow tokens": trusted publishers keep working, a
+leaked token cannot publish. The job itself needs `permissions: id-token:
+write` and npm ≥ 11.5.1 (it upgrades the npm Node 22 ships), both in place.
+Without a trusted publisher — a fork — the publish step fails and the run
+continues: the release job renders the tap without the TypeScript formula.
 
 ### Wiring the tap deploy key (once, by a maintainer)
 
@@ -173,9 +199,10 @@ and Gatekeeper checks the app's staple when the cask copies it into
 `v0.1.0` (2026-09-22) was the first tagged release: the GitHub release holds
 every asset of the table above, and the tap received `Casks/codegraph.rb`
 and the Java, C# and Elixir formulae from the release workflow. The
-`codegraph-typescript` formula is still absent: the repository holds no
-`NPM_TOKEN`, so the npm publish was skipped and there is no tarball sum to
-render. Adding the secret and re-running the tag's workflow fills that gap.
+`codegraph-typescript` formula was absent from that first push: the npm
+publish was still token-gated and no token existed, so there was no tarball
+sum to render. The first version was then published by hand and the job
+switched to trusted publishing (above); the next tag renders the formula.
 What remains of the definition of done in PLAN.md §15.6 is the clean-Mac
 check by hand: the install lines, then a Java, a C# and a TypeScript folder
 opened from the app.
