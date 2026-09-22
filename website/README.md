@@ -4,9 +4,15 @@
 documentation at `/docs/`.
 
 ```bash
+git submodule update --init --recursive   # once per clone: fetches themes/hextra
 hugo server -D --port 1314   # http://localhost:1314/  and  /docs/
 hugo --minify --gc           # → public/
 ```
+
+The theme is a git submodule, so a plain `git clone` leaves `themes/hextra`
+empty and Hugo fails with `unknown output format "llms" for kind "home"` —
+that format is declared by Hextra, not by this site. `pnpm -r build` runs the
+Hugo build too, so the submodule must be initialised before it.
 
 The two halves look nothing alike and that is deliberate: the landing page is
 themeless and runs on the Defsquare Design System, the documentation runs on

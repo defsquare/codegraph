@@ -74,13 +74,18 @@ To work on codegraph itself, run it from a clone instead — Node 22+, pnpm
 (`corepack enable pnpm`), then the toolchain of each extractor you build:
 
 ```bash
-git clone https://github.com/defsquare/codegraph.git && cd codegraph
+git clone --recurse-submodules https://github.com/defsquare/codegraph.git && cd codegraph
 pnpm install && pnpm -r build                    # the CLI (bin/codegraph) and the TypeScript extractor
 (cd extractors/java && ./mvnw -B package)        # Java: a JDK 17+; the wrapper, no local Maven needed
 ./build.sh --csharp                              # C#: the .NET 10 SDK
 ./build.sh --elixir                              # Elixir: Erlang/OTP 27 + Elixir
 ln -s "$PWD/bin/codegraph" ~/.local/bin/codegraph   # optional, works from a symlink
 ```
+
+Already cloned without `--recurse-submodules`? Run
+`git submodule update --init --recursive` first: the website's theme lives in
+`website/themes/hextra` as a submodule, and with it missing Hugo aborts
+`pnpm -r build` with `unknown output format "llms" for kind "home"`.
 
 Now point it at some Java. Any tree of `.java` files works; it does not have
 to build, and no JDK is needed.
