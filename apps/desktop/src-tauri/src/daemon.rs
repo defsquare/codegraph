@@ -118,7 +118,9 @@ impl Daemon {
         ureq::get(&format!("{}/recent", self.base_url))
             .call()
             .ok()
-            .and_then(|response| response.into_json::<RecentFile>().ok())
+            .and_then(|response| {
+                serde_json::from_reader::<_, RecentFile>(response.into_reader()).ok()
+            })
             .map(|file| file.projects)
             .unwrap_or_default()
     }
