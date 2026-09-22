@@ -58,6 +58,8 @@ export interface NavigatorTarget {
 export interface CityViewOptions {
   /** Start with buildings hidden — the `?landscape=1` of the standalone page. */
   readonly landscape?: boolean;
+  /** Skip the once-per-browser Help auto-open — the `?help=0` of an embed. */
+  readonly autoHelp?: boolean;
   /**
    * When given, the details panel offers "Open in navigator". Returns whether
    * the host could navigate: an id the navigator model does not know leaves an
@@ -384,7 +386,7 @@ export function mountCityView(host: HTMLElement, options: CityViewOptions = {}):
     applyToggles();
     loader.hidden = true;
     header.hidden = false;
-    showHelpOnce();
+    if (options.autoHelp !== false) showHelpOnce();
   }
 
   /**

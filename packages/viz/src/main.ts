@@ -5,11 +5,15 @@ import { mountCityView } from "./cityView.js";
  * `?src=URL` is explicit (loud on failure); `/city.json` is the dev-server /
  * `codegraph history|replay --serve` convenience and stays quiet when nothing
  * serves it — then drag & drop or the file picker take over. `?landscape=1`
- * starts with buildings hidden.
+ * starts with buildings hidden; `?help=0` skips the first-visit Help popup
+ * (the website's iframe).
  */
 const host = document.getElementById("app");
 if (host === null) throw new Error("index.html is missing #app");
 const params = new URLSearchParams(window.location.search);
-const view = mountCityView(host, { landscape: params.get("landscape") === "1" });
+const view = mountCityView(host, {
+  landscape: params.get("landscape") === "1",
+  autoHelp: params.get("help") !== "0",
+});
 const src = params.get("src");
 void view.loadUrl(src ?? "city.json", src === null);

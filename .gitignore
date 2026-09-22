@@ -51,3 +51,11 @@ extractors/elixir/burrito_out/
 
 # A BEAM crash dump is never a source file
 erl_crash.dump
+
+# The viz bundle `pnpm --filter @codegraph/website viz` copies beside the
+# corpora cities; the JSONs are content, the bundle is a build product.
+website/static/city/index.html
+website/static/city/assets/
+
+# Playwright screenshots taken while checking the website
+/.playwright-mcp/
