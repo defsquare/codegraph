@@ -22,16 +22,11 @@
 
 name: ci
 
-# The website has its own workflow (website.yml) and its own path filter, so a
-# commit that touches only website/ builds the site and nothing else. Path
-# filters are not evaluated for tag pushes, so a release still runs everything.
 on:
   push:
     branches: [main]
     tags: ["v*"]
-    paths-ignore: ["website/**"]
   pull_request:
-    paths-ignore: ["website/**"]
 
 permissions:
   contents: read
@@ -61,6 +56,28 @@ jobs:
       # schemas/ is a committed artifact: regenerating must be a no-op.
       - run: pnpm run gen:schemas
       - run: git diff --exit-code schemas/ || (echo "schemas/ is stale — run pnpm run gen:schemas and commit" && exit 1)
+
+  # The website — the landing page at / and the documentation at /docs/, one
+  # Hugo site (Hextra vendored as a git submodule) — built with the same pinned
+  # Hugo version a developer runs locally. Independent of the Node toolchain.
+  website:
+    name: website (hugo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: "0.165.0"
+          extended: true
+      - run: cd website && hugo --minify --gc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website
+          path: website/public
+          retention-days: 7
 
   java:
     name: java extractor
