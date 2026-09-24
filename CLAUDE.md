@@ -169,7 +169,7 @@ pnpm --filter @codegraph/desktop tauri:dev     # the desktop shell (after --sea)
 cd apps/desktop && cargo test -p codegraph-discovery   # the discovery crate alone, no WebKit needed
 node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256 HEX] --out tap
 #   the Homebrew cask + formulae the release job pushes to defsquare/homebrew-tap (docs/distribution.md);
-#   `node --test scripts/homebrew` pins the templates to the release's asset names
+#   `node --test scripts/homebrew/render.test.mjs` pins the templates to the release's asset names
 
 ./bin/codegraph-typescript --src <dir> --out model.jsonl   # after `pnpm -r build`; no other toolchain
 ./bin/codegraph-typescript --src packages --src extractors/typescript --out codegraph.jsonl   # self-hosting

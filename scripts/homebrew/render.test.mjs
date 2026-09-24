@@ -1,4 +1,4 @@
-// The tap's generated files (PLAN.md §15.5): run with `node --test scripts/homebrew`.
+// The tap's generated files (PLAN.md §15.5): run with `node --test scripts/homebrew/render.test.mjs`.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";

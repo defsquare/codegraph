@@ -65,8 +65,8 @@ node scripts/homebrew/render.mjs --version 0.1.0 --sums release/SHA256SUMS \
   (`depends_on "node"`, `std_npm_args`), rendered only when the npm publish
   happened for this version.
 
-`node --test scripts/homebrew` (part of `test.sh`) pins the asset names the
-templates reference to the ones the release job writes.
+`node --test scripts/homebrew/render.test.mjs` (part of `test.sh`) pins the
+asset names the templates reference to the ones the release job writes.
 
 ## Secrets the workflow reads
 
