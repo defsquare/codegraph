@@ -68,7 +68,7 @@ cask "codegraph" do
   end
 
   auto_updates false
-  depends_on macos: ">= :monterey"
+  depends_on macos: :monterey
 
   app "Codegraph.app"
   # The single-executable codegraph (CLI + daemon) that rides in the bundle.

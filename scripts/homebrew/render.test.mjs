@@ -40,6 +40,8 @@ test("the cask installs the app and ONE binary, one DMG per architecture, no aut
   assert.equal((ruby.match(/^\s*binary /gm) ?? []).length, 1, "exactly one binary stanza");
   assert.match(ruby, /binary "#\{appdir\}\/Codegraph\.app\/Contents\/MacOS\/codegraph"/);
   assert.match(ruby, /auto_updates false/);
+  // A bare symbol means "this release or newer"; the ">= :x" string is deprecated.
+  assert.match(ruby, /^\s*depends_on macos: :monterey$/m);
   assert.match(ruby, /strategy :github_latest/);
   assert.match(ruby, /do not edit by hand/);
 });
