@@ -2725,7 +2725,7 @@ under one command-line contract (§13.5, schemas/README.md §8) exactly so
 this could be true: the app needs to know nothing about them but that
 contract and the file extensions they claim.
 
-Locked decisions, each with its reason (the delta table in §19 repeats them):
+Locked decisions, each with its reason (the delta table in §20 repeats them):
 
 - **Tauri is the shell, not a runtime.** Window, native menu, folder dialog,
   drag-and-drop, sidecar lifecycle, bundling, signing and notarization. No
@@ -3630,7 +3630,7 @@ file without one of them lying, so they do not share one:
 | will not open | degrade to the `.jsonl`, silently | a usage error naming the file; never overwritten |
 | committed / shared | never | never — the JSONL export is what is committed, diffed and handed to Specy |
 
-Locked decisions, each with its reason (the delta table in §19 repeats them):
+Locked decisions, each with its reason (the delta table in §20 repeats them):
 
 - **The db is the working copy; the JSONL becomes its deterministic export.**
   `<model>.insights.jsonl` keeps its format, its byte-determinism and its
@@ -3960,7 +3960,216 @@ resumes with its records AND its failures; `pnpm -r test`, typecheck and
 
 ---
 
-## 18. Milestones
+## 18. Phase 15 — Measures from big-code-analysis: one pass for every extractor (M17)
+
+Motivation: M10b gave the model two measures, `sloc` and `cyclomatic`, each
+written by its extractor on its own compiler's syntax — four implementations
+of two numbers. [big-code-analysis](https://github.com/dekobon/big-code-analysis)
+(bca: a hard fork of Mozilla's rust-code-analysis, MPL-2.0, published on
+crates.io) computes the whole suite — cognitive complexity, Halstead, the
+maintainability index, ABC, exits, the LOC variants, public methods and
+attributes — over tree-sitter for twenty-odd languages, plus change-history
+metrics over git (churn, ownership dilution, fix history, an ordinal risk
+score, per-function blame). It is a Rust library first; its CLI is a front end.
+The question was where it lives.
+
+**Decision: one Rust binary, `codegraph-metrics` (`extractors/metrics/`), that
+links bca as a library and runs as a PASS over a model an extractor already
+wrote.** It parses every source file the measured entities are anchored in,
+joins bca's function and class spaces to those entities on their anchors, and
+rewrites their `metrics` maps — no other byte of the file moves. Rejected:
+
+- **bca inside each extractor** (JNI in a GraalVM image, P/Invoke and a
+  cdylib per RID for .NET, napi for Node, a NIF in an escript): four bridges,
+  four build systems learning Rust, and the join written four times. Nothing
+  the join needs lives in Spoon or Roslyn — only `(file, start, end)`, and
+  every entity already carries it (invariant 3). The Elixir `--trace` merge
+  (§16) is the precedent: a second producer's facts landing on entities the
+  model already names.
+- **bca's own CLI**: a foreign wire format to translate, all 23 grammars
+  shipped, and no hold on what this contract cares about — number spelling,
+  key names, the reference time of history metrics.
+
+Five principles, locked up front:
+
+1. **The extractor's keys are the extractor's.** `sloc` and `cyclomatic` are
+   compiler-based and hand-counted in every fixture; the pass never touches
+   them. It owns a closed key list (`join::KEYS`) and on every run replaces
+   exactly those — so a re-run over its own output is the identity, and a
+   key an extractor starts emitting must leave that list first.
+2. **Only an entity that IS one space gets span measures.** Two families
+   (METAMODEL §3.8): *charged* keys (`cognitive`, `nexits`, `abc.*`) add up
+   over several spaces; *span* keys (`lloc`, `cloc`, `halstead.*`, `mi`,
+   `npm`, `npa`) are computed over one text and are not additive, so an
+   entity joined to several spaces (an Elixir function's clauses) has none.
+3. **A space the model does not name is charged to the entity around it**
+   (the FOLD) — the rule every extractor's `cyclomatic` already follows: a
+   lambda the model names is its own invocable, a closure it does not name
+   belongs to its enclosing one. `sum:cognitive` over a building then counts
+   every piece of code once.
+4. **Bytes as core writes them.** A new value is rounded to four decimals
+   (libm's `ln`/`log2` may differ in the last ulp between platforms) and
+   spelled as JavaScript's `Number::toString` spells it (`3`, `1e+21`,
+   `1e-7`); the `metrics` map is re-sorted by UTF-16 code unit; an unchanged
+   line is copied, never re-encoded. Two runs over one corpus write the same
+   bytes on every OS (contract §6).
+5. **The join reports itself.** Every run prints how many measured entities
+   joined, and how; `--audit` lists every entity not joined exactly. The
+   WITNESS: on an exact join, bca's `ploc` (lines holding code) and the
+   extractor's `sloc` share a definition — they must agree, and a
+   disagreement names a join or a parser gone wrong.
+
+### 18.1 The join (M17a), measured
+
+The model and bca disagree on granularity in both directions — a C# property
+with accessors is one entity over two spaces, an Elixir function one entity
+over one space per clause, a callback nobody names a space with no entity —
+and on where a declaration starts. Three matches, tried in order, then the
+fold (`extractors/metrics/src/join.rs`):
+
+- **EXACT** — same line span. Natural pairs first, per category (an invocable
+  and a function space, a type and a class space, a `TModule` and the file),
+  outermost to outermost when their numbers agree; then what is left, by
+  depth alone (a one-line C# property and the lambda in it). More entities
+  than spaces leaves the innermost unjoined — a Java class and the implicit
+  constructor Spoon anchors on it; more spaces than entities joins none,
+  unless the one entity sits over sibling spaces (`{ get; set; }`: CONTAINED).
+- **LEADING** — the same last line, first lines apart by nothing but
+  annotations, attributes, decorators, comments and blanks, brackets balanced
+  (`@RequestMapping(value = …,\n method = …)` spans lines). Both ways: Spoon
+  starts a method after its annotations and tree-sitter at them; the
+  TypeScript compiler starts an exported class at its decorator and
+  tree-sitter after it.
+- **CONTAINED** — an entity no space spans takes the outermost unjoined
+  compatible spaces inside its span; never an entity anchored exactly on its
+  parent (an implicit constructor has no extent of its own).
+
+Measured with the release binary (11.0 MB, four grammars):
+
+| corpus | measured | joined | exact · leading · contained | not joined, and why | witness `sloc = ploc` | run |
+|---|---|---|---|---|---|---|
+| `fixtures/java` | 87 | 70 | 61 · 9 · 0 | 17: 11 implicit constructors, 5 lambdas, 1 annotation element | 61 / 61 | |
+| `fixtures/csharp` | 117 | 101 | 99 · 0 · 2 | 16: implicit constructors (anchored on the type's name), record positional members, a property inside a C# 14 extension block | 99 / 99 | |
+| `fixtures/typescript` | 105 | 89 | 87 · 2 · 0 | 16: namespaces, enums, type aliases, signatures, ambient declarations — no space in bca | 87 / 87 | |
+| `fixtures/elixir` | 103 | 96 | 91 · 0 · 5 | 7: `defprotocol`/`defimpl` bodies, `defguard`, `defdelegate` | 90 / 91 — `broken.ex`, unparseable by design (the extractor says 0, tree-sitter recovers 6) | |
+| BroadleafCommerce (Java) | 28 596 | 26 209 (91.7 %) | 16 395 · 9 814 · 0 | 2 387: 2 102 implicit constructors — 98.9 % of what has text of its own joins — 46 lambdas, annotation elements, one modifier line | 16 395 / 16 395 | 2 983 files, 0.82 s, 70 MB |
+| codegraph, self-hosted (TypeScript) | 8 125 | 7 887 (97.1 %) | 7 887 · 0 · 0 | 238: 121 interface signatures, 110 type aliases, 7 declarations | 7 872 / 7 887 — the 15 are `.tsx`: the extractor counts every line a JSX text token spans, bca one or two fewer | 396 files, 0.27 s, 34 MB |
+
+Zero ambiguous joins anywhere. What stays unmeasured is what big-code-analysis
+opens no space for, by its own choice ("Java keeps lambdas out": a Java
+lambda's complexity is charged to its method) or its grammar's
+(tree-sitter-c-sharp 0.23.5 misparses C# 14 `extension(…)` blocks) — absent,
+never zero, and listed by `--audit`.
+
+### 18.2 Change history (M17b)
+
+bca's `vcs` feature (pure-Rust `gix`, no libgit2) walks git once per run:
+
+- **per file** — commits, churn, authors over a long and a recent window,
+  ownership, burst, bug/security/revert fix counts, age, change and co-change
+  entropy, `risk_score`, `hotspot_score`. File-level by nature: copied onto
+  each type it would lie about granularity. So `f` records gain an optional
+  `metrics` map in core (container contract §4, `gen:schemas`, the store's
+  file rows) — the one core change of this phase.
+- **per function** — current-blame, surviving-line attribution
+  (`PerFunctionBlame`), joined like everything else and written as `vcs.*`
+  keys. A different computation from the file level (bca says so); both
+  definitions are documented, never compared.
+- **The reference time is the HEAD commit's committer time**, never the wall
+  clock (`--as-of` overrides it): `age_days` and the windows would otherwise
+  drift daily and break §6.
+- **The header says who measured what**: `passes: [{ name, version,
+  bca, asOf? }]`, additive in core, written by the pass — the honest
+  counterpart of `extractor`.
+- `@codegraph/scm` (`history.jsonl`, the replay timeline) stays: it is the
+  time axis, these are measures at one commit; the two churn definitions are
+  documented side by side, not merged.
+
+### 18.3 Where it runs, how it ships (M17c)
+
+- **The app's job** runs `codegraph-metrics` after `extract`, in place, when
+  discovery found it; absent is one event line, never a failed job. Same for
+  `snapshots --extractor`. Discovery lists it as a pass (no extensions).
+- **Homebrew**: one formula, `codegraph-metrics`; each extractor formula
+  gains `depends_on "defsquare/tap/codegraph-metrics"` — installing any
+  extractor installs the pass once (four formulae each carrying the binary
+  would conflict). `render.mjs` generates it with the rest.
+- **CI**: `metrics` (`cargo test`: the four snapshots byte for byte) and
+  `metrics-native` for the five RIDs — Rust cross-compiles (zig for
+  linux-arm64, both macOS arches from one runner), unlike GraalVM. The
+  tree-sitter grammars are C compiled by `cc`, so the cross toolchain needs a
+  C compiler per target. A third-party notice ships with the binary (bca is
+  MPL-2.0: file-level copyleft, compatible with an MIT binary).
+- The C# and Elixir real-corpus audits of §18.1 (Humanizer or OrchardCore;
+  Phoenix) — neither corpus is on this machine today.
+
+### 18.4 Milestone split
+
+**M17a — the pass, code metrics** (this worktree)
+
+- [x] `extractors/metrics/`: a standalone Cargo crate (edition 2024),
+      `big-code-analysis = "=2.2.0"` with four grammars — an exact pin, since
+      every key's value is that version's definition. `codegraph-metrics
+      <model> [--src DIR] [--out FILE] [--jobs N] [--audit]`; `--src`
+      defaults to the header's `root`, `--out` to the model itself (written
+      through a sibling temp file, renamed on success); exit codes 0/1/2.
+- [x] Two passes over the file: an inventory (header, file table, every
+      `TMetrics` entity with an anchor, its depth and whether it sits on its
+      parent's anchor), then one parse per file on N threads, then a
+      byte-preserving rewrite of the `metrics` values that changed.
+- [x] The join and the fold (§18.1), pinned by unit tests on small sources in
+      all four languages: annotation and decorator offsets, Elixir clauses,
+      C# accessors and one-line nesting, the fold compared with and without
+      the nested entity named.
+- [x] Keys and families in METAMODEL §3.8; `mi` absent when bca has no
+      Halstead volume (it answers 0, which would be a fake zero).
+- [x] Snapshots `fixtures/<lang>/expected/model.metrics.jsonl`: the Rust gate
+      reproduces them byte for byte and a second run over its own output
+      changes nothing (`CODEGRAPH_UPDATE_SNAPSHOTS=1` rewrites them); the core
+      gate (`fixtures-metrics.test.ts`) re-encodes each to the same bytes
+      (the two-encoder test), validates it against its profile, proves nothing
+      but measures moved and every extractor key kept its value, holds values
+      finite, non-negative, counts whole, `mi ≤ 100`, pins the key list equal
+      to `join.rs` and to METAMODEL, and asserts hand counts (`max` = 4 in
+      Java, C# and TypeScript alike).
+- [x] Measured on the fixtures, BroadleafCommerce and codegraph itself
+      (§18.1); every enriched model `validate`-clean.
+- [x] `build.sh --metrics` (`cargo build --release --locked`; the lockfile
+      committed), `test.sh --metrics` (`cargo test`), `ensure_cargo` checking
+      the crate's `rust-version`, `bin/codegraph-metrics`, `docs/metrics.md`,
+      CLAUDE.md, and one note per profile naming what the pass leaves
+      unmeasured in that language and why.
+- [x] Seen in the city: `codegraph city` over the enriched Broadleaf model
+      with `--height sum:cognitive --footprint attribute:lloc` — every
+      internal building measured (the 1 231 unmeasured are all stubs), the
+      tallest `FormBuilderServiceImpl` at 701.
+
+**M17b — change history** (§18.2): `vcs` feature, `f.metrics` and
+`passes` in core, `--repo`/`--as-of`/windows, per-function `vcs.*` keys, the
+key set decided on measurements of Broadleaf's history, blame cost measured.
+
+**M17c — wired in and shipped** (§18.3).
+
+### 18.5 Deferred, explicitly
+
+- **Java lambdas** — bca opens no space for them by design; a change belongs
+  upstream (`JavaCode::is_func_space`), not in a fork.
+- **C# 14 extension blocks** — wait for a tree-sitter-c-sharp that parses
+  them; bca pins its grammars.
+- **The modifier-line gap** — `public @ResponseBody` alone on a line, Spoon
+  starting the method on the next: one method of 239 unjoined on Broadleaf.
+  Recognizing it means a modifier list per language, for a single case.
+- **Entities that do not declare `TMetrics`** — adding the trait means
+  inserting into the header's sorted trait dictionary and renumbering every
+  `tr`; the pass measures what the profile already licensed.
+- **More languages** — bca parses twenty-odd; a future extractor's entities
+  are measured by adding one line to `join::language`.
+- **big-code-analysis 2.2.1** (unpublished today) — a bump is a reviewed
+  snapshot diff, never a silent `cargo update`.
+
+---
+
+## 19. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -3998,8 +4207,11 @@ resumes with its records AND its failures; `pnpm -r test`, typecheck and
 | M16a | Insights store — the storage swap | ✅ (2026-09-19) `<model>.insights.db` (§17) as `explain`'s working copy behind an `InsightsStore` port in `@codegraph/insights`, its SQLite adapter handed an open database (the analyzer's `loadSqlite()` stays the one load site — the hygiene guard caught three comments naming the specifier); one transaction per finished unit and failures written when they happen (`onUnit`/`onFailure` in `executeRun`); the journal writer and the per-layer 47 MB rewrite deleted; the side-car an atomic deterministic export at the end of a run, imported on first contact by the first run that WRITES (`--dry-run`/`--estimate` create nothing), an outside edit warned about and never obeyed; `--export`, `--import FILE` (asks); a run records its pid — a live writer is refused, a dead one resumed with its records AND its failures; a migration ladder on `user_version` + `application_id`, a newer or foreign file refused with its bytes unchanged; round trip byte-identical as a fast-check property and on Broadleaf (28 206 records, 47.5 MB, `cmp`-equal; store 57 MB — 96 MB before `WITHOUT ROWID` was measured and dropped); 18 store tests + 2 run-hook tests + 11 CLI tests incl. a real-disk run |
 | M16b | Insights store — lazy reads | ✅ (2026-09-20) a `RecordSource` keeps a plan's question (`fingerprint`, no block) apart from a prompt's (`summary`: description + the Specy word, projected in SQL and pinned equal to the in-memory rule by a property, read once however often quoted); a `RecordBook`'s `put` is the store's commit, so `executeRun` holds no record; the export streams 500 records at a time into ~1 MB writes. Every plan — reuse-all, `--force` (17 809 prompts quoting the store), the fixture — and every exported record `cmp`-equal to M16a's. Records held by a plan: 68 MB → 7 MB (27 MB with every summary quoted); a 0-call run 1 094 MB · 37 s → 936 MB · 10.6 s, the time being `synchronous = NORMAL` undoing M16a's fsync per templated unit. Stated plainly in §17.3: `--dry-run` peak RSS did NOT move (676 → 686 MB) — the graph is ~580 MB of it, the records never were the cost; a first cut that re-read a whole record per quote was byte-identical and twice as slow (1 521 MB), which is why the gate measures and does not only compare |
 | M16c | Insights store — the first reader | ✅ (2026-09-21) the store opened as a READER (`query_only` on an ordinary connection — a read-only file handle stranded `-wal`/`-shm` beside the model; no migration, an older or foreign store refused) with `query`/`stats`/`runs` projecting rows, never blocks, and `answerInsight` (explained / failed / unknown) as the one rule both readers share; `codegraph insights` — summary, tab-separated lists by level / concept / confidence, one explanation whole (`--id`, a failed id answered with why, exit 3), `--failures`, `--runs`, `--json` — opening the store and nothing else, not even `explain.ts` (the provider SDK): 0.14–0.18 s and ~81 MB on Broadleaf's 28 206 records, the store's hash unchanged; `codegraph serve`'s one lookup route `/insight.json?id=…` (`--insights FILE`, reader opened on first request, 404 and a silent page when there is nothing) and the Navigate panel's explanation block for types and modules — kind restated and pinned, `@codegraph/insights` not imported even for types, block rendered generically, asked once per id, and marked as an INFERENCE in the page's own colour and badge family; screenshots reviewed on Broadleaf. Operations wait on member ids the navigator artifact does not carry |
+| M17a | Code metrics — the pass | ✅ (2026-09-29, worktree `code-metrics`) `codegraph-metrics` (§18): big-code-analysis 2.2.0 as a library, a pass over any extractor's model, 14 keys in two families (METAMODEL §3.8) joined on anchors — exact, leading, contained, then the fold; the extractor's keys untouched, a re-run the identity, numbers in `JSON.stringify`'s spelling (the core gate re-encodes all four enriched fixtures byte for byte). Joined: fixtures 70/87 Java, 101/117 C#, 89/105 TypeScript, 96/103 Elixir; BroadleafCommerce 26 209/28 596 (98.9 % of what has text of its own) in 0.82 s; codegraph itself 7 887/8 125 in 0.27 s; the witness `sloc = ploc` on every exact join but the explained ones; zero ambiguous. `build.sh`/`test.sh --metrics`, `bin/codegraph-metrics`, `docs/metrics.md`, a note per profile |
+| M17b | Code metrics — change history | per-file and per-function history (bca `vcs`, gix), `f.metrics` and header `passes` in core, reference time = HEAD's committer time (§18.2) |
+| M17c | Code metrics — wired in and shipped | the app's job and `snapshots` run the pass, discovery lists it, one `codegraph-metrics` formula every extractor formula depends on, five-RID CI build, C# and Elixir real-corpus audits (§18.3) |
 
-## 19. Decisions made in this plan (deltas vs. the design doc)
+## 20. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -4083,3 +4295,8 @@ resumes with its records AND its failures; `pnpm -r test`, typecheck and
 | Insight blocks in the store (M16) | one JSON text column holding the Zod-normalized bytes; the envelope (id, level, fingerprint, natural key, usage) as columns; `concept`/`confidence` as generated columns | the block's shape moves with `PROMPT_VERSION`, so tables per field would make every prompt change a migration; storing the normalized text makes the export a concatenation; blocks are fetched, not aggregated — the opposite of M10b's measures, hence the opposite storage |
 | Run durability (M16) | one transaction per finished UNIT (a cycle's members in together, its failure row out), failures written when they happen, WAL; ONE writer, decided by the recorded pid's liveness — alive is refused, dead is resumed; the journal writer deleted, its reader kept for first contact | the journal carried records only, so a killed run forgot its failures; a second concurrent `explain` interleaved one journal silently; a run that commits per unit holds no lock across itself, so `SQLITE_BUSY` could never be the refusal |
 | Insights store physical shape (M16a) | rowid tables; order decided in JS, never by `ORDER BY id`; a failure's `reason` as JSON text; a column string holding U+0000 refused at write; `application_id` beside `user_version` | each one measured or found by a test: `WITHOUT ROWID` cost 96 MB against 57 MB on Broadleaf; SQLite orders TEXT by UTF-8 bytes and the side-car by UTF-16 units; Node's binding reads TEXT only up to its first U+0000 (the round-trip property's second case) — an id read back shorter is worse than a refusal; a `model.db` handed over by mistake must not be migrated |
+| Code metrics (M17) | one Rust binary, `codegraph-metrics`, linking big-code-analysis as a library and run as a pass over any extractor's model, joined on anchors; not bca inside each extractor, not bca's CLI | the join needs nothing but `(file, start, end)`, which every entity carries (invariant 3); four FFI bridges would write the join four times; the CLI would ship 23 grammars and a wire format to translate, with no hold on number spelling or history's reference time |
+| Who owns a measure (M17) | the extractor's keys (`sloc`, `cyclomatic`) are never touched; the pass owns a closed key list and replaces exactly it on every run | compiler-based, hand-counted values must not be second-guessed by a tree-sitter parse; owning a closed list makes a re-run the identity and a stale key impossible |
+| Measure attribution (M17) | a space the model does not name is charged to the entity around it; span measures (`lloc`, Halstead, `mi`, `npm`/`npa`) only on an entity that is one space | the `cyclomatic` lambda rule, applied to every additive measure, so `sum:` counts code once; Halstead and MI do not add, so a union of spaces has none rather than a wrong one |
+| Join tolerance (M17) | an exact span first; then the same last line with only annotation/attribute/decorator/comment lines between the two starts, brackets balanced; then containment | Spoon starts a method after its annotations, tree-sitter at them; the TypeScript compiler starts an exported class at its decorator, tree-sitter after — 9 814 of Broadleaf's 26 209 joins are this case; a gap holding code is never bridged |
+| Measure numbers (M17) | four decimals, spelled as JavaScript's `Number::toString` | libm may differ in the last ulp across platforms, and contract §6 promises the same bytes on every OS; core's encoder is the spelling every other producer already matches |
