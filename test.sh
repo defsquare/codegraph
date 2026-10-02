@@ -50,6 +50,8 @@ Options:
                        only extractors/csharp (dotnet test + published-binary smoke test)
   --elixir, --elixir-only
                        only extractors/elixir (mix test + built-escript smoke test)
+  --metrics, --metrics-only
+                       only extractors/metrics (cargo test: the join + the four enriched snapshots)
   --all                everything (default)
   --lint               also run eslint (not part of CI's gate)
   --no-typecheck       skip pnpm -r typecheck
@@ -119,10 +121,14 @@ printf '%scodegraph test%s  %s(%s)%s\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$ROOT" "$
 
 step "toolchain"
 if wants_ts; then check_node; ensure_pnpm; fi
-SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"
+SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"; SKIP_METRICS="no"
 if wants_java; then
   if have_java_extractor; then ensure_jdk; ensure_mvnw
   else warn "no extractors/java in this checkout — skipping the Java tests"; SKIP_JAVA="yes"; fi
+fi
+if wants_metrics; then
+  if have_metrics_pass; then ensure_cargo
+  else warn "no extractors/metrics in this checkout — skipping the metrics tests"; SKIP_METRICS="yes"; fi
 fi
 if wants_csharp; then
   if have_csharp_extractor; then ensure_dotnet
@@ -282,6 +288,17 @@ if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
   else
     warn "no native binary at $ELIXIR_DIR/dist/$(host_rid) — run ./build.sh --elixir --native for the smoke test"
   fi
+fi
+
+# --------------------------------------------------------------- metrics ----
+
+if wants_metrics && [ "$SKIP_METRICS" = "no" ]; then
+  # The unit tests pin the join; tests/fixtures.rs holds the binary to the
+  # four committed `model.metrics.jsonl`, byte for byte, and a re-run over its
+  # own output to the identity. The core side (fixtures-metrics.test.ts)
+  # checks the same files against the profiles in the TypeScript phase.
+  phase "metrics pass tests (cargo test)" \
+    cargo test --locked --manifest-path "$METRICS_DIR/Cargo.toml"
 fi
 
 # The ERR trap must not fire here: `verdict` reporting failures IS the result.

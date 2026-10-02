@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# The metrics pass as a program: `./bin/codegraph-metrics model.jsonl [--src DIR]`.
+#
+# Extensionless on purpose — the name IS the command. It runs the release
+# binary `build.sh --metrics` produces beside ITSELF (a git worktree or a
+# moved checkout runs its own target/); the binary needs nothing installed.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bin="$here/../extractors/metrics/target/release/codegraph-metrics"
+[ -x "$bin" ] || bin="$bin.exe"
+
+if [ ! -x "$bin" ]; then
+  printf 'codegraph-metrics: extractors/metrics/target/release/codegraph-metrics is missing\n' >&2
+  printf 'Run `./build.sh --metrics` in %s and try again.\n' "$(cd "$here/.." && pwd)" >&2
+  exit 1
+fi
+
+exec "$bin" "$@"

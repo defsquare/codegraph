@@ -24,6 +24,9 @@ extractors/csharp/**/bin/
 extractors/csharp/**/obj/
 extractors/csharp/dist/
 
+# The metrics pass (Cargo): build output. Cargo.lock IS committed — a binary's.
+extractors/metrics/target/
+
 .DS_Store
 .idea/
 .vscode/

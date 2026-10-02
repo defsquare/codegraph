@@ -1,0 +1,30 @@
+[package]
+name = "codegraph-metrics"
+description = "Adds big-code-analysis measures to a codegraph model.jsonl, joined on each entity's anchor"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+license = "MIT"
+publish = false
+
+# Standalone: never adopted by a workspace above it.
+[workspace]
+
+[dependencies]
+# Exact pin: every key this binary writes is defined by this version's metric
+# engine, and a bump that moves a value must be a deliberate, reviewed change.
+big-code-analysis = { version = "=2.2.0", default-features = false, features = [
+  "csharp",
+  "elixir",
+  "java",
+  "typescript",
+] }
+serde = { version = "1", features = ["derive"] }
+# `raw_value`: a metric written by the extractor is copied byte for byte, never
+# re-encoded — the model's numbers are core's `JSON.stringify` spelling.
+serde_json = { version = "1", features = ["raw_value"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true

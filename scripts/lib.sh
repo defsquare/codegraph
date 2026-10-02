@@ -17,6 +17,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JAVA_DIR="$ROOT/extractors/java"
 CSHARP_DIR="$ROOT/extractors/csharp"
 ELIXIR_DIR="$ROOT/extractors/elixir"
+METRICS_DIR="$ROOT/extractors/metrics"
 
 # ---------------------------------------------------------------- output ----
 
@@ -467,13 +468,38 @@ ensure_zig() {
 # linux-x64 -> linux_x64: the Burrito target name of a RID (mix.exs `releases`).
 burrito_target() { printf '%s' "$1" | tr '-' '_'; }
 
+# ------------------------------------------------------- rust toolchain -----
+
+have_metrics_pass() { [ -f "$METRICS_DIR/Cargo.toml" ]; }
+
+# Cargo on PATH or in rustup's default home, at the crate's `rust-version`
+# (big-code-analysis's MSRV). Never installed automatically.
+ensure_cargo() {
+  local want have
+  if ! command -v cargo >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
+    export PATH="$HOME/.cargo/bin:$PATH"
+  fi
+  command -v cargo >/dev/null 2>&1 || die \
+    "no cargo found — the metrics pass (extractors/metrics) is Rust" \
+    "rustup:   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" \
+    "homebrew: brew install rustup && rustup-init" \
+    "or skip it entirely: $SCRIPT_NAME --ts"
+  want="$(sed -n 's/^rust-version = "\([0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$METRICS_DIR/Cargo.toml" | head -1)"
+  have="$(rustc --version 2>/dev/null | sed -n 's/^rustc \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')"
+  [ -n "$have" ] || die "cargo is on PATH but rustc is not"
+  if [ -n "$want" ] && [ "$(printf '%s\n%s\n' "$want" "$have" | sort -t. -k1,1n -k2,2n | head -1)" != "$want" ]; then
+    die "rustc $have is too old — the metrics pass needs >= $want (rustup update)"
+  fi
+  ok "rustc $have"
+}
+
 # ------------------------------------------------------- shared parsing -----
 
 # Defaults every script shares; each script may add its own flags on top.
 SKIP_INSTALL="no"
 FROZEN="yes"
 AUTO_INSTALL="yes"
-TARGET="all"      # all | ts | java | csharp | elixir
+TARGET="all"      # all | ts | java | csharp | elixir | metrics
 
 # Returns 0 if it consumed the argument, 1 if the caller should handle it.
 parse_common_flag() {
@@ -482,6 +508,7 @@ parse_common_flag() {
     --java|--java-only) TARGET="java" ;;
     --csharp|--csharp-only) TARGET="csharp" ;;
     --elixir|--elixir-only) TARGET="elixir" ;;
+    --metrics|--metrics-only) TARGET="metrics" ;;
     --all)              TARGET="all" ;;
     --skip-install)     SKIP_INSTALL="yes" ;;
     --no-frozen)        FROZEN="no" ;;
@@ -495,3 +522,4 @@ wants_ts()     { [ "$TARGET" = "all" ] || [ "$TARGET" = "ts" ]; }
 wants_java()   { [ "$TARGET" = "all" ] || [ "$TARGET" = "java" ]; }
 wants_csharp() { [ "$TARGET" = "all" ] || [ "$TARGET" = "csharp" ]; }
 wants_elixir() { [ "$TARGET" = "all" ] || [ "$TARGET" = "elixir" ]; }
+wants_metrics() { [ "$TARGET" = "all" ] || [ "$TARGET" = "metrics" ]; }

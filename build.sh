@@ -17,6 +17,9 @@
 #   Elixir     mix escript.build -> extractors/elixir/dist/codegraph-elixir
 #                                   (an escript: Elixir embedded, needs Erlang/OTP
 #                                   on the machine that runs it — bin/codegraph-elixir)
+#   Metrics    : cargo build     -> extractors/metrics/target/release/codegraph-metrics
+#                                   (the big-code-analysis pass over any extractor's
+#                                   model, PLAN.md §18 — bin/codegraph-metrics)
 #   SEA        : --sea           -> packages/cli/dist-sea/<rid>/codegraph
 #                                   (the CLI + daemon + both frontends as ONE
 #                                   Node single-executable — the desktop app's
@@ -53,6 +56,8 @@ Options:
                        only extractors/csharp (dotnet publish, host RID)
   --elixir, --elixir-only
                        only extractors/elixir (mix escript.build)
+  --metrics, --metrics-only
+                       only extractors/metrics (cargo build --release)
   --native             Java: also build the GraalVM native binary for THIS
                        platform (extractors/java/dist/<rid>/codegraph-java);
                        Elixir: also build the Burrito binary for THIS platform
@@ -102,7 +107,11 @@ printf '%scodegraph build%s  %s(%s)%s\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$ROOT" "
 
 step "toolchain"
 if wants_ts; then check_node; ensure_pnpm; fi
-SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"
+SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"; SKIP_METRICS="no"
+if wants_metrics; then
+  if have_metrics_pass; then ensure_cargo
+  else warn "no extractors/metrics in this checkout — skipping the metrics pass"; SKIP_METRICS="yes"; fi
+fi
 if wants_java; then
   if have_java_extractor; then
     ensure_jdk; ensure_mvnw
@@ -252,6 +261,21 @@ if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
   fi
 fi
 
+# --------------------------------------------------------------- metrics ----
+
+if wants_metrics && [ "$SKIP_METRICS" = "no" ]; then
+  if [ "$CLEAN" = "yes" ]; then
+    step "clean (metrics)"
+    run cargo clean --manifest-path "$METRICS_DIR/Cargo.toml"
+    step_done
+  fi
+  # --locked: the lockfile is committed, and a big-code-analysis bump is a
+  # reviewed snapshot diff (PLAN.md §18.5), never a side effect of a build.
+  step "build the metrics pass (cargo build --release)"
+  run cargo build --release --locked --manifest-path "$METRICS_DIR/Cargo.toml"
+  step_done
+fi
+
 # -------------------------------------------------------------- artifacts ---
 
 step "artifacts"
@@ -308,6 +332,12 @@ if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
       *)     report "$ELIXIR_DIR/dist/$(host_rid)/codegraph-elixir" ;;
     esac
   fi
+fi
+if wants_metrics && [ "$SKIP_METRICS" = "no" ]; then
+  case "$(host_rid)" in
+    win-*) report "$METRICS_DIR/target/release/codegraph-metrics.exe" ;;
+    *)     report "$METRICS_DIR/target/release/codegraph-metrics" ;;
+  esac
 fi
 [ "$missing" -eq 0 ] || die "$missing expected artifact(s) missing — the build did not produce a usable tree"
 step_done

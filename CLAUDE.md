@@ -36,6 +36,12 @@ extractors/elixir/   Mix project `codegraph_elixir` (the compiler's PARSER as a
                      embedded, Erlang/OTP on the machine). `mix codegraph.trace`
                      writes the compiler trace `--trace` merges as `generated`
                      edges. No runtime dependency.
+extractors/metrics/  Rust crate `codegraph-metrics` (big-code-analysis 2.2.0 as a
+                     LIBRARY, four tree-sitter grammars). Not an extractor: a PASS
+                     over any extractor's model.jsonl that joins bca's function and
+                     class spaces to measured entities on their anchors and adds its
+                     own `metrics` keys (METAMODEL §3.8), never the extractor's.
+                     One binary for every language (PLAN §18). No runtime dependency.
 schemas/             Generated per-record JSON Schemas + the container contract
                      (README.md) — THE cross-language contract, committed.
 packages/core/       @codegraph/core — traits, edges, language profiles (data),
@@ -180,6 +186,12 @@ node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256
 ./bin/codegraph-elixir --src <dir> --deps <dir>/deps --trace <dir>/codegraph-trace.jsonl --out model.jsonl
 #   docs/elixir-extractor.md; `test.sh --elixir` = mix test + the escript must reproduce fixtures/elixir
 #   the trace, inside the project: ERL_FLAGS="-pa <repo>/extractors/elixir/_build/dev/lib/codegraph_elixir/ebin" mix codegraph.trace
+
+./build.sh --metrics                                # cargo build --release → extractors/metrics/target/release/codegraph-metrics
+./bin/codegraph-metrics model.jsonl [--src DIR] [--out FILE] [--audit]   # after ANY extractor; in place by default
+#   Rust ≥ 1.94 to build, nothing to run; docs/metrics.md. `test.sh --metrics` = cargo test: the join's unit
+#   tests + the four fixtures/<lang>/expected/model.metrics.jsonl byte for byte (and a re-run is the identity);
+#   CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test --manifest-path extractors/metrics/Cargo.toml rewrites them
 
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
 ./bin/codegraph serve model.jsonl                  # navigator + City tab at http://localhost:4177

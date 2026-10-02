@@ -265,7 +265,7 @@ hierarchy can place it; trait composition expresses it directly.
 
 | Trait | Attributes contributed | Notes |
 |---|---|---|
-| `TMetrics` | `metrics: Record<string, number>` | open map of **measured** finite numbers. Only the extractor writes it: every value here required reading source no consumer sees. Optional on every kind that licenses it — a profile without measures is complete, not deficient |
+| `TMetrics` | `metrics: Record<string, number>` | open map of **measured** finite numbers. Only a source reader writes it — the extractor, or a measuring pass over the extractor's model (`codegraph-metrics`, below): every value here required reading source no consumer sees. Optional on every kind that licenses it — a profile without measures is complete, not deficient |
 
 Two rules give the map meaning:
 
@@ -284,6 +284,40 @@ Two rules give the map meaning:
 |---|---|---|
 | `sloc` | source lines | lines in the entity's own span that are neither blank nor comment-only |
 | `cyclomatic` | branches + 1 | per invocable: 1 + count of decision points — `if`, loops, non-default `case` labels, `catch`, `?:`, short-circuit `&&`/`\|\|`, pattern guards. A lambda's branches belong to the lambda: it is its own invocable |
+
+The **big-code-analysis pass** (`codegraph-metrics`, PLAN.md §18) adds the
+keys below to every entity it can join to one of big-code-analysis's function
+or class spaces, and never touches the two above. The definitions are
+big-code-analysis 2.2's
+([metrics](https://dekobon.github.io/big-code-analysis/metrics.html)); the
+attribution is this model's. They come in two families, because a join does
+not always pair one entity with one space:
+
+- **Charged** — the entity's own code, plus every nested function the model
+  does NOT name, and none that it does: `cyclomatic`'s lambda rule, so a
+  `sum:` over a building counts each piece of code once. Present whenever the
+  entity joined, including over several spaces (an Elixir function's clauses,
+  a C# property's accessors).
+- **Span** — over the entity's whole text, nested functions included (the
+  `sloc` rule), so not additive: `sum:mi` means nothing. Present only when the
+  entity IS one space.
+
+| Key | Family | Unit | Definition |
+|---|---|---|---|
+| `cognitive` | charged | increments | cognitive complexity (Campbell, 2018): +1 per `if`, loop, `catch`, `case`, jump; plus the nesting level it sits at; +1 per run of `&&`/`\|\|` |
+| `nexits` | charged | exits | `return`s and `throw`s |
+| `abc.assignments` | charged | count | ABC (Fitzpatrick, 1997) A: stores into a variable — assignments, compound assignments, `++`/`--`, initialized declarations |
+| `abc.branches` | charged | count | ABC B: calls, as big-code-analysis counts them per language |
+| `abc.conditions` | charged | count | ABC C: comparisons, `?:`, `else`, `case`, `try`, `catch`, and each non-comparison operand of a `&&`/`\|\|` chain |
+| `abc.magnitude` | charged | — | √(A² + B² + C²) of the three above |
+| `lloc` | span | statements | logical lines |
+| `cloc` | span | lines | lines holding a comment |
+| `halstead.volume` | span | bits | N · log₂ n over the span's operators and operands (Halstead, 1977) |
+| `halstead.difficulty` | span | — | (n₁ / 2) · (N₂ / n₂) |
+| `halstead.effort` | span | — | difficulty · volume |
+| `mi` | span | 0–100 | maintainability index, Visual Studio form: max(0, (171 − 5.2 ln V − 0.23 G − 16.2 ln L) · 100 / 171), V the volume, G big-code-analysis's cyclomatic summed over the span, L its line count. Absent when there is no volume |
+| `npm` | span, types | methods | methods declared directly in the type that its language makes public |
+| `npa` | span, types | attributes | public attributes declared directly in the type |
 
 The **derived** counterpart: gross span length (`end − start + 1`) is
 computable from `TSourceAnchor` alone and is not a measure (it is the city's
