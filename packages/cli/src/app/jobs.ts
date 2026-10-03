@@ -17,6 +17,7 @@ import {
   type Candidate,
   type Census,
   type ExtractorEntry,
+  type LaunchLine,
   type Registry,
 } from "./registry.js";
 import {
@@ -127,10 +128,20 @@ const STDERR_TAIL = 8;
 interface Plan {
   readonly job: JobSummary;
   readonly src: string;
-  /** Present for a folder; absent for a model opened directly. */
+  /** Present for a folder; absent for a model opened directly (the user's file: no pass rewrites it). */
   readonly extraction:
-    | { readonly entry: ExtractorEntry & { readonly path: string }; readonly counted: Census; readonly files: number }
+    | {
+        readonly entry: ExtractorEntry & { readonly path: string };
+        readonly counted: Census;
+        readonly files: number;
+        /** The registry's passes, installed or not, in its order. */
+        readonly passes: Registry;
+      }
     | undefined;
+}
+
+function sameList(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
 export function createJobRunner(options: JobRunnerOptions): JobRunner {
@@ -189,7 +200,12 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
         return {
           job: { src, name: basename(src), extractor: decision.entry.name },
           src,
-          extraction: { entry: decision.entry, counted, files: decision.files },
+          extraction: {
+            entry: decision.entry,
+            counted,
+            files: decision.files,
+            passes: registry.filter((entry) => entry.role === "pass"),
+          },
         };
     }
   }
@@ -200,7 +216,38 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
     src: string,
     modelPath: string,
   ): Promise<{ code: number | null; stderr: string[] }> {
-    const line = launchOf(entry, ["--src", src, "--out", modelPath, "--progress", "plain"]);
+    return streamed(launchOf(entry, ["--src", src, "--out", modelPath, "--progress", "plain"]));
+  }
+
+  /**
+   * Every pass over the model, in place, in registry order (PLAN §18.3).
+   * None can fail the job: a missing pass is its install line, a failing one
+   * its exit status, and the page is built from the model either way — the
+   * pass writes through a temporary file, so a failure leaves it as it was.
+   * Returns the passes that measured it.
+   */
+  async function measure(passes: Registry, src: string, modelPath: string): Promise<string[]> {
+    const applied: string[] = [];
+    for (const pass of passes) {
+      const say = (line: string): void => emit({ event: "progress", data: { line: `${pass.name}: ${line}` } });
+      if (pass.path === null) {
+        say(`not installed — the model carries none of its measures (${pass.install ?? "no install line"})`);
+        continue;
+      }
+      phase("extract", `measuring with ${pass.name}`);
+      try {
+        const result = await streamed(launchOf({ ...pass, path: pass.path }, [modelPath, "--src", src]));
+        if (result.code === 0) applied.push(`${pass.name}@${pass.path}`);
+        else say(`exited with ${result.code ?? "a signal"} — the page is built without its measures`);
+      } catch (error) {
+        say(`cannot run it at ${pass.path}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return applied;
+  }
+
+  /** Spawn one process, stream its stderr as progress; resolves with the exit code and the stderr tail. */
+  function streamed(line: LaunchLine): Promise<{ code: number | null; stderr: string[] }> {
     return new Promise((resolvePromise, reject) => {
       const process_ = spawn(line.command, line.args, {
         env: { ...process.env, ...line.env },
@@ -244,9 +291,10 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
     let modelPath = planned.src;
     let fingerprint: string | null = null;
     let extractedAt: string | null = null;
+    let measuredBy: readonly string[] = previous?.measuredBy ?? [];
 
     if (planned.extraction !== undefined) {
-      const { entry, counted, files } = planned.extraction;
+      const { entry, counted, files, passes } = planned.extraction;
       phase("detect", `${files} ${files === 1 ? "file" : "files"} for ${entry.name}`);
       fingerprint = treeFingerprint(counted, entry);
       modelPath = join(projectDir, "model.jsonl");
@@ -273,6 +321,14 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
         }
         extractedAt = now().toISOString();
       }
+      // A fresh model has no measures yet; a reused one is measured again
+      // only when the installed passes are not the ones that measured it.
+      const installed = passes.flatMap((pass) => (pass.path === null ? [] : [`${pass.name}@${pass.path}`]));
+      if (!unchanged || !sameList(previous?.measuredBy ?? [], installed)) {
+        measuredBy = await measure(passes, planned.src, modelPath);
+      }
+    } else {
+      measuredBy = [];
     }
 
     const buildKey = buildKeyOf(options.build, cliVersion());
@@ -283,6 +339,7 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
       previous.model === modelPath &&
       previous.fingerprint === fingerprint &&
       previous.buildKey === buildKey &&
+      sameList(previous.measuredBy ?? [], measuredBy) &&
       existsSync(navigatorPath) &&
       existsSync(cityPath);
 
@@ -316,6 +373,7 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
           model: modelPath,
           fingerprint,
           extractedAt,
+          measuredBy,
           buildKey,
           builtAt: now().toISOString(),
           nodes: navigatorModel.nodes.length,

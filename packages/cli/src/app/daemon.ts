@@ -113,12 +113,22 @@ export function startDaemon(options: DaemonOptions): Server {
         const current = runner.current;
         sendJson(response, 200, JSON.stringify({
           kind: APP_KIND,
-          extractors: registry().map((entry) => ({
-            name: entry.name,
-            extensions: entry.extensions,
-            installed: entry.path !== null,
-            ...(entry.install === undefined ? {} : { install: entry.install }),
-          })),
+          extractors: registry()
+            .filter((entry) => entry.role === "extractor")
+            .map((entry) => ({
+              name: entry.name,
+              extensions: entry.extensions,
+              installed: entry.path !== null,
+              ...(entry.install === undefined ? {} : { install: entry.install }),
+            })),
+          // Passes claim no files: listed apart, so the page never offers one as an extractor.
+          passes: registry()
+            .filter((entry) => entry.role === "pass")
+            .map((entry) => ({
+              name: entry.name,
+              installed: entry.path !== null,
+              ...(entry.install === undefined ? {} : { install: entry.install }),
+            })),
           current: current === undefined ? null : { ...current.job, state: current.state },
         }), method);
         return;

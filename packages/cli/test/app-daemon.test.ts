@@ -9,6 +9,7 @@ import type { CityBuildOptions } from "../src/args.js";
 import { createJobRunner, type JobEvent } from "../src/app/jobs.js";
 import { startDaemon } from "../src/app/daemon.js";
 import { type Registry } from "../src/app/registry.js";
+import { projectDirFor } from "../src/app/store.js";
 import { captureIo, type CapturedIo } from "../src/io.js";
 import { directoryAssets } from "../src/assets.js";
 
@@ -38,11 +39,11 @@ const BUILD: CityBuildOptions & { noCache: boolean } = {
 };
 
 function registry(env: Readonly<Record<string, string>> = {}): Registry {
-  return [{ name: "java", path: FAKE, extensions: [".java"], launch: "node", env, install: undefined }];
+  return [{ name: "java", role: "extractor", path: FAKE, extensions: [".java"], launch: "node", env, install: undefined }];
 }
 
 const INSTALL_LINE = "brew install defsquare/tap/codegraph-elixir";
-const ELIXIR_MISSING = { name: "elixir", path: null, extensions: [".ex"], launch: "exec", env: {}, install: INSTALL_LINE } as const;
+const ELIXIR_MISSING = { name: "elixir", role: "extractor", path: null, extensions: [".ex"], launch: "exec", env: {}, install: INSTALL_LINE } as const;
 
 function fakeAssets(): string {
   const dir = mkdtempSync(join(tmpdir(), "codegraph-app-assets-"));
@@ -210,6 +211,7 @@ describe("the daemon's announcement and capability URL", () => {
     expect(await json(await fetch(`${base}/app`))).toEqual({
       kind: "codegraph.app/1",
       extractors: [{ name: "java", extensions: [".java"], installed: true }],
+      passes: [],
       current: null,
     });
     expect(await json(await fetch(`${base}/recent`))).toEqual({ kind: "codegraph.recent/1", projects: [] });
@@ -349,8 +351,8 @@ describe("POST /jobs: a folder becomes the page", () => {
   it("asks when several extractors claim the tree, and takes the answer", async () => {
     const src = tree({ "A.java": "", "B.cs": "", "C.cs": "" });
     const both: Registry = [
-      { name: "java", path: FAKE, extensions: [".java"], launch: "node", env: {}, install: undefined },
-      { name: "csharp", path: FAKE, extensions: [".cs"], launch: "node", env: {}, install: undefined },
+      { name: "java", role: "extractor", path: FAKE, extensions: [".java"], launch: "node", env: {}, install: undefined },
+      { name: "csharp", role: "extractor", path: FAKE, extensions: [".cs"], launch: "node", env: {}, install: undefined },
     ];
     const { base } = await daemon({ registry: both });
     const asked = await post(base, { src });
@@ -407,6 +409,89 @@ describe("the SSE route with no job", () => {
     const { value } = await reader.read();
     expect(new TextDecoder().decode(value)).toContain("event: idle");
     controller.abort();
+  });
+});
+
+/**
+ * A PASS after the extractor (PLAN §18.3): `codegraph-metrics` in the app,
+ * played by test/fake-pass.mjs. It measures the model the extractor just
+ * wrote, in place; missing or failing, it costs the job nothing.
+ */
+describe("a pass over the extracted model", () => {
+  const FAKE_PASS = join(HERE, "fake-pass.mjs");
+  const ENRICHED = fileURLToPath(new URL("../../../fixtures/java/expected/model.metrics.jsonl", import.meta.url));
+  const METRICS_INSTALL = "brew install defsquare/tap/codegraph-metrics";
+  const withPass = (env: Readonly<Record<string, string>>): Registry => [
+    ...registry(),
+    { name: "metrics", role: "pass", path: FAKE_PASS, extensions: [], launch: "node", env, install: undefined },
+  ];
+  const progressOf = (seen: JobEvent[]): string[] =>
+    seen.filter((event) => event.event === "progress").map((event) => (event.data as { line: string }).line);
+
+  it("measures the fresh model in place before the page is built, and records who measured it", async () => {
+    const log = join(mkdtempSync(join(tmpdir(), "codegraph-pass-")), "runs.log");
+    const { base, dataDir } = await daemon({ registry: withPass({ FAKE_PASS_LOG: log }) });
+    expect((await post(base, { src: JAVA_SRC })).status).toBe(202);
+    const seen = await events(base);
+    expect(seen.at(-1)?.event).toBe("done");
+    const details = seen
+      .filter((event) => event.event === "phase")
+      .map((event) => (event.data as { phase: string; detail: string }).detail);
+    expect(details).toContain("measuring with metrics");
+    expect(progressOf(seen)).toContain("fake-pass: 70 of 87 measured entities joined");
+
+    const project = JSON.parse(readFileSync(join(projectDirFor(dataDir, JAVA_SRC), "project.json"), "utf8")) as {
+      model: string;
+      measuredBy: string[];
+    };
+    expect(project.measuredBy).toEqual([`metrics@${FAKE_PASS}`]);
+    expect(readFileSync(project.model, "utf8")).toBe(readFileSync(ENRICHED, "utf8"));
+    expect(readFileSync(log, "utf8")).toBe(`${project.model} --src ${JAVA_SRC}\n`);
+
+    // An unchanged tree reuses the measured model: the pass does not run again.
+    expect((await post(base, { src: JAVA_SRC })).status).toBe(202);
+    expect((await events(base)).at(-1)?.event).toBe("done");
+    expect(readFileSync(log, "utf8").split("\n").filter(Boolean)).toHaveLength(1);
+  });
+
+  it("builds the page without the measures when the pass is missing — and says how to install it", async () => {
+    const missing: Registry = [
+      ...registry(),
+      { name: "metrics", role: "pass", path: null, extensions: [], launch: "exec", env: {}, install: METRICS_INSTALL },
+    ];
+    const { base, dataDir } = await daemon({ registry: missing });
+    expect((await post(base, { src: JAVA_SRC })).status).toBe(202);
+    const seen = await events(base);
+    expect(seen.at(-1)?.event).toBe("done");
+    expect(progressOf(seen)).toContainEqual(expect.stringContaining(METRICS_INSTALL));
+    const project = JSON.parse(readFileSync(join(projectDirFor(dataDir, JAVA_SRC), "project.json"), "utf8")) as {
+      measuredBy: string[];
+    };
+    expect(project.measuredBy).toEqual([]);
+    const app = await json<{ passes: unknown[]; extractors: { name: string }[] }>(await fetch(`${base}/app`));
+    expect(app.passes).toEqual([{ name: "metrics", installed: false, install: METRICS_INSTALL }]);
+    expect(app.extractors.map((entry) => entry.name)).toEqual(["java"]);
+  });
+
+  it("builds the page from the extractor's model when the pass fails, and says so", async () => {
+    const { base, dataDir } = await daemon({ registry: withPass({ FAKE_PASS_FAIL: "1" }) });
+    expect((await post(base, { src: JAVA_SRC })).status).toBe(202);
+    const seen = await events(base);
+    expect(seen.at(-1)?.event).toBe("done");
+    expect(progressOf(seen)).toContain("metrics: exited with 1 — the page is built without its measures");
+    const project = JSON.parse(readFileSync(join(projectDirFor(dataDir, JAVA_SRC), "project.json"), "utf8")) as {
+      model: string;
+      measuredBy: string[];
+    };
+    expect(project.measuredBy).toEqual([]);
+    expect(readFileSync(project.model, "utf8")).toBe(readFileSync(JAVA_MODEL, "utf8"));
+  });
+
+  it("never runs a pass as the extractor, even when the user names it", async () => {
+    const { base } = await daemon({ registry: withPass({}) });
+    const response = await post(base, { src: JAVA_SRC, extractor: "metrics" });
+    expect(response.status).toBe(422);
+    expect(await json(response)).toEqual({ error: "unknown-extractor", name: "metrics" });
   });
 });
 

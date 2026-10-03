@@ -195,6 +195,8 @@ node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256
 ./bin/codegraph-metrics model.jsonl --history [--ref REV]   # + model.history-metrics.jsonl: git history per
 #   file and per entity at the model's commit — a SIDE-CAR, never the model (PLAN §18.2); then
 ./bin/codegraph serve model.jsonl --height history-file:churn_recent --carry history:risk_score
+./bin/codegraph-metrics --licenses     # the embedded third-party notice (big-code-analysis is MPL-2.0);
+#   after a dependency change: node extractors/metrics/scripts/licenses.mjs > extractors/metrics/THIRD-PARTY-LICENSES.txt
 
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
 ./bin/codegraph serve model.jsonl                  # navigator + City tab at http://localhost:4177
@@ -202,7 +204,8 @@ node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256
 ./bin/codegraph serve --app --data-dir DIR --extractors registry.json   # the desktop app's daemon (M14a)
 #   loopback, ephemeral port, ONE stdout line {"port","token"}; every route under /<token>/;
 #   POST /jobs {src} runs a registry entry (or opens a model.jsonl) and builds the page;
-#   exits when stdin closes. registry.json = [{ name, path, extensions: [".java"], launch?, env? }]
+#   exits when stdin closes. registry.json = [{ name, path, extensions: [".java"], launch?, env?, role? }]
+#   role "pass" (codegraph-metrics): claims no files, runs `<pass> <model> --src <dir>` after the extractor
 ./bin/codegraph city model.jsonl --layout --out city.json        # the artifacts alone
 ./bin/codegraph navigator model.jsonl --out navigator.json
 ./bin/codegraph explain model.jsonl --src DIR --dry-run   # the walk plan, no call

@@ -44,7 +44,10 @@ impl Shell {
     fn rescan(&self) -> Result<usize, String> {
         let entries = discover_now(&self.catalogue_path, &self.settings_path)?;
         write_registry(&self.registry_path, &entries).map_err(|error| error.to_string())?;
-        Ok(entries.iter().filter(|entry| entry.is_installed()).count())
+        Ok(entries
+            .iter()
+            .filter(|entry| entry.is_extractor() && entry.is_installed())
+            .count())
     }
 }
 
@@ -175,10 +178,25 @@ pub fn run() {
             let entries =
                 discover_now(&catalogue_path, &settings_path).map_err(std::io::Error::other)?;
             write_registry(&registry_path, &entries)?;
+            let extractors: Vec<_> = entries
+                .iter()
+                .filter(|entry| entry.is_extractor())
+                .collect();
             eprintln!(
-                "codegraph: {} of {} extractors installed",
-                entries.iter().filter(|entry| entry.is_installed()).count(),
-                entries.len()
+                "codegraph: {} of {} extractors installed{}",
+                extractors
+                    .iter()
+                    .filter(|entry| entry.is_installed())
+                    .count(),
+                extractors.len(),
+                if entries
+                    .iter()
+                    .any(|entry| !entry.is_extractor() && entry.is_installed())
+                {
+                    ", measures on"
+                } else {
+                    ""
+                }
             );
 
             let sidecar = daemon::sidecar_path(&tauri::process::current_binary(&handle.env())?);

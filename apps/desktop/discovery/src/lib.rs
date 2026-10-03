@@ -26,6 +26,11 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct CatalogueEntry {
     pub name: String,
+    /// `pass` for a row that runs over an extractor's model and claims no
+    /// files (`codegraph-metrics`, PLAN.md §18.3); absent for an extractor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(default)]
     pub extensions: Vec<String>,
     /// The command on PATH: `codegraph-java`.
     pub command: String,
@@ -57,12 +62,16 @@ pub struct Settings {
 pub enum RegistryEntry {
     Installed {
         name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        role: Option<String>,
         path: PathBuf,
         extensions: Vec<String>,
         launch: String,
     },
     Missing {
         name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        role: Option<String>,
         extensions: Vec<String>,
         install: String,
     },
@@ -77,6 +86,12 @@ impl RegistryEntry {
 
     pub fn is_installed(&self) -> bool {
         matches!(self, RegistryEntry::Installed { .. })
+    }
+
+    /// An extractor, not a pass: what "N extractors installed" counts.
+    pub fn is_extractor(&self) -> bool {
+        let (RegistryEntry::Installed { role, .. } | RegistryEntry::Missing { role, .. }) = self;
+        role.as_deref() != Some("pass")
     }
 }
 
@@ -157,6 +172,7 @@ pub fn discover(
             if let Some(over) = settings.overrides.iter().find(|o| o.name == entry.name) {
                 return RegistryEntry::Installed {
                     name: entry.name.clone(),
+                    role: entry.role.clone(),
                     path: over.path.clone(),
                     extensions: entry.extensions.clone(),
                     launch: over
@@ -168,12 +184,14 @@ pub fn discover(
             match find_command(&entry.command, dirs) {
                 Some(path) => RegistryEntry::Installed {
                     name: entry.name.clone(),
+                    role: entry.role.clone(),
                     path,
                     extensions: entry.extensions.clone(),
                     launch: "exec".to_string(),
                 },
                 None => RegistryEntry::Missing {
                     name: entry.name.clone(),
+                    role: entry.role.clone(),
                     extensions: entry.extensions.clone(),
                     install: entry.install.clone(),
                 },
@@ -294,12 +312,14 @@ mod tests {
             vec![
                 RegistryEntry::Installed {
                     name: "java".into(),
+                    role: None,
                     path: java,
                     extensions: vec![".java".into()],
                     launch: "exec".into(),
                 },
                 RegistryEntry::Installed {
                     name: "typescript".into(),
+                    role: None,
                     path: PathBuf::from("/src/bin/codegraph-typescript"),
                     extensions: vec![".ts".into(), ".tsx".into()],
                     launch: "exec".into(),
@@ -337,12 +357,14 @@ mod tests {
         let entries = vec![
             RegistryEntry::Installed {
                 name: "java".into(),
+                role: None,
                 path: PathBuf::from("/opt/homebrew/bin/codegraph-java"),
                 extensions: vec![".java".into()],
                 launch: "exec".into(),
             },
             RegistryEntry::Missing {
                 name: "elixir".into(),
+                role: None,
                 extensions: vec![".ex".into(), ".exs".into()],
                 install: "brew install defsquare/tap/codegraph-elixir".into(),
             },
@@ -363,11 +385,65 @@ mod tests {
     }
 
     #[test]
+    fn a_pass_row_keeps_its_role_and_claims_no_files_found_or_missing() {
+        let catalogue = parse_catalogue(
+            r#"[{ "name": "metrics", "role": "pass", "extensions": [], "command": "codegraph-metrics",
+                  "install": "brew install defsquare/tap/codegraph-metrics" }]"#,
+        )
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = executable(dir.path(), "codegraph-metrics");
+        let found = discover(
+            &catalogue,
+            &Settings::default(),
+            &[dir.path().to_path_buf()],
+        );
+        let json: serde_json::Value = serde_json::from_str(&registry_json(&found)).unwrap();
+        assert_eq!(json[0]["role"], "pass");
+        assert_eq!(json[0]["path"], path.to_string_lossy().as_ref());
+        assert_eq!(json[0]["extensions"], serde_json::json!([]));
+        let missing = discover(&catalogue, &Settings::default(), &[]);
+        let json: serde_json::Value = serde_json::from_str(&registry_json(&missing)).unwrap();
+        assert_eq!(json[0]["role"], "pass");
+        assert_eq!(
+            json[0]["install"],
+            "brew install defsquare/tap/codegraph-metrics"
+        );
+        assert!(!found[0].is_extractor() && !missing[0].is_extractor());
+        // An extractor row says nothing about a role: the daemon defaults it.
+        let extractors = discover(
+            &parse_catalogue(CATALOGUE).unwrap(),
+            &Settings::default(),
+            &[],
+        );
+        assert!(extractors.iter().all(RegistryEntry::is_extractor));
+        let json: serde_json::Value = serde_json::from_str(&registry_json(&extractors)).unwrap();
+        assert!(json[0].get("role").is_none());
+    }
+
+    #[test]
+    fn the_shipped_catalogue_parses_and_lists_one_pass() {
+        let text = include_str!("../../src-tauri/resources/extractors.json");
+        let rows = parse_catalogue(text).unwrap();
+        let passes: Vec<&str> = rows
+            .iter()
+            .filter(|r| r.role.as_deref() == Some("pass"))
+            .map(|r| r.command.as_str())
+            .collect();
+        assert_eq!(passes, vec!["codegraph-metrics"]);
+        assert!(rows
+            .iter()
+            .filter(|r| r.role.is_none())
+            .all(|r| !r.extensions.is_empty()));
+    }
+
+    #[test]
     fn writes_the_registry_atomically_into_a_directory_it_creates() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("codegraph").join("registry.json");
         let entries = vec![RegistryEntry::Missing {
             name: "java".into(),
+            role: None,
             extensions: vec![".java".into()],
             install: "brew install defsquare/tap/codegraph-java".into(),
         }];

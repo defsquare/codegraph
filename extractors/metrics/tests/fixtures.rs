@@ -87,6 +87,37 @@ fn elixir() {
     enrich("elixir");
 }
 
+/// The notice must name every crate the lockfile resolves: a dependency added
+/// without regenerating it (scripts/licenses.mjs) fails here, not in a release.
+#[test]
+fn the_licenses_notice_covers_every_locked_crate() {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let lock = std::fs::read_to_string(manifest.join("Cargo.lock")).expect("Cargo.lock is committed");
+    let printed = run(&["--licenses".as_ref()]);
+    assert!(printed.status.success());
+    let notice = String::from_utf8(printed.stdout).expect("UTF-8");
+    assert!(notice.contains("big-code-analysis 2.2.0: https://crates.io/crates/big-code-analysis/2.2.0"));
+    let mut missing = Vec::new();
+    for block in lock.split("[[package]]").skip(1) {
+        let field = |key: &str| {
+            block
+                .lines()
+                .find_map(|line| line.strip_prefix(&format!("{key} = \"")))
+                .and_then(|rest| rest.strip_suffix('"'))
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let (name, version) = (field("name"), field("version"));
+        if name != "codegraph-metrics" && !notice.contains(&format!("  {name} {version} — ")) {
+            missing.push(format!("{name} {version}"));
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "not in THIRD-PARTY-LICENSES.txt — regenerate it with scripts/licenses.mjs: {missing:?}"
+    );
+}
+
 #[test]
 fn exit_codes_follow_the_extractor_contract() {
     let usage = run(&["--no-such-flag".as_ref()]);

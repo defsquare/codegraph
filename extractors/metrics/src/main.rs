@@ -27,7 +27,7 @@ use model::Measurable;
 const USAGE: &str = "\
 Usage: codegraph-metrics <model.jsonl> [--src <dir>] [--out <file>] [--jobs <n>] [--audit]
                          [--history [--history-out <file>] [--ref <rev>]]
-       codegraph-metrics --version | --help
+       codegraph-metrics --version | --help | --licenses
 
 Adds big-code-analysis measures (cognitive, nexits, abc.*, lloc, cloc,
 halstead.*, mi, npm, npa) to the `metrics` map of every entity the model
@@ -65,7 +65,12 @@ enum Command {
     Run(Args),
     Help,
     Version,
+    Licenses,
 }
+
+/// Every linked crate, its license and the texts they ship (scripts/licenses.mjs):
+/// big-code-analysis is MPL-2.0, which asks a binary to say where its source is.
+const LICENSES: &str = include_str!("../THIRD-PARTY-LICENSES.txt");
 
 fn parse(argv: impl IntoIterator<Item = OsString>) -> Result<Command, String> {
     let mut argv = argv.into_iter();
@@ -77,6 +82,7 @@ fn parse(argv: impl IntoIterator<Item = OsString>) -> Result<Command, String> {
         match arg.to_str() {
             Some("--help" | "-h") => return Ok(Command::Help),
             Some("--version") => return Ok(Command::Version),
+            Some("--licenses") => return Ok(Command::Licenses),
             Some("--src") => src = Some(PathBuf::from(value("--src")?)),
             Some("--out") => out = Some(PathBuf::from(value("--out")?)),
             Some("--jobs") => {
@@ -131,6 +137,10 @@ fn main() -> ExitCode {
                 env!("CARGO_PKG_VERSION"),
                 big_code_analysis::VERSION
             );
+            ExitCode::SUCCESS
+        }
+        Ok(Command::Licenses) => {
+            print!("{LICENSES}");
             ExitCode::SUCCESS
         }
         Ok(Command::Run(args)) => match run(&args) {

@@ -22,5 +22,12 @@
     "extensions": [".ex", ".exs"],
     "command": "codegraph-elixir",
     "install": "brew install defsquare/tap/codegraph-elixir"
+  },
+  {
+    "name": "metrics",
+    "role": "pass",
+    "extensions": [],
+    "command": "codegraph-metrics",
+    "install": "brew install defsquare/tap/codegraph-metrics"
   }
 ]

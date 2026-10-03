@@ -14,6 +14,9 @@
 #   typescript-smoke the bundled TypeScript extractor on a runner of each OS must
 #                   reproduce its fixture snapshot byte for byte (PLAN.md §14.7):
 #                   Windows paths, CRLF checkouts, case-insensitive walks
+#   metrics         the metrics pass's own suite (PLAN.md §18): join, snapshots, history
+#   metrics-native  its binary built on each of the four Unix runners, re-measuring
+#                   the four fixtures byte for byte; the tap's formula ships these
 #   release         on a v* tag, the five binaries attached to a GitHub Release,
 #                   and the TypeScript extractor published to npm when NPM_TOKEN is set
 #
@@ -151,6 +154,62 @@ jobs:
         with:
           name: codegraph-java-${{ matrix.rid }}
           path: extractors/java/dist/${{ matrix.rid }}/
+          if-no-files-found: error
+          retention-days: 14
+
+  # The metrics pass (PLAN.md §18): the join's unit tests, the four enriched
+  # fixtures byte for byte, and the history side-car over a repository the test
+  # builds itself — so a shallow checkout is all it needs.
+  metrics:
+    name: metrics pass
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            extractors/metrics/target
+          key: metrics-test-${{ hashFiles('extractors/metrics/Cargo.lock') }}
+      - shell: bash
+        run: ./test.sh --metrics --skip-install --no-auto-install
+
+  # One binary per RID, each built on a runner of its own OS: the tree-sitter
+  # grammars are C, compiled by the host's compiler, and a native build needs
+  # no cross toolchain. Each binary then re-measures the four fixture models and
+  # must reproduce the committed `model.metrics.jsonl` byte for byte — the
+  # cross-OS proof of the four-decimal number spelling (PLAN.md §18, principle 4).
+  metrics-native:
+    name: metrics native ${{ matrix.rid }}
+    needs: metrics
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    rid: linux-x64 }
+          - { os: ubuntu-24.04-arm, rid: linux-arm64 }
+          - { os: macos-latest,     rid: osx-arm64 }
+          - { os: macos-15-intel,   rid: osx-x64 }
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - shell: bash
+        run: ./build.sh --metrics --skip-install --no-auto-install
+      - shell: bash
+        run: |
+          bin=extractors/metrics/target/release/codegraph-metrics
+          "$bin" --version
+          for lang in java csharp typescript elixir; do
+            "$bin" "fixtures/$lang/expected/model.jsonl" --src "fixtures/$lang/src" --out "out-$lang.jsonl"
+            cmp "out-$lang.jsonl" "fixtures/$lang/expected/model.metrics.jsonl"
+          done
+          echo "the binary reproduces the four enriched snapshots on ${{ matrix.os }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codegraph-metrics-${{ matrix.rid }}
+          path: extractors/metrics/target/release/codegraph-metrics
           if-no-files-found: error
           retention-days: 14
 
@@ -519,7 +578,7 @@ jobs:
   release:
     name: github release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [verify, java, java-native, csharp-smoke, typescript-smoke, elixir-smoke, elixir-native, sea, desktop, desktop-bundle, npm-publish]
+    needs: [verify, java, java-native, metrics-native, csharp-smoke, typescript-smoke, elixir-smoke, elixir-native, sea, desktop, desktop-bundle, npm-publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -535,7 +594,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          for extractor in csharp java; do
+          # The metrics pass rides the same loop: `codegraph-metrics-<rid>`.
+          for extractor in csharp java metrics; do
             for dir in artifacts/codegraph-$extractor-*; do
               rid="${dir#artifacts/codegraph-$extractor-}"
               for f in "$dir"/codegraph-$extractor*; do

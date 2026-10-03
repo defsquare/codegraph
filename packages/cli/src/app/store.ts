@@ -61,6 +61,12 @@ export interface ProjectRecord {
   /** The tree fingerprint the model was extracted from; null for a model opened directly. */
   readonly fingerprint: string | null;
   readonly extractedAt: string | null;
+  /**
+   * The passes that measured the model, by `name@path` (PLAN §18.3): a pass
+   * installed, moved or removed since is a reason to run them again and to
+   * rebuild the page. Absent in records written before passes existed.
+   */
+  readonly measuredBy?: readonly string[];
   /** Hash of the build flags + CLI version the artifacts on disk were made with. */
   readonly buildKey: string;
   readonly builtAt: string;

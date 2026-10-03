@@ -19,10 +19,11 @@ import { UsageError } from "../src/exit.js";
  * is a question, never a guess.
  */
 type Installed = ExtractorEntry & { readonly path: string };
-const JAVA: Installed = { name: "java", path: "/opt/codegraph-java", extensions: [".java"], launch: "exec", env: {}, install: undefined };
-const CSHARP: Installed = { name: "csharp", path: "/opt/codegraph-csharp", extensions: [".cs"], launch: "exec", env: {}, install: undefined };
+const JAVA: Installed = { name: "java", role: "extractor", path: "/opt/codegraph-java", extensions: [".java"], launch: "exec", env: {}, install: undefined };
+const CSHARP: Installed = { name: "csharp", role: "extractor", path: "/opt/codegraph-csharp", extensions: [".cs"], launch: "exec", env: {}, install: undefined };
 const TS: Installed = {
   name: "typescript",
+  role: "extractor",
   path: "/opt/homebrew/bin/codegraph-typescript",
   extensions: [".ts", ".tsx"],
   launch: "exec",
@@ -32,6 +33,7 @@ const TS: Installed = {
 /** Known to the shell's catalogue, not found on this machine. */
 const ELIXIR_MISSING: ExtractorEntry = {
   name: "elixir",
+  role: "extractor",
   path: null,
   extensions: [".ex", ".exs"],
   launch: "exec",
@@ -54,9 +56,9 @@ describe("parseRegistry", () => {
   it("accepts a list of entries and infers the launch from the path", () => {
     const registry = parseRegistry(
       JSON.stringify([
-        { name: "java", path: "/x/codegraph-java.jar", extensions: [".java"] },
-        { name: "typescript", path: "/x/cli.js", extensions: [".ts"] },
-        { name: "csharp", path: "/x/codegraph-csharp", extensions: [".cs"], env: { A: "1" } },
+        { name: "java", role: "extractor", path: "/x/codegraph-java.jar", extensions: [".java"] },
+        { name: "typescript", role: "extractor", path: "/x/cli.js", extensions: [".ts"] },
+        { name: "csharp", role: "extractor", path: "/x/codegraph-csharp", extensions: [".cs"], env: { A: "1" } },
       ]),
       "registry.json",
     );
@@ -65,7 +67,7 @@ describe("parseRegistry", () => {
   });
 
   it("normalizes extensions to lower case with a leading dot", () => {
-    const [entry] = parseRegistry(JSON.stringify([{ name: "x", path: "/x", extensions: ["TS", ".Tsx"] }]), "r");
+    const [entry] = parseRegistry(JSON.stringify([{ name: "x", role: "extractor", path: "/x", extensions: ["TS", ".Tsx"] }]), "r");
     expect(entry?.extensions).toEqual([".ts", ".tsx"]);
   });
 
@@ -76,6 +78,7 @@ describe("parseRegistry", () => {
     );
     expect(entry).toEqual({
       name: "elixir",
+      role: "extractor",
       path: null,
       extensions: [".ex"],
       launch: "exec",
@@ -93,9 +96,32 @@ describe("parseRegistry", () => {
     ["a duplicate name", `[{"name":"java","path":"/x","extensions":[".java"]},{"name":"java","path":"/y","extensions":[".kt"]}]`],
     ["an unknown launch", `[{"name":"java","path":"/x","extensions":[".java"],"launch":"docker"}]`],
     ["a non-string env value", `[{"name":"java","path":"/x","extensions":[".java"],"env":{"A":1}}]`],
+    ["an unknown role", `[{"name":"java","path":"/x","extensions":[".java"],"role":"linter"}]`],
+    ["a pass that claims files", `[{"name":"metrics","path":"/x","extensions":[".java"],"role":"pass"}]`],
   ])("refuses %s as a usage error naming the file", (_label, text) => {
     expect(() => parseRegistry(text, "registry.json")).toThrow(UsageError);
     expect(() => parseRegistry(text, "registry.json")).toThrow(/registry\.json/);
+  });
+
+  it("accepts a pass: no extensions, installed or known by its install line (PLAN §18.3)", () => {
+    const [installed, missing] = parseRegistry(
+      JSON.stringify([
+        { name: "metrics", role: "pass", path: "/opt/homebrew/bin/codegraph-metrics", extensions: [] },
+        { name: "lint", role: "pass", install: "brew install x" },
+      ]),
+      "r",
+    );
+    expect(installed).toEqual({
+      name: "metrics",
+      role: "pass",
+      path: "/opt/homebrew/bin/codegraph-metrics",
+      extensions: [],
+      launch: "exec",
+      env: {},
+      install: undefined,
+    });
+    expect(missing?.role).toBe("pass");
+    expect(missing?.path).toBeNull();
   });
 });
 

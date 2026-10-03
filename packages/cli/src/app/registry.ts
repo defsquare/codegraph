@@ -26,11 +26,21 @@ import { nodeCommand } from "../sea.js";
  * knows that; a missing claimant is offered with its install line rather than
  * hidden), only missing claimants is `not-installed`, none is a statement
  * about what the tree does hold.
+ *
+ * A PASS IS AN ENTRY TOO (`role: "pass"`, PLAN §18.3): it claims no files and
+ * extracts nothing; it runs over the model an extractor just wrote, under its
+ * own one-line contract — `<pass> <model.jsonl> --src <dir>`, rewriting the
+ * model in place, exit 0/1/2 — `codegraph-metrics` being the one there is. A
+ * missing pass is its install line, never a failed job.
  */
 export type Launch = "exec" | "java" | "node";
 
+/** An extractor turns a tree into a model; a pass adds to a model an extractor wrote. */
+export type Role = "extractor" | "pass";
+
 export interface ExtractorEntry {
   readonly name: string;
+  readonly role: Role;
   /** The executable, jar or script — resolved by the shell, absolute. Null = known, not installed. */
   readonly path: string | null;
   /** Lower-case, dotted: `.java`, `.tsx`. */
@@ -64,7 +74,8 @@ export function parseRegistry(text: string, label: string): Registry {
   const refuse = (reason: string): never => {
     throw new UsageError(
       `the extractor registry ${label} ${reason}`,
-      `Expected a JSON list of { "name", "extensions": [".java"], "path"?, "launch"?: "exec"|"java"|"node", "env"?: {}, "install"? }.`,
+      `Expected a JSON list of { "name", "extensions": [".java"], "path"?, "launch"?: "exec"|"java"|"node", "env"?: {}, "install"?, ` +
+        `"role"?: "extractor"|"pass" } — a pass claims no extensions.`,
     );
   };
   let parsed: unknown;
@@ -93,10 +104,14 @@ export function parseRegistry(text: string, label: string): Registry {
     if (path === null && install === undefined) {
       return refuse(`entry '${name}' has neither a path nor an install line`);
     }
-    const extensions = record["extensions"];
-    if (!Array.isArray(extensions) || extensions.length === 0 || !extensions.every((e) => typeof e === "string")) {
-      return refuse(`entry '${name}' claims no extensions`);
+    const role = record["role"] ?? "extractor";
+    if (role !== "extractor" && role !== "pass") return refuse(`entry '${name}' has an unknown role '${String(role)}'`);
+    const extensions = record["extensions"] ?? [];
+    if (!Array.isArray(extensions) || !extensions.every((e) => typeof e === "string")) {
+      return refuse(`entry '${name}' has extensions that are not a list of strings`);
     }
+    if (role === "extractor" && extensions.length === 0) return refuse(`entry '${name}' claims no extensions`);
+    if (role === "pass" && extensions.length > 0) return refuse(`entry '${name}' is a pass and claims extensions`);
     const launch = record["launch"] ?? inferLaunch(path as string | null);
     if (typeof launch !== "string" || !LAUNCHES.has(launch)) {
       return refuse(`entry '${name}' has an unknown launch '${String(launch)}'`);
@@ -107,6 +122,7 @@ export function parseRegistry(text: string, label: string): Registry {
     }
     entries.push({
       name,
+      role,
       path: path as string | null,
       extensions: [...new Set((extensions as string[]).map(normalizeExtension))],
       launch: launch as Launch,
@@ -227,7 +243,9 @@ function candidateOf(entry: ExtractorEntry, files: number): Candidate {
  * files (the extractor will then say so itself) — unless it names an entry
  * that is not installed, which is the install line again.
  */
-export function detect(counted: Census, registry: Registry, chosen?: string): Detection {
+export function detect(counted: Census, everything: Registry, chosen?: string): Detection {
+  // A pass extracts nothing, even when named: it is never the answer.
+  const registry = everything.filter((entry) => entry.role === "extractor");
   if (chosen !== undefined) {
     const entry = registry.find((candidate) => candidate.name === chosen);
     if (entry === undefined) return { kind: "unknown", name: chosen };
