@@ -11,11 +11,11 @@ defmodule CodegraphElixir.Corpus do
   defmodule SourceFile do
     @moduledoc """
     One corpus file: its root-relative path, source, line count, quoted AST
-    or parse error, the `#` comments by line, and the lines carrying a token
-    (for `sloc`).
+    or parse error, the `#` comments by line, and the lines that are neither
+    blank nor comment-only (for `sloc`).
     """
     @enforce_keys [:rel, :full, :source, :lines]
-    defstruct [:rel, :full, :source, :lines, ast: nil, error: nil, comments: %{}, token_lines: MapSet.new()]
+    defstruct [:rel, :full, :source, :lines, ast: nil, error: nil, comments: %{}, code_lines: MapSet.new()]
   end
 
   defstruct [:root, :root_display, :files]
@@ -83,12 +83,8 @@ defmodule CodegraphElixir.Corpus do
              emit_warnings: false
            ) do
         {:ok, ast, comments} ->
-          %SourceFile{
-            file
-            | ast: ast,
-              comments: Map.new(comments, fn c -> {c.line, {c.column, c.text}} end),
-              token_lines: Measures.token_lines(source)
-          }
+          by_line = Map.new(comments, fn c -> {c.line, {c.column, c.text}} end)
+          %SourceFile{file | ast: ast, comments: by_line, code_lines: Measures.code_lines(source, by_line)}
 
         {:error, {meta, message, token}} ->
           %SourceFile{file | error: format_error(meta, message, token)}

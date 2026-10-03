@@ -3233,7 +3233,7 @@ extractors/elixir/                     Mix project `codegraph_elixir` (escript n
     entities.ex                        pass 2
     edges.ex                           pass 3
     stubs.ex                           pass 4: <otp> / <deps> / <unresolved> stubs
-    measures.ex                        sloc (`:elixir_tokenizer`, the compiler's own lexer) + cyclomatic
+    measures.ex                        sloc (blank and comment-only lines out, comments as the parser reports them) + cyclomatic
     literals.ex                        module-attribute constants, struct-field defaults, parameter defaults (`\\`)
     model/                             NaturalKey, Entity, Edge, canonical order (UTF-16 code units), JsonlWriter (`JSON.encode_to_iodata!`)
   test/                                ExUnit; the C# suite's names where the property is the same (snapshot, determinism, stub-discipline,
@@ -3266,7 +3266,7 @@ fixtures/elixir/expected/model.jsonl
   The M14 cask gains a fifth `binary` stanza and the registry a fourth entry
   (`extensions: [".ex", ".exs"]`).
 - The extractor's own `mix.exs` has no runtime dependency: `JSON` (Elixir
-  1.18), `Code`, `Macro` and `:elixir_tokenizer` are the whole front end.
+  1.18), `Code` and `Macro` are the whole front end.
   `stream_data` is a test dependency, the fast-check of this side.
 
 ### 16.2 Mapping table (Elixir profile — new, `ex`)
@@ -4161,15 +4161,25 @@ measures only.
   | corpus | measured | joined | exact · leading · contained | not joined, and why | witness | run |
   |---|---|---|---|---|---|---|
   | Humanizer (C#), `src/` | 5 736 | 4 817 (84.0 %) | 4 764 · 8 · 45 | 919: 419 implicit constructors (anchored on the type's name), 311 record positional members, 183 on their parent's anchor — none has a body | 4 727 / 4 764: the rest are files with `#if` blocks — tree-sitter measures every branch, Roslyn's `sloc` the active one (C# profile note) | 245 files, 0.22 s |
-  | Phoenix (Elixir), `lib/` | 1 247 | 1 227 (98.4 %) | 981 · 0 · 246 (multi-clause functions) | 20: `defdelegate`s, `defimpl`/`defprotocol` bodies | 770 / 981 — see below | 75 files, 0.06 s |
+  | Phoenix (Elixir), `lib/` | 1 247 | 1 227 (98.4 %) | 981 · 0 · 246 (multi-clause functions) | 20: `defdelegate`s, `defimpl`/`defprotocol` bodies | 770 / 981 before the fix below, 769 after — see below | 75 files, 0.06 s |
 
   **The witness's first real catch**: the Elixir extractor's `sloc` counts
   the line each TOKEN STARTS on (`Measures.token_lines`), so a heredoc — one
   token over many lines — counts once; Phoenix's `@doc` heredocs and
   templates put it below METAMODEL §3.8's "neither blank nor comment-only"
   (`mix_app_path`: 19 such lines, `sloc` 9, big-code-analysis 13). Java's
-  lexer and the TypeScript extractor count every line a string spans. A fix
-  belongs to the Elixir extractor and its snapshot (§18.5).
+  lexer and the TypeScript extractor count every line a string spans.
+  **Fixed** (2026-10-03, test first): `Measures.code_lines` takes the
+  definition literally — every line that is not blank and not comment-only,
+  a comment being what `Code.string_to_quoted_with_comments` reports, so a
+  `#` inside a heredoc is text. `mix_app_path` now says 19, the hand count.
+  The fixture corpus holds no multi-line literal inside a span — which is why
+  its snapshot never showed the bug and does not move now; a unit test pins
+  heredoc, sigil and multi-line string. The Phoenix witness still disagrees
+  (769 / 981), from the other side: big-code-analysis's Elixir `ploc` leaves
+  a heredoc's text out (13 for `mix_app_path`), where its TypeScript `ploc`
+  counts a template literal's — an oracle wrong there, noted in the Elixir
+  profile.
 
 ### 18.4 Milestone split
 
@@ -4280,11 +4290,10 @@ measures only.
   are measured by adding one line to `join::language`.
 - **big-code-analysis 2.2.1** (unpublished today) — a bump is a reviewed
   snapshot diff, never a silent `cargo update`.
-- **The Elixir extractor's `sloc` over multi-line tokens** (found by the
-  witness on Phoenix, §18.3): `Measures.token_lines` must mark every line a
-  heredoc, sigil or multi-line string spans, as the TypeScript extractor
-  does — its own fix, test first, with `fixtures/elixir` and its enriched
-  snapshot regenerated.
+- **Blank lines inside a multi-line literal**: the Elixir and Java `sloc`
+  leave them out (they are blank), the TypeScript extractor counts every line
+  a template literal spans. A one-line difference per blank line in a
+  template; aligning it changes the TypeScript snapshot and waits for a reason.
 - **Measures over time**: the temporal store keeps no per-revision measures
   (they sit in the flat tables `import --at` rewrites), so `snapshots` does
   not run the pass; a replay of `sum:cognitive` would start there.

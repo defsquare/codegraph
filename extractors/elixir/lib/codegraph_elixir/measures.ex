@@ -1,28 +1,35 @@
 defmodule CodegraphElixir.Measures do
   @moduledoc """
   Measures (TMetrics, METAMODEL.md §3.8): `sloc`, the lines of a span that
-  carry at least one token — counted with the compiler's own tokenizer, so
-  a heredoc or a sigil cannot swallow a comment marker — and `cyclomatic`,
-  1 + the branches the profile note lists. A nested `fn` contributes to its
-  enclosing invocable: an anonymous function is not an entity.
+  are neither blank nor comment-only — a comment being what the compiler's
+  own parser reports as one, so a `#` inside a heredoc or a sigil is text —
+  and `cyclomatic`, 1 + the branches the profile note lists. A nested `fn`
+  contributes to its enclosing invocable: an anonymous function is not an
+  entity.
   """
 
-  @doc "The set of 1-based lines carrying a token; empty when the source does not tokenize."
-  def token_lines(source) do
-    case :elixir_tokenizer.tokenize(String.to_charlist(source), 1, []) do
-      {:ok, _line, _column, _warnings, tokens, _terminators} ->
-        tokens
-        |> Enum.reject(fn token -> elem(token, 0) == :eol end)
-        |> Enum.map(fn token -> elem(elem(token, 1), 0) end)
-        |> MapSet.new()
-
-      _ ->
-        MapSet.new()
-    end
+  @doc """
+  The set of 1-based lines that are neither blank nor comment-only.
+  `comments` are the parser's (`Code.string_to_quoted_with_comments`), by
+  line, as `{column, text}`: a line whose only content is one of them is a
+  comment line. Every other non-blank line is code — including each line a
+  heredoc, a sigil or a multi-line string spans.
+  """
+  def code_lines(source, comments) do
+    source
+    |> String.split("\n")
+    |> Enum.with_index(1)
+    |> Enum.reject(fn {text, line} -> blank?(text) or comment_only?(text, Map.get(comments, line)) end)
+    |> MapSet.new(fn {_, line} -> line end)
   end
 
-  def sloc(token_lines, {start_line, end_line}) do
-    Enum.count(start_line..end_line//1, &MapSet.member?(token_lines, &1))
+  defp blank?(text), do: String.trim(text) == ""
+
+  defp comment_only?(_text, nil), do: false
+  defp comment_only?(text, {column, _}), do: text |> String.slice(0, column - 1) |> String.trim() == ""
+
+  def sloc(code_lines, {start_line, end_line}) do
+    Enum.count(start_line..end_line//1, &MapSet.member?(code_lines, &1))
   end
 
   @doc "1 + branches of one clause body (the fold adds one per clause beyond the first)."

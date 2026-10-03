@@ -95,7 +95,7 @@ defmodule CodegraphElixir.Walker do
       name: file.rel,
       is_stub: false,
       defined_in: [file.rel],
-      metrics: [{"sloc", Measures.sloc(file.token_lines, {1, file.lines})}],
+      metrics: [{"sloc", Measures.sloc(file.code_lines, {1, file.lines})}],
       anchor: {file.rel, 1, file.lines}
     }
 
@@ -107,7 +107,7 @@ defmodule CodegraphElixir.Walker do
       ctx = %{
         file: file.rel,
         file_key: file_key,
-        token_lines: file.token_lines,
+        code_lines: file.code_lines,
         comments: file.comments,
         scope: Scope.new(),
         owner: file_key,
@@ -297,7 +297,7 @@ defmodule CodegraphElixir.Walker do
       is_stub: false,
       parent: ctx.file_key,
       attached_to: attached_to && {:module, attached_to},
-      metrics: [{"sloc", Measures.sloc(ctx.token_lines, {line(meta), end_line})}],
+      metrics: [{"sloc", Measures.sloc(ctx.code_lines, {line(meta), end_line})}],
       comments: block && [block],
       anchor: span
     }
@@ -413,7 +413,7 @@ defmodule CodegraphElixir.Walker do
     metrics =
       if kind == "callback",
         do: nil,
-        else: [{"sloc", Measures.sloc(ctx.token_lines, {start_line, end_line})}, {"cyclomatic", cyclomatic}]
+        else: [{"sloc", Measures.sloc(ctx.code_lines, {start_line, end_line})}, {"cyclomatic", cyclomatic}]
 
     extra =
       if(defaults > 0, do: [{"defaults", defaults}], else: []) ++

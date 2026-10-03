@@ -166,6 +166,41 @@ defmodule CodegraphElixir.EntitiesTest do
     assert Measures.cyclomatic(quote(do: (a && b) || c)) == 3
   end
 
+  # METAMODEL §3.8: `sloc` is the lines of a span that are neither blank nor
+  # comment-only. A heredoc, a sigil or a string written over several lines is
+  # code on every line it spans — and a `#` inside one is text, not a comment
+  # (found on Phoenix: `mix_app_path` has 19 such lines, `sloc` said 9).
+  test "sloc counts every non-blank line a heredoc, a sigil or a multi-line string spans" do
+    source = ~S'''
+    defmodule A do
+      def f(app) do
+        # a comment
+        Mix.raise("""
+        no directory for #{app}
+
+          # not a comment: the heredoc's text
+        """)
+      end
+
+      def g, do: ~S"""
+      one
+      two
+      """
+
+      def h, do: "multi
+      line"
+    end
+    '''
+
+    ids = by_id(walk(source))
+    # f: lines 2-9 minus the comment (3) and the blank line inside the heredoc (6).
+    assert ids["ex:lib%2Fx.ex/A.f#1"].metrics == [{"sloc", 6}, {"cyclomatic", 1}]
+    assert ids["ex:lib%2Fx.ex/A.g#0"].metrics == [{"sloc", 4}, {"cyclomatic", 1}]
+    assert ids["ex:lib%2Fx.ex/A.h#0"].metrics == [{"sloc", 2}, {"cyclomatic", 1}]
+    # The file: 18 lines, of which 3 blank and 1 comment-only.
+    assert ids["ex:lib%2Fx.ex"].metrics == [{"sloc", 14}]
+  end
+
   test "literals: constant-shaped values are kept, code carries none" do
     scope = Scope.new()
     assert Literals.value_of(quote(do: 1.5), scope) == %{k: "number", v: "1.5"}
