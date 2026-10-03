@@ -10,9 +10,9 @@ anchors, and rewrites their `metrics` maps. Nothing else in the file moves.
 One binary serves every extractor (PLAN.md §18); what each key means is in
 METAMODEL.md §3.8.
 
-> **Status (M17a):** code metrics for Java, C#, TypeScript and Elixir models.
-> Change-history metrics (M17b) and running it from the app and the tap
-> (M17c) come next.
+> **Status (M17b):** code metrics for Java, C#, TypeScript and Elixir models;
+> change history per file and per entity into a side-car (`--history`, §5).
+> Running it from the app and the tap (M17c) comes next.
 
 ## 1. From a clone
 
@@ -85,7 +85,46 @@ codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 le
 `--audit` lists every entity not joined exactly, with its outcome, category
 and span, and marks the ones anchored on their parent.
 
-## 4. Limits
+## 4. Change history: `--history`
+
+```bash
+./bin/codegraph-metrics model.jsonl --history            # + model.history-metrics.jsonl beside it
+./bin/codegraph serve model.jsonl --height history-file:churn_recent --carry history:risk_score
+```
+
+`--history` also measures how the code got there, with big-code-analysis's
+git measures: per **file** from one walk over the whole commit graph (commits,
+churn, authors over the last 365 and 90 days, ownership, burst, bug-fix /
+security / revert counts, age, change and co-change entropy, a risk score),
+and per **entity** from one `git blame` per file (the same signals over the
+lines that survive at the commit; their count is `lines_*`, not `churn_*`).
+The full list, with what each means, is `HISTORY_MEASURES` in
+`packages/scm/src/history-metrics.ts`.
+
+These go to a **side-car**, `<model>.history-metrics.jsonl`, never into the
+model: history is a third artifact beside the model (PLAN.md §11) — a model
+describes the code at one commit, and its bytes must not change because
+time passed. `--history-out FILE` puts it elsewhere.
+
+- **Measured at** the commit the model describes: its header's
+  `repository.commit` (written when the extractor got `--repo-*` flags), else
+  HEAD; `--ref REV` overrides both. Every window counts back from that
+  commit's own time, so two runs write the same bytes.
+- **A file changed since that commit** keeps its file record and gets no
+  entity records — its anchors and the blamed lines would describe different
+  text. The run says how many.
+- **Cost**: the walk and one blame per file — 34 s and 690 MB over
+  BroadleafCommerce's 18 776 commits and 2 983 files, against 0.8 s for the
+  code metrics; hence opt-in.
+
+`codegraph city` and `codegraph serve` read the side-car beside each model
+(or `--history-metrics FILE`) and offer it on every metric channel and
+`--carry`: `history:<measure>` is the building's own type (its blame),
+`history-file:<measure>` the file the type is written in. Asking for one
+with no side-car, or `history:churn_long` (a file-only measure), is a usage
+error that says what to run or type instead.
+
+## 5. Limits
 
 - Only entities whose profile licenses `TMetrics` and that the extractor
   measured are touched: the pass never adds a trait.

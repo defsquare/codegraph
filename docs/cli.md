@@ -48,7 +48,7 @@ codegraph import   model.jsonl [--out FILE] [--at SHA [--time T]] [--json]
 codegraph serve    [model.jsonl] [--port N] [--host ADDR] [--name STR]
                    [--height METRIC] [--height-scale linear|sqrt|log]
                    [--footprint METRIC] [--footprint-scale linear|sqrt|log]
-                   [--carry M1,M2] [--framework spring]
+                   [--carry M1,M2] [--framework spring] [--history-metrics FILE]
                    [--internal-only] [--declared-only] [--no-cache]
                    # one page: the navigator, with the 3D city as a tab
 codegraph serve    --app [--data-dir DIR] [--extractors FILE] [--port N] [--host ADDR]
@@ -60,7 +60,7 @@ codegraph city     [model.jsonl] [--layout] [--out FILE]
                    [--height METRIC] [--height-scale linear|sqrt|log]
                    [--footprint METRIC] [--footprint-scale linear|sqrt|log]
                    [--carry M1,M2] [--name STR] [--framework spring]
-                   [--internal-only] [--declared-only]
+                   [--history-metrics FILE] [--internal-only] [--declared-only]
 
 codegraph navigator [model.jsonl] [--out FILE]
                    [--name STR] [--internal-only] [--declared-only]
@@ -202,6 +202,10 @@ footprint follow the chosen metrics, type dependencies as roof-to-roof arcs.
 metrics: `degree`, `fanIn`, `fanOut`, `fields`, `loc`, `members`, `methods`,
 `one`; open forms `attribute:<key>` and `sum:<key>` reach any measure the
 extractor emitted (`--height sum:cyclomatic` builds the complexity city).
+With the change-history side-car `codegraph-metrics --history` writes beside
+the model (or `--history-metrics FILE`), `history:<measure>` reads the type's
+own blame and `history-file:<measure>` its file's history
+(`--height history-file:churn_recent`; docs/metrics.md §4).
 Unmeasured metrics are drawn at the channel minimum and labelled unmeasured.
 
 ### `navigator`

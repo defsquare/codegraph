@@ -32,6 +32,20 @@ export {
 } from "./jsonl.js";
 export { GIT_PRETTY, GitLogParseError, gitLogArgs, parseGitLog, type MineMeta } from "./gitlog.js";
 export {
+  HISTORY_MEASURES,
+  HISTORY_METRICS_KIND,
+  HistoryMetricsEntityRec,
+  HistoryMetricsError,
+  HistoryMetricsFileRec,
+  HistoryMetricsHeaderRec,
+  HistoryMetricsKey,
+  decodeHistoryMetricsText,
+  encodeHistoryMetrics,
+  type HistoryLevel,
+  type HistoryMeasure,
+  type HistoryMetrics,
+} from "./history-metrics.js";
+export {
   COUPLING_DEFAULTS,
   MOMENTUM_WINDOW_DAYS,
   authorStats,

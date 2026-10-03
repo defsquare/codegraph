@@ -6,6 +6,7 @@ import { startDaemon, type DaemonOptions } from "../app/daemon.js";
 import { createJobRunner } from "../app/jobs.js";
 import { parseRegistry, type Registry } from "../app/registry.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
+import { loadHistoryJoin } from "../history-metrics.js";
 import { INSIGHT_ROUTE, insightLookup } from "../insight-route.js";
 import { storePathForModel } from "../insights-paths.js";
 import { errLine, errLines, type IoSink } from "../io.js";
@@ -81,7 +82,8 @@ export function serveCommand(options: ServeOptions, io: IoSink, deps: ServeDeps 
       ...(options.name === undefined ? {} : { name: options.name }),
     });
     // The viewer refuses a city with no placement, so the layout is not optional.
-    const city = layoutCity(cityOf(graph, options));
+    const history = loadHistoryJoin(options.historyMetrics, options.models);
+    const city = layoutCity(cityOf(graph, options, history));
 
     // One "not clean" line for the page, then each artifact's own caveats.
     const built = { clean: true, paths: source.paths };

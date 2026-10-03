@@ -4061,29 +4061,60 @@ lambda's complexity is charged to its method) or its grammar's
 (tree-sitter-c-sharp 0.23.5 misparses C# 14 `extension(…)` blocks) — absent,
 never zero, and listed by `--audit`.
 
-### 18.2 Change history (M17b)
+### 18.2 Change history (M17b) — a side-car, not the model
 
-bca's `vcs` feature (pure-Rust `gix`, no libgit2) walks git once per run:
+**Decided 2026-10-02, against this section's first draft**: history measures
+do NOT enter `model.jsonl`. The first draft put per-file history on `f`
+records and per-function `vcs.*` keys in entity `metrics`; that reverses §11's
+principle 1 (evolution facts are a third artifact), and its reason holds here
+too — a window counts back from the commit's time, so two snapshots a week
+apart would differ on entities whose code did not move, and every
+`snapshots`/replay diff would carry that noise. So `codegraph-metrics
+--history` writes a side-car beside the model, `<model>.history-metrics.jsonl`,
+and the CLI joins the two in memory. No core change; `model.jsonl` keeps code
+measures only.
 
-- **per file** — commits, churn, authors over a long and a recent window,
-  ownership, burst, bug/security/revert fix counts, age, change and co-change
-  entropy, `risk_score`, `hotspot_score`. File-level by nature: copied onto
-  each type it would lie about granularity. So `f` records gain an optional
-  `metrics` map in core (container contract §4, `gen:schemas`, the store's
-  file rows) — the one core change of this phase.
-- **per function** — current-blame, surviving-line attribution
-  (`PerFunctionBlame`), joined like everything else and written as `vcs.*`
-  keys. A different computation from the file level (bca says so); both
-  definitions are documented, never compared.
-- **The reference time is the HEAD commit's committer time**, never the wall
-  clock (`--as-of` overrides it): `age_days` and the windows would otherwise
-  drift daily and break §6.
-- **The header says who measured what**: `passes: [{ name, version,
-  bca, asOf? }]`, additive in core, written by the pass — the honest
-  counterpart of `extractor`.
-- `@codegraph/scm` (`history.jsonl`, the replay timeline) stays: it is the
-  time axis, these are measures at one commit; the two churn definitions are
-  documented side by side, not merged.
+- **What it measures** (bca's `vcs` feature, pure-Rust `gix`, no libgit2):
+  per FILE from one walk — commits, churn (added + deleted), authors over a
+  long (365 d) and a recent (90 d) window, ownership, burst, fix / security /
+  revert counts, age, change and co-change entropy, an ordinal risk score;
+  per ENTITY from one blame per file — the same signals over its SURVIVING
+  lines (the line's last commit), whose line count is named `lines_*`, never
+  `churn_*`: the two are different quantities and never share a key. Who and
+  why live in `@codegraph/scm`'s `HISTORY_MEASURES`, pinned equal to the
+  Rust lists by a test.
+- **At which commit**: the model's `repository.commit`, else HEAD, `--ref`
+  overriding both; the clock is that commit's committer time, never the wall
+  clock — so two runs over one repository write the same bytes (§6), and a
+  `snapshots` frame can be measured at its own commit. Blame reads files at
+  the commit and anchors come from the files the extractor read: a file whose
+  bytes differ from the commit keeps its file record and loses its entities,
+  counted on stderr.
+- **The whole commit graph, merges excluded**: bca walks first-parent by
+  default, which hides every commit a merge brought in — 65 % of
+  BroadleafCommerce's (6 657 of 18 776 are first-parent) — from the file
+  level while blame still credits them. Found by the fixture, pinned by the
+  synthetic-repository test (a branch commit must count).
+- **Identity**: an entity record carries its natural key `{lang, module,
+  symbol, disambiguator?}` — never a rendered id; the CLI renders it with
+  core's `renderId` to join (invariant 7: ids are rendered, never parsed). A
+  file record carries the model's own path (relative to its root).
+- **The format** (`@codegraph/scm`, `history-metrics.ts`): `header` (kind
+  `codegraph.history-metrics/1`, producer and bca versions, `lang`, `root`,
+  `commit`, `asOf`, window days) → `f` per file by path → `e` per entity in
+  canonical key order → `eof` with counts. Strictly ascending order is the
+  uniqueness check; the decoder refuses a missing trailer, wrong counts,
+  disorder, a non-number; `encode(decode(x)) = x` on what Rust wrote.
+- **The join** (`packages/cli/src/history-metrics.ts`): `city` and `serve`
+  read `<model>.history-metrics.jsonl` beside each model (or
+  `--history-metrics FILE`) and offer two metric forms to every channel and
+  `--carry`: `history:<measure>` (the building's own type, its blame) and
+  `history-file:<measure>` (the file the type is written in). Through the
+  city's custom `MetricSource` hook: `@codegraph/city` itself is unchanged.
+  Asking for one with no side-car, or at a level the measure lacks, is a
+  usage error that says how to get it.
+- `@codegraph/scm`'s `history.jsonl` (the time axis: replay, hidden coupling)
+  stays as it is; these are measures AT one commit.
 
 ### 18.3 Where it runs, how it ships (M17c)
 
@@ -4144,9 +4175,36 @@ bca's `vcs` feature (pure-Rust `gix`, no libgit2) walks git once per run:
       internal building measured (the 1 231 unmeasured are all stubs), the
       tallest `FormBuilderServiceImpl` at 701.
 
-**M17b — change history** (§18.2): `vcs` feature, `f.metrics` and
-`passes` in core, `--repo`/`--as-of`/windows, per-function `vcs.*` keys, the
-key set decided on measurements of Broadleaf's history, blame cost measured.
+**M17b — change history, as a side-car** (§18.2)
+
+- [x] `codegraph-metrics --history [--history-out FILE] [--ref REV]`: bca's
+      `vcs` feature plus `gix` 0.87 (the one bca links) for the reference
+      commit, its time and its blobs; one history walk over the full graph,
+      one blame per file on N threads with a session each; the side-car
+      written atomically. The inventory gained each entity's natural key and
+      the header's `repository.commit`; nothing in `model.jsonl` changes.
+- [x] `@codegraph/scm`: the side-car's schema, strict decoder and canonical
+      encoder, `HISTORY_MEASURES` (unit, meaning, level) pinned equal to the
+      Rust lists; a property test (`encode ∘ decode` is the identity on any
+      encoded side-car) and the refusals (truncated, wrong counts, disorder,
+      a non-number, no header).
+- [x] The CLI join (`history-metrics.ts`): `history:`/`history-file:` on
+      every channel and `--carry` of `city` and `serve`, `--history-metrics
+      FILE`, usage errors that say what to run.
+- [x] A repository built by the Rust test, commit by commit, with pinned
+      authors and dates (no history needed from the checkout — CI clones
+      shallow): every file and blame number hand-countable, the branch commit
+      counted through a merge, `--ref` pinned to an earlier commit, an edited
+      file losing its entities and keeping its file record. Its side-car is
+      committed (`fixtures/history-metrics/`) beside its validate-clean model,
+      and is what the scm codec and the CLI join are tested against.
+- [x] BroadleafCommerce at `5036306` (18 776 commits): 2 983 file and
+      26 494 entity records — every entity with text of its own — in 35 s and
+      670 MB (the code metrics alone: 0.8 s); a second run byte-identical; the
+      TypeScript decoder accepted all 26 494 keys in the order Rust wrote
+      them; a city with `--height history-file:churn_long --footprint
+      history:commits_long` measured all 3 312 internal buildings (190 types
+      changed in the year to the commit, 64 non-merge commits in it).
 
 **M17c — wired in and shipped** (§18.3).
 
@@ -4208,7 +4266,7 @@ key set decided on measurements of Broadleaf's history, blame cost measured.
 | M16b | Insights store — lazy reads | ✅ (2026-09-20) a `RecordSource` keeps a plan's question (`fingerprint`, no block) apart from a prompt's (`summary`: description + the Specy word, projected in SQL and pinned equal to the in-memory rule by a property, read once however often quoted); a `RecordBook`'s `put` is the store's commit, so `executeRun` holds no record; the export streams 500 records at a time into ~1 MB writes. Every plan — reuse-all, `--force` (17 809 prompts quoting the store), the fixture — and every exported record `cmp`-equal to M16a's. Records held by a plan: 68 MB → 7 MB (27 MB with every summary quoted); a 0-call run 1 094 MB · 37 s → 936 MB · 10.6 s, the time being `synchronous = NORMAL` undoing M16a's fsync per templated unit. Stated plainly in §17.3: `--dry-run` peak RSS did NOT move (676 → 686 MB) — the graph is ~580 MB of it, the records never were the cost; a first cut that re-read a whole record per quote was byte-identical and twice as slow (1 521 MB), which is why the gate measures and does not only compare |
 | M16c | Insights store — the first reader | ✅ (2026-09-21) the store opened as a READER (`query_only` on an ordinary connection — a read-only file handle stranded `-wal`/`-shm` beside the model; no migration, an older or foreign store refused) with `query`/`stats`/`runs` projecting rows, never blocks, and `answerInsight` (explained / failed / unknown) as the one rule both readers share; `codegraph insights` — summary, tab-separated lists by level / concept / confidence, one explanation whole (`--id`, a failed id answered with why, exit 3), `--failures`, `--runs`, `--json` — opening the store and nothing else, not even `explain.ts` (the provider SDK): 0.14–0.18 s and ~81 MB on Broadleaf's 28 206 records, the store's hash unchanged; `codegraph serve`'s one lookup route `/insight.json?id=…` (`--insights FILE`, reader opened on first request, 404 and a silent page when there is nothing) and the Navigate panel's explanation block for types and modules — kind restated and pinned, `@codegraph/insights` not imported even for types, block rendered generically, asked once per id, and marked as an INFERENCE in the page's own colour and badge family; screenshots reviewed on Broadleaf. Operations wait on member ids the navigator artifact does not carry |
 | M17a | Code metrics — the pass | ✅ (2026-09-29, worktree `code-metrics`) `codegraph-metrics` (§18): big-code-analysis 2.2.0 as a library, a pass over any extractor's model, 14 keys in two families (METAMODEL §3.8) joined on anchors — exact, leading, contained, then the fold; the extractor's keys untouched, a re-run the identity, numbers in `JSON.stringify`'s spelling (the core gate re-encodes all four enriched fixtures byte for byte). Joined: fixtures 70/87 Java, 101/117 C#, 89/105 TypeScript, 96/103 Elixir; BroadleafCommerce 26 209/28 596 (98.9 % of what has text of its own) in 0.82 s; codegraph itself 7 887/8 125 in 0.27 s; the witness `sloc = ploc` on every exact join but the explained ones; zero ambiguous. `build.sh`/`test.sh --metrics`, `bin/codegraph-metrics`, `docs/metrics.md`, a note per profile |
-| M17b | Code metrics — change history | per-file and per-function history (bca `vcs`, gix), `f.metrics` and header `passes` in core, reference time = HEAD's committer time (§18.2) |
+| M17b | Code metrics — change history | ✅ (2026-10-02) `codegraph-metrics --history` → `<model>.history-metrics.jsonl`, a SIDE-CAR (§11 principle 1 kept: no history in `model.jsonl`, no core change): per file from one walk over the full commit graph (merges excluded — first-parent hid 65 % of Broadleaf's commits), per entity from one blame per file, at the model's commit and clocked at its time; codec and `HISTORY_MEASURES` in `@codegraph/scm`; `history:`/`history-file:` metrics in `city`/`serve`. Hand-countable synthetic-repository test; Broadleaf (18 776 commits) 2 983 files + 26 494 entities in 35 s, re-run byte-identical |
 | M17c | Code metrics — wired in and shipped | the app's job and `snapshots` run the pass, discovery lists it, one `codegraph-metrics` formula every extractor formula depends on, five-RID CI build, C# and Elixir real-corpus audits (§18.3) |
 
 ## 20. Decisions made in this plan (deltas vs. the design doc)
@@ -4300,3 +4358,5 @@ key set decided on measurements of Broadleaf's history, blame cost measured.
 | Measure attribution (M17) | a space the model does not name is charged to the entity around it; span measures (`lloc`, Halstead, `mi`, `npm`/`npa`) only on an entity that is one space | the `cyclomatic` lambda rule, applied to every additive measure, so `sum:` counts code once; Halstead and MI do not add, so a union of spaces has none rather than a wrong one |
 | Join tolerance (M17) | an exact span first; then the same last line with only annotation/attribute/decorator/comment lines between the two starts, brackets balanced; then containment | Spoon starts a method after its annotations, tree-sitter at them; the TypeScript compiler starts an exported class at its decorator, tree-sitter after — 9 814 of Broadleaf's 26 209 joins are this case; a gap holding code is never bridged |
 | Measure numbers (M17) | four decimals, spelled as JavaScript's `Number::toString` | libm may differ in the last ulp across platforms, and contract §6 promises the same bytes on every OS; core's encoder is the spelling every other producer already matches |
+| History measures (M17b) | a side-car `<model>.history-metrics.jsonl` (entities by natural key, files by model path), joined by the CLI; never `model.jsonl` | §11 principle 1: a window counts back from the commit's time, so history in the model would make snapshots of unchanged code differ; decided by the user over the first draft of §18.2 |
+| History reference (M17b) | the model's `repository.commit`, else HEAD, `--ref` overriding; clocked at that commit's committer time; the full commit graph, merges excluded | the wall clock would change the bytes daily; first-parent (bca's default) hid 65 % of Broadleaf's commits from the file level while blame still credited them per entity |

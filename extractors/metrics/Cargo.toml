@@ -18,7 +18,11 @@ big-code-analysis = { version = "=2.2.0", default-features = false, features = [
   "elixir",
   "java",
   "typescript",
+  "vcs",
 ] }
+# The same gitoxide big-code-analysis walks history with (pure Rust, no
+# libgit2): resolving the reference commit, its time and its blobs.
+gix = { version = "0.87", default-features = false, features = ["revision", "sha1"] }
 serde = { version = "1", features = ["derive"] }
 # `raw_value`: a metric written by the extractor is copied byte for byte, never
 # re-encoded — the model's numbers are core's `JSON.stringify` spelling.

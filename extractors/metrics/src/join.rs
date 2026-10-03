@@ -491,15 +491,34 @@ mod tests {
     use crate::model::{Category, Measurable};
 
     fn target(entity: u32, category: Category, start: u32, end: u32, depth: u32) -> Measurable {
-        Measurable { entity, file: 0, start, end, category, depth, implicit: false, sloc: None }
+        Measurable {
+            entity,
+            file: 0,
+            start,
+            end,
+            category,
+            depth,
+            implicit: false,
+            sloc: None,
+            module: 0,
+            symbol: format!("e{entity}"),
+            disambiguator: None,
+        }
     }
 
     fn outcome(measured: &[Measured], entity: u32) -> &Measured {
-        measured.iter().find(|m| m.entity == entity).expect("every target has an outcome")
+        measured
+            .iter()
+            .find(|m| m.entity == entity)
+            .expect("every target has an outcome")
     }
 
     fn value<'m>(measured: &'m [Measured], entity: u32, key: &str) -> Option<&'m str> {
-        outcome(measured, entity).values.iter().find(|(k, _)| *k == key).map(|(_, v)| v.as_str())
+        outcome(measured, entity)
+            .values
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, v)| v.as_str())
     }
 
     const JAVA: &str = "\
@@ -521,7 +540,10 @@ class A {
 
     #[test]
     fn a_method_anchored_after_its_annotation_joins_the_space_that_starts_at_it() {
-        let targets = [target(0, Category::Type, 1, 14, 0), target(1, Category::Invocable, 3, 13, 1)];
+        let targets = [
+            target(0, Category::Type, 1, 14, 0),
+            target(1, Category::Invocable, 3, 13, 1),
+        ];
         let measured = measure_file(LANG::Java, JAVA.as_bytes(), &targets).unwrap();
         assert_eq!(outcome(&measured, 0).join, Join::Exact);
         assert_eq!(outcome(&measured, 1).join, Join::Leading);
@@ -555,7 +577,10 @@ defmodule M do
   end
 end
 ";
-        let targets = [target(0, Category::Type, 1, 6, 0), target(1, Category::Invocable, 2, 5, 1)];
+        let targets = [
+            target(0, Category::Type, 1, 6, 0),
+            target(1, Category::Invocable, 2, 5, 1),
+        ];
         let measured = measure_file(LANG::Elixir, code.as_bytes(), &targets).unwrap();
         assert_eq!(outcome(&measured, 0).join, Join::Exact);
         assert_eq!(outcome(&measured, 1).join, Join::Contained);
@@ -609,9 +634,18 @@ export class R {
 
     #[test]
     fn a_leading_gap_holds_annotations_over_several_lines_and_nothing_else() {
-        assert!(is_leading_gap(&["@Entity", "@Table(name = \"T\",", "    schema = \"s)\")", "// note", ""]));
+        assert!(is_leading_gap(&[
+            "@Entity",
+            "@Table(name = \"T\",",
+            "    schema = \"s)\")",
+            "// note",
+            ""
+        ]));
         assert!(is_leading_gap(&["[Obsolete]", "/** doc */"]));
-        assert!(!is_leading_gap(&["@A", "public @ResponseBody"]), "a modifier line is code");
+        assert!(
+            !is_leading_gap(&["@A", "public @ResponseBody"]),
+            "a modifier line is code"
+        );
         assert!(!is_leading_gap(&["@A(value = 1,"]), "an annotation still open");
         assert!(!is_leading_gap(&["class Outer {"]));
     }

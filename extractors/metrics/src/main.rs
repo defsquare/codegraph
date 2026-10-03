@@ -7,6 +7,7 @@
 //! moves. Its keys are its own (`join::KEYS`); the extractor's are never
 //! touched, and a re-run replaces exactly what the previous run wrote.
 
+mod history;
 mod join;
 mod model;
 mod number;
@@ -25,6 +26,7 @@ use model::Measurable;
 
 const USAGE: &str = "\
 Usage: codegraph-metrics <model.jsonl> [--src <dir>] [--out <file>] [--jobs <n>] [--audit]
+                         [--history [--history-out <file>] [--ref <rev>]]
        codegraph-metrics --version | --help
 
 Adds big-code-analysis measures (cognitive, nexits, abc.*, lloc, cloc,
@@ -36,6 +38,14 @@ measures, joined on the entity's anchor. The extractor's own keys are kept.
   --out <file>   where to write (default: the model itself, replaced atomically)
   --jobs <n>     parser threads (default: the machine's parallelism)
   --audit        list, on stderr, every measured entity not joined exactly
+  --history      also measure change history — per file from one git walk, per
+                 measured entity from one blame per file — at the commit the
+                 model describes (its `repository.commit`, else HEAD), clocked
+                 at that commit's time. Written to a SIDE-CAR, never the model:
+                 <out without .jsonl>.history-metrics.jsonl
+  --history-out <file>
+                 where the side-car goes instead
+  --ref <rev>    the commit the history is measured at, overriding the header
 
 Exit codes: 0 success, 1 failure, 2 bad usage.
 ";
@@ -46,6 +56,9 @@ struct Args {
     out: Option<PathBuf>,
     jobs: Option<usize>,
     audit: bool,
+    history: bool,
+    history_out: Option<PathBuf>,
+    reference: Option<String>,
 }
 
 enum Command {
@@ -58,6 +71,7 @@ fn parse(argv: impl IntoIterator<Item = OsString>) -> Result<Command, String> {
     let mut argv = argv.into_iter();
     let mut model = None;
     let (mut src, mut out, mut jobs, mut audit) = (None, None, None, false);
+    let (mut history, mut history_out, mut reference) = (false, None, None);
     while let Some(arg) = argv.next() {
         let mut value = |flag: &str| argv.next().ok_or_else(|| format!("{flag} needs a value"));
         match arg.to_str() {
@@ -71,18 +85,33 @@ fn parse(argv: impl IntoIterator<Item = OsString>) -> Result<Command, String> {
                 jobs = Some(n.ok_or("--jobs takes a positive integer")?);
             }
             Some("--audit") => audit = true,
+            Some("--history") => history = true,
+            Some("--history-out") => history_out = Some(PathBuf::from(value("--history-out")?)),
+            Some("--ref") => {
+                let rev = value("--ref")?;
+                reference = Some(
+                    rev.into_string()
+                        .map_err(|_| "--ref takes a UTF-8 revision".to_owned())?,
+                );
+            }
             Some(flag) if flag.starts_with('-') => return Err(format!("unknown flag {flag}")),
             _ if model.is_none() => model = Some(PathBuf::from(arg)),
             _ => return Err("one model at a time".to_owned()),
         }
     }
     let model = model.ok_or("no model given")?;
+    if (history_out.is_some() || reference.is_some()) && !history {
+        return Err("--history-out and --ref need --history".to_owned());
+    }
     Ok(Command::Run(Args {
         model,
         src,
         out,
         jobs,
         audit,
+        history,
+        history_out,
+        reference,
     }))
 }
 
@@ -134,19 +163,36 @@ fn run(args: &Args) -> Result<(), String> {
         .or_else(|| inventory.root.as_ref().map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("."));
 
-    let mut by_file: BTreeMap<u32, Vec<Measurable>> = BTreeMap::new();
+    let mut by_file: BTreeMap<String, Vec<Measurable>> = BTreeMap::new();
     for m in &inventory.measurable {
-        by_file.entry(m.file).or_default().push(m.clone());
-    }
-    let mut work = Vec::new();
-    let mut unmeasured_language = 0usize;
-    for (file, targets) in by_file {
         let path = inventory
             .files
-            .get(file as usize)
-            .ok_or_else(|| format!("anchor names file {file}, which the model does not declare"))?;
+            .get(m.file as usize)
+            .ok_or_else(|| format!("anchor names file {}, which the model does not declare", m.file))?;
+        by_file.entry(path.clone()).or_default().push(m.clone());
+    }
+    code_metrics(args, &inventory, &src, &by_file, &open)?;
+    if args.history {
+        history_metrics(args, &inventory, &src, &by_file)?;
+    }
+    Ok(())
+}
+
+type Opener<'a> = &'a dyn Fn() -> Result<BufReader<File>, String>;
+
+/// The model rewritten with this pass's code measures.
+fn code_metrics(
+    args: &Args,
+    inventory: &model::Inventory,
+    src: &Path,
+    by_file: &BTreeMap<String, Vec<Measurable>>,
+    open: Opener<'_>,
+) -> Result<(), String> {
+    let mut work = Vec::new();
+    let mut unmeasured_language = 0usize;
+    for (path, targets) in by_file {
         match join::language(&inventory.lang, path) {
-            Some(lang) => work.push((path.clone(), lang, targets)),
+            Some(lang) => work.push((path.clone(), lang, targets.clone())),
             None => unmeasured_language += targets.len(),
         }
     }
@@ -158,7 +204,7 @@ fn run(args: &Args) -> Result<(), String> {
         return Ok(());
     }
 
-    let outcomes = measure_all(&src, &work, args.jobs);
+    let outcomes = measure_all(src, &work, args.jobs);
 
     let mut values: HashMap<u32, Vec<(&'static str, String)>> = HashMap::new();
     let mut tally = Tally::default();
@@ -215,16 +261,94 @@ fn run(args: &Args) -> Result<(), String> {
     Ok(())
 }
 
+/// The side-car beside the written model: `X.jsonl` → `X.history-metrics.jsonl`.
+fn sidecar_path(model: &Path) -> PathBuf {
+    let name = model
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let stem = name.strip_suffix(".jsonl").unwrap_or(&name);
+    model.with_file_name(format!("{stem}.history-metrics.jsonl"))
+}
+
+/// Change history at the model's commit, into the side-car (PLAN.md §18.2).
+fn history_metrics(
+    args: &Args,
+    inventory: &model::Inventory,
+    src: &Path,
+    by_file: &BTreeMap<String, Vec<Measurable>>,
+) -> Result<(), String> {
+    let wanted = args.reference.as_deref().or(inventory.commit.as_deref());
+    let reference = history::resolve(src, wanted)?;
+    // An entity on its parent's anchor would only repeat its parent's blame.
+    let work: Vec<(String, Vec<Measurable>)> = by_file
+        .iter()
+        .map(|(path, targets)| (path.clone(), targets.iter().filter(|t| !t.implicit).cloned().collect()))
+        .collect();
+    let histories = history::measure(&reference, src, &work, jobs(args.jobs, work.len()))?;
+    let mut keys = HashMap::new();
+    for m in &inventory.measurable {
+        let module = inventory.modules.get(&m.module).ok_or_else(|| {
+            format!(
+                "entity {} names module {}, which is not a module record",
+                m.entity, m.module
+            )
+        })?;
+        let key = history::Key {
+            module: module.clone(),
+            symbol: m.symbol.clone(),
+            disambiguator: m.disambiguator.clone(),
+        };
+        keys.insert(m.entity, key);
+    }
+    let provenance = history::Provenance {
+        lang: &inventory.lang,
+        root: inventory.root.as_deref(),
+        reference: &reference,
+    };
+    let out = args
+        .history_out
+        .clone()
+        .unwrap_or_else(|| sidecar_path(args.out.as_ref().unwrap_or(&args.model)));
+    let (files, entities) = write_atomically(&out, |sink| {
+        history::write(sink, &provenance, &histories, &keys).map_err(|e| e.to_string())
+    })?;
+
+    let skipped = |why: history::Skipped| histories.iter().filter(|h| h.skipped == Some(why)).count();
+    let mut text = format!(
+        "codegraph-metrics: history at {} (@{}): {files} files, {entities} entities blamed → {}",
+        &reference.commit[..12.min(reference.commit.len())],
+        reference.time,
+        out.display()
+    );
+    for (why, label) in [
+        (history::Skipped::Differs, "differ from that commit (file-level only)"),
+        (history::Skipped::Untracked, "untracked"),
+        (history::Skipped::Failed, "failed to blame"),
+    ] {
+        let n = skipped(why);
+        if n > 0 {
+            text.push_str(&format!("; {n} files {label}"));
+        }
+    }
+    eprintln!("{text}");
+    Ok(())
+}
+
+fn jobs(wanted: Option<usize>, work: usize) -> usize {
+    wanted
+        .or_else(|| std::thread::available_parallelism().ok().map(usize::from))
+        .unwrap_or(1)
+        .min(work.max(1))
+}
+
 /// Every file parsed once, on `jobs` threads; results in `work` order.
 fn measure_all(
     src: &Path,
     work: &[(String, big_code_analysis::LANG, Vec<Measurable>)],
-    jobs: Option<usize>,
+    wanted: Option<usize>,
 ) -> Vec<Outcome> {
-    let jobs = jobs
-        .or_else(|| std::thread::available_parallelism().ok().map(usize::from))
-        .unwrap_or(1)
-        .min(work.len().max(1));
+    let jobs = jobs(wanted, work.len());
     let next = AtomicUsize::new(0);
     let results: Mutex<Vec<Option<Outcome>>> = Mutex::new((0..work.len()).map(|_| None).collect());
     std::thread::scope(|scope| {
@@ -280,10 +404,7 @@ fn merged(old: &str, fresh: Option<&[(&'static str, String)]>) -> Option<String>
 }
 
 /// Writes through a temporary sibling, renamed over `out` only on success.
-fn write_atomically(
-    out: &Path,
-    body: impl FnOnce(&mut BufWriter<File>) -> Result<usize, String>,
-) -> Result<usize, String> {
+fn write_atomically<T>(out: &Path, body: impl FnOnce(&mut BufWriter<File>) -> Result<T, String>) -> Result<T, String> {
     let name = out
         .file_name()
         .ok_or_else(|| format!("{}: not a file path", out.display()))?;

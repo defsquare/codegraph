@@ -7,9 +7,11 @@ import {
   UnknownMetricError,
   UnknownScaleError,
   type CityModel,
+  type MetricSource,
 } from "@codegraph/city";
 import type { CityBuildOptions, CityOptions } from "../args.js";
 import { UsageError, type ExitCode } from "../exit.js";
+import { historyMetric, loadHistoryJoin, type HistoryJoin } from "../history-metrics.js";
 import { errLine, errLines, type IoSink } from "../io.js";
 import { loadExitCode, loadModelFiles } from "../load.js";
 import { resolveView } from "../view.js";
@@ -43,7 +45,7 @@ export function cityCommand(options: CityOptions, io: IoSink): ExitCode {
   const loaded = loadModelFiles(options.models);
   const graph = buildGraph(loaded.union);
 
-  const city = cityOf(graph, options);
+  const city = cityOf(graph, options, loadHistoryJoin(options.historyMetrics, options.models));
   const laidOut = options.layout;
   const artifact = cityToJsonString(laidOut ? layoutCity(city) : city);
 
@@ -63,8 +65,17 @@ export function cityCommand(options: CityOptions, io: IoSink): ExitCode {
   return loadExitCode(loaded);
 }
 
-/** The city of a graph under the CLI's flags — shared with `serve`. */
-export function cityOf(graph: ReturnType<typeof buildGraph>, options: CityBuildOptions): CityModel {
+/**
+ * The city of a graph under the CLI's flags — shared with `serve`. `history`
+ * is the model's change-history side-car, joined (history-metrics.ts): it
+ * gives the `history:`/`history-file:` metric names their sources.
+ */
+export function cityOf(
+  graph: ReturnType<typeof buildGraph>,
+  options: CityBuildOptions,
+  history?: HistoryJoin,
+): CityModel {
+  const metric = (name: string): string | MetricSource => historyMetric(name, history) ?? name;
   try {
     const framework =
       options.framework === undefined ? undefined : FRAMEWORK_PROFILES[options.framework];
@@ -72,9 +83,9 @@ export function cityOf(graph: ReturnType<typeof buildGraph>, options: CityBuildO
       view: resolveView(options),
       ...(options.name === undefined ? {} : { name: options.name }),
       ...(framework === undefined ? {} : { framework }),
-      height: { metric: options.height, scale: options.heightScale },
-      footprint: { metric: options.footprint, scale: options.footprintScale },
-      carry: options.carry,
+      height: { metric: metric(options.height), scale: options.heightScale },
+      footprint: { metric: metric(options.footprint), scale: options.footprintScale },
+      carry: options.carry.map(metric),
     });
   } catch (error) {
     if (error instanceof UnknownMetricError || error instanceof UnknownScaleError) {

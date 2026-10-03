@@ -1,0 +1,7 @@
+{"t":"header","schemaVersion":"1.0.0","lang":"java","extractor":{"name":"hand-written","version":"0"},"root":"src","dict":{"kinds":["class","method","package"],"traits":["TChildOf","TInvocable","TMetrics","TModule","TNamed","TSourceAnchor","TType","TTypedEntity","TWithAccesses","TWithChildren","TWithImplements","TWithInheritances","TWithInvocations","TWithLocalVariables","TWithParameters"],"edges":[],"provenance":[]}}
+{"t":"f","i":0,"path":"com/acme/Shop.java"}
+{"t":"e","i":0,"k":2,"tr":[4,9,3],"m":0,"s":"com.acme","name":"com.acme","isStub":false,"definedIn":[0]}
+{"t":"e","i":1,"k":0,"tr":[4,5,9,0,6,11,10,2],"m":0,"s":"Shop","name":"Shop","isStub":false,"parent":0,"metrics":{"sloc":9},"anchor":[0,3,11]}
+{"t":"e","i":2,"k":1,"tr":[4,5,9,0,7,1,14,13,12,8,2],"m":0,"s":"Shop.add(int)","name":"add","signature":"add(int)","parent":1,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[0,4,6]}
+{"t":"e","i":3,"k":1,"tr":[4,5,9,0,7,1,14,13,12,8,2],"m":0,"s":"Shop.sub(int)","name":"sub","signature":"sub(int)","parent":1,"parameters":[],"localVariables":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[0,8,10]}
+{"t":"eof","counts":{"files":1,"entities":4,"edges":0}}

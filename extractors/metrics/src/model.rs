@@ -37,16 +37,24 @@ pub struct Measurable {
     pub implicit: bool,
     /// The extractor's own `sloc`, when it wrote one: the join's witness.
     pub sloc: Option<u64>,
+    /// The natural key's `(m, s, d)`: module surrogate, symbol, disambiguator.
+    pub module: u32,
+    pub symbol: String,
+    pub disambiguator: Option<String>,
 }
 
 /// Pass one's result.
 pub struct Inventory {
     pub lang: String,
     pub root: Option<String>,
+    /// The header's `repository.commit`: the commit the model describes.
+    pub commit: Option<String>,
     pub files: Vec<String>,
     pub measurable: Vec<Measurable>,
     /// Entities declaring `TMetrics`, anchored or not.
     pub declaring: usize,
+    /// Module surrogate → module path: a module names itself (contract §2).
+    pub modules: HashMap<u32, String>,
 }
 
 #[derive(Deserialize)]
@@ -54,7 +62,14 @@ struct HeaderRecord {
     lang: String,
     #[serde(default)]
     root: Option<String>,
+    #[serde(default)]
+    repository: Option<RepositoryRecord>,
     dict: Dict,
+}
+
+#[derive(Deserialize)]
+struct RepositoryRecord {
+    commit: String,
 }
 
 #[derive(Deserialize)]
@@ -72,6 +87,10 @@ struct FileRecord {
 struct EntityRecord {
     i: u32,
     tr: Vec<usize>,
+    m: u32,
+    s: String,
+    #[serde(default)]
+    d: Option<String>,
     #[serde(default)]
     parent: Option<u32>,
     #[serde(default)]
@@ -127,6 +146,7 @@ pub fn inventory(input: impl BufRead) -> Result<Inventory, String> {
     let mut anchors: Vec<Option<(u32, u32, u32)>> = Vec::new();
     let mut measurable = Vec::new();
     let mut declaring = 0;
+    let mut modules = HashMap::new();
     for (number, line) in input.lines().enumerate() {
         let line = line.map_err(|e| format!("reading the model: {e}"))?;
         if line.trim().is_empty() {
@@ -154,6 +174,9 @@ pub fn inventory(input: impl BufRead) -> Result<Inventory, String> {
                 }
                 parents.push(record.parent);
                 anchors.push(record.anchor);
+                if record.m == record.i {
+                    modules.insert(record.i, record.s.clone());
+                }
                 if !index.metrics.is_some_and(|t| record.tr.contains(&t)) {
                     continue;
                 }
@@ -173,6 +196,9 @@ pub fn inventory(input: impl BufRead) -> Result<Inventory, String> {
                         depth: 0,
                         implicit: false,
                         sloc,
+                        module: record.m,
+                        symbol: record.s,
+                        disambiguator: record.d,
                     });
                 }
             }
@@ -190,9 +216,11 @@ pub fn inventory(input: impl BufRead) -> Result<Inventory, String> {
     Ok(Inventory {
         lang: header.lang,
         root: header.root,
+        commit: header.repository.map(|r| r.commit),
         files,
         measurable,
         declaring,
+        modules,
     })
 }
 

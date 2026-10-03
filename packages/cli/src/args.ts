@@ -253,7 +253,8 @@ export const EXPORT_SPEC: CommandSpec = {
 function metricHelp(channel: string): string {
   return (
     `Metric driving ${channel}. Built in: ${metricNames().join(", ")}. ` +
-    `Open forms: ${METRIC_PREFIXES.map((form) => `${form.prefix}<key>`).join(", ")}.`
+    `Open forms: ${METRIC_PREFIXES.map((form) => `${form.prefix}<key>`).join(", ")}. ` +
+    `With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file).`
   );
 }
 
@@ -296,6 +297,14 @@ const CITY_CHANNEL_OPTIONS: readonly OptionSpec[] = [
       type: "string",
       describe: "Extra metrics to measure onto every building, comma-separated, bound to nothing.",
       placeholder: "M1,M2",
+    },
+    {
+      name: "history-metrics",
+      type: "string",
+      describe:
+        "The change-history side-car the history:/history-file: metrics read (what " +
+        "'codegraph-metrics --history' wrote). Default: <model>.history-metrics.jsonl beside each model.",
+      placeholder: "FILE",
     },
     {
       name: "framework",
@@ -1119,6 +1128,8 @@ export interface CityBuildOptions extends ViewOptions {
   readonly name: string | undefined;
   /** `--framework NAME`: classify types by that framework; undefined = no roles. */
   readonly framework: string | undefined;
+  /** `--history-metrics FILE`; absent = `<model>.history-metrics.jsonl` beside each model, if any. */
+  readonly historyMetrics?: string | undefined;
 }
 
 export interface CityOptions extends ModelInputOptions, CityBuildOptions {
@@ -1582,6 +1593,7 @@ function cityBuildOf(values: ParsedValues): CityBuildOptions {
     carry: metricList(stringOf(values, "carry")),
     name: stringOf(values, "name"),
     framework: stringOf(values, "framework"),
+    historyMetrics: stringOf(values, "history-metrics"),
     ...viewOf(values),
   };
 }

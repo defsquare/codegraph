@@ -192,6 +192,9 @@ node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256
 #   Rust ≥ 1.94 to build, nothing to run; docs/metrics.md. `test.sh --metrics` = cargo test: the join's unit
 #   tests + the four fixtures/<lang>/expected/model.metrics.jsonl byte for byte (and a re-run is the identity);
 #   CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test --manifest-path extractors/metrics/Cargo.toml rewrites them
+./bin/codegraph-metrics model.jsonl --history [--ref REV]   # + model.history-metrics.jsonl: git history per
+#   file and per entity at the model's commit — a SIDE-CAR, never the model (PLAN §18.2); then
+./bin/codegraph serve model.jsonl --height history-file:churn_recent --carry history:risk_score
 
 ./bin/codegraph analyze model.jsonl --report deps  # after `pnpm -r build`
 ./bin/codegraph serve model.jsonl                  # navigator + City tab at http://localhost:4177

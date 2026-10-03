@@ -26,12 +26,26 @@ fn enrich(lang: &str) {
     let out = std::env::temp_dir().join(format!("codegraph-metrics-{lang}-{}.jsonl", std::process::id()));
     let model = fixture.join("expected/model.jsonl");
     let src = fixture.join("src");
-    let first = run(&[model.as_os_str(), "--src".as_ref(), src.as_os_str(), "--out".as_ref(), out.as_os_str()]);
-    assert!(first.status.success(), "{lang}: {}", String::from_utf8_lossy(&first.stderr));
+    let first = run(&[
+        model.as_os_str(),
+        "--src".as_ref(),
+        src.as_os_str(),
+        "--out".as_ref(),
+        out.as_os_str(),
+    ]);
+    assert!(
+        first.status.success(),
+        "{lang}: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
     let got = std::fs::read(&out).expect("the output was written");
 
     let again = run(&[out.as_os_str(), "--src".as_ref(), src.as_os_str()]);
-    assert!(again.status.success(), "{lang}: {}", String::from_utf8_lossy(&again.stderr));
+    assert!(
+        again.status.success(),
+        "{lang}: {}",
+        String::from_utf8_lossy(&again.stderr)
+    );
     let twice = std::fs::read(&out).expect("the output was rewritten in place");
     std::fs::remove_file(&out).ok();
     assert!(got == twice, "{lang}: a second run over its own output changed it");
@@ -40,8 +54,12 @@ fn enrich(lang: &str) {
         std::fs::write(&expected, &got).expect("the snapshot is writable");
         return;
     }
-    let want = std::fs::read(&expected)
-        .unwrap_or_else(|_| panic!("{} is missing: CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test", expected.display()));
+    let want = std::fs::read(&expected).unwrap_or_else(|_| {
+        panic!(
+            "{} is missing: CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test",
+            expected.display()
+        )
+    });
     assert!(
         got == want,
         "{lang}: the enriched fixture differs from {} — if intended, CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test and review the diff",
@@ -78,5 +96,8 @@ fn exit_codes_follow_the_extractor_contract() {
     let version = run(&["--version".as_ref()]);
     assert!(version.status.success());
     let text = String::from_utf8_lossy(&version.stdout);
-    assert!(text.starts_with("codegraph-metrics ") && text.contains("big-code-analysis 2.2.0"), "{text}");
+    assert!(
+        text.starts_with("codegraph-metrics ") && text.contains("big-code-analysis 2.2.0"),
+        "{text}"
+    );
 }
