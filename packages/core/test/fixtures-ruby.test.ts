@@ -424,17 +424,19 @@ describe("fixtures/ruby/expected/model.jsonl", () => {
   it("attributes a call nothing known answers to the sole library ancestor — derived, never declared", () => {
     const model = loadSnapshot();
     const base = "rb:<gems>/ActiveRecord::Base";
-    // `has_many`, `validates`, `where`: on the class side only ActiveRecord::Base is above.
-    expect(outgoing(model, "invocation", RECORD)).toEqual([`${base}@5`, `${base}@6`]);
-    expect(outgoing(model, "invocation", `${RECORD}.recent#self`)).toEqual([`${base}@9`]);
+    const ledger = `${LIB}ledger.rb/AcmeOrder::Ledger`;
+    // `has_many`, `where`: ActiveRecord::Base is the one library above, and nothing is mixed in.
+    expect(outgoing(model, "invocation", ledger)).toEqual([`${base}@4`]);
+    expect(outgoing(model, "invocation", `${ledger}.current#self`)).toEqual([`${base}@9`]);
     for (const e of model.edges) {
       if (e.edge === "invocation" && e.to === base) expect(e.provenance, e.from).toBe("derived");
     }
     // A class body that calls says so.
-    expect(entity(model, RECORD)["traits"]).toContain("TWithInvocations");
-    // `update!` on an INSTANCE: two libraries are above (the superclass and
-    // ActiveModel::Validations) — no honest target, no edge.
-    expect(outgoing(model, "invocation", `${RECORD}.archive!`)).toEqual([]);
+    expect(entity(model, ledger)["traits"]).toContain("TWithInvocations");
+    // `define_method` with a computed name gives the INSTANCES methods no key
+    // can name: what an instance does not declare proves nothing, while what
+    // the class itself answers is as known as before (M18c).
+    expect(outgoing(model, "invocation", `${ledger}.close!`)).toEqual([]);
     // Every derived edge is an inference the profile names: an import no `require`
     // writes, or a call or an accessor on a receiver the extractor typed.
     for (const e of model.edges) {
@@ -443,6 +445,58 @@ describe("fixtures/ruby/expected/model.jsonl", () => {
       }
       expect(e.candidates, e.from).toBeUndefined();
     }
+  });
+
+  it("refuses the attribution as soon as a second library could answer, on either side (M18c)", () => {
+    const model = loadSnapshot();
+    // `validates` IS ActiveModel::Validations': its `included` hook extends
+    // the class. A library's mixin is one more that could answer — `has_many`
+    // and `where` on the class no less than `update!` on an instance.
+    expect(outgoing(model, "invocation", RECORD)).toEqual([]);
+    expect(outgoing(model, "invocation", `${RECORD}.recent#self`)).toEqual([]);
+    expect(outgoing(model, "invocation", `${RECORD}.archive!`)).toEqual([]);
+    expect(entity(model, RECORD)["traits"]).not.toContain("TWithInvocations");
+  });
+
+  it("finds the class methods an included hook gives the includer — derived (M18c)", () => {
+    const model = loadSnapshot();
+    const file = `${LIB}auditable.rb`;
+    const invoice = `${LIB}invoice.rb/AcmeOrder::Invoice`;
+    // `class_methods do … end` IS the body of the concern's ClassMethods module.
+    const classMethods = entity(model, `${file}/AcmeOrder::Auditable::ClassMethods`);
+    expect(classMethods["kind"]).toBe("module");
+    expect(classMethods["anchor"]).toEqual({ file: "lib/acme_order/auditable.rb", span: [10, 14] });
+    // The Rails way and the plain Ruby way (`base.extend(ClassMethods)`) land
+    // alike. Invoice never writes `extend`: the call is bound through the hook.
+    const audited = `${file}/AcmeOrder::Auditable::ClassMethods.audited`;
+    const stamp = `${file}/AcmeOrder::Stamped::ClassMethods.stamp`;
+    expect(outgoing(model, "invocation", invoice)).toEqual([`${audited}@7`, `${stamp}@8`]);
+    expect(outgoing(model, "invocation", `${invoice}.build#self`)).toEqual([`${audited}@11`]);
+    for (const e of model.edges) {
+      if (e.to === audited || e.to === stamp) expect(e.provenance, e.from).toBe("derived");
+    }
+    // What an INSTANCE of the includer answers is what `include` says: declared.
+    expect(hasEdge(model, "invocation", `${invoice}.settle`, `${file}/AcmeOrder::Auditable.audit!`)).toBe(true);
+    // No mixin edge is invented: Invoice writes two includes, and has two.
+    expect(outgoing(model, "traitUsage", invoice)).toEqual([
+      `${file}/AcmeOrder::Auditable@4`,
+      `${file}/AcmeOrder::Stamped@5`,
+    ]);
+    // What the hook itself names is read where it is written.
+    expect(hasEdge(model, "reference", `${file}/AcmeOrder::Auditable`, "rb:<ruby>/Comparable")).toBe(true);
+  });
+
+  it("stubs a namespace whose body must be elsewhere (M18c)", () => {
+    const model = loadSnapshot();
+    const hook = `${LIB}railtie.rb/Rails::AcmeOrderHook`;
+    // `class Rails::AcmeOrderHook` needs `Rails`. No file gives it a body, yet
+    // `logger` is answered by no bare module: its body is a library's.
+    expect(entity(model, hook)["isStub"]).toBe(false);
+    const rails = entity(model, "rb:<gems>/Rails");
+    expect(rails["isStub"]).toBe(true);
+    expect(rails["kind"]).toBe("module");
+    expect(hasEdge(model, "invocation", `${hook}.install`, "rb:<gems>/Rails")).toBe(true);
+    expect(hasEdge(model, "reference", `${hook}.install`, "rb:<gems>/Rails")).toBe(true);
   });
 
   it("writes a raise as a throw site, beside the reference it also is (M18b)", () => {

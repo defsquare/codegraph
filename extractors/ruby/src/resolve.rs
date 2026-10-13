@@ -8,7 +8,7 @@
 //! the VM's table can say; what a library would answer is never guessed.
 
 use crate::core_table::{CoreKind, CoreTable};
-use crate::declarations::{ConstPath, FileDecls, MixinKind, ScopeKind, Span, Superclass};
+use crate::declarations::{ConstPath, FileDecls, MixinKind, Receiver, ScopeKind, Span, Superclass, What};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -77,6 +77,9 @@ pub enum Ancestor {
 pub enum Step {
     Instance(Ancestor),
     Singleton(Ancestor),
+    /// The instance side of a module an `included` hook mixed in: nothing the
+    /// includer writes says so, and a method found there is an inference.
+    Hook(Ancestor),
 }
 
 /// What all the bodies of one constant path say together.
@@ -88,8 +91,13 @@ pub struct TypeFacts {
     pub prepends: Vec<Ancestor>,
     pub extends: Vec<Ancestor>,
     pub extends_self: bool,
-    /// Some body defines methods no `def` writes.
-    pub dynamic: bool,
+    /// What including this module also extends the includer with, and includes into it.
+    pub hook_extends: Vec<Ancestor>,
+    pub hook_includes: Vec<Ancestor>,
+    pub concern: bool,
+    /// Some body defines methods no `def` writes, for its instances or for itself.
+    pub dynamic_instance: bool,
+    pub dynamic_singleton: bool,
     pub instance_methods: HashMap<String, Vec<Place>>,
     pub singleton_methods: HashMap<String, Vec<Place>>,
     /// Instance methods that also answer on the module (`module_function`).
@@ -104,20 +112,30 @@ pub struct TypeFacts {
 /// What a name finds along a chain.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Found<'w> {
-    /// A `def` the corpus writes, in every body that writes it.
-    Method { owner: &'w str, places: &'w [Place] },
+    /// A `def` the corpus writes, in every body that writes it; `hooked` when
+    /// only an `included` hook puts its owner in the chain.
+    Method {
+        owner: &'w str,
+        places: &'w [Place],
+        hooked: bool,
+    },
     /// An `attr_*` or a Struct member: a field, read or written.
     Accessor {
         owner: &'w str,
         on_class: bool,
         field: &'w str,
         write: bool,
+        hooked: bool,
     },
     /// The VM's own: the class or module that defines it.
     Core { owner: &'static str },
     /// Nothing known answers. `foreign` lists the libraries in the chain that
-    /// might; `dynamic` says a body in the chain defines methods at run time.
-    Missing { foreign: Vec<&'w str>, dynamic: bool },
+    /// might; `dynamic` names the first type in the chain that defines methods
+    /// at run time.
+    Missing {
+        foreign: Vec<&'w str>,
+        dynamic: Option<&'w str>,
+    },
 }
 
 pub struct Whitelist<'a> {
@@ -133,7 +151,13 @@ pub struct Whitelist<'a> {
     facts: HashMap<String, TypeFacts>,
     /// `def`s written at a file's top level, by name.
     toplevel: HashMap<String, Vec<Place>>,
+    /// Namespaces no file gives a body to whose body must exist elsewhere: a
+    /// library's, reopened by the corpus below it (`class Rails::Patch`).
+    foreign: HashSet<String>,
 }
+
+/// What a module nobody gave a body to still answers: `Module`'s own methods.
+const BARE_MODULE: [&str; 4] = ["Module", "Object", "Kernel", "BasicObject"];
 
 fn join(base: &str, rest: &[String]) -> String {
     let mut out = base.to_owned();
@@ -172,6 +196,7 @@ impl<'a> Whitelist<'a> {
             constants: HashMap::new(),
             facts: HashMap::new(),
             toplevel: HashMap::new(),
+            foreign: HashSet::new(),
         };
 
         // `class A::B` needs `A` resolved, and `A` may itself be declared
@@ -235,8 +260,61 @@ impl<'a> Whitelist<'a> {
                 }
             }
         }
+        whitelist.foreign = whitelist.inherited_namespaces(files);
         whitelist.gather_facts(files);
+        // A message is resolved through the ancestors, so the facts come
+        // first — and are read again once a namespace turns out a library's.
+        let messaged = whitelist.messaged_namespaces(files);
+        if !messaged.is_empty() {
+            whitelist.foreign.extend(messaged);
+            whitelist.gather_facts(files);
+        }
         whitelist
+    }
+
+    /// Namespaces a class inherits from and no file opens, even as a wrapper:
+    /// nothing vivifies a class, so its body is outside the corpus.
+    fn inherited_namespaces(&self, files: &[FileDecls]) -> HashSet<String> {
+        let opened: HashSet<&str> = self.fqns.iter().flatten().filter_map(|fqn| fqn.as_deref()).collect();
+        let mut out = HashSet::new();
+        for (file, decls) in files.iter().enumerate() {
+            for scope in &decls.scopes {
+                let Superclass::Constant(reference) = &scope.superclass else {
+                    continue;
+                };
+                let outside = self.nesting(files, file, scope.parent);
+                if let Resolution::Namespace { fqn } = self.resolve(&reference.path, &outside)
+                    && !opened.contains(fqn.as_str())
+                {
+                    out.insert(fqn);
+                }
+            }
+        }
+        out
+    }
+
+    /// Namespaces sent a message no bare module answers (`Rails.env`): the
+    /// corpus defines no method on them, so something else does.
+    fn messaged_namespaces(&self, files: &[FileDecls]) -> HashSet<String> {
+        let mut out = HashSet::new();
+        for (file, decls) in files.iter().enumerate() {
+            for site in &decls.sites {
+                let What::Call {
+                    receiver: Receiver::Constant(path),
+                    name,
+                } = &site.what
+                else {
+                    continue;
+                };
+                if BARE_MODULE.iter().any(|core| self.core.defines_instance(core, name)) {
+                    continue;
+                }
+                if let Resolution::Namespace { fqn } = self.resolve_at(files, file, site.scope, path) {
+                    out.insert(fqn);
+                }
+            }
+        }
+        out
     }
 
     /// One round: every scope's constant, and every assigned constant, under
@@ -331,8 +409,30 @@ impl<'a> Whitelist<'a> {
                     })
                     .collect();
 
+                let hooks: Vec<(MixinKind, Option<Ancestor>)> = scope
+                    .hooks
+                    .iter()
+                    .map(|hook| {
+                        (
+                            hook.kind,
+                            self.ancestor_of(&self.resolve(&hook.reference.path, &inside)),
+                        )
+                    })
+                    .collect();
+
                 let entry = facts.entry(fqn.to_owned()).or_default();
                 entry.is_module = scope.kind == ScopeKind::Module;
+                entry.concern |= scope.concern;
+                for (kind, ancestor) in hooks {
+                    let Some(ancestor) = ancestor else { continue };
+                    let list = match kind {
+                        MixinKind::Extend => &mut entry.hook_extends,
+                        MixinKind::Include | MixinKind::Prepend => &mut entry.hook_includes,
+                    };
+                    if !list.contains(&ancestor) {
+                        list.push(ancestor);
+                    }
+                }
                 if entry.superclass.is_none() {
                     entry.superclass = superclass;
                 }
@@ -348,7 +448,8 @@ impl<'a> Whitelist<'a> {
                     }
                 }
                 entry.extends_self |= scope.extends_self;
-                entry.dynamic |= scope.dynamic;
+                entry.dynamic_instance |= scope.dynamic_instance;
+                entry.dynamic_singleton |= scope.dynamic_singleton;
                 for (index, method) in scope.methods.iter().enumerate() {
                     let place = Place {
                         file,
@@ -401,6 +502,16 @@ impl<'a> Whitelist<'a> {
                         .entry(format!("{member}="))
                         .or_insert_with(|| format!("@{member}"));
                 }
+            }
+        }
+        // ActiveSupport::Concern extends an includer with the concern's
+        // `ClassMethods`, before it runs the `included` block.
+        for (fqn, entry) in facts.iter_mut().filter(|(_, entry)| entry.concern) {
+            let class_methods = format!("{fqn}::ClassMethods");
+            if self.types.contains_key(&class_methods) {
+                let ancestor = Ancestor::Corpus(class_methods);
+                entry.hook_extends.retain(|known| *known != ancestor);
+                entry.hook_extends.insert(0, ancestor);
             }
         }
         self.facts = facts;
@@ -477,7 +588,7 @@ impl<'a> Whitelist<'a> {
         let nesting = self.nesting(files, file, Some(scope));
         let is_known = |name: &str| self.known.contains(name) || self.core.contains(name);
         if path.absolute {
-            return self.classify(join("", &path.segments));
+            return self.classify(self.qualified(path.segments[0].clone(), &path.segments[1..]));
         }
         let head = &path.segments[0];
         let lexical = nesting
@@ -496,7 +607,33 @@ impl<'a> Whitelist<'a> {
             })
         };
         let base = lexical.or_else(inherited).unwrap_or_else(|| head.clone());
-        self.classify(join(&base, &path.segments[1..]))
+        self.classify(self.qualified(base, &path.segments[1..]))
+    }
+
+    /// `Child::LIMIT`: each segment is looked up in what the path names so
+    /// far, then in what THAT inherits from — never at the top level.
+    fn qualified(&self, base: String, rest: &[String]) -> String {
+        let is_known = |name: &str| self.known.contains(name) || self.core.contains(name);
+        let mut current = base;
+        for segment in rest {
+            let direct = format!("{current}::{segment}");
+            if !is_known(&direct) && self.facts.contains_key(&current) {
+                let inherited = self.instance_chain(&current).into_iter().skip(1).find_map(|step| {
+                    match step {
+                        Step::Instance(Ancestor::Corpus(ancestor)) => Some(format!("{ancestor}::{segment}")),
+                        Step::Instance(Ancestor::Core(ancestor)) if !BARE_MODULE.contains(&ancestor) => {
+                            Some(format!("{ancestor}::{segment}"))
+                        }
+                        _ => None,
+                    }
+                    .filter(|candidate| is_known(candidate))
+                });
+                current = inherited.unwrap_or(direct);
+            } else {
+                current = direct;
+            }
+        }
+        current
     }
 
     /// What a fully qualified constant is. The VM's types come first: it
@@ -528,7 +665,7 @@ impl<'a> Whitelist<'a> {
         if let Some(place) = self.constant_places(&fqn).first() {
             return Resolution::Value { place: *place, fqn };
         }
-        if self.known.contains(&fqn) {
+        if self.known.contains(&fqn) && !self.foreign.contains(&fqn) {
             Resolution::Namespace { fqn }
         } else {
             Resolution::Gems { fqn }
@@ -556,6 +693,10 @@ impl<'a> Whitelist<'a> {
                 for included in facts.iter().flat_map(|facts| facts.includes.iter().rev()) {
                     self.push_instance(included, out, visiting);
                 }
+                // What its `included` hook includes into whatever includes it.
+                for hooked in facts.iter().flat_map(|facts| facts.hook_includes.iter().rev()) {
+                    self.push_hooked(hooked, out, visiting);
+                }
                 if self.core.name(fqn).is_some() {
                     // A corpus body of a core class: the rest is the VM's.
                     for core in self.core.ancestors(fqn) {
@@ -572,6 +713,53 @@ impl<'a> Whitelist<'a> {
                 }
             }
             Ancestor::Gems(_) => self.push(Step::Instance(ancestor.clone()), out),
+        }
+    }
+
+    /// Pushes a module a hook mixed in, with what it includes, as hook stops —
+    /// unless the chain already holds it by what the type itself writes.
+    fn push_hooked(&self, ancestor: &Ancestor, out: &mut Vec<Step>, visiting: &mut Vec<String>) {
+        let mut chain = Vec::new();
+        self.push_instance(ancestor, &mut chain, visiting);
+        for step in chain {
+            let step = match step {
+                Step::Instance(Ancestor::Core(core)) | Step::Hook(Ancestor::Core(core)) => {
+                    Step::Instance(Ancestor::Core(core))
+                }
+                Step::Instance(ancestor) | Step::Hook(ancestor) => {
+                    if out.contains(&Step::Instance(ancestor.clone())) {
+                        continue;
+                    }
+                    Step::Hook(ancestor)
+                }
+                singleton @ Step::Singleton(_) => singleton,
+            };
+            self.push(step, out);
+        }
+    }
+
+    /// What the modules `facts` mixes in gave its class side: a corpus
+    /// module's hook says what; a library's may have given anything.
+    fn push_hook_extends(&self, facts: &TypeFacts, out: &mut Vec<Step>) {
+        let mut mixed = Vec::new();
+        for mixin in facts.prepends.iter().rev().chain(facts.includes.iter().rev()) {
+            self.push_instance(mixin, &mut mixed, &mut Vec::new());
+        }
+        for step in &mixed {
+            match step {
+                Step::Instance(Ancestor::Corpus(module)) | Step::Hook(Ancestor::Corpus(module)) => {
+                    let extends = self.facts.get(module).map(|facts| facts.hook_extends.as_slice());
+                    for extended in extends.unwrap_or(&[]).iter().rev() {
+                        self.push_hooked(extended, out, &mut Vec::new());
+                    }
+                }
+                Step::Instance(library @ Ancestor::Gems(_)) | Step::Hook(library @ Ancestor::Gems(_))
+                    if !out.contains(&Step::Instance(library.clone())) =>
+                {
+                    self.push(Step::Hook(library.clone()), out);
+                }
+                _ => {}
+            }
         }
     }
 
@@ -618,6 +806,9 @@ impl<'a> Whitelist<'a> {
                 let facts = self.facts.get(fqn);
                 for extended in facts.iter().flat_map(|facts| facts.extends.iter().rev()) {
                     self.push_instance(extended, out, &mut Vec::new());
+                }
+                if let Some(facts) = facts {
+                    self.push_hook_extends(facts, out);
                 }
                 if self.core.name(fqn).is_some() {
                     for core in self.core.superclasses(fqn) {
@@ -682,18 +873,25 @@ impl<'a> Whitelist<'a> {
     /// The first thing along `chain` that answers `name`.
     pub fn lookup<'w>(&'w self, chain: &'w [Step], name: &str) -> Found<'w> {
         let mut foreign: Vec<&'w str> = Vec::new();
-        let mut dynamic = false;
+        let mut dynamic: Option<&'w str> = None;
         // An alias found at one stop renames what is looked for from there on.
         let mut name = name;
         for step in chain {
             match step {
-                Step::Instance(Ancestor::Corpus(fqn)) => {
+                Step::Instance(Ancestor::Corpus(fqn)) | Step::Hook(Ancestor::Corpus(fqn)) => {
+                    let hooked = matches!(step, Step::Hook(_));
                     let Some(facts) = self.facts.get(fqn) else { continue };
-                    dynamic |= facts.dynamic;
+                    if facts.dynamic_instance {
+                        dynamic.get_or_insert(fqn);
+                    }
                     let method = facts.instance_aliases.get(name).map(String::as_str).unwrap_or(name);
                     name = method;
                     if let Some(places) = facts.instance_methods.get(method) {
-                        return Found::Method { owner: fqn, places };
+                        return Found::Method {
+                            owner: fqn,
+                            places,
+                            hooked,
+                        };
                     }
                     if let Some(field) = facts.instance_accessors.get(name) {
                         return Found::Accessor {
@@ -701,22 +899,33 @@ impl<'a> Whitelist<'a> {
                             on_class: false,
                             field,
                             write: name.ends_with('='),
+                            hooked,
                         };
                     }
                 }
                 Step::Singleton(Ancestor::Corpus(fqn)) => {
                     let Some(facts) = self.facts.get(fqn) else { continue };
-                    dynamic |= facts.dynamic;
+                    if facts.dynamic_singleton {
+                        dynamic.get_or_insert(fqn);
+                    }
                     let method = facts.singleton_aliases.get(name).map(String::as_str).unwrap_or(name);
                     name = method;
                     if let Some(places) = facts.singleton_methods.get(method) {
-                        return Found::Method { owner: fqn, places };
+                        return Found::Method {
+                            owner: fqn,
+                            places,
+                            hooked: false,
+                        };
                     }
                     // `module_function`, `extend self`: an instance method answers on the module.
                     if (facts.extends_self || facts.module_functions.contains(method))
                         && let Some(places) = facts.instance_methods.get(method)
                     {
-                        return Found::Method { owner: fqn, places };
+                        return Found::Method {
+                            owner: fqn,
+                            places,
+                            hooked: false,
+                        };
                     }
                     if let Some(field) = facts.singleton_accessors.get(name) {
                         return Found::Accessor {
@@ -724,10 +933,11 @@ impl<'a> Whitelist<'a> {
                             on_class: true,
                             field,
                             write: name.ends_with('='),
+                            hooked: false,
                         };
                     }
                 }
-                Step::Instance(Ancestor::Core(owner)) => {
+                Step::Instance(Ancestor::Core(owner)) | Step::Hook(Ancestor::Core(owner)) => {
                     if self.core.defines_instance(owner, name) {
                         return Found::Core { owner };
                     }
@@ -737,7 +947,9 @@ impl<'a> Whitelist<'a> {
                         return Found::Core { owner };
                     }
                 }
-                Step::Instance(Ancestor::Gems(fqn)) | Step::Singleton(Ancestor::Gems(fqn)) => {
+                Step::Instance(Ancestor::Gems(fqn))
+                | Step::Singleton(Ancestor::Gems(fqn))
+                | Step::Hook(Ancestor::Gems(fqn)) => {
                     if !foreign.contains(&fqn.as_str()) {
                         foreign.push(fqn);
                     }
@@ -795,6 +1007,9 @@ mod tests {
                 Step::Singleton(Ancestor::Corpus(name)) => format!("{name}.self"),
                 Step::Singleton(Ancestor::Core(name)) => format!("<ruby>/{name}.self"),
                 Step::Singleton(Ancestor::Gems(name)) => format!("<gems>/{name}.self"),
+                Step::Hook(Ancestor::Corpus(name)) => format!("{name} (hook)"),
+                Step::Hook(Ancestor::Core(name)) => format!("<ruby>/{name} (hook)"),
+                Step::Hook(Ancestor::Gems(name)) => format!("<gems>/{name} (hook)"),
             })
             .collect()
     }
@@ -997,6 +1212,49 @@ mod tests {
     }
 
     #[test]
+    fn a_bodiless_namespace_is_a_library_only_on_evidence() {
+        let files = corpus(&[
+            "class Rails::Patch; def x; end; end\nclass Admin::Users; def y; end; end\nclass Legacy::Base::Child < Legacy::Base; end\nmodule Wrapped\n  class Inner; def a; end; end\nend\nclass Odd < Wrapped; end\n",
+            "class Boot\n  def run\n    Rails.env\n    Admin.name\n    Admin.const_get(:Users)\n  end\nend\n",
+        ]);
+        let whitelist = Whitelist::build(&files, core_table::table());
+        // `env` is answered by no bare module: the body of `Rails` is outside the corpus.
+        assert_eq!(
+            whitelist.resolve(&path("Rails"), &[]),
+            Resolution::Gems { fqn: "Rails".into() }
+        );
+        // A class inherits from a path the corpus never opens: a library's class.
+        assert_eq!(
+            whitelist.resolve(&path("Legacy::Base"), &[]),
+            Resolution::Gems {
+                fqn: "Legacy::Base".into()
+            }
+        );
+        assert_eq!(
+            whitelist.resolve(&path("Legacy"), &[]),
+            Resolution::Namespace { fqn: "Legacy".into() }
+        );
+        // `name` and `const_get` are what any module answers.
+        assert_eq!(
+            whitelist.resolve(&path("Admin"), &[]),
+            Resolution::Namespace { fqn: "Admin".into() }
+        );
+        // A wrapper the corpus writes exists by that alone: inheriting from it proves nothing.
+        assert_eq!(
+            whitelist.resolve(&path("Wrapped"), &[]),
+            Resolution::Namespace { fqn: "Wrapped".into() }
+        );
+        // What the corpus opens below a library's namespace is still declared.
+        assert_eq!(
+            whitelist.resolve(&path("Rails::Patch"), &[]),
+            Resolution::Declared {
+                fqn: "Rails::Patch".into(),
+                file: 0
+            }
+        );
+    }
+
+    #[test]
     fn a_core_constant_resolves_below_its_core_namespace() {
         let files = corpus(&["class File\n  def patched; end\nend\n"]);
         let whitelist = Whitelist::build(&files, core_table::table());
@@ -1039,6 +1297,44 @@ mod tests {
         assert_eq!(
             whitelist.resolve(&path("LIMIT"), &["Order"]),
             Resolution::Gems { fqn: "LIMIT".into() }
+        );
+    }
+
+    #[test]
+    fn a_qualified_constant_is_found_through_the_ancestors_of_its_qualifier() {
+        // `Child::LIMIT`: Ruby looks in Child, then in what Child inherits from.
+        let files = corpus(&[
+            "module Limits\n  MAX = 9\nend\nclass Base\n  include Limits\n  LIMIT = 3\n  class Inner; def x; end; end\nend\nclass Child < Base; def y; end; end\nclass User\n  def go\n    Child::LIMIT\n  end\nend\n",
+        ]);
+        let whitelist = Whitelist::build(&files, core_table::table());
+        let user = files[0]
+            .scopes
+            .iter()
+            .position(|scope| scope.path.as_ref().is_some_and(|p| p.segments == ["User"]))
+            .unwrap();
+        let at = |text: &str| whitelist.resolve_at(&files, 0, user, &path(text));
+        assert!(matches!(at("Child::LIMIT"), Resolution::Value { fqn, .. } if fqn == "Base::LIMIT"));
+        assert!(matches!(at("Child::MAX"), Resolution::Value { fqn, .. } if fqn == "Limits::MAX"));
+        assert_eq!(
+            at("Child::Inner"),
+            Resolution::Declared {
+                fqn: "Base::Inner".into(),
+                file: 0
+            }
+        );
+        assert_eq!(
+            at("::Child::Inner"),
+            Resolution::Declared {
+                fqn: "Base::Inner".into(),
+                file: 0
+            }
+        );
+        // Nothing in the chain declares it: still taken as written, a library's.
+        assert_eq!(
+            at("Child::Nope"),
+            Resolution::Gems {
+                fqn: "Child::Nope".into()
+            }
         );
     }
 
@@ -1141,7 +1437,8 @@ mod tests {
                 owner: "Order",
                 on_class: false,
                 field: "@total",
-                write: false
+                write: false,
+                hooked: false
             }
         );
         assert_eq!(
@@ -1150,7 +1447,8 @@ mod tests {
                 owner: "Order",
                 on_class: false,
                 field: "@note",
-                write: true
+                write: true,
+                hooked: false
             }
         );
         assert_eq!(whitelist.lookup(&instance, "puts"), Found::Core { owner: "Kernel" });
@@ -1158,7 +1456,7 @@ mod tests {
             whitelist.lookup(&instance, "nope"),
             Found::Missing {
                 foreign: vec![],
-                dynamic: false
+                dynamic: None
             }
         );
         let on_class = whitelist.singleton_chain("Order");
@@ -1172,7 +1470,8 @@ mod tests {
                 owner: "Order",
                 on_class: true,
                 field: "@registry",
-                write: true
+                write: true,
+                hooked: false
             }
         );
         assert_eq!(
@@ -1185,7 +1484,7 @@ mod tests {
             whitelist.lookup(&on_class, "save"),
             Found::Missing {
                 foreign: vec![],
-                dynamic: false
+                dynamic: None
             }
         );
         // What nothing known answers names the libraries that might.
@@ -1194,7 +1493,7 @@ mod tests {
             whitelist.lookup(&record, "perform_async"),
             Found::Missing {
                 foreign: vec!["Sidekiq::Worker", "ActiveRecord::Base"],
-                dynamic: false
+                dynamic: None
             }
         );
         let ghost = whitelist.instance_chain("Ghost");
@@ -1202,9 +1501,73 @@ mod tests {
             whitelist.lookup(&ghost, "anything"),
             Found::Missing {
                 foreign: vec![],
-                dynamic: true
+                dynamic: Some("Ghost")
             }
         );
+    }
+
+    #[test]
+    fn an_included_hook_extends_whatever_includes_the_module() {
+        let files = corpus(&[
+            "module Finder\n  extend ActiveSupport::Concern\n  included do\n    extend Forwardable\n    include Auditable\n  end\n  class_methods do\n    def find_remote(name); end\n  end\nend\nmodule Auditable\n  def audit; end\nend\nmodule Legacy\n  def self.included(base)\n    base.extend(ClassMethods)\n  end\n  module ClassMethods; def acts_as_x; end; end\nend\nclass Account < ActiveRecord::Base\n  include Finder\n  include Legacy\n  include Sidekiq::Worker\nend\nclass Admin < Account; end\n",
+        ]);
+        let whitelist = Whitelist::build(&files, core_table::table());
+        let on_class = whitelist.singleton_chain("Admin");
+        assert_eq!(
+            steps(&on_class),
+            vec![
+                "Admin.self",
+                "Account.self",
+                // What including them gave the class, the last one included first.
+                "<gems>/Sidekiq::Worker (hook)",
+                "Legacy::ClassMethods (hook)",
+                "<gems>/Forwardable (hook)",
+                "Finder::ClassMethods (hook)",
+                "<gems>/ActiveRecord::Base.self",
+                "<ruby>/Class",
+                "<ruby>/Module",
+                "<ruby>/Object",
+                "<ruby>/Kernel",
+                "<ruby>/BasicObject",
+            ]
+        );
+        assert!(matches!(
+            whitelist.lookup(&on_class, "find_remote"),
+            Found::Method {
+                owner: "Finder::ClassMethods",
+                hooked: true,
+                ..
+            }
+        ));
+        // A library's module may have given the class anything: one more that could answer.
+        assert_eq!(
+            whitelist.lookup(&on_class, "perform_async"),
+            Found::Missing {
+                foreign: vec!["Sidekiq::Worker", "Forwardable", "ActiveRecord::Base"],
+                dynamic: None
+            }
+        );
+        // `included do include Auditable end`: an instance of the includer answers `audit`.
+        let instance = whitelist.instance_chain("Account");
+        assert_eq!(
+            steps(&instance)[..6],
+            [
+                "Account",
+                "<gems>/Sidekiq::Worker",
+                "Legacy",
+                "Finder",
+                "Auditable (hook)",
+                "<gems>/ActiveRecord::Base"
+            ]
+        );
+        assert!(matches!(
+            whitelist.lookup(&instance, "audit"),
+            Found::Method {
+                owner: "Auditable",
+                hooked: true,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -1272,7 +1635,8 @@ mod tests {
                 owner: "Point",
                 on_class: false,
                 field: "@x",
-                write: false
+                write: false,
+                hooked: false
             }
         );
         assert_eq!(steps(&whitelist.instance_chain("Handler"))[..2], ["Handler", "Base"]);

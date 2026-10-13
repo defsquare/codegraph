@@ -486,6 +486,100 @@ fn drops_and_counts_what_names_no_type() {
     assert!(!ids_of(&run).iter().any(|id| id.starts_with("rb:<gems>")));
 }
 
+#[test]
+fn a_namespace_whose_body_is_elsewhere_is_a_library() {
+    // No file gives `Rails`, `Chewy` or `Legacy::Base` a body, and each one's
+    // body must exist: `env` and `strategy` are answered by no bare module,
+    // and a class cannot inherit from a path nothing opens. `Admin` is only
+    // ever a prefix, and `name` is what any module answers.
+    let run = extraction(&[
+        (
+            "lib/boot.rb",
+            "class Boot\n  def run\n    Rails.env\n    Rails\n    Admin.name\n    Admin\n    Chewy.strategy\n  end\nend\n",
+        ),
+        (
+            "lib/patches.rb",
+            "class Rails::Patch; def x; end; end\nclass Admin::Users; def y; end; end\nclass Legacy::Base::Child < Legacy::Base; def z; end; end\nmodule Chewy\n  class Strategy; def a; end; end\nend\n",
+        ),
+    ]);
+    let run_method = "rb:lib%2Fboot.rb/Boot.run";
+    assert_eq!(
+        from(&run, "invocation", run_method),
+        vec![
+            ("rb:<gems>/Rails".to_owned(), "declared", 3),
+            ("rb:<gems>/Chewy".to_owned(), "declared", 7),
+        ]
+    );
+    assert_eq!(
+        from(&run, "reference", run_method),
+        vec![
+            ("rb:<gems>/Rails".to_owned(), "declared", 3),
+            ("rb:<gems>/Rails".to_owned(), "declared", 4),
+            ("rb:<gems>/Chewy".to_owned(), "declared", 7),
+        ]
+    );
+    assert_eq!(
+        edges_of(&run, "inheritance"),
+        vec![(
+            "rb:lib%2Fpatches.rb/Legacy::Base::Child".to_owned(),
+            "rb:<gems>/Legacy::Base".to_owned(),
+            "declared",
+            3
+        )]
+    );
+    assert_eq!(entity(&run, "rb:<gems>/Legacy::Base").kind, "class");
+    // What the corpus opens under a library's namespace stays the corpus's.
+    let ids = ids_of(&run);
+    assert!(ids.contains(&"rb:lib%2Fpatches.rb/Rails::Patch".to_owned()));
+    assert!(ids.contains(&"rb:lib%2Fpatches.rb/Chewy::Strategy".to_owned()));
+    // Nothing says `Admin` has a body anywhere: still a namespace, never a stub.
+    assert!(!ids.contains(&"rb:<gems>/Admin".to_owned()));
+    assert_eq!(dropped(&run, "namespace-only"), 2);
+}
+
+#[test]
+fn a_compact_declaration_reads_the_namespace_it_is_written_under() {
+    // `class Admin::Users` evaluates `Admin` — in a Zeitwerk application that
+    // read is what loads app/models/admin.rb. A namespace no file gives a body
+    // to (`Api::V1`) is nothing the model can point at, and no drop either.
+    let run = extraction(&[
+        ("app/models/admin.rb", "module Admin\n  def self.prefix; end\nend\n"),
+        (
+            "app/controllers/users.rb",
+            "class Admin::Users\n  def index; end\nend\nclass Api::V1::Tokens\n  def show; end\nend\nmodule Rails::Hooks\n  def self.go\n    Rails.env\n  end\nend\n",
+        ),
+    ]);
+    let file = "rb:app%2Fcontrollers%2Fusers.rb";
+    assert_eq!(
+        from(&run, "reference", &format!("{file}/Admin::Users")),
+        vec![("rb:app%2Fmodels%2Fadmin.rb/Admin".to_owned(), "declared", 1)]
+    );
+    assert_eq!(
+        from(&run, "reference", &format!("{file}/Rails::Hooks")),
+        vec![("rb:<gems>/Rails".to_owned(), "declared", 7)]
+    );
+    assert!(from(&run, "reference", &format!("{file}/Api::V1::Tokens")).is_empty());
+    assert_eq!(dropped(&run, "namespace-only"), 0);
+    // Nothing requires admin.rb: the read is the import.
+    assert_eq!(
+        from(&run, "import", file),
+        vec![("rb:app%2Fmodels%2Fadmin.rb".to_owned(), "derived", 1)]
+    );
+}
+
+#[test]
+fn a_constant_qualified_by_a_class_is_the_ancestor_s_that_declares_it() {
+    let run = one(
+        "class Base\n  LIMIT = 3\nend\nclass Child < Base; def y; end; end\nclass User\n  def go\n    Child::LIMIT.size\n  end\nend\n",
+    );
+    // Never a library's `Child::LIMIT`: the constant is Base's, read through Child.
+    assert!(!ids_of(&run).iter().any(|id| id.starts_with("rb:<gems>")));
+    assert_eq!(
+        from(&run, "access", "rb:a.rb/User.go"),
+        vec![("rb:a.rb/Base::LIMIT".to_owned(), "declared", 7)]
+    );
+}
+
 // ------------------------------------------------------ constants and fields ----
 
 #[test]
@@ -814,6 +908,77 @@ fn a_call_nothing_known_answers_is_attributed_to_the_sole_library_ancestor() {
 }
 
 #[test]
+fn methods_defined_at_run_time_cloud_one_side_of_a_type_not_both() {
+    // `define_method` in a class body defines for the INSTANCES: what the class
+    // itself answers is as known as before. `def self.method_missing` is the reverse.
+    let run = one(
+        "class ApplicationRecord < ActiveRecord::Base; end\nclass Account < ApplicationRecord\n  [1].each { |key| define_method(\"k#{key}\") { 1 } }\n  scope :local\n  def self.recent\n    where(x: 1)\n  end\n  def run\n    save!\n  end\nend\nclass Setting < ApplicationRecord\n  def self.method_missing(name); end\n  def self.lookup\n    where(x: 1)\n  end\n  def run\n    save!\n  end\nend\n",
+    );
+    let base = "rb:<gems>/ActiveRecord::Base";
+    assert_eq!(
+        from(&run, "invocation", "rb:a.rb/Account"),
+        vec![(base.to_owned(), "derived", 4)]
+    );
+    assert_eq!(
+        from(&run, "invocation", "rb:a.rb/Account.recent#self"),
+        vec![(base.to_owned(), "derived", 6)]
+    );
+    assert!(from(&run, "invocation", "rb:a.rb/Account.run").is_empty());
+    assert!(from(&run, "invocation", "rb:a.rb/Setting.lookup#self").is_empty());
+    assert_eq!(
+        from(&run, "invocation", "rb:a.rb/Setting.run"),
+        vec![(base.to_owned(), "derived", 18)]
+    );
+    assert_eq!(
+        run.stats.explained,
+        vec![
+            "computed-define-method: a.rb:3 define_method".to_owned(),
+            "unbound-dynamic: a.rb:9 save! (Account defines methods at run time)".to_owned(),
+            "unbound-dynamic: a.rb:15 where (Setting defines methods at run time)".to_owned(),
+        ]
+    );
+}
+
+#[test]
+fn a_class_method_an_included_hook_gives_is_derived() {
+    let run = one(
+        "module Finder\n  extend ActiveSupport::Concern\n  class_methods do\n    def find_remote(name); end\n  end\nend\nmodule Legacy\n  def self.included(base)\n    base.extend(ClassMethods)\n  end\n  module ClassMethods\n    def acts_as_x; end\n  end\nend\nclass Account < ActiveRecord::Base\n  include Finder\n  include Legacy\n  acts_as_x\n  has_many :things\nend\nclass Worker\n  include Sidekiq::Worker\nend\nclass Page < ActionController::Base\n  include Pundit::Authorization\n  before_action :check\nend\nclass Caller\n  def go\n    Account.find_remote(1)\n    Worker.perform_async(1)\n  end\nend\n",
+    );
+    // The includer never writes `extend Legacy::ClassMethods`: found through the hook, an inference.
+    assert_eq!(
+        from(&run, "invocation", "rb:a.rb/Account"),
+        vec![
+            ("rb:a.rb/Legacy::ClassMethods.acts_as_x".to_owned(), "derived", 18),
+            ("rb:<gems>/ActiveRecord::Base".to_owned(), "derived", 19),
+        ]
+    );
+    assert_eq!(
+        from(&run, "invocation", "rb:a.rb/Caller.go"),
+        vec![
+            ("rb:a.rb/Finder::ClassMethods.find_remote".to_owned(), "derived", 30),
+            // The one library that could have given `Worker` a class method.
+            ("rb:<gems>/Sidekiq::Worker".to_owned(), "derived", 31),
+        ]
+    );
+    // `class_methods do` is the body of a module the model names.
+    let class_methods = entity(&run, "rb:a.rb/Finder::ClassMethods");
+    assert_eq!(class_methods.kind, "module");
+    assert_eq!(
+        (
+            class_methods.anchor.as_ref().unwrap().start,
+            class_methods.anchor.as_ref().unwrap().end
+        ),
+        (3, 5)
+    );
+    // A superclass and a mixin, both a library's: either could answer `before_action`.
+    assert!(from(&run, "invocation", "rb:a.rb/Page").is_empty());
+    assert_eq!(dropped(&run, "ambiguous-ancestor"), 1);
+    assert!(run.stats.explained.contains(
+        &"ambiguous-ancestor: a.rb:26 before_action (Pundit::Authorization or ActionController::Base)".to_owned()
+    ));
+}
+
+#[test]
 fn a_receiver_typed_by_what_a_body_assigns_is_derived() {
     let run = one(
         "class Repo\n  def find; end\nend\nclass Cache\n  def get; end\nend\nclass Service\n  def initialize(repo)\n    @repo = Repo.new\n    @cache = Cache.new\n    @given = repo\n  end\n  def reset\n    @cache = build\n  end\n  def run\n    local = Repo.new\n    local.find\n    @repo.find\n    @cache.get\n    @given.find\n    Repo.new.find\n  end\nend\n",
@@ -929,6 +1094,21 @@ fn explains_every_dropped_site_when_asked() {
         vec![
             "untyped-receiver: a.rb:3 total".to_owned(),
             "unbound-self-call: a.rb:4 missing".to_owned()
+        ]
+    );
+}
+
+#[test]
+fn an_unbound_dynamic_drop_names_the_type_that_defines_methods_at_run_time() {
+    // The ancestor, not the class the call is written in: that is what an audit needs to find.
+    let run = one(
+        "module Fixtures\n  def method_missing(name); end\nend\nclass Case < Minitest::Test\n  include Fixtures\n  def run\n    assert_equal 1, 1\n    super\n  end\nend\n",
+    );
+    assert_eq!(
+        run.stats.explained,
+        vec![
+            "unbound-dynamic: a.rb:7 assert_equal (Fixtures defines methods at run time)".to_owned(),
+            "unbound-dynamic: a.rb:8 super (Fixtures defines methods at run time)".to_owned(),
         ]
     );
 }

@@ -1,6 +1,6 @@
 # `fixtures/ruby` — the reference corpus for the Ruby extractor
 
-A small, plausible order-management corpus (27 walked files, ~320 lines) shaped
+A small, plausible order-management corpus (31 walked files, ~400 lines) shaped
 like a gem — `Gemfile`, `Rakefile`, a gemspec, `lib/`, `spec/`, `bin/` — that
 exercises the extraction hazards PLAN.md §19 names. It is the acceptance corpus
 for `extractors/ruby`: the snapshot `expected/model.jsonl` is produced from
@@ -35,13 +35,17 @@ from the tree Prism recovered, and say so on stderr.
 
 ## What the numbers are
 
-27 files, 154 entities (22 of them stubs), 136 edges. Of 152 sites — a
-constant read, a call, a `super`, a `raise`, a variable — 117 resolve (77.0 %):
-70 to the corpus, 20 to `<ruby>`, 10 to `<gems>`, 17 to the language itself
-(`puts`, `private`, `"x".freeze`: resolved, and no edge). The 35 others are
-dropped and counted by reason; `--explain-dropped` lists each with its line.
-Eight operators on a receiver no parser can type (`a + b`) are counted apart
-and stay out of the rate.
+31 files, 181 entities (24 of them stubs), 153 edges. Of 177 sites — a
+constant read, a call, a `super`, a `raise`, a variable — 135 resolve (76.3 %):
+79 to the corpus, 21 to `<ruby>`, 14 to `<gems>`, 21 to the language itself
+(`puts`, `private`, `"x".freeze`: resolved, and no edge). The 42 others are
+dropped and counted by reason; `--explain-dropped` lists each with its line,
+and what decided it where something did. Eight operators on a receiver no
+parser can type (`a + b`) are counted apart and stay out of the rate.
+
+The metrics pass joins 106 of the 109 measured entities. The three others are
+types the grammar reads as a block: `Point = Struct.new … do`, `Loader =
+Class.new(Base) do`, and the `class_methods do` of a concern.
 
 ## What each file pins
 
@@ -56,15 +60,19 @@ and stay out of the rate.
 | `lib/acme_order.rb` | `module AcmeOrder` with a method of its own IS a declaration; `def self.root` is keyed `AcmeOrder.root#self`. `require "bigdecimal"` → `<gems>%2Fbigdecimal`; `require "acme_order/version"` → the corpus file, by load root; five `require_relative` → their files. `autoload :Reporting, "acme_order/reporting"` → a `declared` import of `reporting.rb`: the feature is written, only its loading is deferred. | The entry point both declares the namespace and requires its parts. |
 | `lib/acme_order/version.rb` | `AcmeOrder` again: a SECOND entity, `attachedTo` the one in `lib/acme_order.rb` (first in canonical order: `.` sorts before `/`). `VERSION = "0.1.0"` is a `constant`, keyed by its full path `AcmeOrder::VERSION`, its `value` the string. | One entity per declaring file; a constant is a member, not a type. |
 | `lib/acme_order/errors.rb` | `module AcmeOrder` here only wraps three classes: no `AcmeOrder` entity in this file. `class Error < StandardError; end` — an EMPTY body is a declaration. `NotFound < Error` resolves to the sibling. `super(…)` in `TooManyLines#initialize` → an `invocation` of `<ruby>/Exception`: the nearest ancestor that defines `initialize`, found through `Error` and the VM's own chain. | A wrapper is lexical scope; `super` crosses from the corpus into the core table. |
-| `lib/acme_order/base.rb` | `class AcmeOrder::Base`, the compact spelling: the same key shape as a class nested in `module AcmeOrder`. `self.class.name` is the language: resolved, no edge. | Two spellings, one key. |
+| `lib/acme_order/base.rb` | `class AcmeOrder::Base`, the compact spelling: the same key shape as a class nested in `module AcmeOrder`. Unlike a wrapper it READS `AcmeOrder` — the name must exist for the class to open — so `Base` has a `reference` to the `AcmeOrder` of `lib/acme_order.rb`, and the file a `derived` import of it. `self.class.name` is the language: resolved, no edge. | Two spellings, one key — and one of them is a constant read. |
 | `lib/acme_order/order.rb` | The whole model in one class — see below. | — |
-| `lib/acme_order/a_order_patch.rb` | Reopens `AcmeOrder::Order` and sorts BEFORE `order.rb` — the body that writes a superclass is still the primary, and this one is `attachedTo` it. | "First in file order" alone would pick the patch. |
+| `lib/acme_order/a_order_patch.rb` | Reopens `AcmeOrder::Order` and sorts BEFORE `order.rb` — the body that writes a superclass is still the primary, and this one is `attachedTo` it. Compact, so it references `AcmeOrder` too. | "First in file order" alone would pick the patch. |
 | `lib/acme_order/money.rb` | `< Struct.new(:cents, :currency)`: an `inheritance` to `<ruby>/Struct` with provenance **`generated`** — the language says so, the source writes no such class — and two fields, `@cents` and `@currency`, anchored at that line. A bare `cents` is then an `access`, not a call. `other.cents` is dropped: a parameter is untyped. `include Comparable` → `<ruby>/Comparable`. `def /` and `def %` are keyed `Money.%2F` and `Money.%25`, named `/` and `%`. | A Struct's members are state nobody assigns; `/` and `%` are the key's own separator and escape. |
 | `lib/acme_order/point.rb` | `Point = Struct.new(:lat, :lng) do … end`: a `class` named `AcmeOrder::Point`, its block the body (`to_s` is ITS method, reading both fields). The enclosing `module AcmeOrder` stays a wrapper. | An assignment that declares a type. |
 | `lib/acme_order/priceable.rb` | A module under a wrapper. `raise NotImplementedError` → `throws` (and a `reference`) to `<ruby>/NotImplementedError`. `price.nil?`: `price` is a `declared` call on `self`, `.nil?` on its result is dropped. | The receiver of the second call is a value. |
 | `lib/acme_order/pricing/standard.rb` | Two wrappers deep; `< Base` still finds `AcmeOrder::Base` from the innermost scope outward. `order.lines.sum`: two `untyped-receiver` drops. | Lexical lookup walks every enclosing scope; a parameter's class is not written. |
 | `lib/acme_order/pricing/premium.rb` | A compact class opens ONE scope, so its superclass and its mixin are written in full (`::AcmeOrder::Priceable` absolute). `super` → an `invocation` of `Standard#price_for`, the method it overrides. | From here a bare `Standard` would NOT resolve — in Ruby either. |
-| `lib/acme_order/record.rb` | `< ActiveRecord::Base` → `<gems>/ActiveRecord::Base`, a `class` because it is inherited from; `include ActiveModel::Validations` → a `module`. `has_many`, `validates` and `where` run on the CLASS, whose only library ancestor is `ActiveRecord::Base`: three `invocation`s of that stub, **`derived`** — an attribution, not a fact. `update!` runs on an instance, which has two (the superclass and the mixin): `ambiguous-ancestor`, dropped. | Where `has_many` lands, and why it must not be called a fact. |
+| `lib/acme_order/ledger.rb` | `< ActiveRecord::Base`, and nothing mixed in: `has_many` and `where` run on the class, where one library could answer — two `invocation`s of `<gems>/ActiveRecord::Base`, **`derived`**: an attribution by elimination, not a fact. `define_method("#{state}?")` gives the INSTANCES methods no key can name, so `update!` on an instance is `unbound-dynamic` (the drop names `AcmeOrder::Ledger`) — while what the class itself answers is as known as before. | Where `has_many` lands, why it must not be called a fact, and which side a computed `define_method` clouds. |
+| `lib/acme_order/record.rb` | The same class with `include ActiveModel::Validations`: `<gems>/ActiveRecord::Base` is a `class` (inherited from), the mixin a `module`. Now TWO libraries could answer — on the class side too, because a module's `included` hook may extend whatever includes it, and `validates` IS that module's. `has_many`, `validates`, `where` and `update!`: four `ambiguous-ancestor` drops, each naming both. | An honest "either" beats a confident wrong edge: M18b charged `validates` to ActiveRecord::Base. |
+| `lib/acme_order/auditable.rb` | What including a module ALSO gives the includer. `Auditable` is an ActiveSupport::Concern: `class_methods do … end` IS the body of `Auditable::ClassMethods`, a `module` entity anchored on the block, and `included do include Comparable end` is read as a hook (the constant is still a `reference` from `Auditable`). `Stamped` says the same in plain Ruby: `def self.included(base); base.extend(ClassMethods)`. | The idiom Rails puts every shared class method behind. |
+| `lib/acme_order/invoice.rb` | `include Auditable`, `include Stamped` — two `traitUsage`, and no third: `Invoice` writes no `extend`. `audited :total` and `stamp :issued_at` still land on `Auditable::ClassMethods.audited` and `Stamped::ClassMethods.stamp`, **`derived`**: reached through the hook. `audit!` on an instance is plain `include`: `declared`. `invoices.each { \|invoice\| invoice.settle }` is dropped — a block argument is untyped — and is what `--trace` binds (below). | The receiver is written; the link to the method is not. |
+| `lib/acme_order/railtie.rb` | `class Rails::AcmeOrderHook` opens a member of a namespace no file here gives a body to. `Rails.logger` is answered by no bare module, so the body of `Rails` is elsewhere: a stub `<gems>/Rails`, referenced by the class and invoked by `install`. | Without that evidence `Rails` is `namespace-only` and every `Rails.env` in a Rails application is dropped. |
 | `lib/acme_order/core_ext/string.rb` | A monkey patch: `String` is a declared `class` in this file, `attachedTo` the stub `<ruby>/String`. Inside it, a bare `strip` is the VM's `String#strip`. | The VM defined `String` first; this body cannot be its definition. |
 | `lib/acme_order/label.rb` | `class Label < String` → `inheritance` to `<ruby>/String`, NOT to the patch file; `upcase` and `super` are `invocation`s of that stub. | Otherwise the patch becomes the hub every string points at. |
 | `lib/acme_order/reporting.rb` | Reached by `autoload` alone, and `module_function` makes its methods answer on the module. Typed locals: `label = Label.new(…)` then `label.shout` → a **`derived`** invocation; `order = Order.new(…)` then `order.note = "seen"` → a **`derived`** `access` writing `Order.@note`. `"".blank?` → the corpus's own `String#blank?`, `declared`: a literal's class is written, and the VM's `String` has no such method. Three `derived` imports (`label.rb`, `money.rb`, `order.rb`): nothing here requires them. | Flow-typed is not written: the provenance says which is which. |
@@ -116,4 +124,4 @@ type and file `sloc`.
 | `define_method("#{name}_later")` | dropped, `computed-define-method` — and `Ghost` is now a type with methods no key can name |
 | `send(:ping)` | a literal name is a call like any other: `invocation` of `Ghost.ping` |
 | `public_send(name)` | dropped, `dynamic-dispatch` |
-| `name`, `vanish` | dropped, `unbound-dynamic`: in a type that defines methods at run time, "nothing declares it" is not evidence |
+| `name`, `vanish` | dropped, `unbound-dynamic`: in a type that defines methods at run time, "nothing declares it" is not evidence — and the drop names the type, `AcmeOrder::Dynamic::Ghost` |

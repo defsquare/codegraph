@@ -209,8 +209,16 @@ pub struct Scope {
     /// `extend self`: its instance methods answer on the module itself.
     pub extends_self: bool,
     /// It defines methods no `def` writes — `method_missing`, a `define_method`
-    /// with a computed name — so an unbound call here proves nothing.
-    pub dynamic: bool,
+    /// with a computed name — so an unbound call proves nothing: on its
+    /// instances, or on the type itself, whichever side they are defined for.
+    pub dynamic_instance: bool,
+    pub dynamic_singleton: bool,
+    /// The body writes `extend ActiveSupport::Concern`: a `ClassMethods` module
+    /// below it extends whatever includes it.
+    pub concern: bool,
+    /// What including this module also mixes into the includer: what its
+    /// `included` hook writes (`base.extend(ClassMethods)`, `included do … end`).
+    pub hooks: Vec<Mixin>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -283,6 +291,8 @@ pub enum Assigned {
 pub enum What {
     /// A constant read.
     Constant(ConstPath),
+    /// The `Admin` of `class Admin::Users`: read to open the type below it.
+    Qualifier(ConstPath),
     Call {
         receiver: Receiver,
         name: String,
@@ -388,6 +398,10 @@ struct Walker<'a> {
     /// Branches counted so far, one counter per method being walked.
     branches: Vec<u32>,
     lossy_names: u64,
+    /// Inside `def self.included(base)`: the name `base` goes by.
+    hook_param: Option<String>,
+    /// Inside a concern's `included do … end`: the depth of the block's own statements.
+    hook_block: Option<usize>,
 }
 
 fn new_scope(kind: ScopeKind, parent: Option<usize>, path: Option<ConstPath>, span: Span) -> Scope {
@@ -406,7 +420,10 @@ fn new_scope(kind: ScopeKind, parent: Option<usize>, path: Option<ConstPath>, sp
         members: Vec::new(),
         comment: None,
         extends_self: false,
-        dynamic: false,
+        dynamic_instance: false,
+        dynamic_singleton: false,
+        concern: false,
+        hooks: Vec::new(),
     }
 }
 
@@ -536,6 +553,8 @@ pub fn declarations(source: &[u8]) -> FileDecls {
         frames: vec![Frame::default()],
         branches: Vec::new(),
         lossy_names: 0,
+        hook_param: None,
+        hook_block: None,
     };
     walker.visit(&result.node());
     walker.close_frame();
@@ -883,6 +902,26 @@ impl Walker<'_> {
         }
     }
 
+    /// `class Admin::Users` reads `Admin`: a constant read like any other,
+    /// made by the type being declared, in the scope it is written in.
+    fn qualifier(&mut self, index: usize, name: &Node<'_>) {
+        let scope = &self.scopes[index];
+        let Some(path) = scope.path.as_ref().filter(|path| path.segments.len() > 1) else {
+            return;
+        };
+        if scope.kind == ScopeKind::Opaque {
+            return;
+        }
+        let qualifier = ConstPath {
+            absolute: path.absolute,
+            segments: path.segments[..path.segments.len() - 1].to_vec(),
+        };
+        let span = self.lines.span(&name.location());
+        let outer = std::mem::replace(&mut self.owner, Owner::Type(index));
+        self.site(span, What::Qualifier(qualifier));
+        self.owner = outer;
+    }
+
     /// The members `Struct.new(:a, :b)` / `Data.define(:a)` name.
     fn members(&mut self, call: &CallNode<'_>) -> Vec<(String, Span)> {
         let mut members = Vec::new();
@@ -1091,14 +1130,29 @@ impl Walker<'_> {
 
     /// `include M` / `extend M` / `prepend M` written directly in a type's body.
     fn mixin(&mut self, node: &CallNode<'_>, name: &[u8]) -> bool {
-        // Inside a method or a block (`included do … end`) it is not a
-        // declaration of this type: the profile's stated blind spot.
-        if self.context.last() != Some(&Context::Body) {
+        // Written in a concern's `included do … end`, it is what INCLUDERS mix in.
+        let hooked = self.hook_block == Some(self.context.len());
+        // Inside any other block or a method it is not a declaration of this
+        // type: the profile's stated blind spot.
+        if self.context.last() != Some(&Context::Body) && !hooked {
             return false;
         }
         let Some(arguments) = node.arguments() else {
             return false;
         };
+        if hooked {
+            let kind = match name {
+                b"extend" => MixinKind::Extend,
+                b"prepend" => MixinKind::Prepend,
+                _ => MixinKind::Include,
+            };
+            for argument in arguments.arguments().iter() {
+                self.hook(kind, &argument);
+            }
+            // Not a mixin of THIS module: the call and the constant it names
+            // are read like any other.
+            return false;
+        }
         let kind = match (name, self.singleton_depth > 0) {
             // `extend` inside `class << self` extends the singleton's singleton.
             (b"extend", true) => return false,
@@ -1125,6 +1179,9 @@ impl Walker<'_> {
             match self.const_path(&argument) {
                 Some(path) => {
                     let span = self.lines.span(&argument.location());
+                    if kind == MixinKind::Extend && path.segments == ["ActiveSupport", "Concern"] {
+                        self.scopes[self.scope].concern = true;
+                    }
                     self.scopes[self.scope].mixins.push(Mixin {
                         reference: ConstRef { path, span },
                         kind,
@@ -1134,6 +1191,49 @@ impl Walker<'_> {
             }
         }
         true
+    }
+
+    /// Records what including the module being read also mixes into the includer.
+    fn hook(&mut self, kind: MixinKind, argument: &Node<'_>) {
+        if let Some(path) = self.const_path(argument) {
+            let span = self.lines.span(&argument.location());
+            self.scopes[self.scope].hooks.push(Mixin {
+                reference: ConstRef { path, span },
+                kind,
+            });
+        }
+    }
+
+    /// `base.extend(ClassMethods)`, `base.send(:include, Helpers)` in `def self.included(base)`.
+    fn hook_call(&mut self, node: &CallNode<'_>, name: &[u8]) {
+        let Some(base) = &self.hook_param else { return };
+        let on_base = node
+            .receiver()
+            .and_then(|receiver| receiver.as_local_variable_read_node())
+            .is_some_and(|local| local.name().as_slice() == base.as_bytes());
+        if !on_base {
+            return;
+        }
+        let mut arguments: Vec<Node<'_>> = node
+            .arguments()
+            .iter()
+            .flat_map(|arguments| arguments.arguments().iter())
+            .collect();
+        let verb = match name {
+            b"send" | b"__send__" | b"public_send" if !arguments.is_empty() => {
+                self.name_literal(&arguments.remove(0)).unwrap_or_default()
+            }
+            _ => self.text(name),
+        };
+        let kind = match verb.as_str() {
+            "extend" => MixinKind::Extend,
+            "include" => MixinKind::Include,
+            "prepend" => MixinKind::Prepend,
+            _ => return,
+        };
+        for argument in &arguments {
+            self.hook(kind, argument);
+        }
     }
 
     /// `attr_reader :a, :b` and its kin, written in a type's body.
@@ -1419,6 +1519,16 @@ impl Walker<'_> {
         });
     }
 
+    /// Marks the side of the type being read that gains methods at run time.
+    fn dynamic(&mut self, singleton: bool) {
+        let scope = &mut self.scopes[self.scope];
+        if singleton {
+            scope.dynamic_singleton = true;
+        } else {
+            scope.dynamic_instance = true;
+        }
+    }
+
     /// Records a method and walks its body as that method's own.
     fn method(
         &mut self,
@@ -1430,7 +1540,7 @@ impl Walker<'_> {
         walk: impl FnOnce(&mut Self),
     ) {
         if matches!(name.as_str(), "method_missing" | "respond_to_missing?") {
-            self.scopes[self.scope].dynamic = true;
+            self.dynamic(singleton);
         }
         let index = self.scopes[self.scope].methods.len();
         let comment = self.doc_above(span.0);
@@ -1538,6 +1648,7 @@ impl<'pr> Visit<'pr> for Walker<'_> {
         let keyed = scope.kind != ScopeKind::Opaque;
         let index = self.scopes.len();
         self.scopes.push(scope);
+        self.qualifier(index, &node.constant_path());
         // What a computed superclass writes is evaluated where the class is
         // written, and is the class's own doing.
         given.extend(computed);
@@ -1558,7 +1669,10 @@ impl<'pr> Visit<'pr> for Walker<'_> {
         let span = self.lines.span(&node.location());
         let mut scope = self.type_scope(ScopeKind::Module, &node.constant_path(), span);
         scope.wrapper = scope.kind == ScopeKind::Module && body_is_wrapper(node.body());
-        self.enter(scope, node.body());
+        let index = self.scopes.len();
+        self.scopes.push(scope);
+        self.qualifier(index, &node.constant_path());
+        self.enter_at(index, node.body());
     }
 
     fn visit_singleton_class_node(&mut self, node: &SingletonClassNode<'pr>) {
@@ -1603,8 +1717,13 @@ impl<'pr> Visit<'pr> for Walker<'_> {
             Some(singleton) if !opaque && self.keyed() => {
                 let (parameters, signature) = self.parameters(&name, singleton, node.parameters());
                 let span = self.lines.span(&node.location());
+                // `def self.included(base)`: Ruby calls it with whatever includes the module.
+                let hook = singleton && name == "included" && self.scopes[self.scope].kind == ScopeKind::Module;
+                let base = parameters.first().and_then(|first| first.name.clone()).filter(|_| hook);
                 self.method(name, singleton, span, parameters, signature, |walker| {
-                    ruby_prism::visit_def_node(walker, node)
+                    let outer = std::mem::replace(&mut walker.hook_param, base);
+                    ruby_prism::visit_def_node(walker, node);
+                    walker.hook_param = outer;
                 });
             }
             _ => {
@@ -1673,6 +1792,26 @@ impl<'pr> Visit<'pr> for Walker<'_> {
             .arguments()
             .and_then(|arguments| arguments.arguments().iter().next());
 
+        self.hook_call(node, name);
+        // A concern's two blocks, read as ActiveSupport::Concern defines them.
+        let in_concern = implicit_self
+            && self.singleton_depth == 0
+            && self.context.last() == Some(&Context::Body)
+            && self.scopes[self.scope].kind == ScopeKind::Module
+            && self.scopes[self.scope].concern;
+        let block = node.block().and_then(|block| block.as_block_node());
+        if in_concern
+            && name == b"class_methods"
+            && let Some(block) = &block
+        {
+            // `class_methods do … end` IS the body of the concern's `ClassMethods` module.
+            let path = ConstPath::simple("ClassMethods".to_owned());
+            let mut scope = new_scope(ScopeKind::Module, Some(self.scope), Some(path), span);
+            scope.comment = self.doc_above(span.0);
+            return self.enter(scope, block.body());
+        }
+        let included_block = in_concern && name == b"included" && block.is_some();
+
         match name {
             b"require" | b"require_relative" | b"load" | b"autoload" if on_kernel || implicit_self => {
                 self.require(node, name);
@@ -1731,10 +1870,10 @@ impl<'pr> Visit<'pr> for Walker<'_> {
                     && matches!(self.scopes[self.scope].kind, ScopeKind::Class | ScopeKind::Module) =>
             {
                 let block = node.block().and_then(|block| block.as_block_node());
+                // `self` is the class here: `define_method` defines for its instances.
+                let singleton = self.singleton_depth > 0 || name == b"define_singleton_method";
                 match first.as_ref().and_then(|first| self.name_literal(first)) {
                     Some(method_name) => {
-                        // `self` is the class here: `define_method` defines for its instances.
-                        let singleton = self.singleton_depth > 0 || name == b"define_singleton_method";
                         let block_parameters = block
                             .as_ref()
                             .and_then(|block| block.parameters())
@@ -1750,7 +1889,7 @@ impl<'pr> Visit<'pr> for Walker<'_> {
                     }
                     None => {
                         // A name computed at run time: this type has methods no key can name.
-                        self.scopes[self.scope].dynamic = true;
+                        self.dynamic(singleton);
                         self.drop_call("computed-define-method", node);
                     }
                 }
@@ -1795,7 +1934,14 @@ impl<'pr> Visit<'pr> for Walker<'_> {
         let receiver = self.receiver(node);
         let method_name = self.text(name);
         self.call_site(at, receiver, method_name, false);
+        // `included do … end` runs in whatever includes the concern: its own
+        // statements sit one block deeper than this call.
+        let outer = self.hook_block;
+        if included_block {
+            self.hook_block = Some(self.context.len() + 1);
+        }
         ruby_prism::visit_call_node(self, node);
+        self.hook_block = outer;
     }
 
     fn visit_super_node(&mut self, node: &SuperNode<'pr>) {

@@ -208,7 +208,10 @@ enum Answer {
     Method(Key),
     Field(Key, bool),
     Core(&'static str),
-    Missing { foreign: Vec<String>, dynamic: bool },
+    Missing {
+        foreign: Vec<String>,
+        dynamic: Option<String>,
+    },
 }
 
 struct Extractor<'a> {
@@ -258,6 +261,22 @@ impl Extractor<'_> {
             let text = format!("{reason}: {}:{line} {what}", self.corpus.files[*file].rel);
             self.explained.push((*file, *line, text));
         }
+    }
+
+    /// A miss in a chain where `owner` defines methods at run time: the drop names it.
+    fn drop_dynamic(&mut self, owner: &str) {
+        if let Some((_, _, what)) = &mut self.current {
+            what.push_str(&format!(" ({owner} defines methods at run time)"));
+        }
+        self.drop("unbound-dynamic");
+    }
+
+    /// A miss several libraries in the chain could answer: the drop names them.
+    fn drop_ambiguous(&mut self, foreign: &[String]) {
+        if let Some((_, _, what)) = &mut self.current {
+            what.push_str(&format!(" ({})", foreign.join(" or ")));
+        }
+        self.drop("ambiguous-ancestor");
     }
 
     /// Names what is about to be read, so a drop can say where — built only when asked for.
@@ -792,40 +811,48 @@ impl Extractor<'_> {
         self.method_keys.get(place).cloned()
     }
 
-    /// What `name` finds along `chain`, as keys.
-    fn answer(&self, chain: &[Step], name: &str, file: usize) -> Answer {
+    /// What `name` finds along `chain`, as keys — and whether only an
+    /// `included` hook put what answers in the chain.
+    fn answer(&self, chain: &[Step], name: &str, file: usize) -> (Answer, bool) {
+        let missing = || Answer::Missing {
+            foreign: Vec::new(),
+            dynamic: None,
+        };
         match self.whitelist.lookup(chain, name) {
-            Found::Method { owner, places } => match self.method_target(places, file, owner) {
-                Some(key) => Answer::Method(key),
-                None => Answer::Missing {
-                    foreign: Vec::new(),
-                    dynamic: false,
-                },
-            },
+            Found::Method { owner, places, hooked } => (
+                self.method_target(places, file, owner)
+                    .map(Answer::Method)
+                    .unwrap_or_else(missing),
+                hooked,
+            ),
             Found::Accessor {
                 owner,
                 on_class,
                 field,
                 write,
+                hooked,
             } => {
                 let id = FieldId {
                     owner: FieldOwner::Type(owner.to_owned()),
                     on_class,
                     name: field.to_owned(),
                 };
-                match self.bindings.get(&id).and_then(|bound| self.field_keys.get(bound)) {
-                    Some(key) => Answer::Field(key.clone(), write),
-                    None => Answer::Missing {
-                        foreign: Vec::new(),
-                        dynamic: false,
-                    },
-                }
+                let field = self.bindings.get(&id).and_then(|bound| self.field_keys.get(bound));
+                (
+                    field
+                        .map(|key| Answer::Field(key.clone(), write))
+                        .unwrap_or_else(missing),
+                    hooked,
+                )
             }
-            Found::Core { owner } => Answer::Core(owner),
-            Found::Missing { foreign, dynamic } => Answer::Missing {
-                foreign: foreign.into_iter().map(str::to_owned).collect(),
-                dynamic,
-            },
+            Found::Core { owner } => (Answer::Core(owner), false),
+            Found::Missing { foreign, dynamic } => (
+                Answer::Missing {
+                    foreign: foreign.into_iter().map(str::to_owned).collect(),
+                    dynamic: dynamic.map(str::to_owned),
+                },
+                false,
+            ),
         }
     }
 
@@ -847,7 +874,7 @@ impl Extractor<'_> {
                 let from = self.owner_key(file, site.owner);
                 let anchor = self.anchor(file, site.span);
                 self.reading(file, site.span.0, || match &site.what {
-                    What::Constant(path) => path.written(),
+                    What::Constant(path) | What::Qualifier(path) => path.written(),
                     What::Call { name, .. } | What::MethodRef { name, .. } => name.clone(),
                     What::Super => "super".to_owned(),
                     What::Variable { name, .. } => name.clone(),
@@ -855,6 +882,17 @@ impl Extractor<'_> {
                 });
                 match &site.what {
                     What::Constant(path) => self.constant_site(file, site, &from, anchor, path),
+                    // Where it names a type, a read of it. A namespace no file
+                    // gives a body to is nothing to point at — and nothing lost.
+                    What::Qualifier(path) => {
+                        let resolution = self.whitelist.resolve_at(files, file, site.scope, path);
+                        if matches!(
+                            resolution,
+                            Resolution::Declared { .. } | Resolution::Core { .. } | Resolution::Gems { .. }
+                        ) {
+                            self.constant_site(file, site, &from, anchor, path);
+                        }
+                    }
                     What::Call { receiver, name } => self.call_site(file, site, &from, anchor, receiver, name, false),
                     What::MethodRef { receiver, name } => {
                         self.call_site(file, site, &from, anchor, receiver, name, true)
@@ -1002,7 +1040,10 @@ impl Extractor<'_> {
             _ => None,
         };
 
-        match self.answer(&chain, wanted, file) {
+        let (answer, hooked) = self.answer(&chain, wanted, file);
+        // Through a hook, the receiver's class is written and the link to the method is not.
+        let provenance = if hooked { "derived" } else { provenance };
+        match answer {
             Answer::Method(to) => {
                 self.stats.resolved_corpus += 1;
                 self.edge(
@@ -1049,8 +1090,8 @@ impl Extractor<'_> {
                     self.stats.language += 1;
                     return;
                 }
-                if dynamic {
-                    return self.drop("unbound-dynamic");
+                if let Some(owner) = dynamic {
+                    return self.drop_dynamic(&owner);
                 }
                 match foreign.as_slice() {
                     // Nothing the corpus or the VM defines answers, and exactly one
@@ -1066,7 +1107,7 @@ impl Extractor<'_> {
                     } else {
                         "unbound-method"
                     }),
-                    _ => self.drop("ambiguous-ancestor"),
+                    _ => self.drop_ambiguous(&foreign),
                 }
             }
         }
@@ -1104,14 +1145,16 @@ impl Extractor<'_> {
             .position(|step| *step == own)
             .map(|at| &chain[at + 1..])
             .unwrap_or(&[]);
-        match self.answer(above, &method.name, file) {
+        let (answer, hooked) = self.answer(above, &method.name, file);
+        let provenance = if hooked { "derived" } else { "declared" };
+        match answer {
             Answer::Method(to) => {
                 self.stats.resolved_corpus += 1;
-                self.edge("invocation", from, to, "declared", anchor, None);
+                self.edge("invocation", from, to, provenance, anchor, None);
             }
             Answer::Field(to, write) => {
                 self.stats.resolved_corpus += 1;
-                self.edge("access", from, to, "declared", anchor, Some((!write, write)));
+                self.edge("access", from, to, provenance, anchor, Some((!write, write)));
             }
             Answer::Core(owner) if CoreTable::is_language(owner, method.singleton) => self.stats.language += 1,
             Answer::Core(owner) => {
@@ -1119,7 +1162,9 @@ impl Extractor<'_> {
                 let to = self.stubs.core(owner, TypeKind::Class);
                 self.edge("invocation", from, to, "declared", anchor, None);
             }
-            Answer::Missing { dynamic: true, .. } => self.drop("unbound-dynamic"),
+            Answer::Missing {
+                dynamic: Some(owner), ..
+            } => self.drop_dynamic(&owner),
             Answer::Missing { foreign, .. } => match foreign.as_slice() {
                 [only] => {
                     self.stats.resolved_gems += 1;
@@ -1128,7 +1173,7 @@ impl Extractor<'_> {
                     self.edge("invocation", from, to, "derived", anchor, None);
                 }
                 [] => self.drop("unbound-super"),
-                _ => self.drop("ambiguous-ancestor"),
+                _ => self.drop_ambiguous(&foreign),
             },
         }
     }

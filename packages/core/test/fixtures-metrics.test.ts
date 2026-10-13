@@ -47,15 +47,15 @@ const repo = (path: string): string => fileURLToPath(new URL(`../../../${path}`,
  * How many measured entities each fixture joins (the pass's stderr summary).
  * The rest have no space of their own — implicit constructors anchored on
  * their class, Java lambdas (big-code-analysis opens none), body-less
- * declarations, Elixir protocols and impls, a Ruby `Struct.new do … end` — and
- * carry none of the keys.
+ * declarations, Elixir protocols and impls, a Ruby `Struct.new do … end` or
+ * `class_methods do … end` — and carry none of the keys.
  */
 const FIXTURES: ReadonlyArray<{ lang: string; profile: Profile; joined: number }> = [
   { lang: "java", profile: javaProfile, joined: 70 },
   { lang: "csharp", profile: csharpProfile, joined: 101 },
   { lang: "typescript", profile: typescriptProfile, joined: 89 },
   { lang: "elixir", profile: elixirProfile, joined: 96 },
-  { lang: "ruby", profile: rubyProfile, joined: 86 },
+  { lang: "ruby", profile: rubyProfile, joined: 106 },
 ];
 
 const metricsOf = (entity: Entity): Record<string, number> | undefined =>

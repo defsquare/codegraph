@@ -436,9 +436,60 @@ fn a_define_method_with_a_literal_name_is_a_method_and_a_computed_one_marks_the_
     );
     // The block is the method's body: what it calls, the method calls.
     assert_eq!(call(&file, "helper").owner, Owner::Method(1, 0));
-    assert!(order.dynamic);
+    // The computed name and `method_missing` are both for the instances.
+    assert!(order.dynamic_instance && !order.dynamic_singleton);
     assert_eq!(dropped(&file, "computed-define-method"), 1);
-    assert!(!scope(&file, "Plain").dynamic);
+    assert!(!scope(&file, "Plain").dynamic_instance);
+}
+
+#[test]
+fn reads_what_including_a_module_also_mixes_in() {
+    // An `included` hook is how a module gives class methods to what includes
+    // it: `base.extend(…)` in plain Ruby, and ActiveSupport::Concern on top of
+    // it — a `ClassMethods` module, `class_methods do`, `included do`.
+    let file = read(
+        "module Finder\n  extend ActiveSupport::Concern\n  included do\n    include Comparable\n    extend Forwardable\n    scope :recent\n    helper { include Deeper }\n  end\n  class_methods do\n    def find_remote(name); end\n  end\n  def local?; end\nend\nmodule Legacy\n  def self.included(base)\n    base.extend(ClassMethods)\n    base.send(:include, InstanceMethods)\n    other.extend(Unrelated)\n  end\n  module ClassMethods; def acts_as_x; end; end\n  module InstanceMethods; def y; end; end\nend\nmodule Plain\n  class_methods do\n    def not_a_concern; end\n  end\nend\n",
+    );
+    let hooks = |name: &str| -> Vec<(MixinKind, String)> {
+        scope(&file, name)
+            .hooks
+            .iter()
+            .map(|mixin| (mixin.kind, mixin.reference.path.written()))
+            .collect()
+    };
+    assert!(scope(&file, "Finder").concern);
+    // Only what the block itself writes: a nested block is somebody else's.
+    assert_eq!(
+        hooks("Finder"),
+        vec![
+            (MixinKind::Include, "Comparable".to_owned()),
+            (MixinKind::Extend, "Forwardable".to_owned())
+        ]
+    );
+    // `class_methods do` IS the body of `Finder::ClassMethods`.
+    let finder = file.scopes.iter().position(|s| std::ptr::eq(s, scope(&file, "Finder")));
+    let class_methods = scope(&file, "ClassMethods");
+    assert_eq!(class_methods.parent, finder);
+    assert_eq!(class_methods.kind, ScopeKind::Module);
+    assert!(!class_methods.wrapper);
+    assert_eq!(class_methods.span, (9, 11));
+    let names = |scope: &Scope| -> Vec<(String, bool)> {
+        scope.methods.iter().map(|m| (m.name.clone(), m.singleton)).collect()
+    };
+    assert_eq!(names(class_methods), vec![("find_remote".to_owned(), false)]);
+    assert_eq!(names(scope(&file, "Finder")), vec![("local?".to_owned(), false)]);
+    // The hook's own parameter, and nobody else: `other.extend` says nothing of includers.
+    assert_eq!(
+        hooks("Legacy"),
+        vec![
+            (MixinKind::Extend, "ClassMethods".to_owned()),
+            (MixinKind::Include, "InstanceMethods".to_owned())
+        ]
+    );
+    // Without `extend ActiveSupport::Concern`, `class_methods` is a call like any other.
+    let plain = scope(&file, "Plain");
+    assert!(!plain.concern);
+    assert_eq!(names(plain), vec![("not_a_concern".to_owned(), false)]);
 }
 
 // ------------------------------------------------------------------- sites ----

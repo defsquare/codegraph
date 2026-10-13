@@ -281,21 +281,22 @@ fn lists_every_dropped_site_on_stderr_when_asked_and_changes_no_byte_of_the_mode
         &root,
     );
     assert_eq!(explained.code, EXIT_OK, "{}", explained.stderr);
-    assert!(
-        explained
-            .stderr
-            .contains("dropped ambiguous-ancestor: lib/acme_order/record.rb:13 update!\n")
-    );
+    // Two libraries could answer: the drop names both, on the instance side and the class side.
+    assert!(explained.stderr.contains(
+        "dropped ambiguous-ancestor: lib/acme_order/record.rb:13 update! (ActiveModel::Validations or ActiveRecord::Base)\n"
+    ));
+    assert!(explained.stderr.contains(
+        "dropped ambiguous-ancestor: lib/acme_order/record.rb:6 validates (ActiveModel::Validations or ActiveRecord::Base)\n"
+    ));
     assert!(
         explained
             .stderr
             .contains("dropped untyped-receiver: lib/acme_order/pricing/standard.rb:5 sum\n")
     );
-    assert!(
-        explained
-            .stderr
-            .contains("dropped unbound-dynamic: lib/acme_order/dynamic.rb:32 vanish\n")
-    );
+    // A miss in a chain that defines methods at run time names the type that does.
+    assert!(explained.stderr.contains(
+        "dropped unbound-dynamic: lib/acme_order/dynamic.rb:32 vanish (AcmeOrder::Dynamic::Ghost defines methods at run time)\n"
+    ));
     // What the walker and a type's header drop is listed too: a require, a superclass.
     assert!(
         explained
