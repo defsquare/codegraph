@@ -59,6 +59,19 @@ export function elixirGraph(): CodeGraph {
   return buildGraph(loadModels(elixirFixture(), { sources: ["fixtures/elixir"] }).union);
 }
 
+/** The committed M18 snapshot: real Prism output over `fixtures/ruby/src`. */
+const RUBY_FIXTURE = fileURLToPath(
+  new URL("../../../fixtures/ruby/expected/model.jsonl", import.meta.url),
+);
+
+export function rubyFixture(): Model {
+  return readModelFileSync(RUBY_FIXTURE);
+}
+
+export function rubyGraph(): CodeGraph {
+  return buildGraph(loadModels(rubyFixture(), { sources: ["fixtures/ruby"] }).union);
+}
+
 /** A minimal hand-built model, for shapes the fixture does not contain. */
 export function toyModel(
   entities: readonly Entity[],

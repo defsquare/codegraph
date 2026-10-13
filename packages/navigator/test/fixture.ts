@@ -43,6 +43,16 @@ export function elixirGraph(): CodeGraph {
   return buildGraph(loadModels(model, { sources: ["fixtures/elixir"] }).union);
 }
 
+/** The committed M18 snapshot: real Prism output over `fixtures/ruby/src`. */
+const RUBY_FIXTURE = fileURLToPath(
+  new URL("../../../fixtures/ruby/expected/model.jsonl", import.meta.url),
+);
+
+export function rubyGraph(): CodeGraph {
+  const model = readModelFileSync(RUBY_FIXTURE);
+  return buildGraph(loadModels(model, { sources: ["fixtures/ruby"] }).union);
+}
+
 export function graphOf(entities: readonly Entity[], edges: readonly Edge[] = []): CodeGraph {
   const model: Model = {
     schemaVersion: "1.0.0",
