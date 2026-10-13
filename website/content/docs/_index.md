@@ -37,7 +37,7 @@ extractors, and the build from a clone.
 
 ## Limitations, up front
 
-- **Five languages: Java, C#, TypeScript, Elixir — and Ruby, built from a clone until the next release ships its binary.** Eleven language profiles exist on paper; the extractors are [Spoon for Java](/docs/reference/java-extractor/), [Roslyn for C#](/docs/reference/csharp-extractor/), [the compiler API for TypeScript](/docs/reference/typescript-extractor/) [the compiler's parser for Elixir](https://github.com/defsquare/codegraph/blob/main/docs/elixir-extractor.md) and [Prism for Ruby](https://github.com/defsquare/codegraph/blob/main/docs/ruby-extractor.md). Each is a self-contained binary; the TypeScript one runs on Node 22. A Clojure adapter is next.
+- **Five languages: Java, C#, TypeScript, Elixir and Ruby.** Eleven language profiles exist on paper; the extractors are [Spoon for Java](/docs/reference/java-extractor/), [Roslyn for C#](/docs/reference/csharp-extractor/), [the compiler API for TypeScript](/docs/reference/typescript-extractor/) [the compiler's parser for Elixir](https://github.com/defsquare/codegraph/blob/main/docs/elixir-extractor.md) and [Prism for Ruby](https://github.com/defsquare/codegraph/blob/main/docs/ruby-extractor.md). Each is a self-contained binary; the TypeScript one runs on Node 22. A Clojure adapter is next.
 - **No build means imperfect resolution.** Without a classpath some references stay unresolved; they become stubs, honest but still gaps. Keep one package to one source root per run.
 - **`explain` costs money and needs a network.** It is the only command that does; `--dry-run` and `--estimate` come first.
 - **Not a linter.** Codegraph reports structure, coupling and cycles, not style or bugs.

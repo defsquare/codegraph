@@ -1,6 +1,6 @@
 {
   "name": "@codegraph/city",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "type": "module",
   "description": "Codegraph city model: modules as districts, types as buildings, dependencies as roof-to-roof arrows",

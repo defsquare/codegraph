@@ -53,13 +53,14 @@ brew install defsquare/tap/codegraph-java        # then one line per language yo
 brew install defsquare/tap/codegraph-csharp
 brew install defsquare/tap/codegraph-typescript
 brew install defsquare/tap/codegraph-elixir
+brew install defsquare/tap/codegraph-ruby
 ```
 
 If a recent Homebrew answers *Refusing to load formula … from untrusted tap*,
 run `brew trust defsquare/tap` once and retry. Nothing else is needed: the
 Java extractor is a GraalVM native image, the C# one carries the .NET runtime
-and the base class library, the Elixir one carries Erlang and Elixir, and the
-TypeScript one is the `codegraph-typescript` npm package on Homebrew's Node
+and the base class library, the Elixir one carries Erlang and Elixir, the Ruby
+one is a single binary that needs no Ruby, and the TypeScript one is the `codegraph-typescript` npm package on Homebrew's Node
 (`npx codegraph-typescript` runs it anywhere Node 22 is).
 
 On **Linux**, Homebrew installs the extractors the same way; the `codegraph`
@@ -133,9 +134,8 @@ codegraph-elixir --src ~/src/some-app --trace ~/src/some-app/codegraph-trace.jso
 Ruby: the extractor is Prism, CRuby's own parser, linked into one Rust binary.
 It needs no Ruby, loads no file and reads no bundle — a `Gemfile.lock` that no
 longer resolves is no obstacle. A Zeitwerk application writes no `require`, so
-a constant that resolves to another file is the import. The binary and its
-formula (`brew install defsquare/tap/codegraph-ruby`, macOS and Linux) ship
-with the next release; until then, `./build.sh --ruby` from a clone.
+a constant that resolves to another file is the import. The binary is built
+for macOS and Linux, arm64 and x64 (since v0.2.0).
 
 ```bash
 codegraph-ruby --src ~/src/some-app --out app.jsonl
@@ -407,7 +407,7 @@ about known code shows up as a diff.
 | Second language extractor (C#, Roslyn): one self-contained binary per OS, byte-identity smoke tests in CI on five platforms, audited on Humanizer, dotnet/eShop and OrchardCore | done |
 | Third language extractor (TypeScript, the compiler API): no build, no `node_modules`, self-hosting — codegraph's own package boundaries recovered as graph queries; byte-identity smoke tests on three OSes; audited on TypeScript 4.9's compiler, nestjs and excalidraw | done |
 | Fourth language extractor (Elixir, the compiler's parser): no compile, no `deps/`, the OTP export table baked in, `mix codegraph.trace` for what the compiler bound after macro expansion | done |
-| Fifth language extractor (Ruby, Prism in a Rust binary): no Ruby, nothing run, the import layer derived from constant references; audited on rake, rubygems, Mastodon and rails/rails, checked against Packwerk (98.9 % of its cross-file references) and a booted VM | done; the binaries and the formula ship with the next release |
+| Fifth language extractor (Ruby, Prism in a Rust binary): no Ruby, nothing run, the import layer derived from constant references; audited on rake, rubygems, Mastodon and rails/rails, checked against Packwerk (98.9 % of its cross-file references) and a booted VM | done (v0.2.0) |
 | Desktop app (Tauri, macOS, signed and notarized) over the single-executable `codegraph` daemon | done |
 | Releases: one binary per platform on a GitHub release, the Homebrew tap (app cask + one formula per extractor), `codegraph-typescript` on npm | done (v0.1.0) |
 | Clojure extractor (clj-kondo) | next |

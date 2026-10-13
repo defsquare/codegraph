@@ -19,7 +19,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <!-- One version, three readers: the assembly, `‑‑version`, and the model header. -->
-    <CodegraphExtractorVersion>0.1.0</CodegraphExtractorVersion>
+    <CodegraphExtractorVersion>0.2.0</CodegraphExtractorVersion>
     <Version>$(CodegraphExtractorVersion)</Version>
     <InformationalVersion>$(CodegraphExtractorVersion)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

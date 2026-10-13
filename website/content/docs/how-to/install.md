@@ -35,7 +35,7 @@ also a direct download; see [Without Homebrew](#without-homebrew).
    brew install defsquare/tap/codegraph-csharp       # runtime and base class library inside; no .NET needed
    brew install defsquare/tap/codegraph-typescript   # the npm package, on Homebrew's node
    brew install defsquare/tap/codegraph-elixir       # Erlang and Elixir inside; Apple silicon only
-   brew install defsquare/tap/codegraph-ruby         # one binary, no Ruby needed; from the release after v0.1.0
+   brew install defsquare/tap/codegraph-ruby         # one binary, no Ruby needed; since v0.2.0
    ```
 
 3. Verify.
@@ -100,7 +100,7 @@ Every binary is an asset of the
 | `codegraph-java-<platform>` | the Java extractor, a GraalVM native image |
 | `codegraph-csharp-<platform>` | the C# extractor, a .NET single-file binary |
 | `codegraph-elixir-<platform>` | the Elixir extractor (`osx-arm64`, `linux-x64`) |
-| `codegraph-ruby-<platform>` | the Ruby extractor (`osx-arm64`, `osx-x64`, `linux-arm64`, `linux-x64`), from the release after v0.1.0 |
+| `codegraph-ruby-<platform>` | the Ruby extractor (`osx-arm64`, `osx-x64`, `linux-arm64`, `linux-x64`), since v0.2.0 |
 | `codegraph-metrics-<platform>` | the metrics pass every extractor formula depends on (the same four platforms) |
 | `Codegraph-<version>-<platform>.dmg` | the macOS app (`osx-arm64`, `osx-x64`) |
 

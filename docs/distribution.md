@@ -14,7 +14,7 @@ brew install defsquare/tap/codegraph-java               # one per language, as n
 brew install defsquare/tap/codegraph-csharp
 brew install defsquare/tap/codegraph-typescript
 brew install defsquare/tap/codegraph-elixir
-brew install defsquare/tap/codegraph-ruby               # from the release after v0.1.0
+brew install defsquare/tap/codegraph-ruby               # since v0.2.0
 ```
 
 The app finds the extractors that are installed; a folder whose language has

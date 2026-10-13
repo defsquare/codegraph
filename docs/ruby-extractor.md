@@ -9,8 +9,7 @@ PLAN.md §19.
 
 > **Status (M18c):** audited on rake, rubygems, Mastodon and rails/rails;
 > checked against Packwerk and against a booted VM (§6). The binaries, the
-> formula and the app's catalogue row are wired; they ship with the next
-> tagged release.
+> formula and the app's catalogue row ship with v0.2.0.
 
 ## 1. Getting it
 

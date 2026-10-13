@@ -329,7 +329,7 @@ dependencies = [
 
 [[package]]
 name = "codegraph-desktop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "codegraph-discovery",
  "serde",
@@ -343,7 +343,7 @@ dependencies = [
 
 [[package]]
 name = "codegraph-discovery"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
