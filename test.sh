@@ -323,7 +323,7 @@ fi
 
 if wants_metrics && [ "$SKIP_METRICS" = "no" ]; then
   # The unit tests pin the join; tests/fixtures.rs holds the binary to the
-  # four committed `model.metrics.jsonl`, byte for byte, and a re-run over its
+  # five committed `model.metrics.jsonl`, byte for byte, and a re-run over its
   # own output to the identity. The core side (fixtures-metrics.test.ts)
   # checks the same files against the profiles in the TypeScript phase.
   phase "metrics pass tests (cargo test)" \

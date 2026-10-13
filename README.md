@@ -79,6 +79,7 @@ pnpm install && pnpm -r build                    # the CLI (bin/codegraph) and t
 (cd extractors/java && ./mvnw -B package)        # Java: a JDK 17+; the wrapper, no local Maven needed
 ./build.sh --csharp                              # C#: the .NET 10 SDK
 ./build.sh --elixir                              # Elixir: Erlang/OTP 27 + Elixir
+./build.sh --ruby                                # Ruby: Rust 1.94+ and libclang — to build; no Ruby, ever
 ln -s "$PWD/bin/codegraph" ~/.local/bin/codegraph   # optional, works from a symlink
 ```
 
@@ -127,6 +128,20 @@ codegraph-elixir --src ~/src/some-app --out app.jsonl
 codegraph-elixir --src ~/src/some-app --deps ~/src/some-app/deps --out app.jsonl   # dependency exports
 codegraph-elixir --src ~/src/some-app --trace ~/src/some-app/codegraph-trace.jsonl --out app.jsonl
 #   the trace: what the compiler bound after macro expansion — `mix codegraph.trace` inside the project
+```
+
+Ruby: the extractor is Prism, CRuby's own parser, linked into one Rust binary.
+It needs no Ruby, loads no file and reads no bundle — a `Gemfile.lock` that no
+longer resolves is no obstacle. A Zeitwerk application writes no `require`, so
+a constant that resolves to another file is the import. The binary and its
+formula (`brew install defsquare/tap/codegraph-ruby`, macOS and Linux) ship
+with the next release; until then, `./build.sh --ruby` from a clone.
+
+```bash
+codegraph-ruby --src ~/src/some-app --out app.jsonl
+codegraph-ruby --src ~/src/some-app --out app.jsonl --explain-dropped 2>&1 | grep '^dropped'   # what it would not guess, and why
+codegraph-ruby --src ~/src/some-app --trace ~/src/some-app/codegraph-trace.jsonl --out app.jsonl
+#   the trace: what the running program knows — one Ruby file required inside a project that still boots
 ```
 
 C#: the extractor is a Roslyn program that reads `*.cs` directly: no
@@ -306,7 +321,8 @@ Read these before you commit an afternoon.
   from the tap. Linux gets the extractors from Homebrew and the `codegraph`
   command as a release download. Windows gets release binaries for the
   command, Java and C#, and `npx` for TypeScript. The Elixir extractor is
-  built for Apple silicon and Linux x64 only.
+  built for Apple silicon and Linux x64 only; the Ruby extractor and the
+  metrics pass for macOS and Linux, not Windows.
 - **Big models want memory.** A 100 MB model loads in the navigator in about
   a second, but the extractor and the analyzer are single-process Node and
   JVM tools; a monorepo of millions of lines is untested, we tested with Fineract that is close to 1M sloc (874 kSLOC precisely).
@@ -319,6 +335,7 @@ Read these before you commit an afternoon.
                (C#: Roslyn)
                (TS: the compiler API)
                (Elixir: the parser)
+               (Ruby: Prism)
                                    │                                navigator.json ──▶ navigator
                               schemas/*.json                        model.db ──▶ SQL, time
                             (published JSON Schema)                 *.insights.jsonl ──▶ explanations
@@ -338,6 +355,8 @@ so a model file has one direction of truth. The full reference is
 | `extractors/csharp` | Roslyn-based extractor (no MSBuild, BCL embedded); one self-contained binary per OS |
 | `extractors/typescript` | compiler-API extractor (no build, no `node_modules` needed); runs with `npx` |
 | `extractors/elixir` | parser-as-library extractor (no compile, no `deps/`); an escript, plus `mix codegraph.trace` for the compiler-trace enrichment |
+| `extractors/ruby` | Prism-as-a-library extractor in Rust (no Ruby, nothing run, no bundle read); one binary, plus `trace/codegraph_trace.rb` for what only the running program knows |
+| `extractors/metrics` | not an extractor: a pass over any model that adds code metrics (cognitive complexity, Halstead, ABC…) per method and class |
 | `schemas/` | the generated JSON Schema every extractor must satisfy |
 | `packages/core` | traits, edges, language profiles, validation |
 | `packages/analyzer` | graph, views, folding, cycles, coupling, exports, SQLite store |
@@ -358,6 +377,8 @@ so a model file has one direction of truth. The full reference is
 - [`docs/csharp-extractor.md`](docs/csharp-extractor.md) — running the C# extractor: the self-contained binary, the .NET runtime alone, or the SDK from source
 - [`docs/typescript-extractor.md`](docs/typescript-extractor.md) — running the TypeScript extractor, how it resolves without a build, reading its summary
 - [`docs/elixir-extractor.md`](docs/elixir-extractor.md) — running the Elixir extractor, the OTP table and the stub discipline, the dropped-site reasons, `--deps` and the `--trace` enrichment
+- [`docs/ruby-extractor.md`](docs/ruby-extractor.md) — running the Ruby extractor, how it resolves without running anything, the dropped-site reasons, `--trace`, and what the audit measured against Packwerk and a booted VM
+- [`docs/metrics.md`](docs/metrics.md) — the metrics pass: what it measures, how it joins a model, change history
 - [`docs/distribution.md`](docs/distribution.md) — the Homebrew tap, what a tagged release produces, what is signed and how
 - [`docs/navigator.md`](docs/navigator.md) — the navigator's design
 - [`docs/insights.md`](docs/insights.md) — the explanation walk's design
@@ -386,6 +407,7 @@ about known code shows up as a diff.
 | Second language extractor (C#, Roslyn): one self-contained binary per OS, byte-identity smoke tests in CI on five platforms, audited on Humanizer, dotnet/eShop and OrchardCore | done |
 | Third language extractor (TypeScript, the compiler API): no build, no `node_modules`, self-hosting — codegraph's own package boundaries recovered as graph queries; byte-identity smoke tests on three OSes; audited on TypeScript 4.9's compiler, nestjs and excalidraw | done |
 | Fourth language extractor (Elixir, the compiler's parser): no compile, no `deps/`, the OTP export table baked in, `mix codegraph.trace` for what the compiler bound after macro expansion | done |
+| Fifth language extractor (Ruby, Prism in a Rust binary): no Ruby, nothing run, the import layer derived from constant references; audited on rake, rubygems, Mastodon and rails/rails, checked against Packwerk (98.9 % of its cross-file references) and a booted VM | done; the binaries and the formula ship with the next release |
 | Desktop app (Tauri, macOS, signed and notarized) over the single-executable `codegraph` daemon | done |
 | Releases: one binary per platform on a GitHub release, the Homebrew tap (app cask + one formula per extractor), `codegraph-typescript` on npm | done (v0.1.0) |
 | Clojure extractor (clj-kondo) | next |

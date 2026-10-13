@@ -4447,7 +4447,11 @@ Construct → what the model says (M18a unless marked):
 | `X = Struct.new(:a) do … end`, `X = Data.define(:a)`, `X = Class.new(Base) do … end`, `X = Module.new` | a `class` / `module` named `X`, the block its body; `Class.new(Base)` WRITES its superclass, so that `inheritance` is `declared` (M18b) |
 | `class A < Class.new(Base)`, `< Migration[7.0]` | dropped and counted `computed-superclass` |
 | `include M`, `extend M`, `prepend M` in a type's body; `include M` inside its `class << self` | `traitUsage` type → M, `declared`, one per argument; the edge does not say which was written. `extend self` is no relation |
-| a mixin inside a method or a block (`included do … end`, `base.extend(ClassMethods)`) | invisible — the ActiveSupport::Concern idiom is the first stated blind spot; `--trace` recovers it as `generated` (M18c) |
+| what an `included` hook gives the includer, where the idiom is literal: `base.extend(M)` / `base.include(M)` (and `base.send(:extend, M)`) in `def self.included(base)`; in a module that writes `extend ActiveSupport::Concern`, its `ClassMethods` module, `class_methods do … end` (the BODY of that module: an entity anchored on the block) and the mixins written directly in `included do … end` | read, and used for lookup: the includer's class side answers along those modules. NO `traitUsage` is written — the includer writes no `extend` — and a method found that way is an `invocation` with provenance **`derived`** (M18c; the plan's first stated blind spot, which the audit showed too central to leave to the trace: 214 concerns in rails, 67 in Mastodon) |
+| a mixin applied any other way (a computed argument, a hook that calls a helper, `Foo.extend(Bar)` from outside) | invisible to the parser; `--trace` adds it as a `generated` `traitUsage` (M18c) |
+| `class Admin::Users` — a compact declaration | reads `Admin`: where `Admin` is a type, a `reference` from `Admin::Users` to it (and the `derived` import that follows), since the name must exist for the class to open. A wrapper (`module Admin; class Users`) creates what it opens and reads nothing (M18c) |
+| a namespace no file gives a body to, sent a message no bare module answers (`Rails.env` where the corpus only writes `class Rails::Patch`), or inherited from while nothing opens it | a library's: a stub below `<gems>`, not `namespace-only` (M18c) |
+| `Child::LIMIT` where `Base` assigns `LIMIT` | the constant of the ancestor that declares it: a qualified constant is looked up in its qualifier and in what that inherits from (M18c) |
 | `require_relative "x"` | `import` file → the file that path names, or a stub module keyed by that path when nothing is there |
 | `require "acme/order"` | `import` → the corpus file a load root answers with (every directory named `lib`, `spec` or `test`, then the root; the nearest to the requiring file; a tie is dropped and counted) — a fact about the layout, counted on its own — else a stub module keyed by the feature as written below `<gems>` |
 | `require File.expand_path("../x", __FILE__)`, `File.join(__dir__, "x")`, `File.dirname(__FILE__) + "/x"`, `"#{__dir__}/x"` | the Ruby 1.8 spellings of `require_relative`: the same `import` (M18b) |
@@ -4462,11 +4466,13 @@ Construct → what the model says (M18a unless marked):
 | a constant in a body | `reference` to the type it names: lexically, then through the ancestors of the innermost scope (M18b) |
 | a bare `x`, `self.x`, `super`, `Foo.bar`, `Foo.new` (→ `Foo#initialize`), `Foo.new.x`, `send(:x)` | `invocation`, **`declared`**: the receiver's class is written (§19.4). `method(:x)` takes the method as a value: a `reference` to it (M18b) |
 | a method of `Object`/`Kernel`/`BasicObject` (`puts`, `freeze`), of `Class`/`Module` on the class side (`private`), of a literal (`"x".upcase`) | the LANGUAGE: resolved, counted, **no edge** — an arrow from every method to `<ruby>/Kernel` says nothing (M18b) |
-| a call on `self` nothing declares, on a chain with exactly ONE library ancestor | `invocation` of that stub, **`derived`**, counted `ancestor-attributed` — where `has_many` lands (the Elixir `import-attributed` rule); with two, dropped `ambiguous-ancestor` (M18b) |
+| a call nothing declares, where exactly ONE library could answer — a library superclass, a library module mixed in, and on the class side a library module merely INCLUDED (its hook may have extended the class) | `invocation` of that stub, **`derived`**, counted `ancestor-attributed` — where `has_many` lands (the Elixir `import-attributed` rule); with two, dropped `ambiguous-ancestor`, the drop naming both (M18b; the class-side candidate is M18c: `validates` in a model that includes ActiveModel::Validations was charged to ActiveRecord::Base) |
 | `x = Foo.new; x.bar`, `@repo = Repo.new` … `@repo.find` | `invocation` (or `access`), **`derived`**: a local typed by its assignment in the method, an instance variable only ever assigned one class (M18b) |
 | `x.bar` with `x` untyped | dropped and counted — the stated ceiling; candidate generation is the analyzer's (the §13.2 decision) |
 | `raise Foo`, `raise Foo, "…"`, `raise Foo.new(…)` | `throws` to Foo; `raise "text"` throws `<ruby>/RuntimeError`; `raise error` is a value: dropped `raise-of-a-value` (M18b) |
-| `define_method(:x) { … }` | a `method` like a `def`; a computed name is dropped `computed-define-method` and marks the type as one with methods no key can name — as `method_missing` does (M18b) |
+| `define_method(:x) { … }` | a `method` like a `def`; a computed name is dropped `computed-define-method` and marks the type as one with methods no key can name — as `method_missing` does (M18b) — on the side they are defined for: a class body's `define_method` and `def method_missing` cloud the INSTANCES, `define_singleton_method` and `def self.method_missing` the class itself (M18c) |
+| `--trace`: a mixin the VM holds and no line writes | `traitUsage`, **`generated`**, anchored on the declaration of the type that has it (M18c) |
+| `--trace`: a call the program made at a site the baseline left unresolved | ONE `invocation`, **`dynamic-candidate`**, `candidates` = every method that site was seen to reach, `to` the first (M18c) |
 | a comment block directly above a declaration | its `comments`, magic comments and `# rubocop:` directives left out; `sloc` on files, types and methods, `cyclomatic` on methods (M18b) |
 
 ### 19.3 The Ruby id scheme (`ids.rs`)
@@ -4523,7 +4529,8 @@ level, as Ruby does (M18b); a name found nowhere is taken as written.
 |---|---|
 | a type the VM defines (the core table) | a stub below `<ruby>`, its kind from the table — **even when the corpus reopens it** |
 | a constant path some corpus file gives a body to | the primary declaration |
-| a path the corpus knows and gives no body (a namespace, an assigned constant), or a value constant of the table (`ARGV`) | dropped and counted `not-a-type` — never a stub: resolvability is not membership, and neither is its absence |
+| a path the corpus knows and gives no body (a namespace, an assigned constant), or a value constant of the table (`ARGV`) | dropped and counted `not-a-type` (`namespace-only` in a body) — never a stub: resolvability is not membership, and neither is its absence |
+| such a namespace that the corpus itself proves has a body elsewhere — it is sent a message no bare `Module` answers, or a class inherits from it while nothing opens it (M18c) | a stub below `<gems>`: nobody can answer `env` on a module nobody wrote |
 | anything else | a stub below `<gems>`: a `class` when a site inherits from it, a `module` when one mixes it in |
 
 `<ruby>` is deliberately **core only**. The standard library is `<gems>`:
@@ -4561,9 +4568,21 @@ no edge. Nothing answers and the chain holds exactly one library ancestor →
 `invocation` of it, `derived`, counted `ancestor-attributed`; two →
 `ambiguous-ancestor`; none → `unbound-self-call`. In a type that writes
 `method_missing` or a `define_method` with a computed name, a miss is
-`unbound-dynamic`: "nothing declares it" is no longer evidence. An operator
+`unbound-dynamic`: "nothing declares it" is no longer evidence — on the side
+those methods are defined for (M18c): instances and the class are clouded
+separately. An operator
 on an untyped receiver (`a + b`, `x[0]`) is the language far more often than
 not: counted apart, and kept out of the rate either way.
+
+**Hooks (M18c).** A class gets its class methods from what it includes more
+often than from what it extends: `def self.included(base);
+base.extend(ClassMethods)`, and ActiveSupport::Concern on top of it. Where the
+idiom is literal the walker records it on the MODULE (`hooks`, `concern`), and
+the class side of every includer answers along those modules as hook stops:
+found there, a method is `derived` — the receiver is written, the link is
+not. A LIBRARY's module included by a type is one more library that could
+answer on its class side, whatever its hook did; that is what turns a
+confident wrong attribution into an honest `ambiguous-ancestor`.
 
 ### 19.5 The extractor command-line contract
 
@@ -4576,32 +4595,54 @@ tool, and it changes no byte of the model. `stdout` carries nothing but
 ```
 syntax errors (recovered, 1): lib/acme_order/legacy/broken.rb
 RESOLUTION SUMMARY
-  files           : 27 (with syntax errors: 1)
-  sites           : 152
-  resolved        : 117 (corpus 70, <ruby> 20, <gems> 10, the language 17)
-  unresolved      : 35
-  resolution rate : 77.0%
-  ambiguous-ancestor (dropped): 1
+  files           : 31 (with syntax errors: 1)
+  sites           : 177
+  resolved        : 135 (corpus 79, <ruby> 21, <gems> 14, the language 21)
+  unresolved      : 42
+  resolution rate : 76.3%
+  ambiguous-ancestor (dropped): 4
   computed-require (dropped)  : 1
   …
   unbound-self-call (dropped) : 10
-  untyped-receiver (dropped)  : 19
-  ancestor-attributed         : 3
+  untyped-receiver (dropped)  : 22
+  ancestor-attributed         : 2
   operators, untyped receiver : 8 (not in the rate)
-  imports         : 38 (require 12, require_relative 11; unresolved: 5, by load path: 7, derived: 15)
-  entities        : 154 (stubs: 22)
-  edges           : 136 (self-edges dropped: 1)
+  imports         : 41 (require 12, require_relative 11; unresolved: 5, by load path: 7, derived: 18)
+  entities        : 181 (stubs: 24)
+  edges           : 153 (self-edges dropped: 1)
 ```
 
 A **site** is a constant read, a call, a `super`, a `raise` or a variable; the
 rate is over the sites that named something, the language included, and a
 declaration no key can carry (`def obj.x`) is counted without entering it.
 
-Planned for M18c, shaped by the audit as `--trace` was in §16.5: `--trace
-<file>` merging what a gem run inside a booting application observed —
-mixins the parser cannot see as `generated` `traitUsage`, the targets a
-untyped call site actually reached as one `dynamic-candidate` invocation with
-its `candidates`. Keys never come from the trace.
+A drop says what decided it where something did (M18c): `unbound-dynamic`
+names the type that defines methods at run time, `ambiguous-ancestor` the
+libraries that could answer.
+
+**`--trace <file>` (M18c)** merges what `extractors/ruby/trace/
+codegraph_trace.rb` wrote from inside the running program — one Ruby file, no
+dependency, required first (`ruby -r…/codegraph_trace -e 'require
+"./config/environment"; Rails.application.eager_load!'`), reading the VM when
+the program exits and, with `CODEGRAPH_TRACE_CALLS=1`, listening to the calls
+it makes. The trace is JSONL: a header, then `mixin` (type, how, module),
+`method` (type, name, file, line) and `call` (the site's file and line, the
+name, the file and line of the method entered). It names things as Ruby does
+and **carries no key**: the extraction finds its own entities from a constant
+path, or a file and a line. Merged AFTER the baseline's pass:
+
+- a mixin the source writes is the same fact; one it does not is a
+  `traitUsage`, `generated`, anchored on the declaration of the type that has
+  it — no line writes it;
+- a call at a site the baseline left unresolved is ONE `invocation`,
+  `dynamic-candidate`, `candidates` every method that site was seen to reach
+  and `to` the first of them — what ran, not what must run; a call the
+  baseline already wrote (same caller, callee and line) is counted as known;
+- a method the VM holds on a line that writes no `def` has no entity and gets
+  none: counted.
+
+No entity is added and no edge of the source changes: a tested property. A
+file that is not a trace, or is not there, is a failure that writes nothing.
 
 ### 19.6 Validation (the M2 gate, replayed a fifth time)
 
@@ -4626,17 +4667,65 @@ its `candidates`. Keys never come from the trace.
   refused, `raise`, `super` into the core table, `define_method` literal and
   computed, `send`, `load`, `autoload`, the `__dir__` idiom, and two files
   under `bin/` — one with a Ruby shebang, one without.
-- **The metrics pass** (§18) reads the snapshot with the `ruby` grammar: 86 of
-  88 measured entities joined, the witness `sloc = ploc` on all 86 — the
-  fifth `model.metrics.jsonl`, hand-counted on `Order#total`.
+  M18c adds what the audit found: a class with one library above it and one
+  with two (attribution, then the refusal that names both), a computed
+  `define_method` beside a class-side call, a concern (`class_methods do`,
+  `included do`) and its plain-Ruby twin (`base.extend(ClassMethods)`) with a
+  class that includes both, a compact declaration under a library's
+  namespace, and a block argument only a trace can type.
+- **The metrics pass** (§18) reads the snapshot with the `ruby` grammar: 106
+  of 109 measured entities joined, the witness `sloc = ploc` on all 106 — the
+  fifth `model.metrics.jsonl`, hand-counted on `Order#total`. The three others
+  are types the grammar reads as a block.
 - **Extractor-side tests** (cargo): the walker, the resolver and the writer as
   unit tables; `tests/contract.rs` holds the library to the snapshot byte for
   byte, to a CRLF copy created in reverse order, and to the CLI contract.
-- **Oracles for M18c.** On a Zeitwerk application, Packwerk's reference list
-  for the constant layer; on an application that boots, `Module#ancestors` and
-  `instance_methods(false)` with `source_location` — the superset the
-  baseline's declarations and mixins must be a subset of, every gap a named
-  miss.
+- **The audit (M18c)**, four corpora, each model `validate`-clean:
+
+  | corpus | files | sites | resolved | entities (stubs) | edges | time |
+  |---|---:|---:|---:|---:|---:|---:|
+  | rake 13.2.1 (a plain gem: the `require` resolver) | 100 | 9 261 | 77.8 % | 1 865 (94) | 6 696 | 0.1 s |
+  | rubygems 3.6.2 (implements a core-table constant) | 794 | 138 051 | 54.4 % | 15 809 (465) | 71 197 | 1.0 s |
+  | Mastodon 4.3.0 (Zeitwerk) | 2 541 | 151 603 | 31.2 % | 16 510 (593) | 47 663 | 1.0 s |
+  | — its `app/` and `lib/` alone | 1 108 | 51 548 | 62.1 % | 12 806 (388) | 31 180 | |
+  | rails 8.0.2 (metaprogramming) | 3 334 | 383 269 | 57.0 % | 71 681 (1 004) | 212 140 | 4.7 s |
+  | — every `lib/` and `app/` alone | 1 459 | 84 800 | 59.4 % | 36 275 (667) | 47 918 | |
+
+  The ceiling, measured: four fifths of what application code leaves
+  unresolved is `untyped-receiver`; 55 000 of Mastodon's unbound calls are
+  RSpec's DSL in `spec/`; rails has 46 000 `unbound-dynamic`, nearly all in its tests
+  and three quarters of them from three types (a helper that `define_method`s
+  over a list, the fixture accessors' `method_missing`, ActiveRecord's dynamic
+  finders). On rake every
+  `rake/…` feature resolves to its file through the `lib` load root, and the
+  one `require` the model lacks sits in a string given to `class_eval`.
+- **The Packwerk oracle (M18c).** Packwerk 3.3.1 driven without booting the
+  application — its parser, its reference extraction and its
+  ConstantResolver, over the autoload paths Rails would compute — resolves
+  4 335 cross-file constant references in Mastodon's `app/` and `lib/`. The
+  model has the same constant in the same file for **4 289 (98.9 %)**. The 45
+  others are a `module Admin` wrapper around a class, which Packwerk counts as
+  a reference to `Admin` and the wrapper rule does not; one is an inherited
+  constant Packwerk places by file name and the model in the superclass that
+  assigns it. The model names 346 that Packwerk cannot (declarations under
+  `lib/`, outside the autoload paths) and 147 compact declarations. Two of the
+  audit's fixes came from this oracle: the qualifier of a compact declaration,
+  and a qualified constant looked up through its qualifier's ancestors.
+- **The boot-time oracle (M18c).** rake's own tests, run in a container under
+  the trace: of the 1 012 methods the model declares in the 83 files that were
+  loaded, the VM holds one on the same line for **1 006** — the six others are
+  definitions under a platform or capability `if`, a `def` inside a method
+  that never ran, and methods of anonymous classes. The VM holds 200 methods
+  the model has none for: 199 written by the metaprogramming loops of three
+  files, one the `else` branch of a platform test. Of 2 829 calls observed,
+  1 533 are edges the baseline wrote — same caller, callee and line — 879 land
+  on sites it had left untyped (860 `dynamic-candidate` edges), 259 are
+  written by no line under that name, 158 enter a run-time definition.
+- **The §19.4 misreading, measured (M18c).** rubygems declares 39 bodies of 20
+  types the core table lists (`Gem` alone 12): each is `attachedTo` the VM's
+  stub, and 3 802 of that model's 71 197 edges land on the stub of a type the
+  corpus itself implements. Nothing is lost — the bodies are there, attached —
+  but the reference names the stub rather than the file.
 
 ### 19.7 Distribution
 
@@ -4644,6 +4733,17 @@ One binary per platform from a runner of its own OS, the `metrics-native`
 shape (§18.3): `codegraph-ruby-<rid>`, a formula in the tap, a registry entry
 (`extensions: [".rb", ".rake", ".gemspec", ".ru"]`). All of it is M18c; M18a
 ships `bin/codegraph-ruby` over `target/release/`.
+
+Wired in M18c: the `ruby-native` job (the four Unix runners of
+`metrics-native`, each binary re-extracting the fixture and `cmp`ed with the
+snapshot), `ruby` in the release job's copy loop, the `ruby` row of
+`BINARY_EXTRACTORS` in `scripts/homebrew/render.mjs` (so
+`Formula/codegraph-ruby.rb` depends on the pass like every extractor), and
+the `ruby` row of the app's catalogue. A release that renders the tap now
+needs the four `codegraph-ruby-<rid>` sums: the job, the loop and the row
+land together. Not exercised until a `v*` tag — and `ruby-test` itself has
+yet to run on a GitHub runner: both jobs install `libclang-dev` where the
+image has no `clang`.
 
 ### 19.8 Hazards, each with the test that pins it
 
@@ -4661,6 +4761,11 @@ ships `bin/codegraph-ruby` over `target/release/`.
 | a symlinked directory cycle | `vendor/bundle` links | directory symlinks are not followed; symlinked files are read |
 | a drop counted and not locatable | an audit that cannot find what the summary counts | the walker's drops ARE the list (`reason, line, what`), the counts derived from it; the contract test holds `listed == counted` |
 | an accessor and a `def` of one name | `attr_reader :total` beside `def total` | the field is `@total`, the method `total`: two keys |
+| a library's namespace the corpus reopens below (`class Rails::Patch`) | every `Rails.env` dropped as `namespace-only` — 592 in Mastodon, 422 `I18n.*` in rails | a stub on evidence: a message no bare module answers, a superclass nothing opens; `Admin` (a Zeitwerk directory) stays a namespace |
+| a class method that arrives through an `included` hook | `Account.find_remote` unbound, or charged to the wrong library | the hook is read where it is literal and the lookup goes through it, `derived`; a library mixin is a class-side candidate |
+| `define_method` in a class body clouding the class's own calls | `where`, `scope`, `validates` in a model with one computed accessor: all `unbound-dynamic` | the flag is per side; the drop names the type that set it |
+| a constant qualified by a subclass | `Child::LIMIT` a `declared` reference to an invented `<gems>/Child::LIMIT` | looked up through the qualifier's ancestors |
+| a trace that names what the model does not hold | a method defined at run time, a library's class | counted, never an entity: the entities with and without a trace are the same lines |
 
 ### 19.9 Milestone split
 
@@ -4691,6 +4796,11 @@ ships `bin/codegraph-ruby` over `target/release/`.
   trace gem and `--trace`; the defects found named in the profile notes with
   their counts; binaries on four Unix runners, the registry entry, the
   formula; `docs/ruby-extractor.md`; README names the extractor.
+  *As done:* the trace tool is one Ruby FILE, not a published gem — nothing
+  to install, `ruby -r` it; the oracles ran in a container, since no Ruby is
+  installed where the extractor is built; and the plan's "invisible" hook
+  mixins are read statically where the idiom is literal (§19.4), the trace
+  keeping the rest.
 
 Definition of done: `fixtures/ruby/expected/model.jsonl` byte-identical to
 core's encoder and profile-valid with zero issues; the same bytes from the
@@ -4744,7 +4854,7 @@ per-fixture suite.
 | M17c | Code metrics — wired in and shipped | ◐ (2026-10-03) a pass is a registry entry (`role: "pass"`) across catalogue, discovery and daemon; the app's job measures every fresh model (and re-measures when the installed passes change), a missing or failing pass costing the job nothing; `snapshots` deliberately not (the temporal store keeps no per-revision measures); `codegraph-metrics` formula + `depends_on` in every extractor formula; CI `metrics` + `metrics-native` on four Unix runners, each `cmp`-proving the four snapshots; `--licenses` (MPL source pointers, 189 crates); Humanizer 4 817/5 736 and Phoenix 1 227/1 247 joined — and the witness caught the Elixir extractor's heredoc `sloc` (§18.5). Pending: the first tagged release to exercise CI and the tap |
 | M18a | Ruby extractor — profile + skeleton | ✅ (2026-10-13, worktree `ruby-extractor`) `rb` profile in core (the eleventh: the module is the file, `class` and `module` are types below it, mixins are `traitUsage`, no interface — §19.2); `extractors/ruby/` in Rust on Prism 1.9.0 (`ruby-prism`, pinned), no Ruby to build or run; the core table distilled from RBS 4.2.0 `core/` with RBS's own parser (915 constants: 304 classes, 26 modules, 585 values); walking skeleton — files, classes and modules (the wrapper rule, one entity per declaring file, reopenings `attachedTo` their primary, a `String` patch attached to `<ruby>/String`), methods and parameters, `require`/`require_relative` by path and by load root, superclasses and mixins resolved lexically, the `derived` import, stubs — → `fixtures/ruby/expected/model.jsonl` (24 files, 102 entities / 38 edges) byte-identical to core's encoder and profile-valid with zero issues; 60 cargo tests (50 unit, 10 contract: snapshot, CRLF + reversed creation order, the CLI contract) + 16 core gate tests; `codegraph validate` OK; `bin/codegraph-ruby`; `build.sh --ruby` (a 1.2 MB binary) / `test.sh --ruby` with the release-binary `cmp`; `ruby-test` written in CI, not yet run there |
 | M18b | Ruby extractor — model | ✅ (2026-10-13, worktree `ruby-extractor`) `field` (an instance variable, its `attr_*`, a Struct member: one entity `@x`) and `constant` (keyed by full path, with its literal `value`); `Struct.new` / `Data.define` / `Class.new` / `Module.new` assigned to a constant as types, a `Struct.new` superclass as a `generated` inheritance; constant references resolved lexically then through the ancestors; the core table extended with superclasses, mixins and methods (RBS 4.2.0: 915 constants, 23 mixins, 2428 methods) so lookup crosses from the corpus into the VM's classes; the invocation tiers of §19.4 — `declared` where the receiver's class is written, `derived` for typed locals, typed instance variables and the sole-library-ancestor attribution, the language resolved with no edge, untyped receivers dropped and counted; `access` with read/write, `throws`, comments, `sloc` + `cyclomatic`, literals; the Ruby 1.8 require idioms, `load`, `autoload`, shebang scripts; `--explain-dropped`, every drop with its line → `fixtures/ruby/expected/model.jsonl` (27 files, 154 entities / 136 edges; 152 sites, 77.0 % resolved) byte-identical to core's encoder and profile-valid with zero issues; `ruby` in the metrics pass and the fifth `model.metrics.jsonl` (86 of 88 joined, `sloc = ploc` on all 86); 101 cargo tests (90 unit, 11 contract) + 24 core gate tests; the fixture in the analyzer, city, navigator, CLI `validate` and metrics suites; `validate`, `analyze`, `navigator`, `city --layout` and `serve` run on it, City and Navigate screenshots reviewed |
-| M18c | Ruby extractor — audit + oracles + distribution | rails/rails, a Zeitwerk application and a plain gem audited `validate`-clean, the causes in the profile notes; the Packwerk constant oracle and the boot-time introspection superset check; the trace gem + `--trace` (`generated` mixins, `dynamic-candidate` observed targets); binaries on four Unix runners, the registry entry, the formula; `docs/ruby-extractor.md` |
+| M18c | Ruby extractor — audit + oracles + distribution | ✅ (2026-10-13, worktree `ruby-extractor`; CI not yet run) rake 13.2.1, rubygems 3.6.2, Mastodon 4.3.0 and rails 8.0.2 audited `validate`-clean (100 / 794 / 2 541 / 3 334 files; 77.8 / 54.4 / 31.2 / 57.0 % of sites resolved, Mastodon's `app/`+`lib/` 62.1 %; rails in 4.7 s). Seven defects found and fixed test-first: a library namespace the corpus reopens below dropped as `namespace-only` (592 `Rails.*` in Mastodon); class methods given by an `included` hook unseen (now read where literal — plain Ruby and ActiveSupport::Concern — and `derived`); a library mixin ignored as a class-side candidate (`validates` charged to ActiveRecord::Base); a per-type `dynamic` flag clouding both sides; a compact declaration's qualifier not read; a constant qualified by a subclass stubbed below `<gems>`; `--explain-dropped` not saying what decided a drop. Oracles: Packwerk 3.3.1 over Mastodon — 4 289 of its 4 335 cross-file references in the model (98.9 %), the rest the wrapper rule; rake booted under its own tests — 1 006 of 1 012 declared methods held by the VM on the same line, 1 533 of 2 829 observed calls already edges. The trace tool (`trace/codegraph_trace.rb`, one file) and `--trace`: `generated` `traitUsage`, `dynamic-candidate` invocations with `candidates`, no entity added — exercised end to end in a container and `validate`-clean. `fixtures/ruby` → 31 files, 181 entities / 153 edges, 177 sites, 76.3 %; metrics 106 of 109 joined. 119 cargo tests (107 unit, 12 contract) + 27 core gate tests. Distribution wired: `ruby-native` on four Unix runners, the release loop, `Formula/codegraph-ruby.rb`, the catalogue row; `docs/ruby-extractor.md` |
 
 ## 21. Decisions made in this plan (deltas vs. the design doc)
 
@@ -4847,4 +4957,10 @@ per-fixture suite.
 | Ruby language calls (M18b) | a method of `Object`/`Kernel`/`BasicObject`, of `Class`/`Module` on the class side, or of a literal is resolved, counted, and NOT an edge; a core method reached through a class the receiver is (`upcase` in a `String` subclass) is an edge to that stub | `puts` and `private` would give every method an arrow to `<ruby>/Kernel`: the largest hub of every city, meaning nothing. The rate still counts them, so a corpus is not penalised for using its language |
 | Ruby fields and constants (M18b) | a field is the variable, `@x`, one entity with the `attr_*` that exposes it, owned by the root-most corpus ancestor that has it; a constant is keyed by its full path like a type; an accessor call is an `access`, not an `invocation` | the accessor is syntax over state (the C# property rule), and `@x` keeps the key apart from a `def x`; binding to the root-most ancestor makes a subclass's `@total` and its parent's ONE field, as they are one slot in the object |
 | Ruby synthetic types (M18b) | `X = Struct.new(…)`, `Data.define`, `Class.new(Base)`, `Module.new` are types named by the constant; a Struct/Data superclass is `inheritance` to `<ruby>/Struct` with provenance `generated` | the constant IS the class's name in Ruby; `generated` because the call produces the class — the source writes no `class`, so no `declared`-only analysis should count it as written |
+| Ruby hooks (M18c) | what an `included` hook gives is read statically where the idiom is literal — `base.extend(M)` in `def self.included(base)`; ActiveSupport::Concern's `ClassMethods`, `class_methods do`, `included do` — and used for LOOKUP only: no `traitUsage` is written, and a method found through a hook is `derived` | the plan left the idiom to `--trace`; the audit showed it carries nearly every shared class method of a Rails codebase (214 concerns in rails), a non-booting legacy application has no trace, and without it the attribution rule charges a concern's method to a library. Naming ActiveSupport::Concern in the extractor is the price: it is read by what the module WRITES, never by its name alone |
+| Ruby attribution, class side (M18c) | a library module a type includes is one more library that could answer on its CLASS side | its hook may have extended the class: `validates` is ActiveModel::Validations'. Costs coverage — a controller that includes Pundit loses `before_action` — and buys the rule its soundness; the drop names both candidates, which is what a later `dynamic-candidate` edge would need |
+| Ruby dynamic types (M18c) | "defines methods at run time" is per side: instances or the class itself | `define_method` in a class body says nothing about `where` or `scope`; one flag for both dropped every class-side call of any model with a computed accessor |
+| Ruby namespaces (M18c) | a namespace no file gives a body to is a library's when the corpus proves the body exists elsewhere (a message no bare module answers, a class inheriting from a path nothing opens); otherwise it stays `namespace-only` | `class Rails::Patch` and `class Admin::Users` have the same shape; only evidence tells a gem from a Zeitwerk directory, and no name is trusted |
+| Ruby compact declarations (M18c) | `class Admin::Users` reads `Admin` — a `reference`; a wrapper `module Admin; class Users` does not | the compact form needs the name to exist, the wrapper creates it: the one difference between the two spellings. It is also where the model and Packwerk part: Packwerk counts the wrapper's keyword as a reference (45 of 4 335 on Mastodon) |
+| Ruby trace (M18c) | one Ruby file run by the user inside the booting project; mixins as `generated` `traitUsage` anchored on the type's declaration, observed calls as ONE `dynamic-candidate` invocation per site with its `candidates`; names and positions only, never a key; no entity added | running corpus code is the user's decision, not the extractor's; an observation is what ran once, which is exactly what `dynamic-candidate` says; and a model must have the same entities whether or not a trace was at hand |
 | Ruby import layer (M18) | a constant resolving to a declaration in another file is ONE `derived` `import` per (file, target file), at the first site, absent where a `require` already states it | a Zeitwerk application writes no `require` — the reference is the load — so the one layer comparable across languages would be empty for every Rails corpus; `derived` keeps the inference out of any `declared`-only analysis |

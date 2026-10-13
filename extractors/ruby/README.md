@@ -20,9 +20,10 @@ a variable — and the rate is the share that resolved: to the corpus, to
 and no edge). Everything else is dropped and counted by reason, never guessed:
 
 ```
-  untyped-receiver (dropped)  : 19     a parameter, a block argument, the result of a call
+  untyped-receiver (dropped)  : 22     a parameter, a block argument, the result of a call
   unbound-self-call (dropped) : 10     a call on self that nothing declares (a DSL's verbs)
-  ancestor-attributed         : 3      of the resolved: has_many, charged to the sole library ancestor
+  ambiguous-ancestor (dropped): 4      nothing declares it and two libraries could answer
+  ancestor-attributed         : 2      of the resolved: has_many, charged to the one library that could answer
   operators, untyped receiver : 8 (not in the rate)
 ```
 
@@ -37,6 +38,22 @@ byte of the model — the tool for auditing a corpus:
 
 What each reason means, and what the model says instead, is in the Ruby
 profile's notes (`./bin/codegraph profiles --lang rb`) and PLAN.md §19.4.
+
+## The trace
+
+`trace/codegraph_trace.rb` is the one piece of this package written in Ruby,
+and the one that is never part of the binary: required inside a project that
+still boots, it writes what only the running program knows, and
+`codegraph-ruby --trace` merges it (`docs/ruby-extractor.md` §5). It runs the
+project's code — which is exactly why it is the user's step and not the
+extractor's. One file, no dependency beyond `json`, nothing patched.
+
+It is exercised for real, not in `cargo test`: the Rust tests hold the merge
+to hand-written traces (`src/trace.rs`, `src/extraction/tests.rs`,
+`tests/contract.rs`); the tool itself was run in a container against rake —
+its `lib/` loaded, then its own test suite under `CODEGRAPH_TRACE_CALLS=1` —
+and the result merged and validated. Any Ruby from 2.5 on should do; 3.4 is
+what it ran on.
 
 ## Building
 

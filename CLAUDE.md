@@ -43,6 +43,9 @@ extractors/ruby/     Cargo package `codegraph-ruby` (Prism, CRuby's own parser, 
                      model.jsonl. ONE binary: no Ruby to build it or to run it.
                      Building needs libclang (bindgen reads Prism's C headers).
                      One dependency, `ruby-prism`, pinned exactly.
+                     `trace/codegraph_trace.rb` (one Ruby file, run by the USER
+                     inside a booting project) writes the trace `--trace` merges:
+                     `generated` mixins, `dynamic-candidate` calls, never a key.
 extractors/metrics/  Rust crate `codegraph-metrics` (big-code-analysis 2.2.0 as a
                      LIBRARY, five tree-sitter grammars). Not an extractor: a PASS
                      over any extractor's model.jsonl that joins bca's function and
@@ -197,6 +200,10 @@ node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256
 ./build.sh --ruby                                   # cargo build --release → extractors/ruby/target/release/codegraph-ruby
 ./bin/codegraph-ruby --src <dir> --out model.jsonl  # needs nothing installed — no Ruby
 ./bin/codegraph-ruby --src <dir> --out model.jsonl --explain-dropped   # + stderr: dropped <reason>: <file>:<line> <what>
+./bin/codegraph-ruby --src <dir> --trace <dir>/codegraph-trace.jsonl --out model.jsonl
+#   the trace, inside a project that boots (it RUNS the project's code — the extractor never does):
+#   ruby -r<repo>/extractors/ruby/trace/codegraph_trace -e 'require "./config/environment"; Rails.application.eager_load!'
+#   docs/ruby-extractor.md: the dropped-site reasons, the audit, the Packwerk and boot-time oracles
 #   Rust ≥ 1.94 and libclang to BUILD (build.sh/test.sh lend bindgen GCC's builtin headers when clang's are
 #   missing — a bare `cargo build` there fails on limits.h); `test.sh --ruby` = cargo test + the release
 #   binary must reproduce fixtures/ruby. CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test --manifest-path
