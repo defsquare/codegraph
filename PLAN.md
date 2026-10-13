@@ -2729,7 +2729,7 @@ under one command-line contract (§13.5, schemas/README.md §8) exactly so
 this could be true: the app needs to know nothing about them but that
 contract and the file extensions they claim.
 
-Locked decisions, each with its reason (the delta table in §21 repeats them):
+Locked decisions, each with its reason (the delta table in §22 repeats them):
 
 - **Tauri is the shell, not a runtime.** Window, native menu, folder dialog,
   drag-and-drop, sidecar lifecycle, bundling, signing and notarization. No
@@ -3634,7 +3634,7 @@ file without one of them lying, so they do not share one:
 | will not open | degrade to the `.jsonl`, silently | a usage error naming the file; never overwritten |
 | committed / shared | never | never — the JSONL export is what is committed, diffed and handed to Specy |
 
-Locked decisions, each with its reason (the delta table in §21 repeats them):
+Locked decisions, each with its reason (the delta table in §22 repeats them):
 
 - **The db is the working copy; the JSONL becomes its deterministic export.**
   `<model>.insights.jsonl` keeps its format, its byte-determinism and its
@@ -4811,7 +4811,543 @@ per-fixture suite.
 
 ---
 
-## 20. Milestones
+## 20. Phase 17 — The vocabulary: word cloud and semantic glossary (M19)
+
+Motivation ([#6](https://github.com/defsquare/codegraph/issues/6), with the
+profile half of [#19](https://github.com/defsquare/codegraph/issues/19)): a
+codebase speaks a language, and the model already holds every word of it —
+every `TNamed` entity is an identifier someone chose — but it holds each name
+as ONE token. `OrderManagerRepository` is a name to the analyzer, not the
+three words `order`, `manager`, `repository`; nothing today can say that
+`order` is spoken 1 400 times across 61 modules while `basket` is spoken
+twice, in one. The issue's pitch is the word cloud of an application; what
+makes it more than a picture is what the issue lists after it: **drift**
+(words in the code that the business never says, and the reverse),
+**overlap** between modules, a proxy for **cognitive load** (a module with
+500 distinct words against one with 100), and the city link (where does
+`order` live). Then the half a model is for: a word's MEANING where it is
+used — `order` is polysemic — stored with the insights, as a glossary per
+scope.
+
+**Decision: a pure package, `@codegraph/vocabulary`, computing from the
+NAMES the model carries; an artifact, `vocabulary.json`, beside `city.json`
+and `navigator.json`; the per-language idioms as profile DATA in core
+(`Profile.lexicon`, which is #19); the glossary TIED TO EACH EXPLAINED
+ENTITY — its explanation carries the words its name is made of, each with
+its sense and its concern in that entity's context, and every scope's
+glossary is rolled up from those.** Rejected, each with its reason:
+
+- **Tokenizing source text** (the issue's step 1, read literally: strip the
+  keywords of a file, collect every identifier). The words the issue names —
+  class, method, variable, argument names — are exactly what the model
+  carries, with its kind, its containment and its anchor; a lexer per
+  language would be a sixth source reader, outside the two the architecture
+  licenses (the extractor, the metrics pass), and keyword filtering would
+  become a necessity instead of a tag. What source text would add —
+  comments, string literals, the names of external members called — is a
+  second channel (§20.5). The cost of the choice is COVERAGE: an extractor
+  that emits no local variables (Ruby, Elixir — their profiles have no
+  `localVariable` kind) yields a cloud with fewer incidental words. That is
+  measured and stated per extractor (§20.1), not hidden.
+- **Inside `@codegraph/analyzer`.** The analyzer answers graph questions;
+  this is a view model with an artifact of its own, like the city and the
+  navigator, and it carries its own layout.
+- **Inside the metrics pass.** It would re-read source for words the model
+  already states, and `metrics` is for measured NUMBERS (METAMODEL §3.8), not
+  for derived strings.
+- **Words in `model.jsonl`.** Derived from names, hence recomputable from
+  the model alone — the opposite of a measure. The artifact is the
+  serialization; the model does not move (invariant 4's spirit: derived
+  indexes are never serialized into the interchange).
+- **`d3-cloud` or a browser-only layout.** The layout is a page of geometry
+  that must run in Node — the demo image is a committed SVG the CLI writes
+  deterministically — and the browser passes its own text measurer into the
+  same function.
+
+Seven principles, locked up front:
+
+1. **Words come from the model's names, never from source.** Every kept
+   `TNamed` entity contributes the words of its name; a nameless one
+   (constructor, lambda) contributes none and is counted. Coverage per
+   extractor is a table in this section, filled by the milestone.
+2. **The idiom is the profile's; the algorithm is one.** Keywords,
+   conventional member names, affixes and separators are DATA on the
+   profile (`lexicon`), specifiable without being implemented (invariant 8).
+   The splitter reads them and knows no language.
+3. **Classification, not filtering.** Every token is kept and tagged
+   `domain | technical | keyword | short`; a consumer filters. Drift needs
+   the technical words too, and "not shown" must stay distinguishable from
+   "not there" (the §3.8 rule, applied to words).
+4. **Weights are data and travel in the artifact.** A count without the
+   scheme it was weighted under is not a fact — the city's `bindings` rule.
+5. **Scope membership is the fold's.** A type's words are the words of
+   everything that folds into its building (`containingType`), a module's
+   likewise (`containingModule`), the corpus's every kept entity — the same
+   membership the city uses, so a `vocabulary:order` channel colours the
+   building whose words were counted. Attachment is NOT followed, as the
+   fold does not: a Ruby reopening speaks in the file it is written in.
+6. **Deterministic bytes.** Terms interned and sorted, scopes in id order,
+   tables by weight then term; `fixtures/<lang>/expected/vocabulary.json`
+   per fixture, byte-identical on every run and every OS.
+7. **A word's meaning is an inference about one entity, stored and shown as
+   one.** It lives inside that entity's insight record in
+   `<model>.insights.db` (paid for: migrated, never regenerated), never in
+   the artifact, and wears the page's inference colour.
+
+### 20.1 The split, the classes, the weights (M19a)
+
+**The profile lexicon** (#19, METAMODEL §5 gains the row). Optional on every
+profile — a profile without one is complete, and the splitter falls back to
+the universal rules below — present on the eleven shipped:
+
+```ts
+lexicon?: {
+  keywords: string[];       // reserved words, as the language spells them
+  conventional: string[];   // whole member names the language or its runtime dictates;
+                            // skipped whole: toString/equals/hashCode/main (Java),
+                            // initialize/to_s/inspect/<=> (Ruby), constructor (TS),
+                            // __using__/start_link/init/handle_call (Elixir),
+                            // Equals/GetHashCode/ToString/Dispose/Main (C#)
+  technical?: string[];     // language-specific noise beyond the shared list:
+                            // impl, bean (Java); concern (Ruby); live, web (Elixir)
+  idioms: {
+    separators: string[];   // "_", "-", ".", "::", "/", "$"
+    prefixes: string[];     // sigils stripped before splitting: "@@", "@", "$", "#", "_"
+    suffixes: string[];     // "?", "!", "=" (Ruby/Elixir), "`N" (C# generic arity)
+    interfacePrefix?: true; // C#: `IOrderService` → order, service (I + Upper + lower)
+    fileModules?: true;     // the module is the file: strip the extension, split the path
+  };
+};
+```
+
+`ProfileSchema` mirrors it; `codegraph profiles --lang X` prints it in full
+(the command's completeness rule); `schemas/` is unchanged — a profile is not
+on the wire. Tests pin: every shipped lexicon has a non-empty keyword list,
+its entries are distinct, and nothing in `conventional` is also a keyword.
+
+**The split** (`split.ts`): one function, `splitIdentifier(name, lexicon)`,
+in six steps, each pinned by a table of hand cases per idiom:
+
+1. strip one leading prefix and one trailing suffix from the lexicon
+   (`@total` → `total`, `valid?` → `valid`, `save!`, `name=`,
+   `Repository\`1` → `Repository`), then the interface prefix when the flag
+   is set and the rest starts Upper + lower (`IOrderService`, not `IO`);
+2. split on the lexicon's separators; for `fileModules`, drop the
+   extension first (`legacy/acme-report.ts` → `legacy`, `acme`, `report`);
+3. camel-case boundaries with the acronym rule — lower→Upper, and an
+   Upper run followed by Upper + lower splits before its last letter
+   (`HTTPServer` → `http`, `server`; `getURLString` → `get`, `url`,
+   `string`; `XMLHttpRequest` → `xml`, `http`, `request`) — on Unicode
+   letter categories, not ASCII (`fixtures/unicode` is the test: `ＡFullwidth`
+   and `𠀀Supplementary` must split and lowercase without a replacement
+   character);
+4. a digit run attaches to the token before it (`utf8`, `md5`, `v2`); a
+   token that is only digits is dropped and counted (`skipped.numeric`);
+5. lowercase (`toLowerCase`, locale-independent: a Turkish-locale machine
+   must write the same bytes);
+6. a `conventional` identifier is skipped whole BEFORE step 1 and counted
+   (`skipped.conventional`): `toString` must not contribute `string`,
+   `handle_call` must not contribute `call`.
+
+Properties (fast-check over identifiers the grammar admits): no empty token;
+every token lowercase; every token is, case-insensitively, a substring of
+the input with the affixes removed; the same input gives the same tokens;
+`split(a + sep + b) = split(a) ++ split(b)` for any lexicon separator.
+
+**The classes** (`classify.ts`), a closed set `TERM_CLASSES = ["domain",
+"technical", "keyword", "short"]`, decided per TOKEN in this order:
+`keyword` when the lowercased token equals a lowercased lexicon keyword
+(`type`, `default`, `case`, `new`, `end`); `short` when it is one character
+(`i`, `e`, `x` — length 2 stays: `id`, `db`, `io` are words); `technical`
+when it is in the shared list ∪ the profile's (`DEFAULT_TECHNICAL`, ~80
+words in the package: `get set is has to from of with by and or not new
+create build make init impl abstract base default util utils helper manager
+service repository controller handler factory provider dto dao entity model
+data info config exception error test mock spec com org net io src lib main
+app`…, overridable whole with `--technical FILE`, its digest recorded in the
+artifact); else `domain`. The list is contestable by construction — which is
+why it is data in one place and the artifact says which one it used.
+
+**Roles and weights** (`weight.ts`). The role of the entity carrying a name
+comes from its traits, never its kind (the navigator's rule): `module`
+(TModule), `type` (TType), `operation` (TInvocable), `parameter` / `local`
+(TStructural listed in the parent's `parameters[]` / `localVariables[]`),
+`attribute` (every other TStructural: fields, constants, properties, module
+attributes). Default weights, recorded in the artifact and overridable with
+`--weights role=n,…`:
+
+| role | weight | why |
+|---|---|---|
+| `type`, `module` | 8 | a concept the corpus names once and refers to everywhere |
+| `attribute` | 4 | a thing the type holds — nouns, usually domain |
+| `operation` | 3 | something it does; the prefix is usually technical (`get`, `find`, `build`) |
+| `parameter`, `local` | 1 | incidental: the "variable buried deep in a method" of the issue |
+
+An occurrence is one token in one name; a name carrying a word twice counts
+twice. Both the weighted sum and the raw occurrence count are kept — one is
+a judgement, the other a fact.
+
+**Scopes and aggregation** (`aggregate.ts`). Scopes are the kept
+(view-filtered, non-stub) modules and types, plus the corpus root; an
+operation's table is computed on demand (`--scope ID`), not stored (§20.5).
+A scope's table is the union of the tables of every kept entity whose fold
+container it is: `term → { weight, occurrences, carriers }` where `carriers`
+is the number of distinct entities carrying the word. Per scope: `distinct`
+and `distinctDomain` (the cognitive-load proxy), total `weight` and
+`occurrences`, `skipped` by reason. Per term at the root: `spread.modules`
+and `spread.types` (how many scopes speak it) and `exclusive` (the modules
+whose table alone has it) — the overlap and the drift inputs.
+
+**The artifact** `vocabulary.json`, kind `codegraph.vocabulary/1`: a header
+(generator, view descriptor, `weights`, `classes`, the technical list's
+digest, `langs`), `terms[]` interned and sorted with their class, `scopes[]`
+(root first, then modules then types in id order: `id`, `level`, `name`,
+`kind`, `parent` scope index, `terms: [termIndex, weight, occurrences,
+carriers][]` by weight descending then term) and `diagnostics` (skipped
+counts, entities the fold could not place). Every scope id is an entity the
+model declares and every index is in range — the closure property, tested.
+Size is measured on BroadleafCommerce (3 312 types, 502 modules) before any
+cap is considered; none is planned.
+
+**The command.** `codegraph vocabulary <models…> [--level corpus|module|type]
+[--scope ID] [--top N] [--class domain|technical|keyword|short|all]
+[--weights …] [--technical FILE] [--drift FILE] [--out vocabulary.json]
+[--svg FILE] [--json] [--internal-only] [--declared-only]`. No flag: the
+corpus root's top 40 `domain` terms as a table — term, class, weight,
+occurrences, modules, types. `--level module`: one block per module, its top
+N and its `distinct` column, sorted by `distinct` descending — the
+cognitive-load report. `--drift FILE`: a plain text file, one business term
+per line; each term is split with the universal rules so `Order Line` meets
+`order` and `line`; a business term is SPOKEN in a scope when every one of
+its words is, and the report lists the business terms no scope speaks and
+the `domain` words the code speaks that no business term contains, by
+`--level`. The Specy `.domain` file as input is deferred (§20.5): the plain
+list first, because it exists in every company.
+
+**Measured** (the table this milestone fills — the numbers below are what to
+collect, not results):
+
+| corpus | kept entities | named | by role (module · type · operation · attribute · parameter · local) | skipped (unnamed · conventional · numeric) | distinct terms (domain) | artifact | build |
+|---|---|---|---|---|---|---|---|
+| `fixtures/java`, `csharp`, `typescript`, `elixir`, `ruby` | | | | | | | |
+| BroadleafCommerce (Java) | | | | | | | |
+| codegraph, self-hosted (TypeScript) | | | | | | | |
+| Mastodon (Ruby) — no locals by construction | | | | | | | |
+| Plausible (Elixir) — no locals by construction | | | | | | | |
+
+The Broadleaf top ten by weight under `domain` is the issue's sanity check
+— it must read as a commerce vocabulary (`order`, `product`, `customer`,
+`offer`, `sku`, `fulfillment`, `payment`, `catalog`…), and whatever
+technical word leaks into it names a missing entry of the shared list, fixed
+as data.
+
+### 20.2 The cloud, the tab, the city channel (M19b)
+
+**Layout** (`layout.ts`): pure geometry, no randomness. Terms by weight
+descending; font size interpolated between a minimum and a maximum on the
+square root of the weight (area reads as magnitude); each box placed on an
+Archimedean spiral from the centre, first position with no axis-aligned
+overlap against what is placed, the canvas growing when the spiral leaves
+it. The text measurer is INJECTED — `measure(text, size) → { width, height }`
+— with a monospace default (0.6 em advance per code point, 1.2 em line) that
+is exact for the font the SVG declares, and the browser passes
+`canvas.measureText` for its proportional face. Properties: no two placed
+boxes intersect; every box lies inside the reported viewBox; the same input
+gives the same positions; placement order is weight order.
+
+**SVG** (`svg.ts`): size by weight, colour by class and nothing else
+(`domain` in ink, `technical` muted, `keyword` and `short` faint — meaning
+controls appearance), a legend naming the scope, the weight scheme, the
+class filter and the counts, a monospace font stack. Deterministic bytes:
+`fixtures/java/expected/vocabulary.svg` is a snapshot, and the demo image is
+this command's output on a public corpus, committed under `docs/`.
+`codegraph vocabulary --svg FILE [--scope ID] [--top N] [--class …]`.
+
+**`serve`** builds `vocabulary.json` from the same graph and view as the two
+others and serves it at `/vocabulary.json`; evidence is a LOOKUP,
+`/carriers.json?scope=ID&term=order` → the entities of that scope whose
+names carry the word (name, kind, role, anchor, and the id when the entity
+is a type or module — the hand-off key), from the in-memory model `serve`
+already holds; an unknown scope or term is 404, like `/insight.json`. The
+artifact stays small (counts, not lists) and a static host degrades to no
+evidence rather than to a bigger file.
+
+**The Vocabulary tab** (`navigator-ui`, the sixth): the cloud of the current
+scope — the corpus until a module or a type is selected in Navigate, then
+that scope, the way the explanation panel follows the selection — with class
+chips (default `domain`), a `--top` slider, and beside it the table (term,
+weight, occurrences, carriers, spread). Clicking a word asks `/carriers.json`
+and lists the carriers; a type or module among them reveals in Navigate (its
+`id`), a member reveals its type. The tab restates the artifact kind and
+`TERM_CLASSES` as literals pinned equal to the package's by a test, imports
+`@codegraph/vocabulary` for TYPES only (the frontend rule), and the layout
+runs in the browser with the page's own measurer — the same function the
+CLI ran. Reviewed as screenshots on Broadleaf: the corpus, `catalog.domain`,
+`ProductImpl`.
+
+**The city channel**: `vocabulary:<term>` as a metric source for `--height`,
+`--color` and `--carry` — the term's weight in the building's type scope,
+`undefined` where the type does not speak it, so an unmeasured building is
+floored and labelled, never zeroed. Wired through the CLI's `metric(name)`
+hook exactly as `history:` is (`history-metrics.ts`); `@codegraph/city` is
+unchanged. `codegraph serve model.jsonl --color vocabulary:order` is "where
+does `order` live" — the issue's city link, and the second demo image.
+
+### 20.3 The glossary: words in the explanation (M19c)
+
+What a model is asked, and OF WHAT. The deterministic part knows that
+`OrderManagerRepository` is made of `order`, `manager` and `repository`,
+that `order` is spoken in 61 modules and that `repository` is on the
+technical list; it cannot know what `order` means in THIS class, nor that
+`service` in `CustomerServiceTicket` is a domain word and not a layer. That
+is a judgement about one entity, in the context of that entity — its source,
+its Javadoc, its fields, what its operations were just explained to do, what
+it depends on — and the pipeline already assembles exactly that context for
+exactly that purpose: the context pack `explain` builds before it asks the
+model to explain the entity (`context.ts`). **So the glossary is not a
+second thing beside the explanations. It is IN them: an explained entity's
+record carries the words its name is made of, each with its sense and its
+concern in that entity's context, and every scope's glossary — a type's, a
+module's, the corpus's — is rolled up from the records, deterministically.**
+The first two drafts of this section — a standalone command over a scope's
+term table, then a second request per type and module over the pack — both
+asked about words at the wrong altitude: a scope has a vocabulary, but a
+MEANING belongs to the entity that uses the word, and only there is the
+context complete.
+
+Three layers, each a pure function of the one below it:
+
+| layer | what | who | cost |
+|---|---|---|---|
+| 1. count | names → words, classes, weights, scopes, the cloud (§20.1, §20.2) | `@codegraph/vocabulary` | none — a function of the model |
+| 2. mean | per explained entity, each word of its name: sense + concern, in context | the model, inside the `explain` call it already makes | a longer completion, no extra call |
+| 3. roll up | glossary per type, module, corpus; polysemy; drift between what the list says and what the model judged | readers over the store; the module call reconciles its types | none — a function of the records |
+
+**Layer 2 — the question added to every explanation.** A unit's prompt gains
+one section, *Words to define*: the words of the unit's own name and of the
+names of its members that are not units themselves — an operation's
+parameters, a type's fields, constants and properties — split by the
+deterministic rules of §20.1 and listed with the identifier each comes from
+(`order (OrderManagerRepository)`, `total, amount (totalAmount)`). The
+words are GIVEN, not chosen: the model cannot define a word the name does
+not spell, and the deterministic class is deliberately withheld so the
+judgement is the model's — the gap between the two is layer 3's first
+report. Words of class `short` and `keyword` are not asked (`i`, `x`,
+`type`); `technical` ones are, since a technical word in a domain position
+is the whole point (`service`, `manager`, `handler`). Locals and lambda
+parameters are counted (weight 1) and not defined (§20.5). The block gains:
+
+```ts
+words: [{
+  word,                                    // as the splitter spelled it, lowercase
+  in: string[],                            // the identifiers of this unit it appears in
+  concern: "domain" | "technical" | "ambiguous",
+  sense,                                   // a short label: the signified
+  meaning,                                 // one sentence, in THIS entity's context
+  confidence
+}]
+```
+
+One entry per word per unit — one entity means one thing by a word; an
+entity that does not is `ambiguous`, with the two senses in `meaning`. The
+module block, which already quotes its types' summaries, is additionally
+shown its types' `words` entries (from the store, through the same
+projection discipline as summaries: one JSON path, never the block) and
+gains:
+
+```ts
+glossary: [{ word, concern, sense, meaning,
+             polysemous: boolean,          // its types disagree on the word
+             senses: [{ in: string, sense }] }]   // the disagreeing types, when they do
+```
+
+— the module-level reconciliation of what its types said, over the words
+its types spell (cut at `--terms N`, default 60, by weight). Its existing
+`ubiquitousLanguage` keeps its role (terms the model proposes, in its
+words); `glossary` is over the words the CODE spells. The corpus level has
+no call: a reader lays the modules' senses of a word side by side (below).
+
+**Why in the block, this time.** M11 put `PROMPT_VERSION` into every
+fingerprint precisely so a better prompt re-explains what it improves; a
+shape change is the designed case, not a hazard. `PROMPT_VERSION` becomes
+`"2"`; a store explained under `"1"` keeps every record until a run replaces
+it (the store is not a cache — nothing is deleted by the bump), and a reader
+meeting a record without `words` says "not defined under this prompt", as
+`answerInsight` already distinguishes failed from unknown. `words` and
+`glossary` are `.optional()` in the record schema so a version-1 record
+decodes and re-encodes to its own bytes — the round-trip identity holds for
+every existing side-car — while `strictify` makes them required in the
+response schema sent to the provider, as it makes every property. **The
+side-car format does not change**: no new record type, no new trailer
+count, nothing on failures; the words ride inside `block`, where `concept`
+and `confidence` already do.
+
+**The store**: `INSIGHTS_DB_VERSION = 2`, migration index 1 — the first rung
+of the ladder to run on a real file: a PROJECTION table `insight_word (id,
+word, in, concern, sense, confidence)` written from the block in the same
+transaction as the record (the `glossary_term` idea of the previous draft,
+at the right altitude), indexed on `word`; nothing to backfill, since no
+version-1 block holds words. Tests: a version-1 store with N insights and M
+failures migrates with N and M intact and exports the same bytes as before;
+a version-3 file is refused untouched; `insight_word` is rebuilt from the
+blocks on `--import`, so the side-car stays the one source of truth.
+
+**Fingerprints.** The word list is a function of the lexicon (profile data)
+and of the names already hashed through `signatures` and `factsDigest`; it
+joins the fingerprint inputs anyway, so a lexicon correction re-explains
+exactly the units whose words it changed. A module's fingerprint already
+takes its types' fingerprints, which now cover their words.
+
+**Cost.** No new call. A completion grows by roughly 30 tokens per word:
+an operation defines ~4 (its name and its parameters), a type ~10 (its name
+and its fields), a module ~60 glossary entries at ~40. Broadleaf, estimated
+and to be replaced by the measurement: 24 392 × 4 × 30 + 3 312 × 10 × 30 +
+502 × 60 × 40 ≈ 5 M completion tokens, about **$3 on top of a run** at $0.60
+per million out; and the bump re-explains the existing side-car once
+(measured at $4.70 under `deepseek-v4.1-flash`), which `--estimate` prints
+before anyone pays.
+
+**Layer 3 — readers, all over the store, none calling anything.**
+`codegraph insights --word order` — every entity whose names spell it,
+grouped module → type → operation, each with the identifiers it is in, its
+concern, sense and confidence, then the module-level `glossary` entries
+with their `polysemous` flag: the signifier/signified glossary of the issue,
+at every scope, from one index lookup. `--glossary MODULE_ID` — a module's
+reconciled glossary whole. `--polysemy` — the words a module flagged, and
+the words whose module-level senses differ across the corpus, side by side
+for a human to judge (the corpus has no call to judge for it). `--concerns`
+— per module, how many of its words the model called domain, technical,
+ambiguous: the cognitive-load proxy split by kind. `codegraph vocabulary
+--drift-insights` — the deterministic classes against the model's concerns
+(words the technical list calls technical that the model judged domain
+somewhere, and the reverse, with the entities), plus the business list of
+§20.1 against both; it opens the store as a reader beside the model, which
+`insights` (store only) cannot. `serve` gains `/glossary.json?scope=ID&term=
+order` — the entries of the entities under that scope, from `insight_word`
+— over the same reader as `/insight.json`; the Vocabulary tab shows them
+under a clicked word, each in the `--inference` colour with the model badge,
+and the Navigate explanation panel renders `words` and `glossary` through
+the same generic `blockFacts` it renders everything else with: an inference
+never looks like a fact.
+
+### 20.4 Milestone split
+
+**M19a — the lexicon, the split, the artifact** (closes the profile half of #19)
+
+- [ ] `Profile.lexicon` in core: type, `ProfileSchema`, METAMODEL §5 row,
+      the eleven profiles filled (keywords from each language's
+      specification; conventional names from its runtime), `codegraph
+      profiles --lang` printing it; the three lexicon tests; `schemas/`
+      unchanged, proven by the drift check.
+- [ ] `packages/vocabulary/` (`@codegraph/vocabulary`, depends on core and
+      analyzer only): `split.ts`, `classify.ts` with `DEFAULT_TECHNICAL`,
+      `weight.ts`, `aggregate.ts` on `containingType`/`containingModule`,
+      `artifact.ts` (`codegraph.vocabulary/1`), `drift.ts`; the hand tables
+      per idiom and the properties of §20.1; the unicode fixture through the
+      splitter.
+- [ ] `codegraph vocabulary` (§20.1): the report, `--level`, `--scope`,
+      `--class`, `--weights`, `--technical`, `--drift`, `--out`, `--json`,
+      the view flags; usage errors for an unknown scope, role or class.
+- [ ] `fixtures/<lang>/expected/vocabulary.json` for the five fixtures,
+      byte-identical on every run; hand counts in each fixture's README
+      (`order` in the Java fixture: which names, which weights); the closure
+      and determinism properties over every fixture.
+- [ ] The coverage table of §20.1 filled on the fixtures, Broadleaf,
+      codegraph itself, Mastodon and Plausible; the Broadleaf top ten
+      reviewed; the technical list corrected as data where it leaked.
+
+**M19b — the cloud, the tab, the city channel**
+
+- [ ] `layout.ts` and `svg.ts` with their properties and the SVG snapshot;
+      `--svg`.
+- [ ] `serve`: `/vocabulary.json` built with the two others,
+      `/carriers.json` as a lookup; both on the app daemon's page for free
+      (the artifact rides the same build), the lookups following the
+      insight route's precedent.
+- [ ] The Vocabulary tab: cloud, chips, table, carriers, reveal; the
+      literal-pinning and types-only boundary tests; screenshots on
+      Broadleaf reviewed at user-facing sizes.
+- [ ] `vocabulary:<term>` metric source through the `metric(name)` hook;
+      `--color vocabulary:order` on Broadleaf reviewed as a screenshot.
+- [ ] The demo images: the corpus cloud of a public repository as SVG
+      (`docs/vocabulary-<corpus>.svg`) and the city coloured by one term,
+      with the README section that shows them — the issue's fourth
+      acceptance criterion.
+
+**M19c — the glossary: words in the explanation**
+
+- [ ] `words` on the three blocks and `glossary` on the module block,
+      `.optional()` in the record schema and required on the wire;
+      `PROMPT_VERSION = "2"`; the *Words to define* prompt section fed by
+      `@codegraph/vocabulary` (types only, through the env); the module
+      prompt quoting its types' entries through a `RecordSource.words(id)`
+      projection; the word list in the fingerprint inputs.
+- [ ] The store at version 2: migration 1 creating `insight_word`, written
+      per record in the unit's transaction and rebuilt on `--import`; the
+      migration tests of §20.3; the round-trip property unchanged and green
+      on every existing side-car.
+- [ ] `--terms N`; `--dry-run`/`--estimate` reflecting the longer
+      completions (`COMPLETION_TOKENS_PER_BLOCK` re-measured); a reader's
+      answer for a record explained under prompt `"1"`; on the fake client
+      and live on the Java fixture; the §20.3 estimate replaced by the
+      Broadleaf measurement.
+- [ ] Readers: `insights --word`, `--glossary`, `--polysemy`, `--concerns`;
+      `vocabulary --drift-insights`; `/glossary.json`; the entries in the
+      Vocabulary tab and in the Navigate panel as inferences.
+- [ ] `docs/vocabulary.md` (the idioms per profile, the classes, the
+      weights, the artifact, the three layers, the readers, the drift
+      reports); README names the feature; `docs/cli.md` the command and the
+      flags; `docs/insights.md` the `words` and `glossary` fields and the
+      version bump.
+
+Definition of done: the five `vocabulary.json` snapshots byte-identical to
+the package's output; `codegraph vocabulary` on Broadleaf prints a commerce
+vocabulary under `domain`; the tab and the coloured city reviewed as
+screenshots; `explain` on the Java fixture, live and on the fake client,
+writes a side-car whose every record carries `words` and whose module
+records carry `glossary`; the Broadleaf side-car (28 206 records, prompt
+`"1"`) imports into a version-2 store with its counts intact and exports
+`cmp`-equal, and `--estimate` under prompt `"2"` prices the re-explanation
+before it runs; `insights --word order` on the re-explained Broadleaf store
+answers in under a second; `pnpm -r test`, typecheck and `./test.sh --ts`
+green; the coverage table and the cost filled in this section.
+
+### 20.5 Deferred, explicitly
+
+- **A source-text channel** — comments, string literals, the names of
+  external members a scope calls (what it speaks TO, against what it
+  declares). A second reader with its own classes, waiting for the first
+  channel to prove the tags and the weights.
+- **Operation scopes in the artifact.** Computable on demand; the navigator
+  addresses types and modules only (a member node carries no id), so the
+  page could not ask for one. The day it can, they join the artifact.
+- **Locals and lambda parameters.** Counted at weight 1, never defined:
+  24 392 operations on Broadleaf would spend completion tokens on `i` and
+  `result`. A unit's `words` cover its name, its parameters and (for a
+  type) its fields — the weighted vocabulary minus its lightest role.
+- **A corpus-level reconciliation call.** The modules' senses of a word
+  are laid side by side for a human; one more call could judge them, the
+  way the module call judges its types'. It waits for `--polysemy` to show
+  how often a human disagrees with the obvious reading.
+- **A glossary without explaining** (this section's first two drafts: a
+  request per scope over a term table, with or without the pack). Cheaper,
+  and context-poor by construction: a word's meaning asked at the altitude
+  of a scope instead of the entity that uses it. Waits for a corpus nobody
+  can explain but everybody wants to count.
+- **Deterministic compounds** (n-grams over adjacent tokens of one name:
+  `order line item`). The glossary's `compounds` field answers it for the
+  top terms; a counting pass would answer it everywhere, and its weights
+  would need their own rule.
+- **A Specy `.domain` file as the drift input** — its ubiquitous language
+  is the business glossary a plain list approximates. The skill that reads
+  side-cars lives in another repository; the plain list ships first.
+- **History joins** (who speaks which words, when a word entered the
+  corpus): the `history-metrics` side-car and `snapshots` make it a join,
+  not a feature of this phase.
+
+---
+
+## 21. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -4855,8 +5391,11 @@ per-fixture suite.
 | M18a | Ruby extractor — profile + skeleton | ✅ (2026-10-13, worktree `ruby-extractor`) `rb` profile in core (the eleventh: the module is the file, `class` and `module` are types below it, mixins are `traitUsage`, no interface — §19.2); `extractors/ruby/` in Rust on Prism 1.9.0 (`ruby-prism`, pinned), no Ruby to build or run; the core table distilled from RBS 4.2.0 `core/` with RBS's own parser (915 constants: 304 classes, 26 modules, 585 values); walking skeleton — files, classes and modules (the wrapper rule, one entity per declaring file, reopenings `attachedTo` their primary, a `String` patch attached to `<ruby>/String`), methods and parameters, `require`/`require_relative` by path and by load root, superclasses and mixins resolved lexically, the `derived` import, stubs — → `fixtures/ruby/expected/model.jsonl` (24 files, 102 entities / 38 edges) byte-identical to core's encoder and profile-valid with zero issues; 60 cargo tests (50 unit, 10 contract: snapshot, CRLF + reversed creation order, the CLI contract) + 16 core gate tests; `codegraph validate` OK; `bin/codegraph-ruby`; `build.sh --ruby` (a 1.2 MB binary) / `test.sh --ruby` with the release-binary `cmp`; `ruby-test` written in CI, not yet run there |
 | M18b | Ruby extractor — model | ✅ (2026-10-13, worktree `ruby-extractor`) `field` (an instance variable, its `attr_*`, a Struct member: one entity `@x`) and `constant` (keyed by full path, with its literal `value`); `Struct.new` / `Data.define` / `Class.new` / `Module.new` assigned to a constant as types, a `Struct.new` superclass as a `generated` inheritance; constant references resolved lexically then through the ancestors; the core table extended with superclasses, mixins and methods (RBS 4.2.0: 915 constants, 23 mixins, 2428 methods) so lookup crosses from the corpus into the VM's classes; the invocation tiers of §19.4 — `declared` where the receiver's class is written, `derived` for typed locals, typed instance variables and the sole-library-ancestor attribution, the language resolved with no edge, untyped receivers dropped and counted; `access` with read/write, `throws`, comments, `sloc` + `cyclomatic`, literals; the Ruby 1.8 require idioms, `load`, `autoload`, shebang scripts; `--explain-dropped`, every drop with its line → `fixtures/ruby/expected/model.jsonl` (27 files, 154 entities / 136 edges; 152 sites, 77.0 % resolved) byte-identical to core's encoder and profile-valid with zero issues; `ruby` in the metrics pass and the fifth `model.metrics.jsonl` (86 of 88 joined, `sloc = ploc` on all 86); 101 cargo tests (90 unit, 11 contract) + 24 core gate tests; the fixture in the analyzer, city, navigator, CLI `validate` and metrics suites; `validate`, `analyze`, `navigator`, `city --layout` and `serve` run on it, City and Navigate screenshots reviewed |
 | M18c | Ruby extractor — audit + oracles + distribution | ✅ (2026-10-13, worktree `ruby-extractor`; CI not yet run) rake 13.2.1, rubygems 3.6.2, Mastodon 4.3.0 and rails 8.0.2 audited `validate`-clean (100 / 794 / 2 541 / 3 334 files; 77.8 / 54.4 / 31.2 / 57.0 % of sites resolved, Mastodon's `app/`+`lib/` 62.1 %; rails in 4.7 s). Seven defects found and fixed test-first: a library namespace the corpus reopens below dropped as `namespace-only` (592 `Rails.*` in Mastodon); class methods given by an `included` hook unseen (now read where literal — plain Ruby and ActiveSupport::Concern — and `derived`); a library mixin ignored as a class-side candidate (`validates` charged to ActiveRecord::Base); a per-type `dynamic` flag clouding both sides; a compact declaration's qualifier not read; a constant qualified by a subclass stubbed below `<gems>`; `--explain-dropped` not saying what decided a drop. Oracles: Packwerk 3.3.1 over Mastodon — 4 289 of its 4 335 cross-file references in the model (98.9 %), the rest the wrapper rule; rake booted under its own tests — 1 006 of 1 012 declared methods held by the VM on the same line, 1 533 of 2 829 observed calls already edges. The trace tool (`trace/codegraph_trace.rb`, one file) and `--trace`: `generated` `traitUsage`, `dynamic-candidate` invocations with `candidates`, no entity added — exercised end to end in a container and `validate`-clean. `fixtures/ruby` → 31 files, 181 entities / 153 edges, 177 sites, 76.3 %; metrics 106 of 109 joined. 119 cargo tests (107 unit, 12 contract) + 27 core gate tests. Distribution wired: `ruby-native` on four Unix runners, the release loop, `Formula/codegraph-ruby.rb`, the catalogue row; `docs/ruby-extractor.md` |
+| M19a | Vocabulary — lexicon, split, artifact | `Profile.lexicon` on the eleven profiles (keywords, conventional names, affixes, separators — the profile half of #19), METAMODEL §5 row, printed by `profiles --lang`; `@codegraph/vocabulary`: one idiom-parametrized splitter with the acronym rule on Unicode categories, four term classes as tags (never filters), role weights recorded in the artifact, scopes = the fold's containers; `codegraph vocabulary` report, `--level`/`--scope`/`--class`/`--drift FILE`; five `vocabulary.json` snapshots byte-identical, closure and determinism properties; the coverage table of §20.1 filled on fixtures, Broadleaf, codegraph, Mastodon, Plausible |
+| M19b | Vocabulary — cloud, tab, city channel | deterministic spiral layout with an injected measurer and the no-overlap property; `--svg` with the fixture snapshot; `serve` builds `/vocabulary.json` and answers `/carriers.json?scope=&term=`; the sixth navigator tab (scope follows the selection, chips, table, carriers → reveal), literals pinned, types-only import; `vocabulary:<term>` metric source through the CLI hook, city unchanged; the two demo images under `docs/` and the README section — the issue's fourth criterion |
+| M19c | Vocabulary — glossary in the explanation | `words` on every insight block — the words of the unit's name, its parameters' and (for a type) its fields', each with `in`, `concern` (domain / technical / ambiguous), `sense`, `meaning`, in that entity's context, asked in the SAME call that explains it; `glossary` on the module block reconciling its types' entries with `polysemous`; `PROMPT_VERSION` 2, the words `.optional()` in the record schema so every existing side-car round-trips byte-identical — no new record type, no format change; the store at version 2 with the `insight_word` projection (rebuilt on `--import`); readers `insights --word/--glossary/--polysemy/--concerns`, `vocabulary --drift-insights`, `/glossary.json`, the entries shown as inferences in both panels; the Broadleaf re-explanation priced by `--estimate` and measured; `docs/vocabulary.md` |
 
-## 21. Decisions made in this plan (deltas vs. the design doc)
+## 22. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -4964,3 +5503,14 @@ per-fixture suite.
 | Ruby compact declarations (M18c) | `class Admin::Users` reads `Admin` — a `reference`; a wrapper `module Admin; class Users` does not | the compact form needs the name to exist, the wrapper creates it: the one difference between the two spellings. It is also where the model and Packwerk part: Packwerk counts the wrapper's keyword as a reference (45 of 4 335 on Mastodon) |
 | Ruby trace (M18c) | one Ruby file run by the user inside the booting project; mixins as `generated` `traitUsage` anchored on the type's declaration, observed calls as ONE `dynamic-candidate` invocation per site with its `candidates`; names and positions only, never a key; no entity added | running corpus code is the user's decision, not the extractor's; an observation is what ran once, which is exactly what `dynamic-candidate` says; and a model must have the same entities whether or not a trace was at hand |
 | Ruby import layer (M18) | a constant resolving to a declaration in another file is ONE `derived` `import` per (file, target file), at the first site, absent where a `require` already states it | a Zeitwerk application writes no `require` — the reference is the load — so the one layer comparable across languages would be empty for every Rails corpus; `derived` keeps the inference out of any `declared`-only analysis |
+| Vocabulary source (M19) | words are the model's `TNamed` names — every kept entity's name split by its profile's idiom; source text is never read | the words the issue names are what the model carries, with kind, containment and anchor; a lexer per language would be a third source reader outside the two the architecture licenses; the cost is coverage (no locals from Ruby and Elixir), measured per extractor and stated, not hidden |
+| Where the vocabulary lives (M19) | `@codegraph/vocabulary`, a pure package with its own artifact `vocabulary.json`; never `model.jsonl`, never `analyzer`, never the metrics pass | a view model with a layout, like the city and the navigator; derived from names, hence recomputable — the opposite of a measure, and `metrics` holds measured numbers only (METAMODEL §3.8) |
+| The idiom is profile data (M19, #19) | `Profile.lexicon`: keywords, conventional member names, technical additions, separators, prefixes, suffixes, the C# interface prefix, file-named modules; one splitter reads it | invariant 8: a profile is specifiable without being implemented; the algorithm knows no language, and a language without an extractor still gets its idiom |
+| Term classes are tags (M19) | every token kept and tagged `domain / technical / keyword / short`; a consumer filters; the technical list is data with its digest in the artifact | "not shown" must stay distinguishable from "not there" (the §3.8 absence rule applied to words); drift needs the technical words; the list is contestable by construction, so it is overridable and named |
+| Vocabulary weights (M19) | by role from traits — type and module 8, attribute 4, operation 3, parameter and local 1 — recorded in the artifact beside the raw occurrence count | a count without its scheme is not a fact (the city's `bindings` rule); the issue asks that a class name outweigh a buried variable, and nouns outweigh verbs whose prefix is technical |
+| Vocabulary scopes (M19) | a scope's words are those of every entity whose fold container it is (`containingType`/`containingModule`); attachment not followed; operations on demand, not in the artifact | the same membership the city uses, so `vocabulary:<term>` colours the building whose words were counted; the navigator addresses types and modules only |
+| Cloud layout (M19b) | pure deterministic geometry in the package — weight-ordered spiral, axis-aligned boxes, an injected text measurer with a monospace default; no `d3-cloud` | the demo image is an SVG the CLI writes and a fixture snapshots, so the layout must run in Node and give the same bytes; the browser passes `measureText` into the same function |
+| Carriers are a lookup (M19b) | the artifact carries counts per (scope, term); the carrying entities come from `/carriers.json?scope=&term=` over the model `serve` holds | lists per term per scope would multiply the artifact for evidence a page asks for one word at a time; a static host degrades to no evidence rather than a bigger file (the `/insight.json` precedent) |
+| Glossary tied to the entity (M19c) | each explained unit's block carries `words`: the words its name (and its parameters' or fields' names) is made of, with sense and concern in that entity's context, asked in the explanation call itself; the module block reconciles its types' words into `glossary`; scopes and the corpus roll up from the records | a meaning belongs to the entity that uses the word, and the context pack of that entity is the one place the pipeline has its source, facts and dependencies' explanations together; a scope has a vocabulary, not a meaning — the two earlier drafts (a standalone command over a term table; a second request per scope) asked at the wrong altitude |
+| Glossary storage (M19c) | the insights store, version 2: an `insight_word (id, word, in, concern, sense, confidence)` projection written with the record and rebuilt on `--import`, indexed on `word`; the side-car stays the one source of truth | bought, so it shares the insights' lifecycle (migrated, never regenerated); a projection makes `--word` an index lookup without a second authoritative copy — the M16b rule (what is queried is a column over the JSON, what is fetched is the block) |
+| Glossary wire format (M19c) | no new record type: `words`/`glossary` live inside `block`, `.optional()` in the record schema and required on the wire by `strictify`; `PROMPT_VERSION` 2 | M11 put the prompt version in every fingerprint so a better prompt re-explains what it improves — the designed case; a version-1 record decodes and re-encodes to its own bytes, so every existing side-car round-trips, and nothing is deleted by the bump |
