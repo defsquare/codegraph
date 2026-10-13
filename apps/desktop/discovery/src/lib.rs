@@ -438,6 +438,19 @@ mod tests {
     }
 
     #[test]
+    fn the_shipped_catalogue_claims_ruby_by_the_extensions_its_extractor_walks() {
+        let text = include_str!("../../src-tauri/resources/extractors.json");
+        let rows = parse_catalogue(text).unwrap();
+        let ruby = rows.iter().find(|r| r.name == "ruby").expect("a ruby row");
+        // The same four as extractors/ruby/src/corpus.rs: a Rakefile or a
+        // Gemfile has no extension to claim a tree by.
+        assert_eq!(ruby.extensions, vec![".rb", ".rake", ".gemspec", ".ru"]);
+        assert_eq!(ruby.command, "codegraph-ruby");
+        assert_eq!(ruby.install, "brew install defsquare/tap/codegraph-ruby");
+        assert!(ruby.role.is_none());
+    }
+
+    #[test]
     fn writes_the_registry_atomically_into_a_directory_it_creates() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("codegraph").join("registry.json");

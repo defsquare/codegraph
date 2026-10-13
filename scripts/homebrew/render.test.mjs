@@ -26,6 +26,10 @@ ${HEX(1)}  codegraph-metrics-osx-arm64
 ${HEX(2)}  codegraph-metrics-osx-x64
 ${HEX(3)}  codegraph-metrics-linux-arm64
 ${HEX(4)}  codegraph-metrics-linux-x64
+${HEX(5)}  codegraph-ruby-osx-arm64
+${HEX(6)}  codegraph-ruby-osx-x64
+${HEX(7)}  codegraph-ruby-linux-arm64
+${HEX(8)}  codegraph-ruby-linux-x64
 `;
 
 test("parseSums reads sha256sum output, star-marked or not", () => {
@@ -77,6 +81,20 @@ test("the Elixir formula lists only the platforms its native job builds, and not
   assert.throws(() => binaryFormulaRuby({ name: "go", version: "0.1.0", sums: {} }), /no binary extractor named go/);
 });
 
+test("the Ruby extractor's formula ships one Rust binary per Unix platform, like the pass it depends on", () => {
+  const formula = binaryFormulaRuby({ name: "ruby", version: "0.1.0", sums: parseSums(SUMS) });
+  assert.match(formula, /^class CodegraphRuby < Formula$/m);
+  for (const [rid, hex] of [["osx-arm64", HEX(5)], ["osx-x64", HEX(6)], ["linux-arm64", HEX(7)], ["linux-x64", HEX(8)]]) {
+    assert.match(formula, new RegExp(`download/v0\\.1\\.0/codegraph-ruby-${rid}"\\n\\s+sha256 "${hex}"`));
+  }
+  assert.equal((formula.match(/on_(arm|intel) do/g) ?? []).length, 4);
+  assert.match(formula, /bin\.install Dir\["codegraph-ruby-\*"\]\.first => "codegraph-ruby"/);
+  assert.match(formula, /system bin\/"codegraph-ruby", "--version"/);
+  assert.match(formula, /hello\.rb/);
+  // It needs no Ruby: the formula must not ask Homebrew for one.
+  assert.doesNotMatch(formula, /depends_on "ruby"/);
+});
+
 test("a missing sum is an error naming the asset, never a formula with a blank hash", () => {
   const withoutLinuxX64 = parseSums(SUMS.split("\n").filter((line) => !line.endsWith("codegraph-java-linux-x64")).join("\n"));
   assert.throws(
@@ -109,7 +127,7 @@ test("the metrics pass has its four platform blocks and runs over the smallest m
 
 test("every extractor formula depends on the metrics pass, exactly once", () => {
   const formulae = [
-    ...["java", "csharp", "elixir"].map((name) => binaryFormulaRuby({ name, version: "0.1.0", sums: parseSums(SUMS) })),
+    ...["java", "csharp", "elixir", "ruby"].map((name) => binaryFormulaRuby({ name, version: "0.1.0", sums: parseSums(SUMS) })),
     nodeFormulaRuby({ version: "0.1.0", sha256: HEX("b") }),
   ];
   for (const ruby of formulae) {
@@ -125,6 +143,7 @@ test("renderTap lists the cask and the formulae, the TypeScript one only with an
     "Formula/codegraph-elixir.rb",
     "Formula/codegraph-java.rb",
     "Formula/codegraph-metrics.rb",
+    "Formula/codegraph-ruby.rb",
   ]);
   const withNpm = renderTap({ version: "0.1.0", sums: parseSums(SUMS), npmSha256: HEX("c") });
   assert.ok("Formula/codegraph-typescript.rb" in withNpm);
@@ -144,6 +163,7 @@ test("the CLI writes the files under --out", () => {
     "codegraph-elixir.rb",
     "codegraph-java.rb",
     "codegraph-metrics.rb",
+    "codegraph-ruby.rb",
     "codegraph-typescript.rb",
   ]);
   assert.match(readFileSync(join(dir, "tap", "Casks", "codegraph.rb"), "utf8"), /cask "codegraph"/);

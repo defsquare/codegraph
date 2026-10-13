@@ -24,6 +24,12 @@
     "install": "brew install defsquare/tap/codegraph-elixir"
   },
   {
+    "name": "ruby",
+    "extensions": [".rb", ".rake", ".gemspec", ".ru"],
+    "command": "codegraph-ruby",
+    "install": "brew install defsquare/tap/codegraph-ruby"
+  },
+  {
     "name": "metrics",
     "role": "pass",
     "extensions": [],

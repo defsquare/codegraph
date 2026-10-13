@@ -14,6 +14,7 @@ brew install defsquare/tap/codegraph-java               # one per language, as n
 brew install defsquare/tap/codegraph-csharp
 brew install defsquare/tap/codegraph-typescript
 brew install defsquare/tap/codegraph-elixir
+brew install defsquare/tap/codegraph-ruby               # from the release after v0.1.0
 ```
 
 The app finds the extractors that are installed; a folder whose language has
@@ -35,7 +36,8 @@ matter for distribution, and their outputs on the GitHub release:
 | `java-native` (five runners) | `codegraph-java-<rid>` — the GraalVM native image |
 | `csharp-publish` (five RIDs from Linux) | `codegraph-csharp-<rid>` — the .NET single-file binary |
 | `elixir-native` (ubuntu, macos) | `codegraph-elixir-linux-x64`, `codegraph-elixir-osx-arm64` — the Burrito binary |
-| `metrics-native` (four Unix runners) | `codegraph-metrics-<rid>` (no Windows build) — the Rust metrics pass, each binary having re-measured the four fixtures byte for byte on its own OS |
+| `metrics-native` (four Unix runners) | `codegraph-metrics-<rid>` (no Windows build) — the Rust metrics pass, each binary having re-measured the five fixtures byte for byte on its own OS |
+| `ruby-native` (the same four runners) | `codegraph-ruby-<rid>` (no Windows build) — the Ruby extractor, Prism linked in, each binary having re-extracted its fixture byte for byte on its own OS. Building needs libclang on the runner; the binary needs nothing |
 | `sea` (five runners) | `codegraph-<rid>` — the single-executable CLI + daemon + frontends |
 | `desktop-bundle` (two macOS runners) | `Codegraph-<version>-osx-arm64.dmg`, `Codegraph-<version>-osx-x64.dmg` |
 | `npm-publish` | `codegraph-typescript@<version>` on npm (not on the release) |
@@ -61,10 +63,11 @@ node scripts/homebrew/render.mjs --version 0.1.0 --sums release/SHA256SUMS \
   on the release tags; `brew upgrade` is the update path, the Tauri updater
   is off.
 - `Formula/codegraph-java.rb`, `Formula/codegraph-csharp.rb`,
-  `Formula/codegraph-elixir.rb`: `on_macos` / `on_linux` × `on_arm` /
+  `Formula/codegraph-elixir.rb`, `Formula/codegraph-ruby.rb`: `on_macos` /
+  `on_linux` × `on_arm` /
   `on_intel` blocks with the asset URL and sum — only the platforms that
-  extractor's job builds (Elixir: Apple silicon and Linux x64 today; Homebrew
-  refuses the others cleanly) — `bin.install` renaming the asset to the
+  extractor's job builds (Elixir: Apple silicon and Linux x64 today; Ruby:
+  the four Unix platforms; Homebrew refuses the others cleanly) — `bin.install` renaming the asset to the
   command, a `test do` that runs `--version` and extracts a one-file tree. A
   prebuilt binary in a formula is legitimate in our own tap (homebrew-core
   refuses vendored binaries).
@@ -82,6 +85,11 @@ node scripts/homebrew/render.mjs --version 0.1.0 --sums release/SHA256SUMS \
 
 `node --test scripts/homebrew/render.test.mjs` (part of `test.sh`) pins the
 asset names the templates reference to the ones the release job writes.
+
+A formula is rendered only if every asset it names has a sum: once an
+extractor is in the table, a release missing one of its binaries fails the
+whole tap step. The job that builds them, the release job's copy loop and the
+table row therefore land together — as they did for `codegraph-ruby`.
 
 ## Secrets the workflow reads
 

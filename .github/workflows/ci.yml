@@ -16,10 +16,12 @@
 #                   Windows paths, CRLF checkouts, case-insensitive walks
 #   ruby-test       the Prism extractor's own suite (PLAN.md §19), then its release
 #                   binary re-extracting the fixture snapshot byte for byte
+#   ruby-native     its binary built on each of the four Unix runners, each one
+#                   reproducing that snapshot; the tap's formula ships these
 #   metrics         the metrics pass's own suite (PLAN.md §18): join, snapshots, history
 #   metrics-native  its binary built on each of the four Unix runners, re-measuring
 #                   the five fixtures byte for byte; the tap's formula ships these
-#   release         on a v* tag, the five binaries attached to a GitHub Release,
+#   release         on a v* tag, every binary attached to a GitHub Release,
 #                   and the TypeScript extractor published to npm when NPM_TOKEN is set
 #
 # `test.sh` and `build.sh` are the same gate on a developer machine; CI calls
@@ -232,10 +234,52 @@ jobs:
             ~/.cargo/registry
             extractors/ruby/target
           key: ruby-test-${{ hashFiles('extractors/ruby/Cargo.lock') }}
+      # bindgen loads libclang at build time; a runner image without clang gets it here.
+      - run: command -v clang >/dev/null || (sudo apt-get update && sudo apt-get install -y libclang-dev)
       - shell: bash
         run: |
           ./build.sh --ruby --skip-install --no-auto-install
           ./test.sh --ruby --skip-install --no-auto-install
+
+  # One binary per RID, each built on a runner of its own OS: Prism is C,
+  # compiled by the host's compiler, and bindgen reads its headers with the
+  # host's libclang — no cross toolchain. Each binary then re-extracts the
+  # fixture and must reproduce the committed snapshot byte for byte: the
+  # cross-OS proof of principle 3 (PLAN.md §19). No Windows build, as for the
+  # metrics pass.
+  ruby-native:
+    name: ruby native ${{ matrix.rid }}
+    needs: ruby-test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    rid: linux-x64 }
+          - { os: ubuntu-24.04-arm, rid: linux-arm64 }
+          - { os: macos-latest,     rid: osx-arm64 }
+          - { os: macos-15-intel,   rid: osx-x64 }
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - if: runner.os == 'Linux'
+        run: command -v clang >/dev/null || (sudo apt-get update && sudo apt-get install -y libclang-dev)
+      - shell: bash
+        run: ./build.sh --ruby --skip-install --no-auto-install
+      - shell: bash
+        run: |
+          bin=extractors/ruby/target/release/codegraph-ruby
+          "$bin" --version
+          # The relative --src on purpose: the path as typed is the header's `root`.
+          "$bin" --src fixtures/ruby/src --out out.jsonl --progress plain
+          cmp out.jsonl fixtures/ruby/expected/model.jsonl
+          echo "the binary reproduces the snapshot on ${{ matrix.os }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codegraph-ruby-${{ matrix.rid }}
+          path: extractors/ruby/target/release/codegraph-ruby
+          if-no-files-found: error
+          retention-days: 14
 
   csharp-test:
     name: csharp extractor
@@ -602,7 +646,7 @@ jobs:
   release:
     name: github release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [verify, java, java-native, metrics-native, csharp-smoke, typescript-smoke, elixir-smoke, elixir-native, sea, desktop, desktop-bundle, npm-publish]
+    needs: [verify, java, java-native, metrics-native, ruby-native, csharp-smoke, typescript-smoke, elixir-smoke, elixir-native, sea, desktop, desktop-bundle, npm-publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -619,7 +663,7 @@ jobs:
           set -euo pipefail
           mkdir -p release
           # The metrics pass rides the same loop: `codegraph-metrics-<rid>`.
-          for extractor in csharp java metrics; do
+          for extractor in csharp java metrics ruby; do
             for dir in artifacts/codegraph-$extractor-*; do
               rid="${dir#artifacts/codegraph-$extractor-}"
               for f in "$dir"/codegraph-$extractor*; do
