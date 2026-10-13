@@ -36,6 +36,13 @@ extractors/elixir/   Mix project `codegraph_elixir` (the compiler's PARSER as a
                      embedded, Erlang/OTP on the machine). `mix codegraph.trace`
                      writes the compiler trace `--trace` merges as `generated`
                      edges. No runtime dependency.
+extractors/ruby/     Cargo package `codegraph-ruby` (Prism, CRuby's own parser, as a
+                     LIBRARY through its Rust bindings + a lexical constant resolver
+                     + a table of what the VM defines, distilled from RBS `core/`
+                     and committed; nothing is run, no bundle read) → emits
+                     model.jsonl. ONE binary: no Ruby to build it or to run it.
+                     Building needs libclang (bindgen reads Prism's C headers).
+                     One dependency, `ruby-prism`, pinned exactly.
 extractors/metrics/  Rust crate `codegraph-metrics` (big-code-analysis 2.2.0 as a
                      LIBRARY, four tree-sitter grammars). Not an extractor: a PASS
                      over any extractor's model.jsonl that joins bca's function and
@@ -186,6 +193,14 @@ node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256
 ./bin/codegraph-elixir --src <dir> --deps <dir>/deps --trace <dir>/codegraph-trace.jsonl --out model.jsonl
 #   docs/elixir-extractor.md; `test.sh --elixir` = mix test + the escript must reproduce fixtures/elixir
 #   the trace, inside the project: ERL_FLAGS="-pa <repo>/extractors/elixir/_build/dev/lib/codegraph_elixir/ebin" mix codegraph.trace
+
+./build.sh --ruby                                   # cargo build --release → extractors/ruby/target/release/codegraph-ruby
+./bin/codegraph-ruby --src <dir> --out model.jsonl  # needs nothing installed — no Ruby
+./bin/codegraph-ruby --src <dir> --out model.jsonl --explain-dropped   # + stderr: dropped <reason>: <file>:<line> <what>
+#   Rust ≥ 1.94 and libclang to BUILD (build.sh/test.sh lend bindgen GCC's builtin headers when clang's are
+#   missing — a bare `cargo build` there fails on limits.h); `test.sh --ruby` = cargo test + the release
+#   binary must reproduce fixtures/ruby. CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test --manifest-path
+#   extractors/ruby/Cargo.toml rewrites the snapshot; the core table: extractors/ruby/README.md
 
 ./build.sh --metrics                                # cargo build --release → extractors/metrics/target/release/codegraph-metrics
 ./bin/codegraph-metrics model.jsonl [--src DIR] [--out FILE] [--audit]   # after ANY extractor; in place by default

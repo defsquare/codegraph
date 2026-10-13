@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# The Ruby extractor as a program: `./bin/codegraph-ruby --src <dir> --out model.jsonl`.
+#
+# Extensionless on purpose — the name IS the command. It runs the release
+# binary `build.sh --ruby` produces beside ITSELF (a git worktree or a moved
+# checkout runs its own target/); the binary needs nothing installed — no Ruby.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bin="$here/../extractors/ruby/target/release/codegraph-ruby"
+[ -x "$bin" ] || bin="$bin.exe"
+
+if [ ! -x "$bin" ]; then
+  printf 'codegraph-ruby: extractors/ruby/target/release/codegraph-ruby is missing\n' >&2
+  printf 'Run `./build.sh --ruby` in %s and try again.\n' "$(cd "$here/.." && pwd)" >&2
+  exit 1
+fi
+
+exec "$bin" "$@"

@@ -1,0 +1,5 @@
+require "rake/testtask"
+require_relative "lib/acme_order"
+load "tasks/orders.rake"
+
+task default: :spec

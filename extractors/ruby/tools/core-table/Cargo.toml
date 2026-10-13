@@ -1,0 +1,10 @@
+[package]
+name = "codegraph-ruby-core-table"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+ruby-rbs = "=0.3.0"

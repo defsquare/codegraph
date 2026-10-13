@@ -27,6 +27,11 @@ extractors/csharp/dist/
 # The metrics pass (Cargo): build output. Cargo.lock IS committed — a binary's.
 extractors/metrics/target/
 
+# Ruby extractor (Cargo): build output, its own and the core-table tool's.
+# Both Cargo.lock files ARE committed.
+extractors/ruby/target/
+extractors/ruby/tools/core-table/target/
+
 .DS_Store
 .idea/
 .vscode/

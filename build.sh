@@ -17,6 +17,10 @@
 #   Elixir     mix escript.build -> extractors/elixir/dist/codegraph-elixir
 #                                   (an escript: Elixir embedded, needs Erlang/OTP
 #                                   on the machine that runs it — bin/codegraph-elixir)
+#   Ruby       : cargo build     -> extractors/ruby/target/release/codegraph-ruby
+#                                   (Prism linked in: needs nothing on the machine
+#                                   that runs it — bin/codegraph-ruby; building it
+#                                   needs libclang, for the parser bindings)
 #   Metrics    : cargo build     -> extractors/metrics/target/release/codegraph-metrics
 #                                   (the big-code-analysis pass over any extractor's
 #                                   model, PLAN.md §18 — bin/codegraph-metrics)
@@ -56,6 +60,7 @@ Options:
                        only extractors/csharp (dotnet publish, host RID)
   --elixir, --elixir-only
                        only extractors/elixir (mix escript.build)
+  --ruby, --ruby-only  only extractors/ruby (cargo build --release)
   --metrics, --metrics-only
                        only extractors/metrics (cargo build --release)
   --native             Java: also build the GraalVM native binary for THIS
@@ -107,10 +112,14 @@ printf '%scodegraph build%s  %s(%s)%s\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$ROOT" "
 
 step "toolchain"
 if wants_ts; then check_node; ensure_pnpm; fi
-SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"; SKIP_METRICS="no"
+SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"; SKIP_RUBY="no"; SKIP_METRICS="no"
 if wants_metrics; then
   if have_metrics_pass; then ensure_cargo
   else warn "no extractors/metrics in this checkout — skipping the metrics pass"; SKIP_METRICS="yes"; fi
+fi
+if wants_ruby; then
+  if have_ruby_extractor; then ensure_cargo "$RUBY_DIR" "the Ruby extractor (extractors/ruby)"; ensure_libclang
+  else warn "no extractors/ruby in this checkout — skipping the Ruby build"; SKIP_RUBY="yes"; fi
 fi
 if wants_java; then
   if have_java_extractor; then
@@ -261,6 +270,21 @@ if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
   fi
 fi
 
+# ------------------------------------------------------------------ ruby ----
+
+if wants_ruby && [ "$SKIP_RUBY" = "no" ]; then
+  if [ "$CLEAN" = "yes" ]; then
+    step "clean (ruby)"
+    run cargo clean --manifest-path "$RUBY_DIR/Cargo.toml"
+    step_done
+  fi
+  # --locked: the lockfile is committed, and a Prism bump is a reviewed
+  # snapshot diff (PLAN.md §19.8), never a side effect of a build.
+  step "build ruby extractor (cargo build --release)"
+  run cargo_ruby build --release --locked --manifest-path "$RUBY_DIR/Cargo.toml"
+  step_done
+fi
+
 # --------------------------------------------------------------- metrics ----
 
 if wants_metrics && [ "$SKIP_METRICS" = "no" ]; then
@@ -332,6 +356,12 @@ if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
       *)     report "$ELIXIR_DIR/dist/$(host_rid)/codegraph-elixir" ;;
     esac
   fi
+fi
+if wants_ruby && [ "$SKIP_RUBY" = "no" ]; then
+  case "$(host_rid)" in
+    win-*) report "$RUBY_DIR/target/release/codegraph-ruby.exe" ;;
+    *)     report "$RUBY_DIR/target/release/codegraph-ruby" ;;
+  esac
 fi
 if wants_metrics && [ "$SKIP_METRICS" = "no" ]; then
   case "$(host_rid)" in

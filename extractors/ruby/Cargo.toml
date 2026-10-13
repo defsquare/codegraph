@@ -1,0 +1,32 @@
+[package]
+name = "codegraph-ruby"
+description = "Extracts a codegraph model.jsonl from Ruby sources: Prism as a library, no Ruby on the machine"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+license = "MIT"
+publish = false
+
+# Standalone: never adopted by a workspace above it. `tools/core-table` is its
+# own package for the same reason — the extractor must not link RBS's parser.
+[workspace]
+
+[lib]
+name = "codegraph_ruby"
+path = "src/lib.rs"
+
+[[bin]]
+name = "codegraph-ruby"
+path = "src/main.rs"
+
+[dependencies]
+# Exact pin: the parser IS the front end. A Prism that reads one more syntax
+# form moves entities, so a bump is a deliberate, reviewed change that
+# regenerates the fixture snapshot (`PRISM_VERSION` in src/lib.rs is pinned to
+# this line by a test).
+ruby-prism = "=1.9.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true

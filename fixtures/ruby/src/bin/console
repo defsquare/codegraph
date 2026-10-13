@@ -1,0 +1,6 @@
+#!/usr/bin/env ruby
+# No extension: walked because its first line says it is Ruby.
+require "irb"
+require_relative "../lib/acme_order"
+
+IRB.start

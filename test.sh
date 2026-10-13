@@ -19,6 +19,9 @@
 #              re-extracts fixtures/elixir/src and must reproduce the committed
 #              snapshot byte for byte — the only test that sees the escript's
 #              own code path (embedded Elixir, the OTP table baked at build)
+#   ruby       cargo test, then the RELEASE binary (if build.sh made one)
+#              re-extracts fixtures/ruby/src and must reproduce the committed
+#              snapshot byte for byte — Prism and the core table as linked in
 #
 # No build is required first: packages/cli/vitest.config.ts aliases the
 # workspace packages to their SOURCE, and the CLI e2e suite builds its own dist
@@ -50,6 +53,7 @@ Options:
                        only extractors/csharp (dotnet test + published-binary smoke test)
   --elixir, --elixir-only
                        only extractors/elixir (mix test + built-escript smoke test)
+  --ruby, --ruby-only  only extractors/ruby (cargo test + built-binary smoke test)
   --metrics, --metrics-only
                        only extractors/metrics (cargo test: the join + the four enriched snapshots)
   --all                everything (default)
@@ -121,7 +125,11 @@ printf '%scodegraph test%s  %s(%s)%s\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$ROOT" "$
 
 step "toolchain"
 if wants_ts; then check_node; ensure_pnpm; fi
-SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"; SKIP_METRICS="no"
+SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"; SKIP_RUBY="no"; SKIP_METRICS="no"
+if wants_ruby; then
+  if have_ruby_extractor; then ensure_cargo "$RUBY_DIR" "the Ruby extractor (extractors/ruby)"; ensure_libclang
+  else warn "no extractors/ruby in this checkout — skipping the Ruby tests"; SKIP_RUBY="yes"; fi
+fi
 if wants_java; then
   if have_java_extractor; then ensure_jdk; ensure_mvnw
   else warn "no extractors/java in this checkout — skipping the Java tests"; SKIP_JAVA="yes"; fi
@@ -287,6 +295,27 @@ if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
       sh -c "cd '$ROOT' && out=\$(mktemp) && '$bin' --src fixtures/elixir/src --out \"\$out\" --progress none >/dev/null 2>&1 && cmp \"\$out\" fixtures/elixir/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
   else
     warn "no native binary at $ELIXIR_DIR/dist/$(host_rid) — run ./build.sh --elixir --native for the smoke test"
+  fi
+fi
+
+# ------------------------------------------------------------------ ruby ----
+
+if wants_ruby && [ "$SKIP_RUBY" = "no" ]; then
+  # The unit tests pin the walker, the resolver and the writer;
+  # tests/contract.rs holds the library to the committed snapshot, byte for
+  # byte, under CRLF and a reversed creation order, and to the CLI contract.
+  phase "ruby extractor tests (cargo test)" \
+    cargo_ruby test --locked --manifest-path "$RUBY_DIR/Cargo.toml"
+
+  # The release binary, not `cargo test`, must reproduce the snapshot: it is
+  # the artifact users run, with Prism and the core table linked in.
+  bin="$RUBY_DIR/target/release/codegraph-ruby"
+  [ -x "$bin" ] || bin="$bin.exe"
+  if [ -x "$bin" ]; then
+    phase "built ruby binary reproduces the snapshot" \
+      sh -c "cd '$ROOT' && out=\$(mktemp) && ./bin/codegraph-ruby --src fixtures/ruby/src --out \"\$out\" --progress none >/dev/null 2>&1 && cmp \"\$out\" fixtures/ruby/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
+  else
+    warn "no binary at $RUBY_DIR/target/release — run ./build.sh --ruby for the smoke test"
   fi
 fi
 

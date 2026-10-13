@@ -18,6 +18,7 @@ JAVA_DIR="$ROOT/extractors/java"
 CSHARP_DIR="$ROOT/extractors/csharp"
 ELIXIR_DIR="$ROOT/extractors/elixir"
 METRICS_DIR="$ROOT/extractors/metrics"
+RUBY_DIR="$ROOT/extractors/ruby"
 
 # ---------------------------------------------------------------- output ----
 
@@ -471,26 +472,77 @@ burrito_target() { printf '%s' "$1" | tr '-' '_'; }
 # ------------------------------------------------------- rust toolchain -----
 
 have_metrics_pass() { [ -f "$METRICS_DIR/Cargo.toml" ]; }
+have_ruby_extractor() { [ -f "$RUBY_DIR/Cargo.toml" ]; }
 
-# Cargo on PATH or in rustup's default home, at the crate's `rust-version`
-# (big-code-analysis's MSRV). Never installed automatically.
+# ensure_cargo [crate-dir] [what] — cargo on PATH or in rustup's default home,
+# at that crate's `rust-version`. Never installed automatically.
 ensure_cargo() {
-  local want have
+  local dir="${1:-$METRICS_DIR}" what="${2:-the metrics pass (extractors/metrics)}" want have
   if ! command -v cargo >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
     export PATH="$HOME/.cargo/bin:$PATH"
   fi
   command -v cargo >/dev/null 2>&1 || die \
-    "no cargo found — the metrics pass (extractors/metrics) is Rust" \
+    "no cargo found — $what is Rust" \
     "rustup:   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" \
     "homebrew: brew install rustup && rustup-init" \
     "or skip it entirely: $SCRIPT_NAME --ts"
-  want="$(sed -n 's/^rust-version = "\([0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$METRICS_DIR/Cargo.toml" | head -1)"
+  want="$(sed -n 's/^rust-version = "\([0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$dir/Cargo.toml" | head -1)"
   have="$(rustc --version 2>/dev/null | sed -n 's/^rustc \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')"
   [ -n "$have" ] || die "cargo is on PATH but rustc is not"
   if [ -n "$want" ] && [ "$(printf '%s\n%s\n' "$want" "$have" | sort -t. -k1,1n -k2,2n | head -1)" != "$want" ]; then
-    die "rustc $have is too old — the metrics pass needs >= $want (rustup update)"
+    die "rustc $have is too old — $what needs >= $want (rustup update)"
   fi
   ok "rustc $have"
+}
+
+# The Ruby extractor's parser bindings (ruby-prism-sys) are generated at BUILD
+# time by bindgen, which loads libclang to read Prism's C headers. The binary
+# itself needs nothing. A machine with `clang` is set. One with the library
+# alone (Debian's libclang1-N without libclang-common-N-dev) has no builtin
+# headers — `limits.h` not found — and GCC's stand in for them.
+RUBY_BINDGEN_ARGS=""
+ensure_libclang() {
+  local dir found="" resource="" gcc_include
+  RUBY_BINDGEN_ARGS=""
+  if command -v clang >/dev/null 2>&1; then
+    ok "clang $(clang -dumpversion 2>/dev/null || echo "(version unknown)")"
+    return 0
+  fi
+  for dir in ${LIBCLANG_PATH:+"$LIBCLANG_PATH"} /usr/lib/llvm-*/lib /usr/lib/*-linux-gnu /usr/lib64 /usr/lib \
+             /usr/local/lib /opt/homebrew/opt/llvm/lib /usr/local/opt/llvm/lib; do
+    [ -d "$dir" ] || continue
+    if ls "$dir"/libclang*.so* >/dev/null 2>&1 || ls "$dir"/libclang*.dylib >/dev/null 2>&1; then
+      [ -n "$found" ] || found="$dir"
+      if ls "$dir"/clang/*/include/stddef.h >/dev/null 2>&1; then resource="$dir"; break; fi
+    fi
+  done
+  [ -n "$found" ] || die \
+    "no libclang found — the Ruby extractor's parser bindings are generated with it at build time" \
+    "debian/ubuntu: sudo apt install libclang-dev" \
+    "macOS:         xcode-select --install" \
+    "elsewhere:     set LIBCLANG_PATH to the directory holding libclang" \
+    "or skip it entirely: $SCRIPT_NAME --ts"
+  if [ -n "$resource" ]; then ok "libclang ($resource)"; return 0; fi
+  gcc_include="$(gcc -print-file-name=include 2>/dev/null || true)"
+  if [ -n "$gcc_include" ] && [ -f "$gcc_include/stddef.h" ]; then
+    RUBY_BINDGEN_ARGS="-isystem $gcc_include"
+    ok "libclang ($found), builtin headers from gcc ($gcc_include)"
+    return 0
+  fi
+  die "libclang is installed without its builtin headers (stddef.h, limits.h), and gcc has none to lend" \
+    "debian/ubuntu: sudo apt install clang   (or libclang-common-<N>-dev)" \
+    "or skip it entirely: $SCRIPT_NAME --ts"
+}
+
+# cargo for extractors/ruby. ruby-prism-sys sets BINDGEN_EXTRA_CLANG_ARGS_<host
+# triple> itself, which shadows the plain variable — and a name with dashes is
+# one only `env` can set, never `export`.
+cargo_ruby() {
+  if [ -n "$RUBY_BINDGEN_ARGS" ]; then
+    env "BINDGEN_EXTRA_CLANG_ARGS_$(rustc -vV | sed -n 's/^host: //p')=$RUBY_BINDGEN_ARGS" cargo "$@"
+  else
+    cargo "$@"
+  fi
 }
 
 # ------------------------------------------------------- shared parsing -----
@@ -499,7 +551,7 @@ ensure_cargo() {
 SKIP_INSTALL="no"
 FROZEN="yes"
 AUTO_INSTALL="yes"
-TARGET="all"      # all | ts | java | csharp | elixir | metrics
+TARGET="all"      # all | ts | java | csharp | elixir | ruby | metrics
 
 # Returns 0 if it consumed the argument, 1 if the caller should handle it.
 parse_common_flag() {
@@ -508,6 +560,7 @@ parse_common_flag() {
     --java|--java-only) TARGET="java" ;;
     --csharp|--csharp-only) TARGET="csharp" ;;
     --elixir|--elixir-only) TARGET="elixir" ;;
+    --ruby|--ruby-only) TARGET="ruby" ;;
     --metrics|--metrics-only) TARGET="metrics" ;;
     --all)              TARGET="all" ;;
     --skip-install)     SKIP_INSTALL="yes" ;;
@@ -522,4 +575,5 @@ wants_ts()     { [ "$TARGET" = "all" ] || [ "$TARGET" = "ts" ]; }
 wants_java()   { [ "$TARGET" = "all" ] || [ "$TARGET" = "java" ]; }
 wants_csharp() { [ "$TARGET" = "all" ] || [ "$TARGET" = "csharp" ]; }
 wants_elixir() { [ "$TARGET" = "all" ] || [ "$TARGET" = "elixir" ]; }
+wants_ruby()   { [ "$TARGET" = "all" ] || [ "$TARGET" = "ruby" ]; }
 wants_metrics() { [ "$TARGET" = "all" ] || [ "$TARGET" = "metrics" ]; }

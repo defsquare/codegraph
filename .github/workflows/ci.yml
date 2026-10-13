@@ -14,6 +14,8 @@
 #   typescript-smoke the bundled TypeScript extractor on a runner of each OS must
 #                   reproduce its fixture snapshot byte for byte (PLAN.md §14.7):
 #                   Windows paths, CRLF checkouts, case-insensitive walks
+#   ruby-test       the Prism extractor's own suite (PLAN.md §19), then its release
+#                   binary re-extracting the fixture snapshot byte for byte
 #   metrics         the metrics pass's own suite (PLAN.md §18): join, snapshots, history
 #   metrics-native  its binary built on each of the four Unix runners, re-measuring
 #                   the four fixtures byte for byte; the tap's formula ships these
@@ -212,6 +214,28 @@ jobs:
           path: extractors/metrics/target/release/codegraph-metrics
           if-no-files-found: error
           retention-days: 14
+
+  # The Ruby extractor (PLAN.md §19): the walker, resolver and writer suites,
+  # the fixture snapshot byte for byte under CRLF and a reversed creation order,
+  # then the RELEASE binary re-extracting it. Building needs libclang — bindgen
+  # reads Prism's C headers — which the runner's clang provides; running needs
+  # nothing, least of all Ruby.
+  ruby-test:
+    name: ruby extractor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            extractors/ruby/target
+          key: ruby-test-${{ hashFiles('extractors/ruby/Cargo.lock') }}
+      - shell: bash
+        run: |
+          ./build.sh --ruby --skip-install --no-auto-install
+          ./test.sh --ruby --skip-install --no-auto-install
 
   csharp-test:
     name: csharp extractor

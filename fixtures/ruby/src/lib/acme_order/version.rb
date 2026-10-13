@@ -1,0 +1,3 @@
+module AcmeOrder
+  VERSION = "0.1.0"
+end
