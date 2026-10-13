@@ -142,7 +142,7 @@ All edges carry `from`, `to`, `provenance`, `anchor` (evidence), optional
 
 Edge kinds: `import`, `inheritance`, `interfaceImplementation`, `invocation`,
 `access` (+ `isRead`/`isWrite`), `reference`, `embedding` (Go), `traitUsage`
-(PHP), `fileInclude` (PHP). Discriminated union on `edge` field.
+(PHP, Ruby), `fileInclude` (PHP). Discriminated union on `edge` field.
 
 ### 4.4 Language profiles — data, not code
 
@@ -1199,6 +1199,10 @@ that it cannot be detected by construction.
    compilation tracers as the optional enrichment — planned in full as
    Phase 13 (§16, M15): the first macro-first, dynamically dispatched
    language, `generated` and `dynamic-candidate` provenance exercised for real.
+6. **Ruby** via Prism as a library plus a lexical constant resolver, written
+   in Rust so no Ruby is needed to build or run it — planned in full as
+   Phase 16 (§19, M18): open classes, mixins, and an import layer the source
+   does not write.
 
 Documented static limits (all languages, per profile `notes`): reflection,
 `Class.forName`/Spring XML, service loaders, pre-expansion macro code.
@@ -2725,7 +2729,7 @@ under one command-line contract (§13.5, schemas/README.md §8) exactly so
 this could be true: the app needs to know nothing about them but that
 contract and the file extensions they claim.
 
-Locked decisions, each with its reason (the delta table in §20 repeats them):
+Locked decisions, each with its reason (the delta table in §21 repeats them):
 
 - **Tauri is the shell, not a runtime.** Window, native menu, folder dialog,
   drag-and-drop, sidecar lifecycle, bundling, signing and notarization. No
@@ -3630,7 +3634,7 @@ file without one of them lying, so they do not share one:
 | will not open | degrade to the `.jsonl`, silently | a usage error naming the file; never overwritten |
 | committed / shared | never | never — the JSONL export is what is committed, diffed and handed to Specy |
 
-Locked decisions, each with its reason (the delta table in §20 repeats them):
+Locked decisions, each with its reason (the delta table in §21 repeats them):
 
 - **The db is the working copy; the JSONL becomes its deterministic export.**
   `<model>.insights.jsonl` keeps its format, its byte-determinism and its
@@ -4304,7 +4308,400 @@ measures only.
 
 ---
 
-## 19. Milestones
+## 19. Phase 16 — Ruby extractor (Prism as a library, no Ruby on the machine) (M18)
+
+Motivation: the fifth real extractor is the first for a language where **the
+receiver of most calls has no static type and a class is never finished** —
+any file may reopen any class, the VM's included. Elixir (§16) was dynamic by
+dispatch; Ruby is dynamic by *declaration*: `define_method`, `method_missing`,
+`has_many`, a mixin applied inside an `included do` block. Its legacy is of the
+non-bootable kind: a Rails 3 application whose `Gemfile.lock` no longer
+resolves cannot be loaded, and loading is the only way Ruby itself learns what
+a class is. And Ruby brings the pipeline one thing no language so far has: an
+import layer the source **does not write**. A Zeitwerk application contains no
+`require`; the constant reference is the load.
+
+**What is the Spoon / Roslyn / tsc of Ruby?** A parser, and nothing more — the
+language has no compiler front end that binds names before running them.
+
+| Roslyn / `ts` | Ruby | Role |
+|---|---|---|
+| `SyntaxTree` | **Prism** (`ruby/prism`, CRuby's default parser since 3.4): a C library with a typed tree, byte offsets, error recovery, and the encoding magic comments honoured | syntax with positions, for every Ruby from 1.8-era files to today's |
+| `SemanticModel` / `TypeChecker` | **none before the program runs.** A constant is found by `Module.nesting` and the ancestor chain at run time; a method by `respond_to?` | binding is the VM's; what is statically honest is the LEXICAL part of constant lookup |
+| the BCL ref pack / `lib.*.d.ts` / the OTP table | a table of the constants **the VM defines before any file runs**, distilled from RBS `core/` signatures at a pinned release and embedded | what `StandardError`, `Comparable`, `String` are on a machine with nothing installed |
+| `IErrorTypeSymbol` | a constant neither the corpus declares nor the VM defines | a library, whichever one — stubbed, never guessed |
+
+So the baseline is a **lexical resolver over Prism's tree** against a whitelist
+of what the corpus writes. It is noClasspath by construction and goes one
+further than every extractor before it: a file with syntax errors still
+extracts, from the tree Prism recovered.
+
+The alternatives, and why they are not the baseline:
+
+| Candidate | What it is | Verdict |
+|---|---|---|
+| **Booting the application and introspecting** (`ObjectSpace`, `Module#ancestors`, `Method#source_location`) | the truth, after every `define_method` ran | never the extractor — it runs corpus code, which the pipeline refuses (§5.2), and a legacy application does not boot. It is the `--trace` enrichment of M18c, produced by the user inside a project that still runs |
+| **Sorbet / Steep / TypeProf** | type checkers | enrichments, not a baseline: they need signatures the corpus rarely has (`sig`, RBS) and a resolvable bundle. A typed receiver from a `sig` is M18c material |
+| **ruby-lsp's index, Packwerk's constant resolver** | editor- and boundary-oriented constant resolution | Packwerk becomes an **oracle** (§19.6): on a Zeitwerk application its reference list is what the baseline's constant resolution must reproduce |
+| **tree-sitter-ruby** | a parser with a CST | rejected — a second implementation of Ruby's grammar (heredocs, command calls, `%w`) with no encoding handling, where the language's own parser is a library call away |
+
+Four principles, locked up front:
+
+1. **The parser without the VM — and without Ruby.** The extractor never
+   loads a corpus file, never reads a bundle, and is **written in Rust on
+   Prism's official bindings** (`ruby-prism`). This breaks the habit of §13–§16
+   (an extractor written in the language it reads) for three reasons, each
+   measured rather than preferred: a Ruby program parses with whichever Prism
+   the machine's Ruby bundles, so the same corpus would give different models
+   on two machines, while a binary pins exactly one (principle 3); Ruby has no
+   dependable single-binary packager, where a Rust binary is one file that
+   needs nothing; and the repository already builds, tests and ships one Rust
+   binary per platform (§18). Nothing about the *model* depends on the choice.
+2. **No metamodel intelligence.** It knows the Ruby id scheme, the kind →
+   traits table and how to write bytes. The cross-language gate
+   (`packages/core/test/fixtures-ruby.test.ts`) is where the two halves meet.
+3. **Byte-identity across OS and across install state.** Prism is pinned by
+   exact version in `Cargo.toml` and the core table by RBS release in its file
+   name; the header names both. External types are keyed by name under
+   reserved modules, never by a path into a gem directory, so a model's keys do
+   not depend on what is installed beside the corpus.
+4. **Every provenance earns its place.** `declared` for what the source writes
+   and the lexical rules bind; `derived` for what the extractor infers and
+   says so (the Zeitwerk import, a locally typed receiver); `generated` and
+   `dynamic-candidate` for what only the run-time trace knows (M18c). Ruby is
+   the first profile to use all four.
+
+### 19.1 Toolchain and repository layout
+
+```
+extractors/ruby/                       Cargo package `codegraph-ruby`, standalone (its own [workspace])
+  Cargo.toml                           ONE dependency: ruby-prism, pinned `=` (Prism's C sources vendored in the crate)
+  src/
+    cli.rs                             the extractor contract (schemas/README.md §8)
+    corpus.rs                          pass 0: walk (ordinal order), read as bytes, the common root
+    declarations.rs                    pass 1: what one file WRITES — bodies, defs, constants, mixins, requires, and every
+                                       SITE (a constant read, a call and the shape of its receiver, a variable) — off Prism's tree
+    resolve.rs                         the whitelist (constant paths, fixed point), the lexical resolver, ancestor chains, method lookup
+    core_table.rs                      the embedded table of what the VM defines: constants, superclasses, mixins, methods
+    ids.rs                             THE Ruby id scheme (§19.3): keys, escaping
+    extraction.rs                      passes 2–4: entities, edges, stubs
+    model.rs  writer.rs  json.rs       natural keys, canonical order (UTF-16 code units), the JSONL writer
+    stats.rs                           what was dropped and why — the summary
+  tests/contract.rs                    the snapshot byte for byte, determinism (CRLF, creation order), the CLI contract
+  data/core-rbs-<version>.tsv          the generated core table, committed
+  tools/core-table/                    its generator: RBS's own parser (`ruby-rbs`) over `<rbs>/core` — a separate
+                                       package, so the extractor never links it
+bin/codegraph-ruby                     runs target/release/codegraph-ruby
+fixtures/ruby/src/                     the reference corpus: `acme_order`, gem-shaped
+fixtures/ruby/expected/model.jsonl     + model.metrics.jsonl: the same model after the metrics pass (§18)
+```
+
+- **Building needs libclang; running needs nothing.** `ruby-prism-sys`
+  generates its bindings with bindgen at build time. `scripts/lib.sh`
+  (`ensure_libclang`, `cargo_ruby`) handles the one trap found on the way: a
+  machine with the library and without clang's builtin headers fails on
+  `limits.h`, GCC's stand in, and the variable that says so must be the
+  TARGET-specific one — the crate sets it itself, shadowing the plain form, and
+  a name with dashes is one only `env` can set.
+- **No Ruby anywhere in the toolchain**, the table's generator included: RBS
+  ships a C parser with Rust bindings, so `tools/core-table` reads
+  `core/*.rbs` with RBS's own grammar rather than a second one.
+- No JSON schema validator on the Rust side: the core gate parses the snapshot
+  with core's reader, which enforces the container contract, and re-encodes it
+  byte for byte.
+
+### 19.2 Mapping table (Ruby profile — new, `rb`)
+
+The first M18 commit is `feat(core): ruby profile`, the eleventh, data before
+implementation (invariant 8). Its shape follows prior decisions and adds three.
+
+| Decision | Why |
+|---|---|
+| **the module (`TModule`) is the file** — the TypeScript and Elixir rule | Ruby has no namespace construct apart from its types: a `module` is a mixin, and a `class` nests constants too. A Rails application declares almost everything at the top level, so a namespace-as-module model would be one district. Directories ARE the namespaces under Zeitwerk, so districts by directory coincide with them |
+| **one entity per declaring file; a reopening is `attachedTo` its primary declaration** | the TypeScript merging rule (§14.3), plus the relation TypeScript did not need: Ruby reopens across files as a matter of course, and containment ≠ attachment (invariant 5) says exactly "written here, belongs there". The primary is the declaration that writes a superclass, else the first in canonical file order |
+| **a wrapper body is not a declaration** (decision confirmed 2026-10-13) | `module Acme; class Order; end; end` and `class Acme::Order; end` are two spellings of one thing and must yield one key. A body with no superclass whose statements are all class/module declarations is lexical scope; without the rule a namespace reopened in fifty files is fifty empty buildings |
+| **a constant reference across files is a `derived` import** (decision confirmed 2026-10-13) | a Zeitwerk application writes no `require`, so the import layer — the one layer comparable across languages (invariant 9) — would be empty for every Rails corpus. One edge per (file, target file), at the first site, none where a `require` already says it |
+| `include` / `extend` / `prepend` are **`traitUsage`** | the edge kind PHP introduced: a mixin is used, never flattened. `core` owns the vocabulary; Ruby adds no kind |
+| no `interfaceImplementation`; `inheritance` on `class` only | Ruby has no interface to declare conformance to, and a module has no superclass |
+| no arity in a method's key; `self` as the singleton disambiguator | Ruby has no overloading — a name is one method per type. `def self.call` and `def call` do coexist, and the disambiguator is the keyword the source writes (the TypeScript `#static` rule) |
+| blocks and lambdas are not entities | a block contributes to its enclosing method (the Elixir `fn` rule); it also does not change where a `def` or a constant is written |
+
+Kinds (`TComment`, `TMetrics` optional wherever it makes sense):
+
+| kind | required traits | Ruby construct |
+|---|---|---|
+| `file` | `TNamed, TModule, TWithChildren` | a source file; optional `TWithInvocations`, `TWithAccesses` — a script, a Rakefile, `config/*.rb` run at top level. The reserved stub modules and every external feature are this kind |
+| `class` | `TNamed, TType, TWithInheritances, TWithChildren, TChildOf, TSourceAnchor` | `class Foo [< Bar]`; optional `TAttachedTo` (a reopening), `TWithInvocations`/`TWithAccesses` (class macros are calls from the body) |
+| `module` | `TNamed, TType, TWithChildren, TChildOf, TSourceAnchor` | `module Foo`; the same options, no inheritance |
+| `method` | `TNamed, TInvocable, TWithChildren, TWithParameters, TWithInvocations, TWithAccesses, TChildOf, TSourceAnchor` | `def`, instance or singleton, in a type or at a file's top level |
+| `field` | `TNamed, TStructural, TChildOf, TSourceAnchor` | an instance variable, the `attr_*` that exposes it, a `Struct`/`Data` member — ONE entity named `@x`, read and written by `access` (the C# property rule) (M18b) |
+| `constant` | `TNamed, TStructural, TChildOf, TSourceAnchor` | `NAME = value` for a value that is not a type (M18b) |
+| `parameter` | `TStructural, TChildOf` | optional `TNamed` — `*`, `**`, `&`, `...` and a destructured position have none |
+
+Construct → what the model says (M18a unless marked):
+
+| Ruby construct | model |
+|---|---|
+| `class A < B` with `B` a constant | `inheritance` A → B, `declared`, anchored at the superclass |
+| `class A < Struct.new(:x)`, `< Data.define(:x)` | `inheritance` A → `<ruby>/Struct` (`<ruby>/Data`), **`generated`** — the language says so, the source writes no such class; each member is a `field` (M18b) |
+| `X = Struct.new(:a) do … end`, `X = Data.define(:a)`, `X = Class.new(Base) do … end`, `X = Module.new` | a `class` / `module` named `X`, the block its body; `Class.new(Base)` WRITES its superclass, so that `inheritance` is `declared` (M18b) |
+| `class A < Class.new(Base)`, `< Migration[7.0]` | dropped and counted `computed-superclass` |
+| `include M`, `extend M`, `prepend M` in a type's body; `include M` inside its `class << self` | `traitUsage` type → M, `declared`, one per argument; the edge does not say which was written. `extend self` is no relation |
+| a mixin inside a method or a block (`included do … end`, `base.extend(ClassMethods)`) | invisible — the ActiveSupport::Concern idiom is the first stated blind spot; `--trace` recovers it as `generated` (M18c) |
+| `require_relative "x"` | `import` file → the file that path names, or a stub module keyed by that path when nothing is there |
+| `require "acme/order"` | `import` → the corpus file a load root answers with (every directory named `lib`, `spec` or `test`, then the root; the nearest to the requiring file; a tie is dropped and counted) — a fact about the layout, counted on its own — else a stub module keyed by the feature as written below `<gems>` |
+| `require File.expand_path("../x", __FILE__)`, `File.join(__dir__, "x")`, `File.dirname(__FILE__) + "/x"`, `"#{__dir__}/x"` | the Ruby 1.8 spellings of `require_relative`: the same `import` (M18b) |
+| `load "tasks/x.rake"` | `import`: a file named WITH its extension, searched on the same load roots (M18b) |
+| `autoload :X, "acme/x"` | `import`, `declared`: the feature is written, only its loading is deferred (M18b) |
+| any other computed argument | dropped and counted `computed-require` |
+| a constant resolving to a declaration in another file | the `derived` import above |
+| `def x`, `def self.x`, a `def` inside `class << self` | a `method`, the last two with the `self` disambiguator; written twice in one file, ONE entity anchored at the first |
+| `def obj.x`, a `def` in `class << obj`, `class self::Foo` | no key can carry them: dropped and counted |
+| `NAME = value` | a `constant`, keyed by its full constant path, a child of the type (or file) that writes it, with its literal `value`; read from a body, an `access`. A name the whitelist knows is never stubbed (M18b) |
+| `@x`, `@x = …`, a call that names an `attr_*` or a Struct member | `access` to the `field`, reading or writing — the accessor is not an entity. The field belongs to the root-most corpus ancestor that has it (M18b) |
+| a constant in a body | `reference` to the type it names: lexically, then through the ancestors of the innermost scope (M18b) |
+| a bare `x`, `self.x`, `super`, `Foo.bar`, `Foo.new` (→ `Foo#initialize`), `Foo.new.x`, `send(:x)` | `invocation`, **`declared`**: the receiver's class is written (§19.4). `method(:x)` takes the method as a value: a `reference` to it (M18b) |
+| a method of `Object`/`Kernel`/`BasicObject` (`puts`, `freeze`), of `Class`/`Module` on the class side (`private`), of a literal (`"x".upcase`) | the LANGUAGE: resolved, counted, **no edge** — an arrow from every method to `<ruby>/Kernel` says nothing (M18b) |
+| a call on `self` nothing declares, on a chain with exactly ONE library ancestor | `invocation` of that stub, **`derived`**, counted `ancestor-attributed` — where `has_many` lands (the Elixir `import-attributed` rule); with two, dropped `ambiguous-ancestor` (M18b) |
+| `x = Foo.new; x.bar`, `@repo = Repo.new` … `@repo.find` | `invocation` (or `access`), **`derived`**: a local typed by its assignment in the method, an instance variable only ever assigned one class (M18b) |
+| `x.bar` with `x` untyped | dropped and counted — the stated ceiling; candidate generation is the analyzer's (the §13.2 decision) |
+| `raise Foo`, `raise Foo, "…"`, `raise Foo.new(…)` | `throws` to Foo; `raise "text"` throws `<ruby>/RuntimeError`; `raise error` is a value: dropped `raise-of-a-value` (M18b) |
+| `define_method(:x) { … }` | a `method` like a `def`; a computed name is dropped `computed-define-method` and marks the type as one with methods no key can name — as `method_missing` does (M18b) |
+| a comment block directly above a declaration | its `comments`, magic comments and `# rubocop:` directives left out; `sloc` on files, types and methods, `cyclomatic` on methods (M18b) |
+
+### 19.3 The Ruby id scheme (`ids.rs`)
+
+```
+file (module)     rb:lib%2Facme%2Forder.rb                    path relative to the root, escaped
+reserved          rb:<ruby>   rb:<gems>                        what the VM defines / what nothing here declares
+external feature  rb:<gems>%2Fnokogiri   rb:<gems>%2Fnet%2Fhttp     a `require` no corpus file answers, as written
+missing relative  rb:lib%2Facme%2Fmissing.rb                   a `require_relative` to a file that is not there
+class / module    rb:lib%2Facme%2Forder.rb/Acme::Order         the fully qualified constant path
+stub type         rb:<ruby>/StandardError     rb:<gems>/ActiveRecord::Base
+method            …/Acme::Order.total         singleton: …/Acme::Order.call#self
+top-level method  rb:bin%2Ftool.rb/main
+operator          …/Acme::Money.%2F     …/Acme::Money.%25     …/Acme::Money.<=>
+parameter         …/Acme::Order.total#param:currency           unnamed or repeated: #param:<1-based ordinal>
+field             …/Acme::Order.@total       the class's own (`@x` in a class body or a `def self.x`): …/Acme::Order.@registry#self
+constant          rb:lib%2Facme%2Forder.rb/Acme::Order::MAX_LINES      its full constant path, as a type's
+```
+
+- **`::` is part of a name, not a separator of the key.** A type's symbol is
+  its constant path whole; a member hangs below it with a dot.
+- **Escaping, the TypeScript rule with one more input.** `/`, `#` and `%` are
+  percent-encoded in every path segment and name — `def /(other)` and
+  `def %(other)` are ordinary Ruby — and `<` in a path segment, so that no
+  walked path can spell a reserved module: `<gems>/json.rb` is a legal file
+  name, and the extensionless files Ruby walks (`Rakefile`) mean a key can lack
+  the extension that protected every extractor before. Injective by
+  construction, pinned by an exhaustive round-trip over the reserved alphabet.
+- **A field is named as the variable is written, `@total`**, whichever of an
+  `attr_*`, an assignment or a Struct member introduces it: `total` is already
+  the key of a `def total`, and a class may write both.
+- **An external feature is a module of its own, below `<gems>`.** What a
+  `require` names is written in the source and is kept (the TypeScript rule:
+  the specifier as written), `.rb` dropped; which gem provides a *constant* is
+  not written anywhere, so constants share the two reserved modules.
+
+### 19.4 Stub discipline and the lexical resolver
+
+Pass 1 reads every `class`/`module` body and every constant assignment; the
+whitelist is the set of constant paths they open, **and every prefix of one**
+(`A::B::C` cannot exist without `A::B`). A compact declaration (`class A::B`)
+needs `A` resolved, and `A` may be declared compactly in a later file: the
+names are computed to a fixed point, two rounds on any corpus people wrote.
+
+A constant path at a site resolves as Ruby resolves it lexically — each
+enclosing scope from the innermost out, then the top level. **A compact class
+opens ONE scope**: inside `class Acme::Order`, a bare `Priceable` is not
+`Acme::Priceable`, in the model as in Ruby. A name no enclosing scope answers
+is then searched in the ancestors of the innermost scope — its prepends,
+mixins and superclasses, corpus and core table alike — and last at the top
+level, as Ruby does (M18b); a name found nowhere is taken as written.
+
+| The resolver says | The model says |
+|---|---|
+| a type the VM defines (the core table) | a stub below `<ruby>`, its kind from the table — **even when the corpus reopens it** |
+| a constant path some corpus file gives a body to | the primary declaration |
+| a path the corpus knows and gives no body (a namespace, an assigned constant), or a value constant of the table (`ARGV`) | dropped and counted `not-a-type` — never a stub: resolvability is not membership, and neither is its absence |
+| anything else | a stub below `<gems>`: a `class` when a site inherits from it, a `module` when one mixes it in |
+
+`<ruby>` is deliberately **core only**. The standard library is `<gems>`:
+nearly all of it is default or bundled gems, the set moves with every Ruby
+release (`csv` left the default gems in 3.4), and a model's keys must not move
+with it. That choice is also what makes the first row exact rather than
+heuristic: the VM defined `String` before any file ran, so a corpus
+`class String` can only be a reopening — a declared entity `attachedTo`
+`<ruby>/String`, while every reference to `String` still names the VM's. The
+one corpus it misreads is a library that itself implements a core-table
+constant (rubygems' own `Gem`); M18c measures it. A *library's* class the
+corpus reopens has no table to consult and is the declaration the corpus
+knows — the monkey-patch file becomes that constant's target, stated.
+
+**Calls (M18b): the shape of the receiver decides everything.** The walker
+records each call with what its receiver IS in the source; pass 3 looks the
+method up along the chain that names — prepends, the type, its mixins in
+reverse, the superclass; corpus declarations first, the core table as the
+tail.
+
+| Receiver | Chain | Provenance |
+|---|---|---|
+| none, `self`, `super` | the enclosing type's — instance side in a method, class side in a body or a `def self.x` | `declared` |
+| a constant (`Foo.bar`), `Foo.new` (→ `Foo#initialize`), `Foo.new.bar`, `self.class.bar`, `new.bar` in a class method | that type's | `declared` |
+| a local assigned `Foo.new` in the method (a later reassignment untypes it); an instance variable only ever assigned one class | that type's | **`derived`** — flow, not text |
+| a literal (`"x".blank?`) | the literal's class | `declared` when the corpus defines the method, else the language |
+| a parameter, a block argument, the result of a call | none | dropped, `untyped-receiver` |
+
+What answers decides the edge. A corpus `def` → `invocation` of it. An
+`attr_*` or a Struct member → `access` to the field. A method the core table
+gives to a class the receiver *is* (`upcase` in a `String` subclass) →
+`invocation` of that stub type. A method of `Object`/`Kernel`/`BasicObject`,
+or of `Class`/`Module` on the class side → the language: resolved, counted,
+no edge. Nothing answers and the chain holds exactly one library ancestor →
+`invocation` of it, `derived`, counted `ancestor-attributed`; two →
+`ambiguous-ancestor`; none → `unbound-self-call`. In a type that writes
+`method_missing` or a `define_method` with a computed name, a miss is
+`unbound-dynamic`: "nothing declares it" is no longer evidence. An operator
+on an untyped receiver (`a + b`, `x[0]`) is the language far more often than
+not: counted apart, and kept out of the rate either way.
+
+### 19.5 The extractor command-line contract
+
+Same flag shape and exit codes as every extractor (`schemas/README.md §8`),
+plus one flag of its own: `--explain-dropped` lists every drop on stderr, in
+source order, as `dropped <reason>: <file>:<line> <what>` — the audit's working
+tool, and it changes no byte of the model. `stdout` carries nothing but
+`--help`/`--version`:
+
+```
+syntax errors (recovered, 1): lib/acme_order/legacy/broken.rb
+RESOLUTION SUMMARY
+  files           : 27 (with syntax errors: 1)
+  sites           : 152
+  resolved        : 117 (corpus 70, <ruby> 20, <gems> 10, the language 17)
+  unresolved      : 35
+  resolution rate : 77.0%
+  ambiguous-ancestor (dropped): 1
+  computed-require (dropped)  : 1
+  …
+  unbound-self-call (dropped) : 10
+  untyped-receiver (dropped)  : 19
+  ancestor-attributed         : 3
+  operators, untyped receiver : 8 (not in the rate)
+  imports         : 38 (require 12, require_relative 11; unresolved: 5, by load path: 7, derived: 15)
+  entities        : 154 (stubs: 22)
+  edges           : 136 (self-edges dropped: 1)
+```
+
+A **site** is a constant read, a call, a `super`, a `raise` or a variable; the
+rate is over the sites that named something, the language included, and a
+declaration no key can carry (`def obj.x`) is counted without entering it.
+
+Planned for M18c, shaped by the audit as `--trace` was in §16.5: `--trace
+<file>` merging what a gem run inside a booting application observed —
+mixins the parser cannot see as `generated` `traitUsage`, the targets a
+untyped call site actually reached as one `dynamic-candidate` invocation with
+its `candidates`. Keys never come from the trace.
+
+### 19.6 Validation (the M2 gate, replayed a fifth time)
+
+- **Walking skeleton first** (M18a): one corpus in, `codegraph validate`
+  green, snapshot committed, the core gate (parses as a `Model`;
+  byte-identical to core's encoder; ZERO profile issues; closed; no
+  self-edges; the stub-discipline evidence by id).
+- **The fixture corpus** `fixtures/ruby/src` — `acme_order` as a gem, each
+  file pinning one hazard (its README lists them): both spellings of a nested
+  class, a wrapper beside a body with something of its own, a reopening that
+  sorts before its primary, a monkey patch of `String` and a class that
+  inherits from `String`, `def self.x` beside `def x`, `class << self`, the
+  operators `/` and `%`, every parameter shape, a compact class that cannot
+  see its namespace, two wrappers deep, a `Struct.new` superclass, an assigned
+  constant used as a superclass, the standard library under `<gems>`, a
+  `require` by load root, by path, missing, computed, a file with a syntax
+  error, a `#` in a file name, an extensionless `Rakefile`, a `.rake`, a
+  `.ru`, and a `vendor/` tree that must not appear. M18b adds what a body
+  says: constants of three literal shapes, fields from `attr_*`, assignments
+  and Struct members, a `Struct.new` assigned to a constant, every receiver
+  shape of §19.4 with its provenance, `has_many` attributed and `update!`
+  refused, `raise`, `super` into the core table, `define_method` literal and
+  computed, `send`, `load`, `autoload`, the `__dir__` idiom, and two files
+  under `bin/` — one with a Ruby shebang, one without.
+- **The metrics pass** (§18) reads the snapshot with the `ruby` grammar: 86 of
+  88 measured entities joined, the witness `sloc = ploc` on all 86 — the
+  fifth `model.metrics.jsonl`, hand-counted on `Order#total`.
+- **Extractor-side tests** (cargo): the walker, the resolver and the writer as
+  unit tables; `tests/contract.rs` holds the library to the snapshot byte for
+  byte, to a CRLF copy created in reverse order, and to the CLI contract.
+- **Oracles for M18c.** On a Zeitwerk application, Packwerk's reference list
+  for the constant layer; on an application that boots, `Module#ancestors` and
+  `instance_methods(false)` with `source_location` — the superset the
+  baseline's declarations and mixins must be a subset of, every gap a named
+  miss.
+
+### 19.7 Distribution
+
+One binary per platform from a runner of its own OS, the `metrics-native`
+shape (§18.3): `codegraph-ruby-<rid>`, a formula in the tap, a registry entry
+(`extensions: [".rb", ".rake", ".gemspec", ".ru"]`). All of it is M18c; M18a
+ships `bin/codegraph-ruby` over `target/release/`.
+
+### 19.8 Hazards, each with the test that pins it
+
+| Hazard | Where it shows | Guard |
+|---|---|---|
+| canonical order compares UTF-16 code units; Rust strings compare by byte | a name above U+FFFF sorts differently | `utf16_cmp` on `encode_utf16`; a unit test with the pair that disagrees |
+| JSON bytes must match core's `JSON.stringify` | escaping, key order | a hand-written encoder (no serde: the order is the contract); the two-encoder gate in core |
+| a source that is not UTF-8 (a Latin-1 comment in a 2009 file) | names enter the model as strings | Prism reads bytes and honours the magic comment; the FILE is never rejected, a name that is not valid UTF-8 is written with U+FFFD and counted |
+| `\r\n` sources | Windows checkouts | lines counted on `\n`; the CRLF determinism test |
+| `\` separators | Windows anchors and keys | every path `/`-joined before it enters a key |
+| enumeration order | case-insensitive file systems | ordinal sort of walked paths by UTF-16 units; the reversed-creation-order test |
+| a Prism bump reads one more syntax form | entities move | the exact pin, `PRISM_VERSION` restated for the header and pinned to `Cargo.toml` by a test; `--locked` builds |
+| the core table drifts with RBS | `Set` entered `core/` when Ruby made it core | the table is named by RBS version and the header carries it |
+| bindgen without clang's builtin headers | `limits.h` not found on a machine with libclang alone | `ensure_libclang` + `cargo_ruby` in `scripts/lib.sh` |
+| a symlinked directory cycle | `vendor/bundle` links | directory symlinks are not followed; symlinked files are read |
+| a drop counted and not locatable | an audit that cannot find what the summary counts | the walker's drops ARE the list (`reason, line, what`), the counts derived from it; the contract test holds `listed == counted` |
+| an accessor and a `def` of one name | `attr_reader :total` beside `def total` | the field is `@total`, the method `total`: two keys |
+
+### 19.9 Milestone split
+
+- **M18a — profile + skeleton + contract.** `feat(core): ruby profile`
+  (§19.2, the eleventh) and the registry test; `extractors/ruby/` on Prism
+  with the embedded core table; the walking skeleton — files, classes and
+  modules (the wrapper rule, one entity per declaring file, attachment),
+  methods and parameters, `require`/`require_relative`, superclasses and
+  mixins, the `derived` import, stubs — → `fixtures/ruby/expected/model.jsonl`
+  byte-identical to core's encoder and profile-valid with zero issues; the
+  core gate; `bin/codegraph-ruby`; `build.sh --ruby` / `test.sh --ruby` with
+  the release-binary `cmp`; `ruby-test` in CI.
+- **M18b — the model.** `field` (instance variables and `attr_*` as one
+  entity) and `constant`; `Struct.new` / `Class.new` / `Data.define` as types;
+  constant references in bodies, with the ancestor chain searched; the
+  invocation tiers of §19.2 with their provenances; `access`, `throws`;
+  comments; `sloc` + `cyclomatic`, literals; the `__FILE__` require idioms,
+  `load` and `autoload`; a Ruby shebang as a walked file; `ruby` in the
+  metrics pass (big-code-analysis has the grammar) and a fifth
+  `model.metrics.jsonl`; the full fixture with its README; the fixture in
+  every per-fixture suite; every CLI command verified on it; city and
+  navigator screenshots reviewed.
+- **M18c — audit + oracles + distribution.** Three corpora, every model
+  `validate`-clean: `rails/rails` (metaprogramming: the ceiling measured), a
+  Zeitwerk application (Discourse or Mastodon: the `derived` import layer and
+  the Packwerk oracle), a plain gem (the `require` resolver); a default gem
+  that implements a core-table constant (the §19.4 misreading, measured); the
+  trace gem and `--trace`; the defects found named in the profile notes with
+  their counts; binaries on four Unix runners, the registry entry, the
+  formula; `docs/ruby-extractor.md`; README names the extractor.
+
+Definition of done: `fixtures/ruby/expected/model.jsonl` byte-identical to
+core's encoder and profile-valid with zero issues; the same bytes from the
+binary on every runner; the constant layer equal to Packwerk's on a Zeitwerk
+application up to the documented blind spots; the audit numbers in the
+profile notes; `./test.sh` and CI green with the Ruby fixture in every
+per-fixture suite.
+
+---
+
+## 20. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -4345,8 +4742,11 @@ measures only.
 | M17a | Code metrics — the pass | ✅ (2026-09-29, worktree `code-metrics`) `codegraph-metrics` (§18): big-code-analysis 2.2.0 as a library, a pass over any extractor's model, 14 keys in two families (METAMODEL §3.8) joined on anchors — exact, leading, contained, then the fold; the extractor's keys untouched, a re-run the identity, numbers in `JSON.stringify`'s spelling (the core gate re-encodes all four enriched fixtures byte for byte). Joined: fixtures 70/87 Java, 101/117 C#, 89/105 TypeScript, 96/103 Elixir; BroadleafCommerce 26 209/28 596 (98.9 % of what has text of its own) in 0.82 s; codegraph itself 7 887/8 125 in 0.27 s; the witness `sloc = ploc` on every exact join but the explained ones; zero ambiguous. `build.sh`/`test.sh --metrics`, `bin/codegraph-metrics`, `docs/metrics.md`, a note per profile |
 | M17b | Code metrics — change history | ✅ (2026-10-02) `codegraph-metrics --history` → `<model>.history-metrics.jsonl`, a SIDE-CAR (§11 principle 1 kept: no history in `model.jsonl`, no core change): per file from one walk over the full commit graph (merges excluded — first-parent hid 65 % of Broadleaf's commits), per entity from one blame per file, at the model's commit and clocked at its time; codec and `HISTORY_MEASURES` in `@codegraph/scm`; `history:`/`history-file:` metrics in `city`/`serve`. Hand-countable synthetic-repository test; Broadleaf (18 776 commits) 2 983 files + 26 494 entities in 35 s, re-run byte-identical |
 | M17c | Code metrics — wired in and shipped | ◐ (2026-10-03) a pass is a registry entry (`role: "pass"`) across catalogue, discovery and daemon; the app's job measures every fresh model (and re-measures when the installed passes change), a missing or failing pass costing the job nothing; `snapshots` deliberately not (the temporal store keeps no per-revision measures); `codegraph-metrics` formula + `depends_on` in every extractor formula; CI `metrics` + `metrics-native` on four Unix runners, each `cmp`-proving the four snapshots; `--licenses` (MPL source pointers, 189 crates); Humanizer 4 817/5 736 and Phoenix 1 227/1 247 joined — and the witness caught the Elixir extractor's heredoc `sloc` (§18.5). Pending: the first tagged release to exercise CI and the tap |
+| M18a | Ruby extractor — profile + skeleton | ✅ (2026-10-13, worktree `ruby-extractor`) `rb` profile in core (the eleventh: the module is the file, `class` and `module` are types below it, mixins are `traitUsage`, no interface — §19.2); `extractors/ruby/` in Rust on Prism 1.9.0 (`ruby-prism`, pinned), no Ruby to build or run; the core table distilled from RBS 4.2.0 `core/` with RBS's own parser (915 constants: 304 classes, 26 modules, 585 values); walking skeleton — files, classes and modules (the wrapper rule, one entity per declaring file, reopenings `attachedTo` their primary, a `String` patch attached to `<ruby>/String`), methods and parameters, `require`/`require_relative` by path and by load root, superclasses and mixins resolved lexically, the `derived` import, stubs — → `fixtures/ruby/expected/model.jsonl` (24 files, 102 entities / 38 edges) byte-identical to core's encoder and profile-valid with zero issues; 60 cargo tests (50 unit, 10 contract: snapshot, CRLF + reversed creation order, the CLI contract) + 16 core gate tests; `codegraph validate` OK; `bin/codegraph-ruby`; `build.sh --ruby` (a 1.2 MB binary) / `test.sh --ruby` with the release-binary `cmp`; `ruby-test` written in CI, not yet run there |
+| M18b | Ruby extractor — model | ✅ (2026-10-13, worktree `ruby-extractor`) `field` (an instance variable, its `attr_*`, a Struct member: one entity `@x`) and `constant` (keyed by full path, with its literal `value`); `Struct.new` / `Data.define` / `Class.new` / `Module.new` assigned to a constant as types, a `Struct.new` superclass as a `generated` inheritance; constant references resolved lexically then through the ancestors; the core table extended with superclasses, mixins and methods (RBS 4.2.0: 915 constants, 23 mixins, 2428 methods) so lookup crosses from the corpus into the VM's classes; the invocation tiers of §19.4 — `declared` where the receiver's class is written, `derived` for typed locals, typed instance variables and the sole-library-ancestor attribution, the language resolved with no edge, untyped receivers dropped and counted; `access` with read/write, `throws`, comments, `sloc` + `cyclomatic`, literals; the Ruby 1.8 require idioms, `load`, `autoload`, shebang scripts; `--explain-dropped`, every drop with its line → `fixtures/ruby/expected/model.jsonl` (27 files, 154 entities / 136 edges; 152 sites, 77.0 % resolved) byte-identical to core's encoder and profile-valid with zero issues; `ruby` in the metrics pass and the fifth `model.metrics.jsonl` (86 of 88 joined, `sloc = ploc` on all 86); 101 cargo tests (90 unit, 11 contract) + 24 core gate tests; the fixture in the analyzer, city, navigator, CLI `validate` and metrics suites; `validate`, `analyze`, `navigator`, `city --layout` and `serve` run on it, City and Navigate screenshots reviewed |
+| M18c | Ruby extractor — audit + oracles + distribution | rails/rails, a Zeitwerk application and a plain gem audited `validate`-clean, the causes in the profile notes; the Packwerk constant oracle and the boot-time introspection superset check; the trace gem + `--trace` (`generated` mixins, `dynamic-candidate` observed targets); binaries on four Unix runners, the registry entry, the formula; `docs/ruby-extractor.md` |
 
-## 20. Decisions made in this plan (deltas vs. the design doc)
+## 21. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -4439,3 +4839,12 @@ measures only.
 | History reference (M17b) | the model's `repository.commit`, else HEAD, `--ref` overriding; clocked at that commit's committer time; the full commit graph, merges excluded | the wall clock would change the bytes daily; first-parent (bca's default) hid 65 % of Broadleaf's commits from the file level while blame still credited them per entity |
 | Passes in the app (M17c) | a registry entry with `role: "pass"`, its own contract `<pass> <model> --src <dir>`, run after the extractor; missing or failing never fails a job; never run over a model the user opened | the catalogue stays data (one row, no new mechanism); the user's measures are an addition to a page, not a condition of having one; a user's own file is not ours to rewrite |
 | Shipping the pass (M17c) | one Homebrew formula every extractor formula depends on; built natively on four Unix runners, each proving the snapshots; the third-party notice embedded (`--licenses`) | the user asked for one binary installed with each extractor; native builds need no cross C toolchain for the grammars; MPL-2.0 asks where the source is |
+| Ruby front end (M18) | Prism as a library plus a lexical constant resolver and an embedded table of what the VM defines; booting the application only as the `--trace` enrichment; tree-sitter-ruby and the type checkers rejected as baselines | Ruby binds nothing before it runs, and a legacy application does not boot; the lexical half of constant lookup is the one part that is statically honest, and Prism — CRuby's own parser — recovers from syntax errors, so even a broken file extracts |
+| Ruby extractor host (M18) | written in Rust on `ruby-prism`, Prism pinned by exact version; no Ruby to build or to run, the core table's generator included (`ruby-rbs`) | a Ruby program parses with whichever Prism the machine's Ruby bundles, so two machines could write two models of one corpus; Ruby has no dependable single-binary packager; the repository already ships one Rust binary per platform (§18). The first extractor not written in the language it reads — nothing in the model depends on it |
+| Ruby type identity (M18) | the module is the file; one entity per declaring file, a reopening `attachedTo` the primary declaration (the one writing a superclass, else first in canonical order); a body that only wraps class/module declarations declares nothing | Ruby has no namespace apart from its types and reopens them across files as a matter of course; both spellings of a nested class must be one key, and a namespace opened in fifty files must not be fifty buildings; containment ≠ attachment (invariant 5) is exactly "written here, belongs there" |
+| Ruby external keys (M18) | `<ruby>` = the constants the VM defines before any file runs (RBS `core/`, pinned, named in the header); `<gems>` = everything else, the standard library included; a required feature is a stub module below `<gems>` named as written | the standard library is default and bundled gems whose set moves with every release, and keys must not move with it; core-only also makes the monkey-patch rule exact — the VM defined `String` first, so a corpus body of it is a reopening and a reference still names the VM's |
+| Ruby call provenance (M18b) | `declared` exactly when the receiver's class is WRITTEN at the site (none, `self`, a constant, `Foo.new`); `derived` for what flow says (a local or an instance variable assigned `Foo.new`) and for the attribution of an undeclared self-call to a sole library ancestor; an untyped receiver is dropped, never guessed | invariant 2: a `declared`-only analysis must hold nothing a second assignment could falsify. `has_many` is the edge a Rails reader most wants and the one the source least proves — it is in the model, and it says what it is |
+| Ruby language calls (M18b) | a method of `Object`/`Kernel`/`BasicObject`, of `Class`/`Module` on the class side, or of a literal is resolved, counted, and NOT an edge; a core method reached through a class the receiver is (`upcase` in a `String` subclass) is an edge to that stub | `puts` and `private` would give every method an arrow to `<ruby>/Kernel`: the largest hub of every city, meaning nothing. The rate still counts them, so a corpus is not penalised for using its language |
+| Ruby fields and constants (M18b) | a field is the variable, `@x`, one entity with the `attr_*` that exposes it, owned by the root-most corpus ancestor that has it; a constant is keyed by its full path like a type; an accessor call is an `access`, not an `invocation` | the accessor is syntax over state (the C# property rule), and `@x` keeps the key apart from a `def x`; binding to the root-most ancestor makes a subclass's `@total` and its parent's ONE field, as they are one slot in the object |
+| Ruby synthetic types (M18b) | `X = Struct.new(…)`, `Data.define`, `Class.new(Base)`, `Module.new` are types named by the constant; a Struct/Data superclass is `inheritance` to `<ruby>/Struct` with provenance `generated` | the constant IS the class's name in Ruby; `generated` because the call produces the class — the source writes no `class`, so no `declared`-only analysis should count it as written |
+| Ruby import layer (M18) | a constant resolving to a declaration in another file is ONE `derived` `import` per (file, target file), at the first site, absent where a `require` already states it | a Zeitwerk application writes no `require` — the reference is the load — so the one layer comparable across languages would be empty for every Rails corpus; `derived` keeps the inference out of any `declared`-only analysis |
