@@ -1,7 +1,7 @@
 ---
 title: "What exactly depends on what?"
 weight: 2
-lead: "Every dependency of every code elements."
+lead: "Every dependency of every code elements and their tangle."
 cmd: "codegraph serve gson.jsonl"
 more:
   name: "Read the tutorial on the navigator"
