@@ -165,6 +165,9 @@ pub struct Edge {
     pub anchor: Anchor,
     /// `(isRead, isWrite)` — on an `access` edge, and only there.
     pub access: Option<(bool, bool)>,
+    /// Every target a `dynamic-candidate` invocation was seen to reach, `to`
+    /// among them; absent on any other edge.
+    pub candidates: Option<Vec<Key>>,
 }
 
 #[derive(Debug)]

@@ -4,6 +4,37 @@
 
 use std::collections::BTreeMap;
 
+/// What `--trace` found in a running program's account of the corpus. Every
+/// record is counted once: in the model already, added, or set aside and why.
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct TraceStats {
+    pub mixins: u64,
+    /// The source writes it: the same fact.
+    pub mixins_known: u64,
+    /// Added as a `generated` `traitUsage`.
+    pub mixins_generated: u64,
+    /// On a type the corpus does not declare, or naming what is no type.
+    pub mixins_outside: u64,
+    pub methods: u64,
+    /// A `def`, an `attr_*` or a `define_method` is written on that line.
+    pub methods_known: u64,
+    /// Defined where nothing writes it: no entity, and none is made up.
+    pub methods_at_run_time: u64,
+    pub methods_outside: u64,
+    pub calls: u64,
+    /// An edge of the baseline already says so.
+    pub calls_known: u64,
+    /// Bound to a site the baseline left unresolved…
+    pub calls_bound: u64,
+    /// …as this many `dynamic-candidate` invocations, one per site.
+    pub calls_added: u64,
+    /// No call of that name is written on that line.
+    pub calls_unmatched: u64,
+    /// The callee is defined where no `def` is written.
+    pub calls_untargeted: u64,
+    pub calls_outside: u64,
+}
+
 #[derive(Default)]
 pub struct Stats {
     pub files: usize,
@@ -37,6 +68,8 @@ pub struct Stats {
     pub entities: usize,
     pub stubs: usize,
     pub edges: usize,
+    /// `--trace`: what the trace added, and what it could not.
+    pub trace: Option<TraceStats>,
 }
 
 /// Drop reasons that are SITES — something written that named nothing the
@@ -112,6 +145,26 @@ impl Stats {
             self.imports_by_load_path,
             self.imports_derived
         ));
+        if let Some(trace) = &self.trace {
+            out.push_str(&format!(
+                "  trace mixins    : {} ({} in the source, {} added as generated, {} outside the corpus)\n",
+                trace.mixins, trace.mixins_known, trace.mixins_generated, trace.mixins_outside
+            ));
+            out.push_str(&format!(
+                "  trace methods   : {} ({} written, {} defined at run time — no entity, {} outside the corpus)\n",
+                trace.methods, trace.methods_known, trace.methods_at_run_time, trace.methods_outside
+            ));
+            out.push_str(&format!(
+                "  trace calls     : {} ({} in the model, {} bound to {} dynamic-candidate edges, {} unmatched, {} to a run-time definition, {} outside the corpus)\n",
+                trace.calls,
+                trace.calls_known,
+                trace.calls_bound,
+                trace.calls_added,
+                trace.calls_unmatched,
+                trace.calls_untargeted,
+                trace.calls_outside
+            ));
+        }
         out.push_str(&format!(
             "  entities        : {} (stubs: {})\n",
             self.entities, self.stubs

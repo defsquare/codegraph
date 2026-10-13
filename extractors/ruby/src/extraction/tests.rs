@@ -2,6 +2,15 @@ use super::*;
 use crate::corpus::{SourceFile, line_count};
 
 fn extraction(files: &[(&str, &str)]) -> Extraction {
+    traced(files, None)
+}
+
+/// The same corpus, with what a running program said of it.
+fn traced(files: &[(&str, &str)], trace: Option<&str>) -> Extraction {
+    let trace = trace.map(|records| {
+        let header = r#"{"t":"header","tool":"codegraph-trace","version":"0.1.0","ruby":"3.4.11","root":"/work"}"#;
+        crate::trace::parse(&format!("{header}\n{records}")).expect("a trace")
+    });
     let mut files: Vec<SourceFile> = files
         .iter()
         .map(|(rel, source)| SourceFile {
@@ -15,7 +24,7 @@ fn extraction(files: &[(&str, &str)]) -> Extraction {
         root_display: "src".to_owned(),
         files,
     };
-    extract(&corpus, None, true, &mut |_, _| {})
+    extract(&corpus, None, true, trace.as_ref(), &mut |_, _| {})
 }
 
 /// One file, `a.rb`.
@@ -1111,4 +1120,144 @@ fn an_unbound_dynamic_drop_names_the_type_that_defines_methods_at_run_time() {
             "unbound-dynamic: a.rb:8 super (Fixtures defines methods at run time)".to_owned(),
         ]
     );
+}
+
+// -------------------------------------------------------------------- trace ----
+
+const TRACED: &[(&str, &str)] = &[(
+    "lib/a.rb",
+    "module Hooked\n  def self.included(base)\n    base.send(HOOK, Extra)\n  end\nend\nmodule Extra\n  def extra; end\nend\nclass Order\n  include Hooked\n  include Comparable\n  def total; 1; end\n  def run(x)\n    x.total\n    total\n  end\nend\n",
+)];
+
+#[test]
+fn a_trace_adds_the_mixins_the_parser_cannot_see_as_generated() {
+    let run = traced(
+        TRACED,
+        Some(concat!(
+            // `base.send(HOOK, Extra)`: what the hook did is only known once it ran.
+            r#"{"t":"mixin","type":"Order","how":"extend","module":"Extra"}"#,
+            "\n",
+            r#"{"t":"mixin","type":"Order","how":"include","module":"Hooked"}"#,
+            "\n",
+            r#"{"t":"mixin","type":"Order","how":"include","module":"Comparable"}"#,
+            "\n",
+            r#"{"t":"mixin","type":"Order","how":"include","module":"ActiveModel::Model"}"#,
+            "\n",
+            // A library's class is not the corpus's to describe.
+            r#"{"t":"mixin","type":"Rack::Request","how":"include","module":"Extra"}"#,
+        )),
+    );
+    let order = "rb:lib%2Fa.rb/Order";
+    assert_eq!(
+        from(&run, "traitUsage", order),
+        vec![
+            // Anchored on the class the VM found them on: no line writes them.
+            ("rb:<gems>/ActiveModel::Model".to_owned(), "generated", 9),
+            ("rb:lib%2Fa.rb/Extra".to_owned(), "generated", 9),
+            ("rb:lib%2Fa.rb/Hooked".to_owned(), "declared", 10),
+            ("rb:<ruby>/Comparable".to_owned(), "declared", 11),
+        ]
+    );
+    let trace = run.stats.trace.as_ref().expect("trace stats");
+    assert_eq!(
+        (
+            trace.mixins,
+            trace.mixins_known,
+            trace.mixins_generated,
+            trace.mixins_outside
+        ),
+        (5, 2, 2, 1)
+    );
+}
+
+#[test]
+fn a_trace_binds_an_untyped_call_to_what_it_reached_as_a_dynamic_candidate() {
+    let run = traced(
+        TRACED,
+        Some(concat!(
+            // `x.total`: no parser types `x`; the program reached Order#total.
+            r#"{"t":"call","file":"lib/a.rb","line":14,"name":"total","at":"lib/a.rb","def":12}"#,
+            "\n",
+            // `total` on self: the baseline already says so.
+            r#"{"t":"call","file":"lib/a.rb","line":15,"name":"total","at":"lib/a.rb","def":12}"#,
+            "\n",
+            // No call of that name is written on that line: `send`, a DSL.
+            r#"{"t":"call","file":"lib/a.rb","line":14,"name":"nope","at":"lib/a.rb","def":12}"#,
+            "\n",
+            // The callee was defined where no `def` is written.
+            r#"{"t":"call","file":"lib/a.rb","line":14,"name":"total","at":"lib/a.rb","def":3}"#,
+            "\n",
+            r#"{"t":"call","file":"lib/elsewhere.rb","line":1,"name":"total","at":"lib/a.rb","def":12}"#,
+        )),
+    );
+    let edges: Vec<_> = run
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "invocation" && e.from.render() == "rb:lib%2Fa.rb/Order.run")
+        .map(|e| {
+            (
+                e.to.render(),
+                e.provenance,
+                e.anchor.start,
+                e.candidates
+                    .as_ref()
+                    .map(|c| c.iter().map(Key::render).collect::<Vec<_>>()),
+            )
+        })
+        .collect();
+    assert_eq!(
+        edges,
+        vec![
+            ("rb:lib%2Fa.rb/Order.total".to_owned(), "declared", 15, None),
+            (
+                "rb:lib%2Fa.rb/Order.total".to_owned(),
+                "dynamic-candidate",
+                14,
+                Some(vec!["rb:lib%2Fa.rb/Order.total".to_owned()])
+            ),
+        ]
+    );
+    let trace = run.stats.trace.as_ref().expect("trace stats");
+    assert_eq!(
+        (
+            trace.calls,
+            trace.calls_added,
+            trace.calls_known,
+            trace.calls_unmatched,
+            trace.calls_untargeted,
+            trace.calls_outside
+        ),
+        (5, 1, 1, 1, 1, 1)
+    );
+}
+
+#[test]
+fn a_trace_counts_the_methods_no_def_writes_and_never_adds_an_entity() {
+    let records = concat!(
+        r#"{"t":"method","type":"Order","name":"total","singleton":false,"file":"lib/a.rb","line":12}"#,
+        "\n",
+        // Defined at run time, on a line that writes no `def`.
+        r#"{"t":"method","type":"Order","name":"hooked?","singleton":false,"file":"lib/a.rb","line":3}"#,
+        "\n",
+        r#"{"t":"method","type":"Order","name":"gem_method","singleton":false,"file":"lib/gone.rb","line":1}"#,
+    );
+    let run = traced(TRACED, Some(records));
+    let trace = run.stats.trace.as_ref().expect("trace stats");
+    assert_eq!(
+        (
+            trace.methods,
+            trace.methods_known,
+            trace.methods_at_run_time,
+            trace.methods_outside
+        ),
+        (3, 1, 1, 1)
+    );
+    // Keys never come from the trace: the same entities, and every edge the source wrote.
+    let plain = traced(TRACED, None);
+    assert_eq!(ids_of(&run), ids_of(&plain));
+    assert!(plain.stats.trace.is_none());
+    for edge in &plain.model.edges {
+        assert!(run.model.edges.contains(edge), "{edge:?}");
+    }
 }

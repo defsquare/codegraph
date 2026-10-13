@@ -277,6 +277,13 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
             "{{\"t\":\"x\",\"k\":{},\"f\":{from},\"o\":{to},\"p\":{}",
             edge_kind_ref[edge.kind], provenance_ref[edge.provenance]
         ));
+        if let Some(candidates) = &edge.candidates {
+            let refs = candidates
+                .iter()
+                .map(|candidate| reference(candidate, &edge.from).map(|surrogate| surrogate.to_string()))
+                .collect::<Result<Vec<String>, WriteError>>()?;
+            line.push_str(&format!(",\"candidates\":[{}]", refs.join(",")));
+        }
         if let Some((read, write)) = edge.access {
             line.push_str(&format!(",\"isRead\":{read},\"isWrite\":{write}"));
         }
@@ -383,6 +390,32 @@ mod tests {
     }
 
     #[test]
+    fn writes_the_candidates_of_an_uncertain_call_as_surrogates_before_the_anchor() {
+        let a = file("a.rb");
+        let b = file("b.rb");
+        let c = file("c.rb");
+        let edge = Edge {
+            kind: "invocation",
+            from: a.key.clone(),
+            to: b.key.clone(),
+            provenance: "dynamic-candidate",
+            anchor: Anchor {
+                file: "a.rb".into(),
+                start: 3,
+                end: 3,
+            },
+            access: None,
+            candidates: Some(vec![b.key.clone(), c.key.clone()]),
+        };
+        let text = written(&model(vec![a, b, c], vec![edge]));
+        // core's key order (packages/core/src/jsonl.ts): candidates, isRead, isWrite, anchor.
+        assert!(
+            text.contains(r#"{"t":"x","k":0,"f":0,"o":1,"p":0,"candidates":[1,2],"anchor":[0,3,3]}"#),
+            "{text}"
+        );
+    }
+
+    #[test]
     fn writes_sections_in_order_with_dense_surrogates_whatever_the_input_order() {
         let b = file("b.rb");
         let a = file("a.rb");
@@ -397,6 +430,7 @@ mod tests {
                 end: 1,
             },
             access: None,
+            candidates: None,
         };
         let text = written(&model(vec![b, a], vec![edge]));
         let lines: Vec<&str> = text.lines().collect();

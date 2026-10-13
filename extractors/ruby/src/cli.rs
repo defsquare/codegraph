@@ -5,6 +5,7 @@
 
 use crate::corpus;
 use crate::extraction;
+use crate::trace;
 use crate::writer;
 use crate::{NAME, VERSION};
 use std::fs::File;
@@ -41,6 +42,8 @@ pub struct Options {
     pub repository: Option<Vec<(&'static str, String)>>,
     /// List every dropped site on stderr.
     pub explain_dropped: bool,
+    /// What `trace/codegraph_trace.rb` wrote inside the running program.
+    pub trace: Option<String>,
     pub help: bool,
     pub version: bool,
 }
@@ -49,6 +52,7 @@ const VALUE_FLAGS: &[&str] = &[
     "--src",
     "--out",
     "--progress",
+    "--trace",
     "--repo-remote",
     "--repo-commit",
     "--repo-root",
@@ -61,6 +65,7 @@ pub fn parse(argv: &[String], cwd: &Path) -> Result<Options, String> {
     let mut progress = Progress::Auto;
     let (mut remote, mut commit, mut root, mut provider) = (None, None, None, None);
     let (mut help, mut version, mut explain_dropped) = (false, false, false);
+    let mut trace = None;
 
     let mut args = argv.iter();
     while let Some(flag) = args.next() {
@@ -77,6 +82,7 @@ pub fn parse(argv: &[String], cwd: &Path) -> Result<Options, String> {
                         other => return Err(format!("--progress must be auto, plain or none, got: {other}")),
                     }
                 }
+                "--trace" => trace = Some(value),
                 "--repo-remote" => remote = Some(value),
                 "--repo-commit" => commit = Some(value),
                 "--repo-root" => root = Some(value),
@@ -110,6 +116,7 @@ pub fn parse(argv: &[String], cwd: &Path) -> Result<Options, String> {
         progress,
         repository,
         explain_dropped,
+        trace,
         help,
         version,
     })
@@ -181,6 +188,10 @@ OPTIONS
   --no-progress         same as --progress none
   --explain-dropped     list every drop on stderr, in source order, as
                         `dropped <reason>: <file>:<line> <what>`; the model is unchanged
+  --trace <file>        merge what trace/codegraph_trace.rb wrote inside the running
+                        program: the mixins no line writes become `generated` edges,
+                        the calls it saw at sites left untyped `dynamic-candidate`
+                        ones. No entity is added and no edge of the source changes.
   --repo-remote <url>   normalized https clone URL, no .git suffix
   --repo-commit <sha>   the sha this tree is at — a permalink, not a branch
   --repo-root <path>    repo-relative path of the analyzed root (\"\" at the repo root)
@@ -241,10 +252,19 @@ fn extract(options: &Options, io: &mut Io<'_>, cwd: &Path) -> Result<(), String>
     let corpus = corpus::load(&options.sources, cwd)?;
     phase(&mut *io.stderr, "walk", format!("{} files", corpus.files.len()));
 
+    let trace = match &options.trace {
+        Some(path) => {
+            let text = std::fs::read_to_string(corpus::absolute(path, cwd))
+                .map_err(|e| format!("cannot read the trace {path}: {e}"))?;
+            Some(trace::parse(&text).map_err(|message| format!("{path}: {message}"))?)
+        }
+        None => None,
+    };
     let extraction = extraction::extract(
         &corpus,
         options.repository.clone(),
         options.explain_dropped,
+        trace.as_ref(),
         &mut |label, detail| phase(&mut *io.stderr, label, detail),
     );
 

@@ -125,3 +125,18 @@ type and file `sloc`.
 | `send(:ping)` | a literal name is a call like any other: `invocation` of `Ghost.ping` |
 | `public_send(name)` | dropped, `dynamic-dispatch` |
 | `name`, `vanish` | dropped, `unbound-dynamic`: in a type that defines methods at run time, "nothing declares it" is not evidence — and the drop names the type, `AcmeOrder::Dynamic::Ghost` |
+
+## With a trace
+
+Nothing here boots, so the corpus has no trace of its own; `tests/contract.rs`
+writes the one a program that loaded it would produce and merges it with
+`--trace`:
+
+| The trace says | The model gains |
+|---|---|
+| `AcmeOrder::Invoice` is extended with `AcmeOrder::Auditable::ClassMethods` | a `traitUsage`, provenance **`generated`**, anchored on the `class Invoice` line: the VM holds it, no line writes it |
+| `AcmeOrder::Invoice` includes `AcmeOrder::Auditable` | nothing: the source says so |
+| `invoice.settle` at `invoice.rb:15` entered the method defined at `invoice.rb:18` | ONE `invocation` from `Invoice.settle_all#self` to `Invoice.settle`, provenance **`dynamic-candidate`**, `candidates` listing that one target |
+| `Ledger#open?` is defined at `ledger.rb:6` | nothing, counted: a method no `def` writes has no entity, and gets none |
+
+The files and the entities are the same lines with and without it.

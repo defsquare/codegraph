@@ -334,3 +334,96 @@ fn lists_every_dropped_site_on_stderr_when_asked_and_changes_no_byte_of_the_mode
     assert_eq!(explained.stdout, "");
     assert!(plain == fs::read(&out).unwrap());
 }
+
+#[test]
+fn merges_a_trace_adding_edges_and_touching_nothing_the_source_wrote() {
+    let root = repository();
+    let dir = scratch("trace");
+    let plain = String::from_utf8(extract(&root, &dir.join("plain.jsonl"))).unwrap();
+    // What a program that loaded the fixture would say: the hook extended
+    // Invoice, and `invoice.settle` — a block argument no parser types —
+    // reached Invoice#settle.
+    let trace = dir.join("codegraph-trace.jsonl");
+    fs::write(
+        &trace,
+        concat!(
+            r#"{"t":"header","tool":"codegraph-trace","version":"0.1.0","ruby":"3.4.11","root":"/work"}"#,
+            "\n",
+            r#"{"t":"mixin","type":"AcmeOrder::Invoice","how":"extend","module":"AcmeOrder::Auditable::ClassMethods"}"#,
+            "\n",
+            r#"{"t":"mixin","type":"AcmeOrder::Invoice","how":"include","module":"AcmeOrder::Auditable"}"#,
+            "\n",
+            r#"{"t":"method","type":"AcmeOrder::Ledger","name":"open?","singleton":false,"file":"lib/acme_order/ledger.rb","line":6}"#,
+            "\n",
+            r#"{"t":"method","type":"AcmeOrder::Ledger","name":"close!","singleton":false,"file":"lib/acme_order/ledger.rb","line":12}"#,
+            "\n",
+            r#"{"t":"call","file":"lib/acme_order/invoice.rb","line":15,"name":"settle","at":"lib/acme_order/invoice.rb","def":18}"#,
+            "\n",
+            r#"{"t":"eof","mixins":2,"methods":2,"calls":1}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+    let out = dir.join("traced.jsonl");
+    let traced = run(
+        &[
+            "--src",
+            FIXTURE,
+            "--out",
+            out.to_str().unwrap(),
+            "--trace",
+            trace.to_str().unwrap(),
+        ],
+        &root,
+    );
+    assert_eq!(traced.code, EXIT_OK, "{}", traced.stderr);
+    assert!(
+        traced
+            .stderr
+            .contains("trace mixins    : 2 (1 in the source, 1 added as generated, 0 outside the corpus)\n"),
+        "{}",
+        traced.stderr
+    );
+    assert!(
+        traced
+            .stderr
+            .contains("trace methods   : 2 (1 written, 1 defined at run time — no entity, 0 outside the corpus)\n"),
+        "{}",
+        traced.stderr
+    );
+    assert!(
+        traced.stderr.contains(
+            "trace calls     : 1 (0 in the model, 1 bound to 1 dynamic-candidate edges, 0 unmatched, 0 to a run-time definition, 0 outside the corpus)\n"
+        ),
+        "{}",
+        traced.stderr
+    );
+    // Keys never come from the trace: the same files and entities, line for
+    // line (two provenances join the header's dictionary), and two edges more.
+    let model = fs::read_to_string(&out).unwrap();
+    let records = |text: &str, tag: &str| -> Vec<String> {
+        text.lines()
+            .filter(|line| line.starts_with(&format!("{{\"t\":\"{tag}\"")))
+            .map(str::to_owned)
+            .collect()
+    };
+    assert_eq!(records(&model, "f"), records(&plain, "f"));
+    assert_eq!(records(&model, "e"), records(&plain, "e"));
+    assert_eq!(records(&model, "x").len(), records(&plain, "x").len() + 2);
+    assert!(model.contains("\"candidates\":["));
+
+    // A file that is no trace, or is not there, is a failure that says so — and writes nothing.
+    for (file, message) in [
+        ("fixtures/ruby/expected/model.jsonl", "not a trace"),
+        ("fixtures/ruby/no-such-trace.jsonl", "cannot read the trace"),
+    ] {
+        let refused = dir.join("refused.jsonl");
+        let failed = run(
+            &["--src", FIXTURE, "--out", refused.to_str().unwrap(), "--trace", file],
+            &root,
+        );
+        assert_eq!(failed.code, EXIT_FAILURE, "{}", failed.stderr);
+        assert!(failed.stderr.contains(message), "{}", failed.stderr);
+        assert!(!refused.exists());
+    }
+}

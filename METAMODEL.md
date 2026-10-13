@@ -96,8 +96,8 @@ Enum qualifying *how we know* an edge exists. Never mix facts and inferences.
 |---|---|---|
 | `declared` | written literally in the source | explicit `extends`, direct call |
 | `derived` | computed by analysis | Go implicit interface satisfaction, TS structural conformance, Python protocols, Rust blanket impls, a Ruby receiver typed by its one assignment (`x = Foo.new; x.bar`) |
-| `dynamic-candidate` | dispatch not statically resolvable; targets are guesses | multimethods, PHP `__call`, duck typing, `dyn Trait` |
-| `generated` | produced by macro/annotation expansion | Rust `#[derive]`, Lombok, Python decorators, Clojure macros, Ruby `Struct.new` / `Data.define` (the class they produce inherits `Struct` / `Data`; no `class` writes it) |
+| `dynamic-candidate` | dispatch not statically resolvable; targets are guesses | multimethods, PHP `__call`, duck typing, `dyn Trait`, a Ruby call on an untyped receiver bound to what a trace saw it reach (`candidates`: every target observed) |
+| `generated` | produced by macro/annotation expansion | Rust `#[derive]`, Lombok, Python decorators, Clojure macros, Ruby `Struct.new` / `Data.define` (the class they produce inherits `Struct` / `Data`; no `class` writes it), a Ruby mixin the VM holds and no line writes (from a trace) |
 
 **Relations:** mandatory attribute of every Edge. Analyses wanting facts only
 filter on `declared`.

@@ -15,7 +15,8 @@ use crate::declarations::{
 use crate::ids;
 use crate::model::{Anchor, Edge, Entity, Key, Literal, Model};
 use crate::resolve::{Ancestor, Found, Place, Resolution, Step, TypeKind, Whitelist};
-use crate::stats::Stats;
+use crate::stats::{Stats, TraceStats};
+use crate::trace::Trace;
 use crate::{NAME, PRISM_VERSION, VERSION};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
@@ -327,10 +328,178 @@ impl Extractor<'_> {
             provenance,
             anchor,
             access,
+            candidates: None,
         };
         if self.seen_edges.insert(edge.clone()) {
             self.edges.push(edge);
         }
+    }
+
+    // --------------------------------------------------------------- trace ----
+
+    /// Merges what a running program said (`--trace`), after the baseline's
+    /// own pass: a fact the source already writes is the same fact, a new one
+    /// is an edge that says where it comes from. Keys never come from the
+    /// trace — it names constants, files and lines, and what has no entity
+    /// here is counted, never invented.
+    fn trace(&mut self, trace: &Trace) {
+        let mut stats = TraceStats::default();
+        let whitelist = self.whitelist;
+        let by_path: HashMap<&str, usize> = self
+            .corpus
+            .files
+            .iter()
+            .enumerate()
+            .map(|(index, file)| (file.rel.as_str(), index))
+            .collect();
+
+        // --- mixins: what a hook, or a block nobody can read, gave a type.
+        for mixin in &trace.mixins {
+            stats.mixins += 1;
+            let Resolution::Declared { fqn, file } = whitelist.classify(mixin.type_name.clone()) else {
+                stats.mixins_outside += 1;
+                continue;
+            };
+            let ancestor = whitelist.as_ancestor(&mixin.module);
+            let written = whitelist.facts(&fqn).is_some_and(|facts| {
+                [&facts.includes, &facts.prepends, &facts.extends]
+                    .iter()
+                    .any(|list| list.contains(&ancestor))
+            });
+            if written {
+                stats.mixins_known += 1;
+                continue;
+            }
+            let to = match whitelist.classify(mixin.module.clone()) {
+                Resolution::Declared { fqn, file } => self.type_key(file, &fqn),
+                Resolution::Core { fqn, kind } => self.stubs.core(&fqn, kind),
+                Resolution::Gems { fqn } => self.stubs.gems(&fqn, false),
+                Resolution::Value { .. } | Resolution::CoreValue { .. } | Resolution::Namespace { .. } => {
+                    stats.mixins_outside += 1;
+                    continue;
+                }
+            };
+            let from = self.type_key(file, &fqn);
+            // No line writes it: anchored on the class the VM found it on.
+            let line = whitelist
+                .primary(&fqn)
+                .map(|declaration| declaration.span.0)
+                .unwrap_or(1);
+            let anchor = self.anchor(file, (line, line));
+            let before = self.edges.len();
+            self.edge("traitUsage", &from, to, "generated", anchor, None);
+            if self.edges.len() > before {
+                stats.mixins_generated += 1;
+            } else {
+                stats.mixins_known += 1;
+            }
+        }
+
+        // --- methods: the lines that write one, against the lines the VM names.
+        let mut written: HashSet<(usize, u32)> = HashSet::new();
+        let mut defined: HashMap<(usize, u32), Place> = HashMap::new();
+        for (file, decls) in self.files.iter().enumerate() {
+            for (scope, body) in decls.scopes.iter().enumerate() {
+                for (index, method) in body.methods.iter().enumerate() {
+                    written.insert((file, method.span.0));
+                    defined
+                        .entry((file, method.span.0))
+                        .or_insert(Place { file, scope, index });
+                }
+                written.extend(body.attrs.iter().map(|attr| (file, attr.span.0)));
+                written.extend(body.members.iter().map(|(_, span)| (file, span.0)));
+            }
+        }
+        for method in &trace.methods {
+            stats.methods += 1;
+            match by_path.get(method.file.as_str()) {
+                None => stats.methods_outside += 1,
+                Some(file) if written.contains(&(*file, method.line)) => stats.methods_known += 1,
+                Some(_) => stats.methods_at_run_time += 1,
+            }
+        }
+
+        // --- calls: what a site the baseline could not type actually reached.
+        let stated: HashSet<(Key, Key, u32)> = self
+            .edges
+            .iter()
+            .filter(|edge| edge.kind == "invocation")
+            .map(|edge| (edge.from.clone(), edge.to.clone(), edge.anchor.start))
+            .collect();
+        // A site — file, line, name — to who calls there, where, and what it reached.
+        struct Reached {
+            from: Key,
+            span: Span,
+            targets: Vec<Key>,
+        }
+        let mut reached: BTreeMap<(usize, u32, String), Reached> = BTreeMap::new();
+        for call in &trace.calls {
+            stats.calls += 1;
+            let (Some(&file), Some(&at)) = (by_path.get(call.file.as_str()), by_path.get(call.at.as_str())) else {
+                stats.calls_outside += 1;
+                continue;
+            };
+            let Some(to) = defined
+                .get(&(at, call.def))
+                .and_then(|place| self.method_keys.get(place))
+                .cloned()
+            else {
+                stats.calls_untargeted += 1;
+                continue;
+            };
+            let site = self.files[file].sites.iter().find(|site| {
+                site.span.0 == call.line && matches!(&site.what, What::Call { name, .. } if *name == call.name)
+            });
+            let Some(site) = site else {
+                stats.calls_unmatched += 1;
+                continue;
+            };
+            let from = self.owner_key(file, site.owner);
+            if stated.contains(&(from.clone(), to.clone(), call.line)) {
+                stats.calls_known += 1;
+                continue;
+            }
+            stats.calls_bound += 1;
+            reached
+                .entry((file, call.line, call.name.clone()))
+                .or_insert_with(|| Reached {
+                    from,
+                    span: site.span,
+                    targets: Vec::new(),
+                })
+                .targets
+                .push(to);
+        }
+        for ((file, _, _), site) in reached {
+            let Reached {
+                from,
+                span,
+                targets: mut candidates,
+            } = site;
+            candidates.sort_by(|a, b| a.canonical_cmp(b));
+            candidates.dedup();
+            // A method that reaches itself is no dependency.
+            candidates.retain(|candidate| *candidate != from);
+            let Some(to) = candidates.first().cloned() else {
+                self.stats.self_edges += 1;
+                continue;
+            };
+            self.invokes.insert(from.clone());
+            let edge = Edge {
+                kind: "invocation",
+                from,
+                to,
+                provenance: "dynamic-candidate",
+                anchor: self.anchor(file, span),
+                access: None,
+                candidates: Some(candidates),
+            };
+            if self.seen_edges.insert(edge.clone()) {
+                self.edges.push(edge);
+                stats.calls_added += 1;
+            }
+        }
+        self.stats.trace = Some(stats);
     }
 
     /// A constant of another file was named here: where nothing is required, that is the import.
@@ -1307,6 +1476,7 @@ pub fn extract(
     corpus: &Corpus,
     repository: Option<Vec<(&'static str, String)>>,
     explain: bool,
+    trace: Option<&Trace>,
     phase: &mut dyn FnMut(&str, String),
 ) -> Extraction {
     let core = core_table::table();
@@ -1375,6 +1545,11 @@ pub fn extract(
     extractor.current = None;
     extractor.imports();
     phase("edges", format!("{} edges", extractor.edges.len()));
+    if let Some(trace) = trace {
+        let before = extractor.edges.len();
+        extractor.trace(trace);
+        phase("trace", format!("{} edges added", extractor.edges.len() - before));
+    }
 
     let Extractor {
         stubs,

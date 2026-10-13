@@ -19,6 +19,7 @@ pub mod json;
 pub mod model;
 pub mod resolve;
 pub mod stats;
+pub mod trace;
 pub mod writer;
 
 pub const NAME: &str = "codegraph-ruby";
