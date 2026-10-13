@@ -9,11 +9,12 @@ import { validateModel, type Profile } from "../src/profile.js";
 import { csharpProfile } from "../src/profiles/csharp.js";
 import { elixirProfile } from "../src/profiles/elixir.js";
 import { javaProfile } from "../src/profiles/java.js";
+import { rubyProfile } from "../src/profiles/ruby.js";
 import { typescriptProfile } from "../src/profiles/typescript.js";
 
 /**
  * THE M17a GATE — `codegraph-metrics` (extractors/metrics, PLAN.md §18), the
- * big-code-analysis pass, over the four fixture models. Its own tests prove it
+ * big-code-analysis pass, over the five fixture models. Its own tests prove it
  * reproduces `model.metrics.jsonl` byte for byte; what only this side can say
  * is that the result is a model core itself would write, that nothing moved
  * but the measures, and that the extractor's own measures survived untouched.
@@ -46,13 +47,15 @@ const repo = (path: string): string => fileURLToPath(new URL(`../../../${path}`,
  * How many measured entities each fixture joins (the pass's stderr summary).
  * The rest have no space of their own — implicit constructors anchored on
  * their class, Java lambdas (big-code-analysis opens none), body-less
- * declarations, Elixir protocols and impls — and carry none of the keys.
+ * declarations, Elixir protocols and impls, a Ruby `Struct.new do … end` — and
+ * carry none of the keys.
  */
 const FIXTURES: ReadonlyArray<{ lang: string; profile: Profile; joined: number }> = [
   { lang: "java", profile: javaProfile, joined: 70 },
   { lang: "csharp", profile: csharpProfile, joined: 101 },
   { lang: "typescript", profile: typescriptProfile, joined: 89 },
   { lang: "elixir", profile: elixirProfile, joined: 96 },
+  { lang: "ruby", profile: rubyProfile, joined: 86 },
 ];
 
 const metricsOf = (entity: Entity): Record<string, number> | undefined =>
@@ -120,6 +123,7 @@ describe.each(FIXTURES)("fixtures/$lang/expected/model.metrics.jsonl", ({ lang, 
  *   ensure (Java)     if +1, catch +1                                          = 2, 2 throws
  *   ensure (TS)       if +1, catch +1, if nested in the catch +2               = 4, 3 throws + 1 return
  *   available? (ex)   case +1                                                  = 1
+ *   total (rb)        `return … if …` +1                                       = 1, 1 return
  *
  * Java `max` is also ABC-counted: assignments `best = null`, `best = value`;
  * one branch (the `compareTo` call); conditions `== null`, `> 0` — √(4+1+4) = 3;
@@ -161,6 +165,20 @@ describe("hand-counted measures", () => {
 
   it("Elixir Stock.available?", () => {
     expect(measure("elixir", "ex:lib%2Facme_order%2Fstock.ex/AcmeOrder%2EStock.available?#1", "cognitive")).toBe(1);
+  });
+
+  // `return Money.zero(@currency) if @lines.empty?` then `@pricing.price_for(self)`:
+  // one branch, one return, no assignment, three calls, one condition.
+  it("Ruby Order.total", () => {
+    const total = "rb:lib%2Facme_order%2Forder.rb/AcmeOrder::Order.total";
+    expect(measure("ruby", total, "cognitive")).toBe(1);
+    expect(measure("ruby", total, "nexits")).toBe(1);
+    expect(measure("ruby", total, "abc.assignments")).toBe(0);
+    expect(measure("ruby", total, "abc.branches")).toBe(3);
+    expect(measure("ruby", total, "abc.conditions")).toBe(1);
+    // The extractor's own two measures ride through the pass untouched.
+    expect(measure("ruby", total, "cyclomatic")).toBe(2);
+    expect(measure("ruby", total, "sloc")).toBe(4);
   });
 });
 

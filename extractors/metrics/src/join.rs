@@ -213,6 +213,7 @@ pub fn language(lang: &str, path: &str) -> Option<LANG> {
         "java" => Some(LANG::Java),
         "csharp" => Some(LANG::Csharp),
         "ex" => Some(LANG::Elixir),
+        "rb" => Some(LANG::Ruby),
         "ts" if path.ends_with(".tsx") => Some(LANG::Tsx),
         "ts" => Some(LANG::Typescript),
         _ => None,

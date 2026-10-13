@@ -5,7 +5,7 @@ License 2.0 are available in source form at:
   big-code-analysis 2.2.0: https://crates.io/crates/big-code-analysis/2.2.0 (https://github.com/dekobon/big-code-analysis)
   uluru 3.1.0: https://crates.io/crates/uluru/3.1.0 (https://github.com/servo/uluru)
 
-The 189 crates, with their declared licenses:
+The 190 crates, with their declared licenses:
   aho-corasick 1.1.5 — Unlicense OR MIT — https://github.com/BurntSushi/aho-corasick
   allocator-api2 0.2.21 — MIT OR Apache-2.0 — https://github.com/zakarumych/allocator-api2
   arc-swap 1.9.2 — MIT OR Apache-2.0 — https://github.com/vorner/arc-swap
@@ -182,6 +182,7 @@ The 189 crates, with their declared licenses:
   tree-sitter-elixir 0.3.5 — Apache-2.0 — https://github.com/elixir-lang/tree-sitter-elixir
   tree-sitter-java 0.23.5 — MIT — https://github.com/tree-sitter/tree-sitter-java
   tree-sitter-language 0.1.8 — MIT — https://github.com/tree-sitter/tree-sitter
+  tree-sitter-ruby 0.23.1 — MIT — https://github.com/tree-sitter/tree-sitter-ruby
   tree-sitter-typescript 0.23.2 — MIT — https://github.com/tree-sitter/tree-sitter-typescript
   typenum 1.20.1 — MIT OR Apache-2.0 — https://github.com/paholg/typenum
   uluru 3.1.0 — MPL-2.0 — https://github.com/servo/uluru
@@ -5882,6 +5883,7 @@ SOFTWARE.
 
 ==============================================================================
   tree-sitter-java 0.23.5
+  tree-sitter-ruby 0.23.1
   tree-sitter-typescript 0.23.2
 ------------------------------------------------------------------------------
 (no license file in the published crate: MIT — its terms are those of that SPDX license)

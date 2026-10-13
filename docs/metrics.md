@@ -10,19 +10,19 @@ anchors, and rewrites their `metrics` maps. Nothing else in the file moves.
 One binary serves every extractor (PLAN.md §18); what each key means is in
 METAMODEL.md §3.8.
 
-> **Status (M17b):** code metrics for Java, C#, TypeScript and Elixir models;
+> **Status (M17b, Ruby since M18b):** code metrics for Java, C#, TypeScript, Elixir and Ruby models;
 > change history per file and per entity into a side-car (`--history`, §5).
 > Running it from the app and the tap (M17c) comes next.
 
 ## 1. From a clone
 
 A standalone Cargo crate under `extractors/metrics`, linking
-`big-code-analysis` 2.2.0 as a library with four tree-sitter grammars. It
+`big-code-analysis` 2.2.0 as a library with five tree-sitter grammars. It
 needs Rust ≥ 1.94 to build and nothing to run:
 
 ```bash
 ./build.sh --metrics                    # cargo build --release → extractors/metrics/target/release/codegraph-metrics
-./test.sh --metrics                     # cargo test: the join's unit tests + the four enriched snapshots, byte for byte
+./test.sh --metrics                     # cargo test: the join's unit tests + the five enriched snapshots, byte for byte
 ./bin/codegraph-java --src src/main/java --out model.jsonl
 ./bin/codegraph-metrics model.jsonl     # in place; --out FILE writes elsewhere
 ```
@@ -72,6 +72,10 @@ codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 le
   at it).
 - **contained** — one entity over several spaces (an Elixir function's
   clauses, a C# property's accessors): charged keys only.
+- **ambiguous** — entities and spaces share a span and do not pair up. In
+  Ruby, a type declared by assignment (`Point = Struct.new(:x) do … end`): the
+  model names a class there, the grammar sees a block. It keeps the
+  extractor's own `sloc` and none of the pass's keys.
 - **unjoined** — big-code-analysis opens no space there. Expected for
   implicit constructors (anchored on their class), Java lambdas
   (big-code-analysis charges them to their method), bodyless declarations

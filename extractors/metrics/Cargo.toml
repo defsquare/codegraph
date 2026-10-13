@@ -17,6 +17,7 @@ big-code-analysis = { version = "=2.2.0", default-features = false, features = [
   "csharp",
   "elixir",
   "java",
+  "ruby",
   "typescript",
   "vcs",
 ] }

@@ -44,7 +44,7 @@ extractors/ruby/     Cargo package `codegraph-ruby` (Prism, CRuby's own parser, 
                      Building needs libclang (bindgen reads Prism's C headers).
                      One dependency, `ruby-prism`, pinned exactly.
 extractors/metrics/  Rust crate `codegraph-metrics` (big-code-analysis 2.2.0 as a
-                     LIBRARY, four tree-sitter grammars). Not an extractor: a PASS
+                     LIBRARY, five tree-sitter grammars). Not an extractor: a PASS
                      over any extractor's model.jsonl that joins bca's function and
                      class spaces to measured entities on their anchors and adds its
                      own `metrics` keys (METAMODEL §3.8), never the extractor's.
@@ -205,7 +205,7 @@ node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256
 ./build.sh --metrics                                # cargo build --release → extractors/metrics/target/release/codegraph-metrics
 ./bin/codegraph-metrics model.jsonl [--src DIR] [--out FILE] [--audit]   # after ANY extractor; in place by default
 #   Rust ≥ 1.94 to build, nothing to run; docs/metrics.md. `test.sh --metrics` = cargo test: the join's unit
-#   tests + the four fixtures/<lang>/expected/model.metrics.jsonl byte for byte (and a re-run is the identity);
+#   tests + the five fixtures/<lang>/expected/model.metrics.jsonl byte for byte (and a re-run is the identity);
 #   CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test --manifest-path extractors/metrics/Cargo.toml rewrites them
 ./bin/codegraph-metrics model.jsonl --history [--ref REV]   # + model.history-metrics.jsonl: git history per
 #   file and per entity at the model's commit — a SIDE-CAR, never the model (PLAN §18.2); then

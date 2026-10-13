@@ -55,7 +55,7 @@ Options:
                        only extractors/elixir (mix test + built-escript smoke test)
   --ruby, --ruby-only  only extractors/ruby (cargo test + built-binary smoke test)
   --metrics, --metrics-only
-                       only extractors/metrics (cargo test: the join + the four enriched snapshots)
+                       only extractors/metrics (cargo test: the join + the five enriched snapshots)
   --all                everything (default)
   --lint               also run eslint (not part of CI's gate)
   --no-typecheck       skip pnpm -r typecheck
