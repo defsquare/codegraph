@@ -48,7 +48,7 @@ export const ReferenceEdge = z.object({ edge: z.literal("reference"), ...edgeBas
 /** Type → Type. Go `struct { Base }` — method promotion, neither inheritance nor attribute. */
 export const EmbeddingEdge = z.object({ edge: z.literal("embedding"), ...edgeBase });
 
-/** Type → PHP trait. Never flattened into the using class. */
+/** Type → PHP trait or Ruby mixin (`include`/`extend`/`prepend`). Never flattened into the using class. */
 export const TraitUsageEdge = z.object({ edge: z.literal("traitUsage"), ...edgeBase });
 
 /** CodeFile → CodeFile. PHP `include`/`require`, the only file-to-file dependency. */

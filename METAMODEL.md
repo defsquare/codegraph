@@ -95,9 +95,9 @@ Enum qualifying *how we know* an edge exists. Never mix facts and inferences.
 | Value | Meaning | Examples |
 |---|---|---|
 | `declared` | written literally in the source | explicit `extends`, direct call |
-| `derived` | computed by analysis | Go implicit interface satisfaction, TS structural conformance, Python protocols, Rust blanket impls |
+| `derived` | computed by analysis | Go implicit interface satisfaction, TS structural conformance, Python protocols, Rust blanket impls, a Ruby receiver typed by its one assignment (`x = Foo.new; x.bar`) |
 | `dynamic-candidate` | dispatch not statically resolvable; targets are guesses | multimethods, PHP `__call`, duck typing, `dyn Trait` |
-| `generated` | produced by macro/annotation expansion | Rust `#[derive]`, Lombok, Python decorators, Clojure macros |
+| `generated` | produced by macro/annotation expansion | Rust `#[derive]`, Lombok, Python decorators, Clojure macros, Ruby `Struct.new` / `Data.define` (the class they produce inherits `Struct` / `Data`; no `class` writes it) |
 
 **Relations:** mandatory attribute of every Edge. Analyses wanting facts only
 filter on `declared`.
@@ -363,7 +363,7 @@ Rules:
 | `annotationUse` | Entity → Type (annotation) | `arguments: NamedArgument[]` (§1.6) | a written annotation on any entity, with its arguments. Formerly a plain `reference`; the dedicated kind both carries the values and lets a consumer select annotation usages without guessing from the target's kind — which a stub target cannot answer |
 | `throws` | Invocable → Type (exception) | | a written `throw` statement whose static exception type resolved; the anchor is the throw SITE — the evidence a guard clause leaves. A declared propagation clause (Java `throws E`) is a plain `reference`, not this. Distinct from `reference` so failure exits are selectable without reading the target's kind, which a stub target cannot answer |
 | `embedding` | Type → Type | | Go `struct { Base }` — neither inheritance nor attribute (method promotion); dedicated relation |
-| `traitUsage` | Type → Trait (PHP) | | PHP `use TraitX;` — kept as a usage edge, never flattened into the class |
+| `traitUsage` | Type → Trait (PHP), Type → mixin module (Ruby) | | PHP `use TraitX;`, Ruby `include`/`extend`/`prepend` — kept as a usage edge, never flattened into the class |
 | `fileInclude` | CodeFile → CodeFile | | PHP `include`/`require` — the only file-to-file dependency in the metamodel |
 
 **Relations:** edges connect Entities; are licensed per Language Profile

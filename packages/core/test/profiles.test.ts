@@ -4,7 +4,14 @@ import { SPACES } from "../src/primitives.js";
 import { Entity } from "../src/entity.js";
 import { parseModel, SCHEMA_VERSION } from "../src/model.js";
 import { validateEntity, validateModel, validateProfile, type Profile } from "../src/profile.js";
-import { PROFILES, clojureProfile, elixirProfile, getProfile, typescriptProfile } from "../src/profiles/index.js";
+import {
+  PROFILES,
+  clojureProfile,
+  elixirProfile,
+  getProfile,
+  rubyProfile,
+  typescriptProfile,
+} from "../src/profiles/index.js";
 
 // Profiles are data; this suite is the check that the data stays inside the
 // canonical vocabularies and keeps saying what each language actually is.
@@ -23,13 +30,14 @@ const EXPECTED_LANGS = [
   "js",
   "php",
   "python",
+  "rb",
   "rust",
   "ts",
 ] as const;
 
-describe("the ten shipped profiles", () => {
-  it("registers exactly ten profiles under unique langs", () => {
-    expect(profiles).toHaveLength(10);
+describe("the eleven shipped profiles", () => {
+  it("registers exactly eleven profiles under unique langs", () => {
+    expect(profiles).toHaveLength(11);
     expect(profiles.map(([lang]) => lang)).toEqual([...EXPECTED_LANGS].sort());
   });
 
@@ -333,13 +341,18 @@ describe("structural claims that must not silently regress", () => {
     });
   });
 
-  it("PHP is the only profile with fileInclude and traitUsage", () => {
+  // `fileInclude` exists because PHP's module is the namespace, so a file-to-file
+  // dependency needs endpoints of its own; a language whose module IS the file
+  // (Ruby's `require`) says the same thing with `import`. `traitUsage` is the
+  // mixin relation, never flattened: PHP's `use TraitX;` and Ruby's
+  // `include`/`extend`/`prepend`, and nothing else.
+  it("PHP alone has fileInclude; traitUsage belongs to the mixin languages, PHP and Ruby", () => {
     for (const [lang, profile] of profiles) {
-      const expected = lang === "php";
-      expect(profile.edges.includes("fileInclude"), `${lang}.fileInclude`).toBe(expected);
-      expect(profile.edges.includes("traitUsage"), `${lang}.traitUsage`).toBe(expected);
+      expect(profile.edges.includes("fileInclude"), `${lang}.fileInclude`).toBe(lang === "php");
+      expect(profile.edges.includes("traitUsage"), `${lang}.traitUsage`).toBe(lang === "php" || lang === "rb");
     }
     expect(PROFILES["php"]?.kinds["codeFile"]).toBeDefined();
+    expect(PROFILES["rb"]?.kinds["codeFile"]).toBeUndefined();
   });
 
   // Every language has external types (JDK, npm, crates.io, Composer…), so
@@ -525,6 +538,223 @@ describe("structural claims that must not silently regress", () => {
         anchor: { file: "lib/order.ex", span: [1, 9] },
       });
       expect(validateEntity(ex, rogue).map((i) => i.code)).toEqual(["trait-not-allowed"]);
+    });
+  });
+
+  /**
+   * Ruby profile (PLAN §19.2): the module is the file, `class` and `module`
+   * are types below it, mixins are `traitUsage`, and a `require` is an
+   * `import` — every claim the Prism extractor emits against, pinned as data.
+   */
+  describe("Ruby profile licenses what the Prism extractor emits", () => {
+    const rb = rubyProfile;
+    const allowed = (kind: string): Set<string> =>
+      new Set([...(rb.kinds[kind]?.required ?? []), ...(rb.kinds[kind]?.optional ?? [])]);
+
+    it("makes the file the module, and a class or a module a type below it", () => {
+      expect(rb.kinds["file"]?.required).toEqual(["TNamed", "TModule", "TWithChildren"]);
+      for (const kind of ["class", "module"]) {
+        expect(rb.kinds[kind]?.required, kind).toContain("TType");
+        expect(rb.kinds[kind]?.required, kind).toContain("TChildOf");
+        expect(allowed(kind), kind).not.toContain("TModule");
+      }
+    });
+
+    it("gives inheritance to classes only: a Ruby module mixes in, it never inherits", () => {
+      expect(rb.edges).toContain("inheritance");
+      expect(rb.kinds["class"]?.required).toContain("TWithInheritances");
+      expect(allowed("module")).not.toContain("TWithInheritances");
+    });
+
+    it("lets a reopening name the declaration it belongs to", () => {
+      // Containment is where a body is written; attachment is the type it is a body OF.
+      for (const kind of ["class", "module"]) expect(allowed(kind), kind).toContain("TAttachedTo");
+      expect(rb.notes?.join("\n") ?? "").toMatch(/attachedTo/);
+    });
+
+    it("says mixins with traitUsage and has no interface to implement", () => {
+      expect(rb.edges).toContain("traitUsage");
+      expect(rb.edges).not.toContain("interfaceImplementation");
+      expect(rb.edges).not.toContain("fileInclude");
+      for (const kind of Object.keys(rb.kinds)) expect(allowed(kind), kind).not.toContain("TWithImplements");
+    });
+
+    it("lets a file and a type body run code: top-level statements and class macros are calls", () => {
+      for (const kind of ["file", "class", "module"]) {
+        expect(allowed(kind), kind).toContain("TWithInvocations");
+        expect(allowed(kind), kind).toContain("TWithAccesses");
+      }
+    });
+
+    it("makes a method a container of its parameters, a parameter nameable but not always named", () => {
+      expect(rb.kinds["method"]?.required).toContain("TWithChildren");
+      expect(rb.kinds["method"]?.required).toContain("TWithParameters");
+      // `def each(*, &)`: anonymous rest and block parameters are legal Ruby.
+      expect(rb.kinds["parameter"]?.required).not.toContain("TNamed");
+      expect(allowed("parameter")).toContain("TNamed");
+    });
+
+    it("documents the id scheme, the wrapper rule and the stated ceiling", () => {
+      const notes = rb.notes?.join("\n") ?? "";
+      expect(notes).toMatch(/%2F/);
+      expect(notes).toMatch(/PER DECLARING FILE/);
+      expect(notes).toMatch(/wrapper/);
+      expect(notes).toMatch(/<ruby>/);
+      expect(notes).toMatch(/<gems>/);
+      expect(notes).toMatch(/dropped and counted/);
+    });
+
+    it("validates a class, its mixin, a singleton method and the stubs they point at", () => {
+      const model = parseModel({
+        schemaVersion: SCHEMA_VERSION,
+        lang: "rb",
+        extractor: { name: "codegraph-ruby", version: "0.0.0" },
+        root: "fixtures/ruby/src",
+        entities: [
+          {
+            id: "rb:lib%2Facme%2Forder.rb",
+            kind: "file",
+            traits: ["TNamed", "TModule", "TWithChildren", "TSourceAnchor"],
+            name: "lib/acme/order.rb",
+            definedIn: ["lib/acme/order.rb"],
+            isStub: false,
+            anchor: { file: "lib/acme/order.rb", span: [1, 12] },
+          },
+          {
+            id: "rb:lib%2Facme%2Fpriceable.rb",
+            kind: "file",
+            traits: ["TNamed", "TModule", "TWithChildren", "TSourceAnchor"],
+            name: "lib/acme/priceable.rb",
+            definedIn: ["lib/acme/priceable.rb"],
+            isStub: false,
+            anchor: { file: "lib/acme/priceable.rb", span: [1, 5] },
+          },
+          {
+            id: "rb:lib%2Facme%2Fpriceable.rb/Acme::Priceable",
+            kind: "module",
+            traits: ["TNamed", "TType", "TWithChildren", "TChildOf", "TSourceAnchor"],
+            name: "Acme::Priceable",
+            isStub: false,
+            parent: "rb:lib%2Facme%2Fpriceable.rb",
+            anchor: { file: "lib/acme/priceable.rb", span: [2, 4] },
+          },
+          {
+            id: "rb:lib%2Facme%2Forder.rb/Acme::Order",
+            kind: "class",
+            traits: ["TNamed", "TType", "TWithInheritances", "TWithChildren", "TChildOf", "TSourceAnchor"],
+            name: "Acme::Order",
+            isStub: false,
+            parent: "rb:lib%2Facme%2Forder.rb",
+            anchor: { file: "lib/acme/order.rb", span: [3, 11] },
+          },
+          {
+            id: "rb:lib%2Facme%2Forder.rb/Acme::Order.call#self",
+            kind: "method",
+            traits: [
+              "TNamed",
+              "TInvocable",
+              "TWithChildren",
+              "TWithParameters",
+              "TWithInvocations",
+              "TWithAccesses",
+              "TChildOf",
+              "TSourceAnchor",
+            ],
+            name: "call",
+            signature: "self.call(*)",
+            parameters: ["rb:lib%2Facme%2Forder.rb/Acme::Order.call#self#param:1"],
+            parent: "rb:lib%2Facme%2Forder.rb/Acme::Order",
+            anchor: { file: "lib/acme/order.rb", span: [6, 8] },
+          },
+          {
+            id: "rb:lib%2Facme%2Forder.rb/Acme::Order.call#self#param:1",
+            kind: "parameter",
+            traits: ["TStructural", "TChildOf", "TSourceAnchor"],
+            parent: "rb:lib%2Facme%2Forder.rb/Acme::Order.call#self",
+            anchor: { file: "lib/acme/order.rb", span: [6, 6] },
+          },
+          {
+            id: "rb:<ruby>",
+            kind: "file",
+            traits: ["TNamed", "TModule", "TWithChildren"],
+            name: "<ruby>",
+            definedIn: [],
+            isStub: true,
+          },
+          {
+            id: "rb:<ruby>/StandardError",
+            kind: "class",
+            traits: ["TNamed", "TType", "TChildOf"],
+            name: "StandardError",
+            isStub: true,
+            parent: "rb:<ruby>",
+          },
+          {
+            id: "rb:<gems>%2Fbigdecimal",
+            kind: "file",
+            traits: ["TNamed", "TModule", "TWithChildren"],
+            name: "bigdecimal",
+            definedIn: [],
+            isStub: true,
+          },
+        ],
+        edges: [
+          {
+            edge: "import",
+            from: "rb:lib%2Facme%2Forder.rb",
+            to: "rb:<gems>%2Fbigdecimal",
+            provenance: "declared",
+            anchor: { file: "lib/acme/order.rb", span: [1, 1] },
+          },
+          {
+            // Nothing requires priceable.rb: the constant reference is the import (Zeitwerk).
+            edge: "import",
+            from: "rb:lib%2Facme%2Forder.rb",
+            to: "rb:lib%2Facme%2Fpriceable.rb",
+            provenance: "derived",
+            anchor: { file: "lib/acme/order.rb", span: [4, 4] },
+          },
+          {
+            edge: "inheritance",
+            from: "rb:lib%2Facme%2Forder.rb/Acme::Order",
+            to: "rb:<ruby>/StandardError",
+            provenance: "declared",
+            anchor: { file: "lib/acme/order.rb", span: [3, 3] },
+          },
+          {
+            edge: "traitUsage",
+            from: "rb:lib%2Facme%2Forder.rb/Acme::Order",
+            to: "rb:lib%2Facme%2Fpriceable.rb/Acme::Priceable",
+            provenance: "declared",
+            anchor: { file: "lib/acme/order.rb", span: [4, 4] },
+          },
+        ],
+      });
+      expect(validateModel(model, rb).map((i) => `${i.code} @ ${i.path}: ${i.message}`)).toEqual([]);
+    });
+
+    it("refuses a Ruby module that claims a superclass, and a class that claims to be a module of its own", () => {
+      const inheriting = Entity.parse({
+        id: "rb:lib%2Fa.rb/Acme::Priceable",
+        kind: "module",
+        traits: ["TNamed", "TType", "TWithInheritances", "TWithChildren", "TChildOf", "TSourceAnchor"],
+        name: "Acme::Priceable",
+        isStub: false,
+        parent: "rb:lib%2Fa.rb",
+        anchor: { file: "lib/a.rb", span: [1, 3] },
+      });
+      expect(validateEntity(rb, inheriting).map((i) => i.code)).toEqual(["trait-not-allowed"]);
+      const rogue = Entity.parse({
+        id: "rb:lib%2Fa.rb/Acme::Order",
+        kind: "class",
+        traits: ["TNamed", "TType", "TModule", "TWithInheritances", "TWithChildren", "TChildOf", "TSourceAnchor"],
+        name: "Acme::Order",
+        definedIn: ["lib/a.rb"],
+        isStub: false,
+        parent: "rb:lib%2Fa.rb",
+        anchor: { file: "lib/a.rb", span: [1, 3] },
+      });
+      expect(validateEntity(rb, rogue).map((i) => i.code)).toEqual(["trait-not-allowed"]);
     });
   });
 });

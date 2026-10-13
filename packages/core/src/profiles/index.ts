@@ -8,6 +8,7 @@ import { javaProfile } from "./java.js";
 import { javascriptProfile } from "./javascript.js";
 import { phpProfile } from "./php.js";
 import { pythonProfile } from "./python.js";
+import { rubyProfile } from "./ruby.js";
 import { rustProfile } from "./rust.js";
 import { typescriptProfile } from "./typescript.js";
 
@@ -20,6 +21,7 @@ export {
   javascriptProfile,
   phpProfile,
   pythonProfile,
+  rubyProfile,
   rustProfile,
   typescriptProfile,
 };
@@ -33,12 +35,13 @@ const ALL_PROFILES: readonly Profile[] = [
   javascriptProfile,
   phpProfile,
   pythonProfile,
+  rubyProfile,
   rustProfile,
   typescriptProfile,
 ];
 
 /**
- * The ten profiles keyed by `lang` — the same prefix an EntityId carries.
+ * The eleven profiles keyed by `lang` — the same prefix an EntityId carries.
  * Null-prototype so a lookup of a language named `constructor` or `toString`
  * cannot resolve to an inherited Object member.
  */
