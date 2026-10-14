@@ -4,7 +4,9 @@ linkTitle: Architecture
 weight: 11
 ---
 
-Codegraph is a pnpm workspace of ten TypeScript packages plus a Maven project.
+Codegraph is a pnpm workspace of ten TypeScript packages, five extractors — a
+Maven project, a .NET project, a pnpm package, a Mix project and a Cargo
+package — and one Rust measuring pass.
 That is more moving parts than a tool of this size usually needs, and the split
 is not incidental — most of the package boundaries exist to make a specific
 mistake impossible rather than merely inconvenient. This page walks the shape and
@@ -14,7 +16,7 @@ argues for each boundary.
 
 ```
    sources ──▶  extractor  ──▶  model.jsonl  ──▶  analyzer  ──▶  reports, exports
-  (any state)  (Java/Spoon)   (the contract)      (TypeScript)      city.json ──▶ 3D city
+  (any state)  (5 languages)  (the contract)      (TypeScript)      city.json ──▶ 3D city
                                    │                                navigator.json ──▶ navigator
                               schemas/*.json                        model.db ──▶ SQL, time
                             (published JSON Schema)                 *.insights.jsonl ──▶ explanations
@@ -22,15 +24,20 @@ argues for each boundary.
 
 The key principle is that **extractors are federated behind one contract**. Each
 extractor is free to use the best native tooling for its language — Spoon on the
-JVM for Java today, with clj-kondo and the TypeScript compiler named in the plan
-for the languages after it — and its only obligation is to produce conforming
-records. Everything that knows what a trait
+JVM for Java, Roslyn for C#, the compiler API for TypeScript, the compiler's own
+parser for Elixir, Prism for Ruby, with clj-kondo named in the plan for Clojure —
+and its only obligation is to produce conforming records. Everything that knows what a trait
 is, which compositions are legal, how to fold a graph or how to compute a metric
 lives once, in TypeScript.
 
 | Package | Role |
 |---|---|
-| `extractors/java` | Spoon-based extractor; emits `model.jsonl`. JVM code only. |
+| `extractors/java` | Spoon-based extractor, noClasspath; a GraalVM native image. Emits `model.jsonl` |
+| `extractors/csharp` | Roslyn-based extractor: one compilation over every `*.cs`, the base class library embedded, no MSBuild. Emits `model.jsonl` |
+| `extractors/typescript` | the compiler API: one program over every `*.ts`, nothing built, `typescript` its only dependency. Emits `model.jsonl` |
+| `extractors/elixir` | the compiler's parser as a library plus an embedded OTP table; an escript, nothing compiled. Emits `model.jsonl` |
+| `extractors/ruby` | Prism as a library plus a table of what the VM defines; one binary, no Ruby, nothing run. Emits `model.jsonl` |
+| `extractors/metrics` | not an extractor: a pass over any of the five models, big-code-analysis as a library, joined to entities on their anchors |
 | `schemas/` | the generated per-record JSON Schemas and the container contract — committed |
 | `packages/core` | traits, edge kinds, language profiles, validation, schema export |
 | `packages/analyzer` | graph, views, folding, cycles, coupling, exports, the SQLite store |

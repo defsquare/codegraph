@@ -10,7 +10,7 @@ One page, built from one graph under one view: the **Navigate** tab (tree and pe
 ## Synopsis
 
 ```
-codegraph serve [model.jsonl...] [--name STR] [--height METRIC] [--height-scale <linear|sqrt|log>] [--footprint METRIC] [--footprint-scale <linear|sqrt|log>] [--carry M1,M2] [--framework <spring>] [--port N] [--host ADDR] [--internal-only] [--declared-only] [--no-cache]
+codegraph serve [model.jsonl...] [--name STR] [--height METRIC] [--height-scale <linear|sqrt|log>] [--footprint METRIC] [--footprint-scale <linear|sqrt|log>] [--carry M1,M2] [--history-metrics FILE] [--framework <spring>] [--port N] [--host ADDR] [--internal-only] [--declared-only] [--no-cache] [--insights FILE]
 codegraph serve --app [--data-dir DIR] [--extractors FILE] [--port N] [--host ADDR] [city flags…]
 ```
 
@@ -25,17 +25,19 @@ codegraph serve --app [--data-dir DIR] [--extractors FILE] [--port N] [--host AD
 | Option | Meaning | Default |
 |---|---|---|
 | `--name STR` | Display name for the corpus in the page header; defaults to the basename of each model's root. | — |
-| `--height METRIC` | Metric driving building height. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. | `loc` |
+| `--height METRIC` | Metric driving building height. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). | `loc` |
 | `--height-scale <linear\|sqrt\|log>` | How height follows its metric. | `linear` |
-| `--footprint METRIC` | Metric driving building footprint. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. | `members` |
+| `--footprint METRIC` | Metric driving building footprint. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). | `members` |
 | `--footprint-scale <linear\|sqrt\|log>` | How the footprint SIDE follows its metric; sqrt makes the AREA proportional. | `sqrt` |
 | `--carry M1,M2` | Extra metrics to measure onto every building, comma-separated, bound to nothing. | — |
+| `--history-metrics FILE` | The change-history side-car the history:/history-file: metrics read (what 'codegraph-metrics --history' wrote). | `<model>.history-metrics.jsonl` beside each model |
 | `--framework <spring>` | Classify types by a framework's own vocabulary (service, repository, controller…) and offer it as a color channel. An inference from written annotations; absent means the city says nothing about roles. | — |
 | `--port N` | Port to listen on; 0 picks a free one (announced on stderr). | `4177` |
 | `--host ADDR` | Address to bind. 0.0.0.0 is every interface, so the page is reachable from other machines; 127.0.0.1 keeps it to this one. | `0.0.0.0` |
 | `--internal-only` | Drop stub (external) entities and every edge touching one. | — |
 | `--declared-only` | Keep only `declared` facts; drop derived and dynamic-candidate edges. | — |
 | `--no-cache` | Read the model.jsonl directly; never build or reuse a sibling model.db. | — |
+| `--insights FILE` | The insights store behind the page's explanation panel (what 'codegraph explain' wrote). With none, the page simply shows no explanations. | `<model>.insights.db` beside the first model |
 | `--app` | The desktop app's daemon: no model on argv; bind 127.0.0.1:0 under a per-launch token, print one JSON line {port, token} on stdout, open folders through POST /jobs, exit when stdin closes. | — |
 | `--data-dir DIR` | With --app: where models, their model.db caches, the page's artifacts and the recents live. | the OS application-data directory, `codegraph/` under it |
 | `--extractors FILE` | With --app: the extractor registry, a JSON list of { name, path, extensions[], launch?, env? } — the daemon runs an entry, never a language. | — (only model.jsonl files open) |
@@ -108,4 +110,4 @@ Bound to every interface, the last line reads `codegraph at http://localhost:417
 
 ## See also
 
-[City metrics](/docs/reference/city-metrics/) · [city.json](/docs/reference/artifacts/city-json/) · [navigator.json](/docs/reference/artifacts/navigator-json/) · [Serve on a network](/docs/how-to/serve-network/) · [CLI conventions](/docs/reference/cli/)
+[City metrics](/docs/reference/city-metrics/) · [city.json](/docs/reference/artifacts/city-json/) · [navigator.json](/docs/reference/artifacts/navigator-json/) · [history-metrics.jsonl](/docs/reference/artifacts/history-metrics-jsonl/) · [Serve on a network](/docs/how-to/serve-network/) · [CLI conventions](/docs/reference/cli/)

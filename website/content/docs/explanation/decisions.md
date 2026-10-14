@@ -53,6 +53,10 @@ settled, usually the hard way.
 | DI wiring (Phase 9) | derived by the analyzer from declared facts + a framework data table; `dynamic-candidate` provenance, in-memory only, matched by entity name — never id parsing | the extractor stays framework-blind; the candidate set needs whole-corpus implementor knowledge only the analyzer holds; Spring dispatch is the `dynamic-candidate` definition verbatim |
 | Literal values (Phase 9) | tagged-union `Literal`: numbers as canonical decimal text, enum values as type id + simple name, unfoldable constant expressions kept as `unevaluated` source text; ids inside values obey closure | a JSON number loses a Java `long`; a fabricated enum-member stub is the one thing the stub discipline forbids; dropping an unfoldable expression erases a written fact — degraded honesty over silent loss, the stub discipline applied to values |
 | Annotation usage (Phase 9) | dedicated `annotationUse` edge kind carrying `arguments`, replacing the plain `reference` — in-place clean break, fixtures regenerated | overloading `reference` would make `arguments` meaningful on one disguised subset of a kind; consumers cannot select annotation usages today without guessing from the target's kind, which a stub target cannot answer |
+| Elixir module (M15) | the module is the file; a `defmodule` is a `module` kind carrying `TType`; no `inheritance`, no `embedding`; what a `use`d macro injects is absent from the baseline, counted, and recovered by `--trace` as `generated` | Elixir has no namespace — nothing contains `MyApp.Accounts.User` but the file it is written in; the module IS the type (`%Mod{}`, behaviours, protocols); a parser cannot see what `use` injects, and the compiler's own trace can |
+| Metrics pass (M17) | one Rust binary, `codegraph-metrics`, linking big-code-analysis as a library and run as a PASS over any extractor's model, joined to entities on their anchors; the extractor's `sloc` and `cyclomatic` never touched; *charged* keys add up over spaces, *span* keys do not | the whole suite inside each extractor would be four bridges, four build systems learning Rust and the join written four times; nothing the join needs lives in a compiler — only `(file, start, end)`, which every entity already carries |
+| History measures (M17b) | a side-car `<model>.history-metrics.jsonl`, measured at the model's commit and clocked at its time, joined in memory by `city` and `serve` as `history:`/`history-file:`; never a key in `model.jsonl` | reverses this section's own first draft: a window counts back from the commit's time, so two snapshots a week apart would differ on entities whose code never moved; evolution facts are a third artifact (Phase 8) |
+| Ruby reopening (M18) | one entity per declaring file, every other body `attachedTo` the primary (the one that writes a superclass, else the first in file order); a wrapper body declares nothing; a constant reference into another file is a `derived` import; `include`/`extend`/`prepend` are `traitUsage` | Ruby reopens across files as a matter of course, and containment ≠ attachment says exactly "written here, belongs there"; a Zeitwerk application writes no `require`, so without the derived import the one cross-language layer would be empty for every Rails corpus |
 
 ## Where this shows up
 
@@ -70,6 +74,11 @@ Almost every row is argued at length somewhere in this section:
   [extracting without compiling](/docs/explanation/extracting-without-compiling/) and
   [reference: the Java extractor](/docs/reference/java-extractor/).
 - Evolution facts, replay layout, snapshot strategy —
+  [time as structure](/docs/explanation/time-as-structure/).
+- The Elixir and Ruby extractors, the metrics pass and its history side-car —
+  [reference: Elixir extractor](/docs/reference/elixir-extractor/),
+  [reference: Ruby extractor](/docs/reference/ruby-extractor/),
+  [reference: metrics pass](/docs/reference/metrics-pass/) and
   [time as structure](/docs/explanation/time-as-structure/).
 - Measures, literal values, annotation usage, DI wiring —
   [facts and inferences](/docs/explanation/facts-vs-inferences/) and

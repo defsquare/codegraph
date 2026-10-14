@@ -30,11 +30,22 @@ An extractor's own measures live in the entity's `TMetrics` map, whose keys are 
 | `attribute:<key>` | the type's own measure | `<key>` |
 | `sum:<key>` | that measure summed over everything that folded into the building | `<key>` |
 
-`sum:` is the form complexity wants, because complexity is measured per invocable and a building is a type: `--height sum:cyclomatic --footprint loc` builds the complexity city. The [Java extractor](/docs/reference/java-extractor/) emits `sloc` and `cyclomatic`.
+`sum:` is the form complexity wants, because complexity is measured per invocable and a building is a type: `--height sum:cyclomatic --footprint loc` builds the complexity city. Every extractor emits `sloc` and `cyclomatic`; the [metrics pass](/docs/reference/metrics-pass/) adds `cognitive`, `nexits`, the `abc.*` keys, `lloc`, `cloc`, the `halstead.*` keys, `mi`, `npm` and `npa` to the same map. Its *charged* keys (`cognitive`, `nexits`, `abc.*`) are additive, so `sum:cognitive` is well defined; its *span* keys (`lloc`, `cloc`, `halstead.*`, `mi`) cover an entity's whole text and are not — read them with `attribute:`, since `sum:mi` is a number with no meaning.
 
 The city will **not** invent a measure by re-parsing source it cannot see — only the extractor measures. A top-level numeric key of the same name is still read, since an entity is a loose object, but it is uncontractual: the map wins.
 
 **An unknown name throws** (`UnknownMetricError`, naming what exists) rather than falling back to a default. A silent fallback would put a documented metric's name on a different metric's numbers.
+
+## History forms
+
+With a change-history side-car beside the model — what [`codegraph-metrics --history`](/docs/reference/metrics-pass/#--history-change-history-as-a-side-car) writes — two more forms read [`history-metrics.jsonl`](/docs/reference/artifacts/history-metrics-jsonl/) by measure name, wherever a metric name is accepted: `--height`, `--footprint` and `--carry`.
+
+| Form | Reads | Unit |
+|---|---|---|
+| `history:<measure>` | the building's own type: its blame | the measure's own |
+| `history-file:<measure>` | the file the type is written in | the measure's own |
+
+`codegraph serve model.jsonl --height history-file:churn_recent --carry history:risk_score` raises a building by how much its file changed in the last 90 days and carries its type's risk rank. The side-car is read from `<model>.history-metrics.jsonl` beside each model, or from `--history-metrics FILE`. Asking for a form with no side-car, or for a measure at a level it lacks (`churn_long` exists per file only), is a usage error that says what to run or type instead — never a silent zero.
 
 ## "I do not know" is an answer
 

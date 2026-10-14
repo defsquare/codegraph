@@ -1,6 +1,6 @@
 ---
 title: domain-facts.json
-weight: 4
+weight: 5
 ---
 
 One dossier per corpus type, with every fact the model holds about it pre-joined: annotations with their written arguments, fields joined to their declared types, operations with their invocations, accesses and throw sites. Written by [`domain-facts`](/docs/reference/cli/domain-facts/).

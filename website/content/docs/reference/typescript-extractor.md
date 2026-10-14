@@ -166,6 +166,8 @@ Carried in the `TMetrics` map, computed with the compiler's own scanner. See [Me
 
 A nested arrow or function does not contribute to its enclosing invocable: it is its own invocable and carries its own count. A type's complexity is the sum over its members, which the consumer computes with `sum:cyclomatic`.
 
+The [metrics pass](/docs/reference/metrics-pass/) adds cognitive complexity, Halstead, ABC, the maintainability index and more to the same map, joined on the anchors; the compiler starts an exported class at its decorator and tree-sitter after it, which the join's *leading* rule bridges. Interface signatures, type aliases, enums, namespaces and ambient declarations carry none of its keys — big-code-analysis opens no space for them — and in `.tsx` its line count differs from `sloc` by the lines of JSX text.
+
 ## Literal and decorator facts emitted
 
 | Fact | Carried by | Notes |
@@ -208,6 +210,7 @@ The documented blind spots, verbatim from the profile.
 - Getters and setters are `method` entities; a property access that runs an accessor is an `access` edge, not an invocation, so a read that runs code is visible as access — a write lands on the setter, a read on the getter. Class fields and object-literal members share the `property` kind; a parameter property (`constructor(readonly x: T)`) is both a `parameter` and a `property`, and an access to it lands on the property.
 - Locals are entities keyed `#local:name:line:column` below their invocable (two `let x` in sibling blocks are two entities) and listed in its `localVariables`; a function declared inside an invocable is `#fn:name`, a type declared there `#type:name`. Locals and parameters are never edge targets: an access to a local is not a dependency, and a call through a parameter of function type names no declaration (dropped and counted as an indirect call). A member of an anonymous type literal (`{ order: Order }`) is not an entity — the literal is none.
 - A written value (TWithValue) is emitted for a `const` variable, a `readonly` property, an enum member and a parameter default whose initializer is CONSTANT-SHAPED — a literal, `-N`, an enum member, a type used as a value, arrays and operator expressions over those. TypeScript folds nothing at the declaration, so `4 * 25` rides `unevaluated` with its source text where Java would fold it; an enum member's value is the checker's computed constant. An initializer that is code — a call, a `new`, a function, an object literal — carries no value at all: absence is a claim. Such an initializer's calls and accesses are edges FROM the variable or property (the narrowest declared owner), which then carries TWithInvocations/TWithAccesses.
+- The metrics pass (`codegraph-metrics`, PLAN.md §18): namespaces, enums, type aliases, interface members without a body and ambient declarations have no big-code-analysis space and carry none of the pass's keys. An exported class's decorators precede tree-sitter's class node; the pass joins across the decorator lines. In a `.tsx` file big-code-analysis's `ploc` can count a line or two fewer than this extractor's `sloc` (a JSX text token counts every line it spans here), so the join's witness differs there by that much.
 
 ## The reference corpus
 

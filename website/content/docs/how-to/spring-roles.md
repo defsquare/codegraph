@@ -1,7 +1,7 @@
 ---
 title: Colour a Spring codebase by role
 linkTitle: Spring roles
-weight: 7
+weight: 8
 ---
 
 Spring's structure lives in annotations, not in the call graph: a controller

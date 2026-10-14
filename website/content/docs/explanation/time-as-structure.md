@@ -171,6 +171,24 @@ and is counted, rather than being resolved by a guess. In that city,
 `TypeAdapters` shows its dominant author with a 29% share of added lines and its
 dashed co-change fan on selection.
 
+## Measures at one commit
+
+History also enters as numbers. The [metrics pass](/docs/reference/metrics-pass/)
+with `--history` measures each file and each measured entity **at the commit the
+model describes** — commits, churn, authors, ownership, bursts, bug-fix and
+revert counts, change and co-change entropy, a risk score — from one walk over
+the whole commit graph and one `git blame` per file. The first principle above
+decides where they go: a window counts back from the commit's own time, so two
+snapshots a week apart would differ on entities whose code never moved, and
+every replay diff would carry that noise. So they never enter `model.jsonl`.
+They live in a side-car beside it,
+[`history-metrics.jsonl`](/docs/reference/artifacts/history-metrics-jsonl/),
+joined in memory by `city` and `serve` under names that say which graph they
+come from (`history:` for the type's own blame, `history-file:` for its file),
+and clocked at that commit rather than at today, so a snapshot can be measured
+at its own frame and two runs write the same bytes. The bug-fix, security and
+revert counts are the miner's subject-line heuristics again, labelled as such.
+
 ## What is deliberately not here
 
 - **Per-commit incremental extraction** — see above; keyframes bound the
@@ -194,6 +212,9 @@ more than an approximate answer whose error nobody can characterise.
   every N commits, resuming, composing runs.
 - [How to join history with a model](/docs/how-to/history-joins/) — hidden coupling
   and dead weight, and tuning support and confidence.
-- [Reference: history.jsonl](/docs/reference/artifacts/history-jsonl/).
+- [How to measure change history](/docs/how-to/measure-metrics/#measure-change-history) — the
+  side-car, and the `history:` and `history-file:` channels of the city.
+- [Reference: history.jsonl](/docs/reference/artifacts/history-jsonl/) and
+  [history-metrics.jsonl](/docs/reference/artifacts/history-metrics-jsonl/).
 - [Identity is a key](/docs/explanation/identity/) — why lineage was nearly free.
 - [Prior art](/docs/explanation/prior-art/) — Gource, Code Maat and CodeScene.

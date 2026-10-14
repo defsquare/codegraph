@@ -11,6 +11,7 @@ The files codegraph writes that are not the interchange model. Each is a **deriv
 | [`city.json`](/docs/reference/artifacts/city-json/) | [`city`](/docs/reference/cli/city/), [`replay`](/docs/reference/cli/replay/), [`history --city`](/docs/reference/cli/history/) | `codegraph.city/1` | one JSON document |
 | [`navigator.json`](/docs/reference/artifacts/navigator-json/) | [`navigator`](/docs/reference/cli/navigator/) | `codegraph.navigator/1` | one JSON document |
 | [`history.jsonl`](/docs/reference/artifacts/history-jsonl/) | [`scm`](/docs/reference/cli/scm/) | `"artifact": "history"` | JSONL, section-ordered |
+| [`<model>.history-metrics.jsonl`](/docs/reference/artifacts/history-metrics-jsonl/) | [`codegraph-metrics --history`](/docs/reference/metrics-pass/) | `codegraph.history-metrics/1` | JSONL, section-ordered |
 | [`domain-facts.json`](/docs/reference/artifacts/domain-facts/) | [`domain-facts`](/docs/reference/cli/domain-facts/) | `codegraph.domainFacts/1` | one JSON document |
 | [`<model>.insights.jsonl`](/docs/reference/artifacts/insights-jsonl/) | [`explain`](/docs/reference/cli/explain/) | `codegraph.insights/1` | JSONL, header/records/trailer |
 

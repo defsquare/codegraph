@@ -15,8 +15,9 @@ Complexity is subjective, but three measures approach it from three sides:
 tells you where to look. Together they draw the terrain, and everything else
 in this section is placed on it.
 
-**Before you start:** the codegraph CLI and a JDK 17+ (Java) or the .NET 10
-SDK (C#). Everything on this page is deterministic and runs in seconds.
+**Before you start:** the codegraph CLI and the extractor of your language,
+both from the tap (no JDK, no .NET, no runtime of any kind). Everything on
+this page is deterministic and runs in seconds.
 
 ## Extract the model
 
@@ -191,6 +192,13 @@ test exhaustively, and that method is where bugs are fixed repeatedly (step 3
 will confirm or deny). Compare this table with the size table: a type that is
 high on both is the classic outlier; a type that is small but branchy is the
 one lines of code would have hidden.
+
+With the [metrics pass](/docs/how-to/measure-metrics/) run over the model, the
+same query with `em.key = 'cognitive'` ranks by **cognitive** complexity —
+branching weighted by how deep it nests, which is closer to how hard a method
+is to read than to how many tests it needs — and `'mi'` gives each method's
+maintainability index. The pass joins its measures to the entities the
+extractor already wrote, so the queries above do not change.
 
 ## Find the tangles
 

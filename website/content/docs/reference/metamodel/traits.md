@@ -65,7 +65,7 @@ A Go method with receiver `(o *Order)` is a *child* of its file/package and *att
 
 | Trait | Attributes contributed | Notes |
 |---|---|---|
-| `TMetrics` | `metrics: Record<string, number>` | open map of **measured** finite numbers. Only the extractor writes it |
+| `TMetrics` | `metrics: Record<string, number>` | open map of **measured** finite numbers. Only a source reader writes it: the extractor, or the [metrics pass](/docs/reference/metrics-pass/) over its model |
 
 See [Measures and literals](/docs/reference/metamodel/measures-literals/).
 

@@ -1,6 +1,6 @@
 ---
 title: insights.jsonl
-weight: 5
+weight: 6
 ---
 
 The side-car [`explain`](/docs/reference/cli/explain/) writes: one explanation record per operation, type and module, in the vocabulary of the Specy domain metamodel. It lives **beside** the model — `<model>.insights.jsonl` by default — and never inside it, so it can be regenerated, pointed at another model, or deleted without touching `model.jsonl` or `model.db`.

@@ -1,7 +1,7 @@
 ---
 title: Estimate, cap and scope an explain run
 linkTitle: Explain cost
-weight: 10
+weight: 11
 ---
 
 `explain` is the only command that costs money and needs a network. Everything

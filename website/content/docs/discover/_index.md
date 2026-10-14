@@ -75,12 +75,16 @@ first hours of reading.
 - **Module.** The unit of code organisation the language has: a Java package,
   a C# namespace. Codegraph folds dependencies up to it.
 - **Type.** A class, interface, enum, record or annotation.
-- **SLOC.** Source lines of code, blank lines and comments excluded. The Java
+- **SLOC.** Source lines of code, blank lines and comments excluded. Every
   extractor measures it per type and per method.
 - **Cyclomatic complexity.** The number of independent paths through a
   method: roughly one plus its `if`, loop, `case`, `catch` and boolean
   operators. A method at 1 is straight-line code; above 10 it is hard to test
   exhaustively. Measured per method; summed per type by the tools.
+- **Cognitive complexity.** How hard a method is to read rather than to test:
+  every branch counts, and counts more the deeper it is nested. Added per
+  method by the [metrics pass](/docs/reference/metrics-pass/), with Halstead's
+  measures, ABC and the maintainability index.
 - **Strongly connected component (SCC), or tangle.** A group of modules or
   types that all depend on each other, directly or through others, so no
   member can be changed, tested or extracted without the rest. The single
@@ -98,16 +102,19 @@ first hours of reading.
 - **Entry point.** Code that runs because something outside called it: a
   REST endpoint, a message listener, a scheduled job, `main`.
 - **Side-car.** A file written beside the model and never into it, such as
-  the explanations `explain` produces.
+  the explanations `explain` produces or the change-history measures the
+  metrics pass writes.
 
 ## What you need
 
 - The `codegraph` command and the extractor of your language, both from the
   Homebrew tap: see [Install](/docs/how-to/install/). The
-  [Java](/docs/reference/java-extractor/) and
-  [C#](/docs/reference/csharp-extractor/) extractors are self-contained
-  binaries; the [TypeScript one](/docs/reference/typescript-extractor/) runs
-  on Node 22.
+  [Java](/docs/reference/java-extractor/), [C#](/docs/reference/csharp-extractor/),
+  [Elixir](/docs/reference/elixir-extractor/) and [Ruby](/docs/reference/ruby-extractor/)
+  extractors are self-contained binaries; the
+  [TypeScript one](/docs/reference/typescript-extractor/) runs on Node 22. Any
+  of them installs the [metrics pass](/docs/reference/metrics-pass/), which
+  step 1 can use and nothing below requires.
 - `sqlite3` on your path for the ad-hoc queries. Any SQLite client works;
   DuckDB and Datasette are shown in [Query model.db](/docs/how-to/query-model-db/).
 - For step 3, a git clone with its history, not an exported tree.

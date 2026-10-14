@@ -7,9 +7,10 @@ weight: 6
 The default city is sized by lines of code and member count. To make complexity
 the thing you see, bind it to the height channel and move size to the footprint.
 
-**Before you start:** a `model.jsonl` from an extractor that emits measures. The
-Java extractor emits `sloc` per type and invocable and `cyclomatic` per
-invocable.
+**Before you start:** a `model.jsonl` from any extractor: every one emits `sloc`
+per type and invocable and `cyclomatic` per invocable, and the
+[metrics pass](/docs/how-to/measure-metrics/) adds cognitive complexity,
+Halstead, ABC and the maintainability index to the same model.
 
 ## Bind the channels
 
@@ -42,6 +43,22 @@ An unknown name is refused rather than silently replaced:
 ```text
 codegraph: unknown metric source: complexity. Known sources: loc, members, methods, fields, fanIn, fanOut, degree, one; or attribute:<key> / sum:<key>.
 ```
+
+## Use the metrics pass's measures
+
+After the [metrics pass](/docs/how-to/measure-metrics/) has run over the model,
+the same open forms read its keys by name:
+
+```bash
+codegraph serve model.jsonl --height sum:cognitive --footprint attribute:lloc --carry attribute:mi
+```
+
+**Charged measures add up; span measures do not.** `cognitive`, `nexits` and
+the `abc.*` keys are charged to the entity that owns the code — a closure
+nobody names counts for the method around it — so `sum:` over a type counts
+each piece of code once. `lloc`, `cloc`, the `halstead.*` keys and `mi` are
+computed over an entity's whole text, nested functions included, so `sum:mi`
+is a number with no meaning: read the type's own value with `attribute:`.
 
 ## Choose the scales
 
@@ -102,6 +119,7 @@ when there is nothing there.
 ## Related
 
 - [Reading a city](/docs/tutorials/reading-the-city/)
+- [Measure complexity and change history](/docs/how-to/measure-metrics/)
 - [City metrics reference](/docs/reference/city-metrics/)
 - [`codegraph serve`](/docs/reference/cli/serve/)
 - [`codegraph city`](/docs/reference/cli/city/)

@@ -1,7 +1,7 @@
 ---
 title: Query model.db from your own tool
 linkTitle: Query model.db
-weight: 12
+weight: 13
 ---
 
 `model.db` is the workbench: a SQLite cache of one `model.jsonl`, indexed so you

@@ -1,7 +1,7 @@
 ---
 title: Write an extractor for a new language
 linkTitle: Write an extractor
-weight: 13
+weight: 14
 ---
 
 An extractor's whole job is to emit a conforming `model.jsonl`. It contains no

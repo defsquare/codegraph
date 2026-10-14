@@ -10,7 +10,7 @@ This writes the artifact. To look at it, [`codegraph serve`](/docs/reference/cli
 ## Synopsis
 
 ```
-codegraph city [model.jsonl...] [--height METRIC] [--height-scale <linear|sqrt|log>] [--footprint METRIC] [--footprint-scale <linear|sqrt|log>] [--carry M1,M2] [--name STR] [--framework <spring>] [--layout] [--internal-only] [--declared-only] [--out FILE]
+codegraph city [model.jsonl...] [--height METRIC] [--height-scale <linear|sqrt|log>] [--footprint METRIC] [--footprint-scale <linear|sqrt|log>] [--carry M1,M2] [--history-metrics FILE] [--framework <spring>] [--name STR] [--layout] [--internal-only] [--declared-only] [--out FILE]
 ```
 
 ## Arguments
@@ -23,11 +23,12 @@ codegraph city [model.jsonl...] [--height METRIC] [--height-scale <linear|sqrt|l
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--height METRIC` | Metric driving building height. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. | `loc` |
+| `--height METRIC` | Metric driving building height. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). | `loc` |
 | `--height-scale <linear\|sqrt\|log>` | How height follows its metric. | `linear` |
-| `--footprint METRIC` | Metric driving building footprint. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. | `members` |
+| `--footprint METRIC` | Metric driving building footprint. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). | `members` |
 | `--footprint-scale <linear\|sqrt\|log>` | How the footprint SIDE follows its metric; sqrt makes the AREA proportional. | `sqrt` |
 | `--carry M1,M2` | Extra metrics to measure onto every building, comma-separated, bound to nothing. | — |
+| `--history-metrics FILE` | The change-history side-car the history:/history-file: metrics read (what 'codegraph-metrics --history' wrote). | `<model>.history-metrics.jsonl` beside each model |
 | `--name STR` | Display name for the corpus in the page header; defaults to the basename of each model's root. | — |
 | `--framework <spring>` | Classify types by a framework's own vocabulary (service, repository, controller…) and offer it as a color channel. An inference from written annotations; absent means the city says nothing about roles. | — |
 | `--layout` | Lay the city out: positions on buildings, bounds on districts, by recursive shelf packing. | — |
@@ -54,4 +55,4 @@ wrote 64904 bytes to /tmp/city.json (city, view all, 10 districts, 37 buildings,
 
 ## See also
 
-[`serve`](/docs/reference/cli/serve/) · [City metrics](/docs/reference/city-metrics/) · [city.json](/docs/reference/artifacts/city-json/) · [CLI conventions](/docs/reference/cli/)
+[`serve`](/docs/reference/cli/serve/) · [City metrics](/docs/reference/city-metrics/) · [city.json](/docs/reference/artifacts/city-json/) · [history-metrics.jsonl](/docs/reference/artifacts/history-metrics-jsonl/) · [CLI conventions](/docs/reference/cli/)

@@ -1,7 +1,7 @@
 ---
 title: Serve the navigator and city on a network
 linkTitle: Serve on a network
-weight: 11
+weight: 12
 ---
 
 `codegraph serve` starts a small HTTP server with both artifacts loaded: the

@@ -196,6 +196,7 @@ A how-to assumes competence and answers one question. Titles are tasks.
 | `query-model-db.md` | Read `model.db` from your own tool: the four rules, the tables to start from. | docs/sql-cookbook.md "Four rules" | exists |
 | `write-an-extractor.md` | Write an extractor for a new language against the schema: record order, surrogates, the profile check, the conformance gate. | schemas/README.md, PLAN §10, docs/model-encoding.md §2 | write |
 | `compare-snapshots.md` | Diff two models of one corpus (fixture-style expected files) and two revisions of a store (`timeline`). | fixtures workflow, docs/cli.md | write |
+| `measure-metrics.md` | Run the metrics pass over any model, read the join report and `--audit`, see `sum:cognitive` in the city, measure change history into the side-car and bind `history:`/`history-file:`. | docs/metrics.md, PLAN §18 | written |
 
 ### 4.3 Reference — `content/reference/`
 Austere, complete, structured like the thing described. Where a generator
@@ -214,6 +215,9 @@ exists (`--help`, `schemas/`, `profiles --json`), the page is its rendering.
 | `environment.md` | Environment variables (`OPENROUTER_API_KEY`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_GATEWAY_ID`, `CITY_JSON`, `NAVIGATOR_JSON`, and the test-only `CODEGRAPH_CORPUS_MODEL`) and where each is read. | `grep -rn process.env packages` | written |
 | `java-extractor.md` | Flags, the Java profile mapping table, what resolves and what becomes a stub, annotations and measures emitted. | extractors/java, PLAN §5.1, fixtures/java/README.md | partial |
 | `exit-codes.md` | The four exit codes and the findings contract. | docs/cli.md | exists |
+| `elixir-extractor.md`, `ruby-extractor.md` | Flags, resolution without a build or a VM, the summary and its drop reasons, `--deps`/`--trace`, the profile mapping, ids, stub discipline, measures, the fixture, gotchas. | docs/elixir-extractor.md, docs/ruby-extractor.md, PLAN §16, §19, the profiles, fixtures READMEs | written |
+| `metrics-pass.md` | `codegraph-metrics`: flags, the join and its report, the fourteen keys in two families, what each language leaves unmeasured, `--history`. | docs/metrics.md, METAMODEL §3.8, PLAN §18 | written |
+| `artifacts/history-metrics-jsonl.md` | The change-history side-car: records, the twenty measures with their levels, the fixture excerpt, the `history:` forms. | packages/scm/src/history-metrics.ts, fixtures/history-metrics | written |
 
 ### 4.4 Explanation — `content/explanation/`
 Discursive: why things are the way they are, the alternatives, the trade-offs.

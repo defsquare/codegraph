@@ -1,7 +1,7 @@
 ---
 title: Compare two models of one corpus
 linkTitle: Compare snapshots
-weight: 14
+weight: 15
 ---
 
 Every codegraph artifact is byte-identical for identical input, which makes

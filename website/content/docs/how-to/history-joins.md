@@ -1,7 +1,7 @@
 ---
 title: Find hidden coupling and dead weight
 linkTitle: History joins
-weight: 9
+weight: 10
 ---
 
 Two of codegraph's reports need both graphs at once — what the code says, and

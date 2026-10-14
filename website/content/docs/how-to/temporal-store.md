@@ -1,7 +1,7 @@
 ---
 title: Sample a repository's history into a temporal store
 linkTitle: Temporal store
-weight: 8
+weight: 9
 ---
 
 `codegraph snapshots` extracts a repository at chosen revisions and appends each
