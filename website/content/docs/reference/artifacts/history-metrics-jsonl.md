@@ -83,7 +83,7 @@ Windows count back from `asOf`. Blame credits a line to the commit that last tou
 | `risk_score` | rank | file, entity | big-code-analysis's weighted risk score — ordinal: rank by it |
 | `security_fix_commits` | commits | file, entity | long-window commits whose message reads as a security fix |
 
-The list is `HISTORY_MEASURES` in `@codegraph/scm`, pinned equal to the Rust lists by a test. Bug-fix, security and revert counts are **labelled heuristics** over commit messages, as the `fix` and `revert` flags of [`history.jsonl`](/docs/reference/artifacts/history-jsonl/) are.
+The list is `HISTORY_MEASURES` in `@codegraph/scm`, pinned equal to the Rust lists by a test. Bug-fix, security and revert counts are **labelled heuristics** over commit messages, as the `fix` and `revert` flags of [`history.jsonl`](/docs/reference/artifacts/history-jsonl/) are. Each measure's paper, how the walk and the blame differ, the classifier's keywords and the risk formula: [Metrics catalogue](/docs/reference/metrics-catalogue/#change-history-metrics).
 
 ## Excerpt
 

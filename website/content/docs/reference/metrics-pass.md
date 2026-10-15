@@ -4,7 +4,7 @@ linkTitle: Metrics pass
 weight: 14
 ---
 
-`codegraph-metrics` 0.2.0 (big-code-analysis 2.2.0) — the measuring pass over any extractor's model. A Cargo package in `extractors/metrics/`, linking [big-code-analysis](https://github.com/dekobon/big-code-analysis) as a library with five tree-sitter grammars. It is **not an extractor**: it reads a `model.jsonl`, parses every source file the measured entities are anchored in, joins big-code-analysis's function and class spaces to those entities on their anchors, and rewrites their `metrics` maps — cognitive complexity, Halstead, the maintainability index, ABC, exits, logical and comment lines, public methods and attributes. No other byte of the file moves. One binary serves Java, C#, TypeScript, Elixir and Ruby; what each key means is on [Measures and literals](/docs/reference/metamodel/measures-literals/).
+`codegraph-metrics` 0.2.0 (big-code-analysis 2.2.0) — the measuring pass over any extractor's model. A Cargo package in `extractors/metrics/`, linking [big-code-analysis](https://github.com/dekobon/big-code-analysis) as a library with five tree-sitter grammars. It is **not an extractor**: it reads a `model.jsonl`, parses every source file the measured entities are anchored in, joins big-code-analysis's function and class spaces to those entities on their anchors, and rewrites their `metrics` maps — cognitive complexity, Halstead, the maintainability index, ABC, exits, logical and comment lines, public methods and attributes. No other byte of the file moves. One binary serves Java, C#, TypeScript, Elixir and Ruby; what each key means is on [Measures and literals](/docs/reference/metamodel/measures-literals/), and what each counts, where it comes from and how to read it on the [Metrics catalogue](/docs/reference/metrics-catalogue/).
 
 ```bash
 brew install defsquare/tap/codegraph-metrics    # already there if any extractor came from the tap
@@ -111,7 +111,7 @@ The keys come in two families, because a join does not always pair one entity wi
 | `npm` | span, types | methods | methods declared directly in the type that its language makes public |
 | `npa` | span, types | attributes | public attributes declared directly in the type |
 
-The definitions are big-code-analysis 2.2's ([metrics](https://dekobon.github.io/big-code-analysis/metrics.html)); the attribution to entities is this model's. Only entities whose profile licenses `TMetrics` and that the extractor measured are touched: the pass never adds a trait.
+The definitions are big-code-analysis 2.2's ([metrics](https://dekobon.github.io/big-code-analysis/metrics.html)); the attribution to entities is this model's. Only entities whose profile licenses `TMetrics` and that the extractor measured are touched: the pass never adds a trait. The [Metrics catalogue](/docs/reference/metrics-catalogue/) walks every key — its origin, what each of the five languages counts, the thresholds the literature reads it by — and lists what big-code-analysis computes that the pass leaves out, and why.
 
 **Bytes as `codegraph` writes them.** A new value is rounded to four decimals (`ln` and `log₂` may differ in the last bit between platforms) and spelled as JavaScript spells a number; the `metrics` map is re-sorted; an unchanged line is copied, never re-encoded. Two runs over one corpus write the same bytes on every OS, and the file stays byte-identical to what core's own encoder would write — `./test.sh --metrics` and the `metrics-native` CI job, built natively on four runners, hold the five `fixtures/<lang>/expected/model.metrics.jsonl` snapshots to that.
 
@@ -150,7 +150,7 @@ codegraph serve model.jsonl --height history-file:churn_recent --carry history:r
 - **A file changed since that commit** keeps its file record and gets no entity records — its anchors and the blamed lines would describe different text. The run says how many.
 - **Cost**: the walk and one blame per file — 35 s and 670 MB over BroadleafCommerce's 18 776 commits, against 0.8 s for the code metrics; hence opt-in, and not something the desktop app runs.
 
-[`city`](/docs/reference/cli/city/) and [`serve`](/docs/reference/cli/serve/) read the side-car beside each model (or `--history-metrics FILE`) and offer it on every channel and `--carry`: see [City metrics](/docs/reference/city-metrics/#history-forms).
+[`city`](/docs/reference/cli/city/) and [`serve`](/docs/reference/cli/serve/) read the side-car beside each model (or `--history-metrics FILE`) and offer it on every channel and `--carry`: see [City metrics](/docs/reference/city-metrics/#history-forms). Each measure, the paper behind it, how the walk and the blame differ and the risk formula: [Metrics catalogue](/docs/reference/metrics-catalogue/#change-history-metrics).
 
 ## Limits
 
@@ -161,4 +161,4 @@ codegraph serve model.jsonl --height history-file:churn_recent --carry history:r
 
 ## See also
 
-[How to measure complexity and change history](/docs/how-to/measure-metrics/) · [Measures and literals](/docs/reference/metamodel/measures-literals/) · [City metrics](/docs/reference/city-metrics/) · [history-metrics.jsonl](/docs/reference/artifacts/history-metrics-jsonl/)
+[Metrics catalogue](/docs/reference/metrics-catalogue/) · [How to measure complexity and change history](/docs/how-to/measure-metrics/) · [Measures and literals](/docs/reference/metamodel/measures-literals/) · [City metrics](/docs/reference/city-metrics/) · [history-metrics.jsonl](/docs/reference/artifacts/history-metrics-jsonl/)

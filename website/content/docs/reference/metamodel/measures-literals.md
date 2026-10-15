@@ -46,6 +46,8 @@ The [metrics pass](/docs/reference/metrics-pass/) (`codegraph-metrics`) adds the
 | `npm` | span, types | methods | methods declared directly in the type that its language makes public |
 | `npa` | span, types | attributes | public attributes declared directly in the type |
 
+What each key counts in each language, the paper it comes from and the thresholds it is read by: [Metrics catalogue](/docs/reference/metrics-catalogue/).
+
 The **derived** counterpart: gross span length (`end − start + 1`) is computable from `TSourceAnchor` alone and is not a measure — it is the city's `loc` source. A module's size is a sum over its derived children. `sloc` exists because blanks and comments are invisible downstream: the two claims ("how much is written here" vs "how much of it is code") are never conflated.
 
 Measures reach the city through the open metric forms `attribute:<key>` and `sum:<key>` — see [City metrics](/docs/reference/city-metrics/). Change history is not a measure of the code and never enters this map: [`codegraph-metrics --history`](/docs/reference/metrics-pass/#--history-change-history-as-a-side-car) writes it to a side-car.

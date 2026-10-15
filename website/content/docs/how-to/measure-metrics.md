@@ -181,6 +181,7 @@ there is either way. `--history` is not run by the app.
 - [Build a complexity city](/docs/how-to/complexity-city/)
 - [Find hidden coupling and dead weight](/docs/how-to/history-joins/)
 - [Metrics pass reference](/docs/reference/metrics-pass/)
+- [Metrics catalogue](/docs/reference/metrics-catalogue/) — every key's definition, origin and reading
 - [Measures and literals](/docs/reference/metamodel/measures-literals/)
 - [`history-metrics.jsonl`](/docs/reference/artifacts/history-metrics-jsonl/)
 - [Time as structure](/docs/explanation/time-as-structure/)

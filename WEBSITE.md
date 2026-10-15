@@ -218,6 +218,7 @@ exists (`--help`, `schemas/`, `profiles --json`), the page is its rendering.
 | `elixir-extractor.md`, `ruby-extractor.md` | Flags, resolution without a build or a VM, the summary and its drop reasons, `--deps`/`--trace`, the profile mapping, ids, stub discipline, measures, the fixture, gotchas. | docs/elixir-extractor.md, docs/ruby-extractor.md, PLAN §16, §19, the profiles, fixtures READMEs | written |
 | `metrics-pass.md` | `codegraph-metrics`: flags, the join and its report, the fourteen keys in two families, what each language leaves unmeasured, `--history`. | docs/metrics.md, METAMODEL §3.8, PLAN §18 | written |
 | `artifacts/history-metrics-jsonl.md` | The change-history side-car: records, the twenty measures with their levels, the fixture excerpt, the `history:` forms. | packages/scm/src/history-metrics.ts, fixtures/history-metrics | written |
+| `metrics-catalogue.md` | Every measure a model or its side-car carries: the three writers, the sixteen keys and twenty history measures with big-code-analysis's definition, origin, per-language counting rules and reading thresholds; what big-code-analysis computes that codegraph leaves out, and what to read instead. | dekobon.github.io/big-code-analysis `metrics` and `metrics-vcs` chapters, the bca 2.2.0 crate, extractors/metrics/src, the five fixtures | written |
 
 ### 4.4 Explanation — `content/explanation/`
 Discursive: why things are the way they are, the alternatives, the trade-offs.

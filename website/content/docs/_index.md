@@ -13,7 +13,7 @@ The documentation is in four parts, each for a different moment:
 {{< cards >}}
   {{< card link="tutorials" title="Tutorials" icon="academic-cap" subtitle="Learn by doing: your first city, reading it, the navigator, history replay, explanations, SQL." >}}
   {{< card link="how-to" title="How-to guides" icon="clipboard-check" subtitle="Solve one problem: CI gates, facts-only views, complexity cities, the metrics pass, Spring roles, temporal stores, extractor authoring." >}}
-  {{< card link="reference" title="Reference" icon="book-open" subtitle="Look it up: every command and option, each extractor and the metrics pass, the interchange format, the metamodel, artifacts, the SQLite store." >}}
+  {{< card link="reference" title="Reference" icon="book-open" subtitle="Look it up: every command and option, each extractor, the metrics pass and its catalogue of measures, the interchange format, the metamodel, artifacts, the SQLite store." >}}
   {{< card link="explanation" title="Explanation" icon="light-bulb" subtitle="Understand why: traits, provenance, extraction without compiling, identity, the city as a model, prior art." >}}
 {{< /cards >}}
 
