@@ -4871,9 +4871,10 @@ Seven principles, locked up front:
    (constructor, lambda) contributes none and is counted. Coverage per
    extractor is a table in this section, filled by the milestone.
 2. **The idiom is the profile's; the algorithm is one.** Keywords,
-   conventional member names, affixes and separators are DATA on the
-   profile (`lexicon`), specifiable without being implemented (invariant 8).
-   The splitter reads them and knows no language.
+   conventional names, technical words and file kinds are DATA on the
+   profile (`lexicon`), specifiable without being implemented (invariant 8);
+   word boundaries are universal and need none. The splitter reads the data
+   and knows no language.
 3. **Classification, not filtering.** Every token is kept and tagged
    `domain | technical | keyword | short`; a consumer filters. Drift needs
    the technical words too, and "not shown" must stay distinguishable from
@@ -4902,38 +4903,54 @@ the universal rules below — present on the eleven shipped:
 
 ```ts
 lexicon?: {
-  keywords: string[];       // reserved words, as the language spells them
-  conventional: string[];   // whole member names the language or its runtime dictates;
+  keywords: string[];       // the specification's RESERVED words, as the language spells them;
+                            // a contextual keyword (record, var, TS's type) is an identifier
+  conventional: string[];   // whole identifiers the language or its runtime dictates;
                             // skipped whole: toString/equals/hashCode/main (Java),
                             // initialize/to_s/inspect/<=> (Ruby), constructor (TS),
                             // __using__/start_link/init/handle_call (Elixir),
                             // Equals/GetHashCode/ToString/Dispose/Main (C#)
-  technical?: string[];     // language-specific noise beyond the shared list:
-                            // impl, bean (Java); concern (Ruby); live, web (Elixir)
-  idioms: {
-    separators: string[];   // "_", "-", ".", "::", "/", "$"
-    prefixes: string[];     // sigils stripped before splitting: "@@", "@", "$", "#", "_"
-    suffixes: string[];     // "?", "!", "=" (Ruby/Elixir), "`N" (C# generic arity)
-    interfacePrefix?: true; // C#: `IOrderService` → order, service (I + Upper + lower)
-    fileModules?: true;     // the module is the file: strip the extension, split the path
-  };
+  technical?: string[];     // language-specific plumbing beyond the shared list, as the
+                            // splitter yields it: bean, jdbc (Java); concern (Ruby); live, web (Elixir)
+  fileKinds?: string[];     // kinds whose name is a file path: TS/JS `module`, Ruby and Elixir
+                            // `file`, PHP `codeFile` — the extension is not a word
+  interfacePrefix?: true;   // C#: `IOrderService` → order, service (I + Upper + lower)
 };
 ```
 
-`ProfileSchema` mirrors it; `codegraph profiles --lang X` prints it in full
-(the command's completeness rule); `schemas/` is unchanged — a profile is not
-on the wire. Tests pin: every shipped lexicon has a non-empty keyword list,
-its entries are distinct, and nothing in `conventional` is also a keyword.
+The first draft carried `idioms.separators`, `prefixes` and `suffixes`; built
+(M19a), they could change no output. The splitter must break on EVERY
+character that is not a letter, a mark or a digit anyway — or `<=>`,
+`[Symbol.iterator]` and `this[]` become tokens — and once it does, `@total`,
+`valid?`, `Order::Line` and `` Repository`1 `` need no data. The draft's
+`fileModules` flag was per PROFILE; file-ness is per KIND (Elixir's `file` is
+a path, its `module` the dotted `AcmeOrder.Registry`, whose `.Registry` a
+profile-wide flag would drop as an extension), so it became `fileKinds`.
 
-**The split** (`split.ts`): one function, `splitIdentifier(name, lexicon)`,
-in six steps, each pinned by a table of hand cases per idiom:
+`ProfileSchema` mirrors it (a test parses every shipped profile through it
+unchanged); `codegraph profiles --lang X` prints it in full, between the kinds
+and the notes (the command's completeness rule); `schemas/` is unchanged — a
+profile is not on the wire. `validateProfile` rejects an entry that could
+never do what its list says, with four codes: `lexicon-duplicate`,
+`lexicon-not-a-word` (a keyword with no letter, a name holding whitespace, a
+technical entry the splitter cannot yield), `lexicon-keyword-overlap` (a
+conventional name or a technical word a keyword claims first) and
+`lexicon-unknown-kind`. Tests pin, per shipped profile: a non-empty keyword
+list, no contextual keyword listed, `interfacePrefix` in C# alone, and exactly
+the five file kinds above. TypeScript reserves exactly ECMAScript's words, so
+the two profiles read one `ECMASCRIPT_LEXICON`.
 
-1. strip one leading prefix and one trailing suffix from the lexicon
-   (`@total` → `total`, `valid?` → `valid`, `save!`, `name=`,
-   `Repository\`1` → `Repository`), then the interface prefix when the flag
-   is set and the rest starts Upper + lower (`IOrderService`, not `IO`);
-2. split on the lexicon's separators; for `fileModules`, drop the
-   extension first (`legacy/acme-report.ts` → `legacy`, `acme`, `report`);
+**The split** (`split.ts`): one function, `splitIdentifier(name, kind,
+lexicon)`, in six steps, each pinned by a table of hand cases per idiom:
+
+1. for a kind in `fileKinds`, drop the extension of the last path segment
+   (`legacy/acme-report.ts` → `legacy/acme-report`); then the interface
+   prefix when the flag is set and the name starts `I` + Upper + lower
+   (`IOrderService`, not `IO`);
+2. split on every character that is not a Unicode letter, mark or digit —
+   universal, no data: `@total` → `total`, `valid?` → `valid`, `save!`,
+   `name=`, `Order::Line`, `max_lines`, `acme-report`, `Repository\`1` →
+   `repository`, `1`;
 3. camel-case boundaries with the acronym rule — lower→Upper, and an
    Upper run followed by Upper + lower splits before its last letter
    (`HTTPServer` → `http`, `server`; `getURLString` → `get`, `url`,
@@ -5234,10 +5251,10 @@ never looks like a fact.
 
 **M19a — the lexicon, the split, the artifact** (closes the profile half of #19)
 
-- [ ] `Profile.lexicon` in core: type, `ProfileSchema`, METAMODEL §5 row,
+- [x] `Profile.lexicon` in core: type, `ProfileSchema`, METAMODEL §5 row,
       the eleven profiles filled (keywords from each language's
       specification; conventional names from its runtime), `codegraph
-      profiles --lang` printing it; the three lexicon tests; `schemas/`
+      profiles --lang` printing it; the lexicon's validation codes and tests; `schemas/`
       unchanged, proven by the drift check.
 - [ ] `packages/vocabulary/` (`@codegraph/vocabulary`, depends on core and
       analyzer only): `split.ts`, `classify.ts` with `DEFAULT_TECHNICAL`,
