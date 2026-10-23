@@ -139,7 +139,7 @@ export const clojureProfile: Profile = {
       "-main", "-init", "-post-init", "-toString", "-equals", "-hashCode",
     ],
     technical: [
-      "coll", "ctx", "kw", "ns", "opts", "seq", "sym", "xf", "xform",
+      "coll", "kw", "ns", "seq", "sym", "xf", "xform",
     ],
   },
 };

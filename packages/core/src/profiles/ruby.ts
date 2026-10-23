@@ -133,7 +133,7 @@ export const rubyProfile: Profile = {
     ],
     technical: [
       "accessor", "attr", "concern", "concerns", "ext", "gem", "gemspec", "klass", "lambda",
-      "mixin", "proc", "rake", "rakefile",
+      "proc", "rake", "rakefile",
     ],
     fileKinds: ["file"],
   },

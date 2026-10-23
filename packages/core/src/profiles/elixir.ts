@@ -155,9 +155,8 @@ export const elixirProfile: Profile = {
       "@fallback_to_any", "@file",
     ],
     technical: [
-      "attrs", "behaviour", "callback", "changeset", "conn", "ecto", "ets", "gen", "live", "mix",
-      "opts", "otp", "phoenix", "pid", "plug", "repo", "schema", "server", "socket", "sup",
-      "supervisor", "web",
+      "attrs", "behaviour", "changeset", "conn", "ecto", "ets", "gen", "live", "mix", "otp",
+      "phoenix", "pid", "plug", "schema", "server", "socket", "sup", "supervisor", "web",
     ],
     fileKinds: ["file"],
   },

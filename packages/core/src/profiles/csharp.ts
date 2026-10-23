@@ -246,7 +246,7 @@ export const csharpProfile: Profile = {
       "op_LeftShift", "op_RightShift", "op_UnsignedRightShift",
     ],
     technical: [
-      "args", "async", "attribute", "enumerable", "enumerator", "extension", "extensions", "linq",
+      "attribute", "enumerable", "enumerator", "extension", "extensions", "linq",
     ],
     interfacePrefix: true,
   },

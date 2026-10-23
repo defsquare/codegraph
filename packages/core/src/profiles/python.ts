@@ -131,7 +131,7 @@ export const pythonProfile: Profile = {
       "__doc__", "__dict__",
     ],
     technical: [
-      "args", "dict", "kwargs", "metaclass", "mixin", "py", "str", "tuple",
+      "dict", "kwargs", "metaclass", "py", "tuple",
     ],
   },
 };

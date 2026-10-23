@@ -24,6 +24,6 @@ export const ECMASCRIPT_LEXICON = {
     "[Symbol.toStringTag]", "[Symbol.dispose]", "[Symbol.asyncDispose]",
   ],
   technical: [
-    "args", "async", "callback", "cb", "fn", "json", "opts", "promise", "prototype",
+    "cb", "fn", "promise", "prototype",
   ],
 } as const satisfies Lexicon;

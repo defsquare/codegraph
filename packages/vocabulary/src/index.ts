@@ -7,3 +7,4 @@
  * lexicon, never source, and touches no DOM.
  */
 export * from "./split.js";
+export * from "./classify.js";
