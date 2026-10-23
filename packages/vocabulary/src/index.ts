@@ -8,3 +8,4 @@
  */
 export * from "./split.js";
 export * from "./classify.js";
+export * from "./weight.js";
