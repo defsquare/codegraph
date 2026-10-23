@@ -4951,47 +4951,68 @@ lexicon)`, in six steps, each pinned by a table of hand cases per idiom:
    universal, no data: `@total` → `total`, `valid?` → `valid`, `save!`,
    `name=`, `Order::Line`, `max_lines`, `acme-report`, `Repository\`1` →
    `repository`, `1`;
-3. camel-case boundaries with the acronym rule — lower→Upper, and an
-   Upper run followed by Upper + lower splits before its last letter
+3. camel-case boundaries with the acronym rule — lower→Upper, digit→Upper,
+   and an Upper run followed by Upper + lower splits before its last letter
    (`HTTPServer` → `http`, `server`; `getURLString` → `get`, `url`,
    `string`; `XMLHttpRequest` → `xml`, `http`, `request`) — on Unicode
    letter categories, not ASCII (`fixtures/unicode` is the test: `ＡFullwidth`
    and `𠀀Supplementary` must split and lowercase without a replacement
-   character);
-4. a digit run attaches to the token before it (`utf8`, `md5`, `v2`); a
-   token that is only digits is dropped and counted (`skipped.numeric`);
+   character). A caseless letter (`𠀀`, `注`) counts as lower; a mark takes
+   the case of the letter it sits on, so a decomposed `é` never splits;
+4. a digit run stays with the letters around it — only an Upper after it
+   breaks (`utf8`, `md5`, `v2`, `i18n`, `http2`; `Utf8Encoder` → `utf8`,
+   `encoder`); a token that is only digits is dropped and counted
+   (`skipped.numeric`);
 5. lowercase (`toLowerCase`, locale-independent: a Turkish-locale machine
    must write the same bytes);
 6. a `conventional` identifier is skipped whole BEFORE step 1 and counted
    (`skipped.conventional`): `toString` must not contribute `string`,
    `handle_call` must not contribute `call`.
 
-Properties (fast-check over identifiers the grammar admits): no empty token;
-every token lowercase; every token is, case-insensitively, a substring of
-the input with the affixes removed; the same input gives the same tokens;
-`split(a + sep + b) = split(a) ++ split(b)` for any lexicon separator.
+Properties (fast-check over identifiers the grammar admits): every token is
+a non-empty run of letters, marks and digits, lowercase, never digits only,
+and a slice of the lowered name; the same input gives the same tokens;
+`split(a + sep + b) = split(a) ++ split(b)` for any character that is not a
+letter, a mark or a digit — without a lexicon, since the file kinds, the
+interface prefix and a conventional name read the WHOLE name. A Σ is left
+out of the generator: its lower case depends on what follows it, so a
+token's lower case and its slice of the lowered name may differ (`ΟΔΟΣ` →
+`οδος`, pinned by hand).
 
 **The classes** (`classify.ts`), a closed set `TERM_CLASSES = ["domain",
 "technical", "keyword", "short"]`, decided per TOKEN in this order:
 `keyword` when the lowercased token equals a lowercased lexicon keyword
-(`type`, `default`, `case`, `new`, `end`); `short` when it is one character
-(`i`, `e`, `x` — length 2 stays: `id`, `db`, `io` are words); `technical`
-when it is in the shared list ∪ the profile's (`DEFAULT_TECHNICAL`, ~80
-words in the package: `get set is has to from of with by and or not new
-create build make init impl abstract base default util utils helper manager
-service repository controller handler factory provider dto dao entity model
-data info config exception error test mock spec com org net io src lib main
-app`…, overridable whole with `--technical FILE`, its digest recorded in the
-artifact); else `domain`. The list is contestable by construction — which is
-why it is data in one place and the artifact says which one it used.
+(`type`, `default`, `case`, `new`, `end`) — a keyword the splitter never
+yields whole (`defined?`, `__FILE__`, `set!`) classifies nothing, since the
+`file` of `upload_file` is not `__FILE__`; `short` when it is one code point
+that is not a mark (`i`, `e`, `x`, `𠀀` — length 2 stays: `id`, `db`, `io`
+are words); `technical` when it is in the shared list ∪ the profile's
+(`DEFAULT_TECHNICAL`, 125 words in the package: `get set is has to from of
+with by and or not new create build make init impl abstract base default
+util utils helper manager service repository controller handler factory
+provider dto dao entity model data info config exception error test mock
+spec com org net io src lib main app`, the CRUD verbs, the web and format
+words…, overridable whole with `--technical FILE`, its digest recorded in
+the artifact — the profile's own words apply either way); else `domain`. The
+list is contestable by construction — which is why it is data in one place
+and the artifact says which one it used. It holds what every language
+shares: a word two lexicons listed (`args`, `opts`, `ctx`, `err`,
+`callback`, `str`, `mutex`, `mixin`, `async`) moved into it, and a test
+keeps it disjoint from every profile's `technical`.
 
 **Roles and weights** (`weight.ts`). The role of the entity carrying a name
-comes from its traits, never its kind (the navigator's rule): `module`
-(TModule), `type` (TType), `operation` (TInvocable), `parameter` / `local`
-(TStructural listed in the parent's `parameters[]` / `localVariables[]`),
-`attribute` (every other TStructural: fields, constants, properties, module
-attributes). Default weights, recorded in the artifact and overridable with
-`--weights role=n,…`:
+comes from its traits, never its kind (the navigator's rule), first match
+winning: `module` (TModule), `type` (TType — a C# delegate, TType +
+TInvocable, is a type), `operation` (TInvocable — a Clojure fn-var too),
+`parameter` / `local` (TStructural listed in some entity's `parameters[]` /
+`localVariables[]`), `attribute` (every other TStructural: fields,
+constants, properties, module attributes), and `other` — a named entity no
+role trait describes (TypeScript's `namespace`, PHP's `codeFile`, Python's
+`decorator`), whose words still count (principle 1). Built on the fixtures,
+one parameter is listed nowhere: the C# indexer's, a child of its
+`property`, which the C# profile gives no `TWithParameters`; it weighs as
+an attribute until the model lists it, pinned by id. Default weights,
+recorded in the artifact and overridable with `--weights role=n,…`:
 
 | role | weight | why |
 |---|---|---|
@@ -4999,6 +5020,7 @@ attributes). Default weights, recorded in the artifact and overridable with
 | `attribute` | 4 | a thing the type holds — nouns, usually domain |
 | `operation` | 3 | something it does; the prefix is usually technical (`get`, `find`, `build`) |
 | `parameter`, `local` | 1 | incidental: the "variable buried deep in a method" of the issue |
+| `other` | 1 | no trait says what it is |
 
 An occurrence is one token in one name; a name carrying a word twice counts
 twice. Both the weighted sum and the raw occurrence count are kept — one is
@@ -5256,12 +5278,13 @@ never looks like a fact.
       specification; conventional names from its runtime), `codegraph
       profiles --lang` printing it; the lexicon's validation codes and tests; `schemas/`
       unchanged, proven by the drift check.
-- [ ] `packages/vocabulary/` (`@codegraph/vocabulary`, depends on core and
+- [x] `packages/vocabulary/` (`@codegraph/vocabulary`, depends on core and
       analyzer only): `split.ts`, `classify.ts` with `DEFAULT_TECHNICAL`,
-      `weight.ts`, `aggregate.ts` on `containingType`/`containingModule`,
-      `artifact.ts` (`codegraph.vocabulary/1`), `drift.ts`; the hand tables
-      per idiom and the properties of §20.1; the unicode fixture through the
-      splitter.
+      `weight.ts`; the hand tables per idiom and the properties of §20.1;
+      the unicode fixture through the splitter; the shared words out of
+      the profiles.
+- [ ] `aggregate.ts` on `containingType`/`containingModule`, `artifact.ts`
+      (`codegraph.vocabulary/1`), `drift.ts`.
 - [ ] `codegraph vocabulary` (§20.1): the report, `--level`, `--scope`,
       `--class`, `--weights`, `--technical`, `--drift`, `--out`, `--json`,
       the view flags; usage errors for an unknown scope, role or class.
