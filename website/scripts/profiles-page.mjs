@@ -23,15 +23,15 @@ function parse(text) {
   const edges = lines.find((l) => l.startsWith("edge kinds:")).slice("edge kinds:".length).split(",").map((s) => s.trim());
   const kinds = [];
   for (let i = lines.indexOf("kinds:") + 1; i < lines.length && lines[i] !== "lexicon:" && !lines[i].startsWith("notes:"); i++) {
-    const kind = /^  (\S+)$/.exec(lines[i]);
+    const kind = /^ {2}(\S+)$/.exec(lines[i]);
     if (kind) { kinds.push({ name: kind[1], required: [], optional: [] }); continue; }
-    const traits = /^    (required|optional)\s+(.*)$/.exec(lines[i]);
+    const traits = /^ {4}(required|optional)\s+(.*)$/.exec(lines[i]);
     if (traits) kinds.at(-1)[traits[1]] = traits[2].split(",").map((s) => s.trim()).filter(Boolean);
   }
   // `  keywords          a, b` … up to the blank line; absent rows stay absent.
   const lexicon = {};
   for (let i = lines.indexOf("lexicon:") + 1; i > 0 && i < lines.length && lines[i] !== ""; i++) {
-    const row = /^  (keywords|conventional|technical|file kinds|interface prefix)\s+(.*)$/.exec(lines[i]);
+    const row = /^ {2}(keywords|conventional|technical|file kinds|interface prefix)\s+(.*)$/.exec(lines[i]);
     if (row) lexicon[row[1]] = row[2] === "(none)" ? [] : row[2].split(", ");
   }
   const notes = [];
