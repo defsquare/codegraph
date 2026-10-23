@@ -109,4 +109,23 @@ export const goProfile: Profile = {
     "Invisible to static extraction: reflect, the plugin package, cgo, go:generate and go:linkname directives, and side effects of init() functions pulled in by blank imports (`import _ \"…\"`), which are still emitted as ordinary import edges.",
     "Build tags and GOOS/GOARCH constrained files mean a single extraction run sees one build configuration; entities excluded by the active tags are absent from the model.",
   ],
+
+  lexicon: {
+    // The Go specification, Keywords: the 25 reserved words. Predeclared identifiers (`nil`,
+    // `true`, `int`, `len`, `new`…) may be redeclared, so they are not listed.
+    keywords: [
+      "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough",
+      "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range",
+      "return", "select", "struct", "switch", "type", "var",
+    ],
+    // Package initialization, the entry point, and the methods the standard library's interfaces
+    // dictate (`fmt.Stringer`, `error` and `errors`, `sort.Interface`, `encoding`, `net/http`).
+    conventional: [
+      "init", "main", "String", "GoString", "Error", "Unwrap", "Is", "As", "Len", "Less", "Swap",
+      "MarshalJSON", "UnmarshalJSON", "MarshalText", "UnmarshalText", "ServeHTTP",
+    ],
+    technical: [
+      "cfg", "cmd", "ctx", "err", "errs", "internal", "mu", "mutex", "pkg", "srv", "svc", "wg",
+    ],
+  },
 };

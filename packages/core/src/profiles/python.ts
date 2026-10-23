@@ -105,4 +105,33 @@ export const pythonProfile: Profile = {
     "`from x import *` yields a module-level import edge only; the individual names it binds cannot be attributed.",
     "Conditional and `if TYPE_CHECKING:` imports are emitted like any other import — this profile declares no Space, so type-only dependencies are indistinguishable from runtime ones.",
   ],
+
+  lexicon: {
+    // The Python 3.12 Language Reference §2.3.1: the 35 keywords. Soft keywords (`match`, `case`,
+    // `type`, `_`) are identifiers.
+    keywords: [
+      "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
+      "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if",
+      "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
+      "while", "with", "yield",
+    ],
+    // The receiver conventions and the data model's special names (Reference §3.3).
+    conventional: [
+      "self", "cls", "__init__", "__new__", "__del__", "__repr__", "__str__", "__bytes__",
+      "__format__", "__hash__", "__bool__", "__eq__", "__ne__", "__lt__", "__le__", "__gt__",
+      "__ge__", "__len__", "__iter__", "__next__", "__aiter__", "__anext__", "__reversed__",
+      "__contains__", "__getitem__", "__setitem__", "__delitem__", "__missing__", "__getattr__",
+      "__getattribute__", "__setattr__", "__delattr__", "__dir__", "__get__", "__set__",
+      "__delete__", "__set_name__", "__call__", "__enter__", "__exit__", "__aenter__", "__aexit__",
+      "__await__", "__init_subclass__", "__class_getitem__", "__post_init__", "__add__", "__sub__",
+      "__mul__", "__matmul__", "__truediv__", "__floordiv__", "__mod__", "__pow__", "__neg__",
+      "__pos__", "__abs__", "__invert__", "__and__", "__or__", "__xor__", "__lshift__",
+      "__rshift__", "__int__", "__float__", "__index__", "__round__", "__copy__", "__deepcopy__",
+      "__reduce__", "__getstate__", "__setstate__", "__slots__", "__all__", "__name__", "__main__",
+      "__doc__", "__dict__",
+    ],
+    technical: [
+      "args", "dict", "kwargs", "metaclass", "mixin", "py", "str", "tuple",
+    ],
+  },
 };

@@ -384,6 +384,7 @@ implemented* (robustness test of the schema).
 | `kinds` | `Record<kind, {required: TraitName[], optional: TraitName[]}>` | the licit trait compositions per entity kind |
 | `edges` | EdgeKind[] | edge kinds this language can emit |
 | `notes` | string[] | documented static-analysis blind spots (reflection, `Class.forName`, dynamic `require`, macros pre-expansion, …) |
+| `lexicon` | `{keywords, conventional, technical?, fileKinds?, interfacePrefix?}` | the language's words, for the vocabulary (§5.3): reserved words, names the language dictates, plumbing words, kinds whose name is a file path, C#'s interface marker |
 
 **Validation** of an entity against its profile:
 1. `kind` exists in the profile;
@@ -420,6 +421,31 @@ lower bound (§6) is an entity-level fact, so it is part of what the verdict is
 keyed on; and the verdict is per profile, since two profiles may name the same
 kind under different rules. It is a **reader-side** optimisation and requires no
 encoding support — trait sets are deliberately not a wire-level concept.
+
+### 5.3 The lexicon: a language's words
+
+The vocabulary (PLAN.md §20) splits every name into words — `OrderManagerRepository`
+is `order`, `manager`, `repository` — and tags each one. Splitting is
+**universal**: every character that is not a letter, a mark or a digit ends a
+word, and so does a camel-case boundary, so sigils, separators and suffixes
+(`@total`, `valid?`, `Order::Line`) need no data. What a language adds is the
+lexicon, optional on a profile and present on every shipped one:
+
+| Key | Meaning |
+|---|---|
+| `keywords` | the specification's **reserved** words, as the language spells them. A contextual keyword (`record`, `var`, TypeScript's `type`) is a legal identifier, often a domain word, and is not listed |
+| `conventional` | whole identifiers the language or its runtime dictates — overrides, protocol members, operators (`toString`, `__init__`, `<=>`). Their words say nothing about the domain, so such a name contributes none |
+| `technical` | plumbing words of the language beyond the vocabulary's shared list, spelled as the splitter yields them (lowercase letters and digits) |
+| `fileKinds` | kinds whose name is a file path (TypeScript's `module`, Ruby's `file`): the extension is not a word |
+| `interfacePrefix` | `true` in C# alone: `IOrderService` names an interface `OrderService` |
+
+`validateProfile` rejects an entry that could never do what its list says:
+listed twice (`lexicon-duplicate`); a keyword with no letter or a name holding
+whitespace, a technical entry the splitter cannot yield (`lexicon-not-a-word`);
+a conventional name or technical word a keyword already claims
+(`lexicon-keyword-overlap`); a file kind the profile does not define
+(`lexicon-unknown-kind`). The lexicon is not on the wire: `schemas/` is
+unchanged by it.
 
 ---
 

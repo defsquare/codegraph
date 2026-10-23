@@ -123,4 +123,33 @@ export const phpProfile: Profile = {
     "Gradual typing: parameter, property and return type declarations are optional, so TTypedEntity.declaredType is often absent. Docblock types (@var, @param) are not authoritative and must not be promoted to declaredType.",
     "Namespaces are 1-N with files: TModule.definedIn lists every file declaring into the namespace. A file with no `namespace` statement declares into the global namespace.",
   ],
+
+  lexicon: {
+    // The PHP manual, List of Keywords and its compile-time constants, plus the literals `true`,
+    // `false`, `null`; spelled lowercase, as PHP matches them case-insensitively. `enum` is
+    // context-sensitive; the type names reserved only as class names (`int`, `string`, `mixed`…)
+    // are not listed.
+    keywords: [
+      "__halt_compiler", "abstract", "and", "array", "as", "break", "callable", "case", "catch",
+      "class", "clone", "const", "continue", "declare", "default", "die", "do", "echo", "else",
+      "elseif", "empty", "enddeclare", "endfor", "endforeach", "endif", "endswitch", "endwhile",
+      "eval", "exit", "extends", "final", "finally", "fn", "for", "foreach", "function", "global",
+      "goto", "if", "implements", "include", "include_once", "instanceof", "insteadof",
+      "interface", "isset", "list", "match", "namespace", "new", "or", "print", "private",
+      "protected", "public", "readonly", "require", "require_once", "return", "static", "switch",
+      "throw", "trait", "try", "unset", "use", "var", "while", "xor", "yield", "__CLASS__",
+      "__DIR__", "__FILE__", "__FUNCTION__", "__LINE__", "__METHOD__", "__NAMESPACE__",
+      "__PROPERTY__", "__TRAIT__", "true", "false", "null",
+    ],
+    // The magic methods.
+    conventional: [
+      "__construct", "__destruct", "__call", "__callStatic", "__get", "__set", "__isset",
+      "__unset", "__sleep", "__wakeup", "__serialize", "__unserialize", "__toString", "__invoke",
+      "__set_state", "__clone", "__debugInfo",
+    ],
+    technical: [
+      "arr", "closure", "facade", "middleware", "php", "str",
+    ],
+    fileKinds: ["codeFile"],
+  },
 };

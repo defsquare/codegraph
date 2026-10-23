@@ -132,4 +132,33 @@ export const elixirProfile: Profile = {
     "Measures (TMetrics, METAMODEL.md §3.8): `sloc` on the file, every module and every invocable — lines of its own span that are neither blank nor comment-only, a comment being what the compiler's own parser reports as one: every non-blank line a heredoc, a sigil or a multi-line string spans is code, a `#` inside one included; `cyclomatic` on invocables: 1 + clause heads beyond the first + `case`/`cond`/`with`/`receive`/`try` clauses beyond the first + `if`/`unless` + `and`/`or`/`&&`/`||` + `rescue`/`catch` clauses. A nested `fn` contributes to its enclosing invocable: an anonymous function is not an entity.",
     "The metrics pass (`codegraph-metrics`, PLAN.md §18): big-code-analysis opens one space per `def` clause, so a function of several clauses is joined by containment and carries the charged keys only (cognitive, exits, ABC) — no `lloc`, Halstead or `mi`, which do not add up over clauses. `defprotocol` and `defimpl` bodies, `defguard` and `defdelegate` have no space and carry none of the pass's keys. The join's witness (`sloc` = big-code-analysis's `ploc`) cannot hold over a heredoc: big-code-analysis leaves a heredoc's text lines out of `ploc`, which METAMODEL's `sloc` counts (Phoenix's `mix_app_path`: `sloc` 19, `ploc` 13).",
   ],
+
+  lexicon: {
+    // The Elixir syntax reference, Reserved words: the 15 words no variable, function or module
+    // may be named.
+    keywords: [
+      "true", "false", "nil", "when", "and", "or", "not", "in", "fn", "do", "end", "catch",
+      "rescue", "after", "else",
+    ],
+    // The compiler's callbacks and reflection, the OTP behaviours' callbacks (`GenServer`,
+    // `Supervisor`), `String.Chars` and `Inspect`, and the module attributes the compiler reads,
+    // spelled as the extractor names attributes (`@moduledoc`).
+    conventional: [
+      "__using__", "__before_compile__", "__after_compile__", "__after_verify__",
+      "__on_definition__", "__struct__", "__info__", "__deriving__", "__impl__", "__protocol__",
+      "start_link", "child_spec", "init", "handle_call", "handle_cast", "handle_info",
+      "handle_continue", "terminate", "code_change", "format_status", "to_string", "inspect",
+      "@moduledoc", "@doc", "@typedoc", "@spec", "@type", "@typep", "@opaque", "@callback",
+      "@macrocallback", "@optional_callbacks", "@impl", "@behaviour", "@derive", "@enforce_keys",
+      "@external_resource", "@compile", "@deprecated", "@dialyzer", "@on_load", "@vsn",
+      "@before_compile", "@after_compile", "@after_verify", "@on_definition", "@nifs",
+      "@fallback_to_any", "@file",
+    ],
+    technical: [
+      "attrs", "behaviour", "callback", "changeset", "conn", "ecto", "ets", "gen", "live", "mix",
+      "opts", "otp", "phoenix", "pid", "plug", "repo", "schema", "server", "socket", "sup",
+      "supervisor", "web",
+    ],
+    fileKinds: ["file"],
+  },
 };

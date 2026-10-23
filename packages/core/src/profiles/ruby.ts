@@ -113,4 +113,28 @@ export const rubyProfile: Profile = {
     "`--trace <file>` merges what `extractors/ruby/trace/codegraph_trace.rb` wrote from INSIDE the running program — the one thing the extractor never does is run corpus code, so the trace is a separate step, the user's, in a project that still boots. It names constants, files and lines, never a key: no entity is added and no edge of the source changes. A mixin the VM holds and no line writes is a `traitUsage` with provenance `generated`, anchored on the declaration of the type that has it. A call the program made at a site the baseline left unresolved is ONE `invocation` with provenance `dynamic-candidate`, `candidates` listing every method that site was seen to reach and `to` the first of them — what ran once, not what must run. A method the VM holds on a line that writes no `def` has no entity and gets none: it is counted.",
     "Audited (M18c) on rake 13.2.1, rubygems 3.6.2, Mastodon 4.3.0 and rails 8.0.2 — 100, 794, 2 541 and 3 334 files, every model `validate`-clean, rails in 4.7 s. Resolution rate 77.8 %, 54.4 %, 31.2 % and 57.0 % of the sites; Mastodon without `spec/` is 62.1 % (55 000 of its unbound calls are RSpec's DSL), rails' own `lib` and `app` 59.4 %. Four fifths of what stays unresolved in application code is `untyped-receiver` — the ceiling of any reader that does not run the code. ORACLES: Packwerk 3.3.1's reference extraction and ConstantResolver over Mastodon's autoload paths resolve 4 335 cross-file constant references in `app/` and `lib/`; the model has the same constant in the same file for 4 289 of them (98.9 %) — the 45 others are a `module Admin` WRAPPER, which Packwerk counts as a reference and the wrapper rule does not, and one an inherited constant Packwerk places by file name. The model names 346 more that Packwerk cannot: declarations outside the autoload paths. Run under its own tests in a container, rake's VM holds a method on the same line for 1 006 of the 1 012 methods the model declares in the 83 files it loaded (the six others: definitions under a platform or capability `if`, a `def` inside a method that never ran, methods of anonymous classes), and 200 methods the model has none for — 199 written by the metaprogramming loops of three files (`class_eval` of a string, `define_method` over a list), one the `else` branch of a platform test. Of the 2 829 calls observed during that run, 1 533 are edges the baseline wrote and 879 land on sites it had left untyped. The core-table misreading, measured on rubygems: 39 corpus bodies of 20 VM types (`Gem` alone 12), and 3 802 of 71 197 edges landing on the VM's stub of a type that corpus itself implements.",
   ],
+
+  lexicon: {
+    // The Ruby documentation, Keywords: the 41 reserved words, as Ruby spells them.
+    keywords: [
+      "__ENCODING__", "__LINE__", "__FILE__", "BEGIN", "END", "alias", "and", "begin", "break",
+      "case", "class", "def", "defined?", "do", "else", "elsif", "end", "ensure", "false", "for",
+      "if", "in", "module", "next", "nil", "not", "or", "redo", "rescue", "retry", "return",
+      "self", "super", "then", "true", "undef", "unless", "until", "when", "while", "yield",
+    ],
+    // The constructor and copy hooks, the conversion and comparison protocols, the operator
+    // methods, `Enumerable`'s `each`, `method_missing`, and the hooks a module or class receives.
+    conventional: [
+      "initialize", "initialize_copy", "to_s", "to_str", "to_a", "to_ary", "to_h", "to_hash",
+      "to_proc", "inspect", "hash", "eql?", "==", "===", "=~", "!~", "!=", "<=>", "<", ">", "<=",
+      ">=", "+", "-", "*", "/", "%", "**", "<<", ">>", "&", "|", "^", "~", "!", "+@", "-@", "[]",
+      "[]=", "each", "coerce", "method_missing", "respond_to_missing?", "respond_to?", "included",
+      "extended", "inherited", "prepended", "method_added", "const_missing",
+    ],
+    technical: [
+      "accessor", "attr", "concern", "concerns", "ext", "gem", "gemspec", "klass", "lambda",
+      "mixin", "proc", "rake", "rakefile",
+    ],
+    fileKinds: ["file"],
+  },
 };

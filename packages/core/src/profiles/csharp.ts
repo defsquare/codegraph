@@ -217,4 +217,37 @@ export const csharpProfile: Profile = {
     "Neither a `.sln` nor a `.csproj` is read: the extractor parses every `*.cs` under the source roots into ONE compilation (no MSBuild, no restore), so a legacy tree with no restorable project graph still extracts, and a missing package is a stub rather than a build failure. Consequences: one preprocessor configuration is parsed (no `--define` yet); source-generated and XAML/Razor code-behind partials are absent unless their output is under the roots; a name declared twice across projects that never see each other collides as one entity.",
     "The metrics pass (`codegraph-metrics`, PLAN.md §18): a property with accessors is joined to its accessor spaces — `{ get; set; }` is two, so it carries the pass's charged keys only (cognitive, exits, ABC). An implicit constructor (anchored on the type's name) and a record's positional members have no space and carry none of its keys. tree-sitter-c-sharp 0.23.5 misparses a C# 14 extension block: its members go unmeasured by the pass, and the enclosing class is joined by containment (charged keys only). tree-sitter does not evaluate `#if`: in a file with conditional blocks big-code-analysis measures EVERY branch, where Roslyn — and so this extractor's `sloc` — keeps the active one; on Humanizer such files are the 37 exact joins whose `sloc` and big-code-analysis's `ploc` disagree.",
   ],
+
+  lexicon: {
+    // ECMA-334 §6.4.4: the 77 reserved keywords. Contextual keywords (`var`, `async`, `await`,
+    // `record`, `value`, `get`, `set`, the query words) are identifiers.
+    keywords: [
+      "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked",
+      "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else",
+      "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for",
+      "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is", "lock",
+      "long", "namespace", "new", "null", "object", "operator", "out", "override", "params",
+      "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed", "short",
+      "sizeof", "stackalloc", "static", "string", "struct", "switch", "this", "throw", "true",
+      "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual",
+      "void", "volatile", "while",
+    ],
+    // `System.Object`'s overrides, the entry point,
+    // `IComparable`/`IDisposable`/`IEnumerable`/`ICloneable`, deconstruction, the indexer
+    // (`this[]`, as the extractor names it) and the operators' metadata names.
+    conventional: [
+      "ToString", "Equals", "GetHashCode", "Finalize", "Main", "CompareTo", "Dispose",
+      "DisposeAsync", "GetEnumerator", "GetAsyncEnumerator", "MoveNext", "MoveNextAsync", "Clone",
+      "Deconstruct", "this[]", "op_Addition", "op_Subtraction", "op_Multiply", "op_Division",
+      "op_Modulus", "op_Equality", "op_Inequality", "op_LessThan", "op_GreaterThan",
+      "op_LessThanOrEqual", "op_GreaterThanOrEqual", "op_Implicit", "op_Explicit",
+      "op_UnaryNegation", "op_UnaryPlus", "op_LogicalNot", "op_OnesComplement", "op_Increment",
+      "op_Decrement", "op_True", "op_False", "op_BitwiseAnd", "op_BitwiseOr", "op_ExclusiveOr",
+      "op_LeftShift", "op_RightShift", "op_UnsignedRightShift",
+    ],
+    technical: [
+      "args", "async", "attribute", "enumerable", "enumerator", "extension", "extensions", "linq",
+    ],
+    interfacePrefix: true,
+  },
 };

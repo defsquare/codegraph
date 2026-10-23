@@ -100,6 +100,48 @@ describe("one language's full spec", () => {
     );
   });
 
+  /**
+   * The lexicon is what the vocabulary splitter reads (PLAN.md §20.1): someone
+   * asking why `newOrder` gave no `new` reads the keyword list here, so every
+   * entry must be printed, unwrapped, in the order the profile declares it.
+   */
+  it.each(LANGS)("prints %s's lexicon in full, line for line", (lang) => {
+    const lexicon = profileOf(lang).lexicon;
+    if (lexicon === undefined) throw new Error(`${lang} ships no lexicon`);
+    const lines = invoke(["profiles", "--lang", lang]).io.stdoutLines();
+    const start = lines.indexOf("lexicon:");
+    const expected = [
+      "lexicon:",
+      `  keywords          ${lexicon.keywords.join(", ")}`,
+      `  conventional      ${lexicon.conventional.length === 0 ? "(none)" : lexicon.conventional.join(", ")}`,
+      ...(lexicon.technical === undefined ? [] : [`  technical         ${lexicon.technical.join(", ")}`]),
+      ...(lexicon.fileKinds === undefined ? [] : [`  file kinds        ${lexicon.fileKinds.join(", ")}`]),
+      ...(lexicon.interfacePrefix === true ? ["  interface prefix  yes"] : []),
+    ];
+    expect(start, "no lexicon section").toBeGreaterThan(0);
+    expect(lines.slice(start, start + expected.length)).toEqual(expected);
+    // The block ends there: a blank line, then the next section.
+    expect(lines[start + expected.length]).toBe("");
+  });
+
+  // The notes stay last: they are the one section whose entries run to several
+  // sentences, and a reader of the text form (the website's page) takes
+  // everything after `notes:` as notes.
+  it("prints the lexicon after the kinds and before the notes", () => {
+    for (const lang of LANGS) {
+      const lines = invoke(["profiles", "--lang", lang]).io.stdoutLines();
+      expect(lines.indexOf("lexicon:"), lang).toBeGreaterThan(lines.indexOf("kinds:"));
+      expect(lines.indexOf("lexicon:"), lang).toBeLessThan(lines.indexOf("notes:"));
+    }
+  });
+
+  it("prints the interface prefix and the file kinds only where a profile declares them", () => {
+    expect(invoke(["profiles", "--lang", "csharp"]).io.stdout()).toContain("\n  interface prefix  yes\n");
+    expect(invoke(["profiles", "--lang", "java"]).io.stdout()).not.toContain("interface prefix");
+    expect(invoke(["profiles", "--lang", "ts"]).io.stdout()).toContain("\n  file kinds        module\n");
+    expect(invoke(["profiles", "--lang", "java"]).io.stdout()).not.toContain("file kinds");
+  });
+
   it("prints the declaration spaces exactly where a profile declares them", () => {
     const ts = invoke(["profiles", "--lang", "ts"]).io.stdout();
     expect(ts).toContain("space");
@@ -143,6 +185,15 @@ describe("--json prints the profile data as-is", () => {
     expect(payload(["profiles"])).toEqual(
       LANGS.map((lang) => JSON.parse(JSON.stringify(profileOf(lang)))),
     );
+  });
+
+  it("writes the lexicon's keys in one fixed order, absent keys absent", () => {
+    const keysOf = (lang: string): readonly string[] => {
+      const [json] = payload(["profiles", "--lang", lang]) as readonly Profile[];
+      return Object.keys(json?.lexicon ?? {});
+    };
+    expect(keysOf("csharp")).toEqual(["keywords", "conventional", "technical", "interfacePrefix"]);
+    expect(keysOf("ts")).toEqual(["keywords", "conventional", "technical", "fileKinds"]);
   });
 
   it("says the same thing as the text form (decision 8)", () => {

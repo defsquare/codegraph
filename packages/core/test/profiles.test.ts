@@ -3,7 +3,7 @@ import { EDGE_KINDS, TRAIT_NAMES } from "../src/names.js";
 import { SPACES } from "../src/primitives.js";
 import { Entity } from "../src/entity.js";
 import { parseModel, SCHEMA_VERSION } from "../src/model.js";
-import { validateEntity, validateModel, validateProfile, type Profile } from "../src/profile.js";
+import { ProfileSchema, validateEntity, validateModel, validateProfile, type Profile } from "../src/profile.js";
 import {
   PROFILES,
   clojureProfile,
@@ -755,6 +755,91 @@ describe("structural claims that must not silently regress", () => {
         anchor: { file: "lib/a.rb", span: [1, 3] },
       });
       expect(validateEntity(rb, rogue).map((i) => i.code)).toEqual(["trait-not-allowed"]);
+    });
+  });
+});
+
+/**
+ * The lexicon (PLAN.md §20.1): what the vocabulary splitter must know about a
+ * language and cannot derive. Every claim below is about the LANGUAGE — its
+ * specification's reserved words, the names its runtime dictates — so a later
+ * edit that "tidies" a list into something the language does not say fails here.
+ */
+describe("the lexicon of every shipped profile", () => {
+  const lexiconOf = (lang: string) => {
+    const lexicon = getProfile(lang)?.lexicon;
+    if (lexicon === undefined) throw new Error(`no lexicon for ${lang}`);
+    return lexicon;
+  };
+
+  it.each(profiles)("%s has a lexicon with its reserved words", (_lang, profile) => {
+    expect(profile.lexicon?.keywords.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it.each(profiles)("%s parses through ProfileSchema unchanged", (_lang, profile) => {
+    expect(ProfileSchema.parse(profile)).toEqual(profile);
+  });
+
+  it("lists the conventional names the plan names, per language", () => {
+    expect(lexiconOf("java").conventional).toEqual(expect.arrayContaining(["toString", "equals", "hashCode", "main"]));
+    expect(lexiconOf("rb").conventional).toEqual(expect.arrayContaining(["initialize", "to_s", "inspect", "<=>"]));
+    expect(lexiconOf("ts").conventional).toEqual(expect.arrayContaining(["constructor"]));
+    expect(lexiconOf("ex").conventional).toEqual(expect.arrayContaining(["__using__", "start_link", "init", "handle_call"]));
+    expect(lexiconOf("csharp").conventional).toEqual(
+      expect.arrayContaining(["Equals", "GetHashCode", "ToString", "Dispose", "Main"]),
+    );
+    expect(lexiconOf("python").conventional).toEqual(expect.arrayContaining(["__init__", "self", "cls"]));
+  });
+
+  // A contextual keyword is a legal identifier, and often a domain word: listing
+  // it would tag every `record`, `event` handler or `match` in the corpus as syntax.
+  it("lists reserved words only, never contextual ones", () => {
+    const contextual: Readonly<Record<string, readonly string[]>> = {
+      java: ["record", "var", "yield", "sealed", "permits", "module", "when", "to"],
+      csharp: ["var", "async", "await", "record", "value", "get", "set", "where", "from", "select"],
+      ts: ["type", "namespace", "module", "declare", "readonly", "of", "get", "set", "async"],
+      js: ["of", "get", "set", "async", "from"],
+      python: ["match", "case", "type", "_"],
+      rust: ["union", "macro_rules", "default"],
+      php: ["enum"],
+    };
+    for (const [lang, words] of Object.entries(contextual)) {
+      const keywords = new Set(lexiconOf(lang).keywords);
+      for (const word of words) expect(keywords.has(word), `${lang} lists ${word}`).toBe(false);
+    }
+  });
+
+  it("knows which languages reserve which words", () => {
+    // `type` is reserved by Go and Rust; to Java and TypeScript it is an identifier.
+    expect(lexiconOf("go").keywords).toContain("type");
+    expect(lexiconOf("rust").keywords).toContain("type");
+    expect(lexiconOf("java").keywords).not.toContain("type");
+    expect(lexiconOf("ts").keywords).not.toContain("type");
+    // Rust reserves both spellings of the receiver; Ruby spells its block ends.
+    expect(lexiconOf("rust").keywords).toEqual(expect.arrayContaining(["self", "Self"]));
+    expect(lexiconOf("rb").keywords).toEqual(expect.arrayContaining(["end", "begin", "BEGIN", "END"]));
+    expect(lexiconOf("ex").keywords).toEqual(expect.arrayContaining(["do", "end", "fn", "when"]));
+  });
+
+  it("strips the interface marker in C# alone", () => {
+    for (const [lang, profile] of profiles) {
+      expect(profile.lexicon?.interfacePrefix === true, lang).toBe(lang === "csharp");
+    }
+  });
+
+  // A file kind's name is a path whose extension is not a word. Elixir's
+  // `module` is a dotted name (`AcmeOrder.Registry`), not a file: declaring it
+  // would drop `.Registry` as an extension.
+  it("declares exactly the kinds whose name is a file path", () => {
+    const fileKinds = Object.fromEntries(
+      profiles.flatMap(([lang, profile]) => (profile.lexicon?.fileKinds === undefined ? [] : [[lang, profile.lexicon.fileKinds]])),
+    );
+    expect(fileKinds).toEqual({
+      ex: ["file"],
+      js: ["module"],
+      php: ["codeFile"],
+      rb: ["file"],
+      ts: ["module"],
     });
   });
 });

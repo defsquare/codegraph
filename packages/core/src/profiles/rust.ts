@@ -104,4 +104,28 @@ export const rustProfile: Profile = {
     "`static` items map to the `const` kind. Tuple-struct fields are named by their position (\"0\", \"1\", ...). Shadowed `let` bindings produce several localVariable entities disambiguated by (file, startLine).",
     "The `self` receiver is not emitted as a parameter; the receiver relation is the impl block's attachment.",
   ],
+
+  lexicon: {
+    // The Rust Reference, Keywords: the strict and the reserved keywords. Weak keywords (`union`,
+    // `macro_rules`, `raw`, `safe`) are identifiers outside their one context.
+    keywords: [
+      "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum",
+      "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move",
+      "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true",
+      "type", "unsafe", "use", "where", "while", "abstract", "become", "box", "do", "final", "gen",
+      "macro", "override", "priv", "try", "typeof", "unsized", "virtual", "yield",
+    ],
+    // The entry point and the methods the standard library's traits name (`Display`/`Debug`,
+    // `Drop`, `Clone`, `PartialEq`/`Ord`, `Deref`, `IntoIterator`, `FromStr`, the conversion
+    // traits, `Default`, `IndexMut`, `Future`).
+    conventional: [
+      "main", "fmt", "drop", "clone", "clone_from", "eq", "ne", "partial_cmp", "cmp", "deref",
+      "deref_mut", "into_iter", "from_str", "try_from", "try_into", "as_ref", "as_mut",
+      "borrow_mut", "index_mut", "default", "poll",
+    ],
+    technical: [
+      "arc", "buf", "cell", "ctx", "err", "ffi", "iter", "mutex", "ok", "opt", "rc", "refcell",
+      "rs", "rx", "sys", "tx", "vec",
+    ],
+  },
 };
