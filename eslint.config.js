@@ -58,6 +58,7 @@ export default tseslint.config(
       "packages/analyzer/**/*.ts",
       "packages/city/**/*.ts",
       "packages/navigator/**/*.ts",
+      "packages/vocabulary/**/*.ts",
       "packages/insights/**/*.ts",
       "packages/cli/**/*.ts",
     ],

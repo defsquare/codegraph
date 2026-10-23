@@ -66,6 +66,10 @@ packages/navigator/  @codegraph/navigator — the navigator MODEL: the browsable
                      tree (modules → types → operations/attributes) plus one
                      classified dependency row per base edge, carrying member,
                      provenance and anchor included. Pure computation.
+packages/vocabulary/ @codegraph/vocabulary — the words of the model's NAMES
+                     (never source): the universal splitter driven by each
+                     profile's lexicon, the word classes (domain, technical,
+                     keyword, short) and the role weights. Pure computation.
 packages/insights/   @codegraph/insights — the bottom-up EXPLANATION walk: units
                      (operations → types → modules), SCC-condensed walk order,
                      context packs, prompts, Merkle fingerprints, plan/run, the
@@ -107,7 +111,7 @@ fixtures/            Reference corpora + expected model.jsonl snapshots.
 
 ### Hard boundaries (convenience does not override architecture)
 
-- **`core`, `analyzer`, `city` and `navigator` never import Three.js or React**
+- **`core`, `analyzer`, `city`, `navigator` and `vocabulary` never import Three.js or React**
   — they must run in Node with no DOM. `viz` reads the city model and
   `navigator-ui` the navigator model; neither mutates its model and neither
   re-derives graph facts the analyzer already computes.
