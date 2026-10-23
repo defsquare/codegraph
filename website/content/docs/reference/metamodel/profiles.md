@@ -11,8 +11,9 @@ A profile is **data, not code**: the contract stating what a given language's ex
 | `kinds` | `Record<kind, {required: TraitName[], optional: TraitName[]}>` | the licit trait compositions per entity kind |
 | `edges` | EdgeKind[] | edge kinds this language can emit |
 | `notes` | string[] | documented static-analysis blind spots (reflection, `Class.forName`, dynamic `require`, macros pre-expansion, …) |
+| `lexicon` | `{keywords, conventional, technical?, fileKinds?, interfacePrefix?}` | the language's words, for the vocabulary — see [The lexicon](#the-lexicon) |
 
-The nine shipped profiles are rendered in full on [Language profiles](/docs/reference/profiles/).
+The eleven shipped profiles are rendered in full on [Language profiles](/docs/reference/profiles/).
 
 ## Validation
 
@@ -33,6 +34,20 @@ Kinds, trait names, edge kinds and provenance values are **finite sets owned by 
 The rule above reads only the kind and the *set* of traits — never the entity carrying them. So a consumer may decide each distinct `(kind, trait set)` pair **once** and share the verdict across every entity with that composition. Step 3 — the trait-key check — still runs per entity, because the keys' *values* differ.
 
 Two bounds on that licence: a [stub](/docs/reference/metamodel/stubs/)'s exemption from the lower bound is an entity-level fact, so it is part of what the verdict is keyed on; and the verdict is per profile, since two profiles may name the same kind under different rules. It is a reader-side optimisation and requires no encoding support.
+
+## The lexicon
+
+The vocabulary splits every name into words — `OrderManagerRepository` is `order`, `manager`, `repository` — and tags each one. Splitting is **universal**: every character that is not a letter, a mark or a digit ends a word, and so does a camel-case boundary, so sigils, separators and suffixes (`@total`, `valid?`, `Order::Line`) need no data. What a language adds is its lexicon, optional on a profile and present on every shipped one:
+
+| Key | Meaning |
+|---|---|
+| `keywords` | the specification's **reserved** words, as the language spells them. A contextual keyword (`record`, `var`, TypeScript's `type`) is a legal identifier, often a domain word, and is not listed |
+| `conventional` | whole identifiers the language or its runtime dictates — overrides, protocol members, operators (`toString`, `__init__`, `<=>`). Their words say nothing about the domain, so such a name contributes none |
+| `technical` | plumbing words of the language beyond the vocabulary's shared list, spelled as the splitter yields them |
+| `fileKinds` | kinds whose name is a file path (TypeScript's `module`, Ruby's `file`): the extension is not a word |
+| `interfacePrefix` | `true` in C# alone: `IOrderService` names an interface `OrderService` |
+
+Profile validation rejects an entry that could never do what its list says: one listed twice, a keyword with no letter, a technical entry the splitter cannot yield, a name a keyword already claims, a file kind the profile does not define.
 
 ## Framework profiles
 
