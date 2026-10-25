@@ -9,3 +9,5 @@
 export * from "./split.js";
 export * from "./classify.js";
 export * from "./weight.js";
+export * from "./artifact.js";
+export * from "./aggregate.js";

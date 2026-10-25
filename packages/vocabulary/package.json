@@ -19,6 +19,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@codegraph/analyzer": "workspace:*",
     "@codegraph/core": "workspace:*"
   },
   "devDependencies": {

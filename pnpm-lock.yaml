@@ -373,6 +373,9 @@ importers:
 
   packages/vocabulary:
     dependencies:
+      '@codegraph/analyzer':
+        specifier: workspace:*
+        version: link:../analyzer
       '@codegraph/core':
         specifier: workspace:*
         version: link:../core
