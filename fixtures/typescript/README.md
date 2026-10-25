@@ -75,3 +75,23 @@ edges : 127 (self-edges dropped: 1, indirect calls dropped: 2, computed imports 
 
 Every dropped thing is counted: the model is a lower bound that says where it
 stopped, never a guess.
+
+## The vocabulary: `legacy`, counted by hand
+
+`expected/vocabulary.json` is the words of this model's names
+(`@codegraph/vocabulary`, PLAN.md §20), rebuilt byte for byte by
+`pnpm --filter @codegraph/vocabulary test` (`CODEGRAPH_UPDATE_SNAPSHOTS=1`
+rewrites it). A word weighs the role of the entity whose name carries it —
+module and type 8, attribute 4, operation 3, parameter and local 1 — except a
+word of the name's qualifier, before the last separator of a qualified kind,
+which weighs 1. One word, counted by hand from the model and pinned by the
+vocabulary's tests:
+
+| name | kind | role | weight |
+|---|---|---|---|
+| `legacy-lib` | module | module | 8 |
+| `legacy/acme-report.ts`, `legacy/acme.ts`, `packages/order/src/legacy/list.ts` | module | qualifier | 3 × 1 |
+
+**`legacy`: weight 11, 4 occurrences, 4 carriers.** A module is named by its
+path: the directories qualify the file, so `packages` (21 modules) weighs 21,
+not 168.

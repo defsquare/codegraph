@@ -1,0 +1,26 @@
+{
+  "kind": "codegraph.vocabulary/1",
+  "generatedBy": "@codegraph/vocabulary",
+  "view": {"name":"all","filters":[]},
+  "corpus": {"name":"src","roots":["fixtures/unicode/src"]},
+  "langs": ["java"],
+  "weights": {"module":8,"type":8,"operation":3,"attribute":4,"parameter":1,"local":1,"other":1,"qualifier":1},
+  "classes": ["domain","technical","keyword","short"],
+  "technical": {"words":125,"sha256":"c16bd05be59a0c3281696359e4b4f7b3efe7860512b4ab37519f8c3a063c95f7"},
+  "terms": [
+    {"text":"ascii","class":"domain","modules":1,"types":1,"exclusive":1},
+    {"text":"fullwidth","class":"domain","modules":1,"types":1,"exclusive":1},
+    {"text":"sorting","class":"domain","modules":1,"types":0,"exclusive":1},
+    {"text":"supplementary","class":"domain","modules":1,"types":1,"exclusive":1},
+    {"text":"𠀀","class":"short","modules":1,"types":1,"exclusive":1},
+    {"text":"ａ","class":"short","modules":1,"types":1,"exclusive":1}
+  ],
+  "scopes": [
+    {"level":"corpus","name":"src","entities":4,"roles":{"module":1,"type":3,"operation":0,"attribute":0,"parameter":0,"local":0,"other":0},"skipped":{"unnamed":0,"conventional":0,"numeric":0},"distinct":6,"distinctDomain":4,"weight":48,"occurrences":6,"terms":[[0,8,1,1],[1,8,1,1],[2,8,1,1],[3,8,1,1],[4,8,1,1],[5,8,1,1]]},
+    {"level":"module","id":"java:sorting","name":"sorting","kind":"package","parent":0,"entities":4,"roles":{"module":1,"type":3,"operation":0,"attribute":0,"parameter":0,"local":0,"other":0},"skipped":{"unnamed":0,"conventional":0,"numeric":0},"distinct":6,"distinctDomain":4,"weight":48,"occurrences":6,"terms":[[0,8,1,1],[1,8,1,1],[2,8,1,1],[3,8,1,1],[4,8,1,1],[5,8,1,1]]},
+    {"level":"type","id":"java:sorting/Ascii","name":"Ascii","kind":"class","parent":1,"entities":1,"roles":{"module":0,"type":1,"operation":0,"attribute":0,"parameter":0,"local":0,"other":0},"skipped":{"unnamed":0,"conventional":0,"numeric":0},"distinct":1,"distinctDomain":1,"weight":8,"occurrences":1,"terms":[[0,8,1,1]]},
+    {"level":"type","id":"java:sorting/𠀀Supplementary","name":"𠀀Supplementary","kind":"class","parent":1,"entities":1,"roles":{"module":0,"type":1,"operation":0,"attribute":0,"parameter":0,"local":0,"other":0},"skipped":{"unnamed":0,"conventional":0,"numeric":0},"distinct":2,"distinctDomain":1,"weight":16,"occurrences":2,"terms":[[3,8,1,1],[4,8,1,1]]},
+    {"level":"type","id":"java:sorting/ＡFullwidth","name":"ＡFullwidth","kind":"class","parent":1,"entities":1,"roles":{"module":0,"type":1,"operation":0,"attribute":0,"parameter":0,"local":0,"other":0},"skipped":{"unnamed":0,"conventional":0,"numeric":0},"distinct":2,"distinctDomain":1,"weight":16,"occurrences":2,"terms":[[1,8,1,1],[5,8,1,1]]}
+  ],
+  "diagnostics": {"unplaced":[],"withoutLexicon":[]}
+}
