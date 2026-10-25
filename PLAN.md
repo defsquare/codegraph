@@ -4914,6 +4914,10 @@ lexicon?: {
                             // splitter yields it: bean, jdbc (Java); concern (Ruby); live, web (Elixir)
   fileKinds?: string[];     // kinds whose name is a file path: TS/JS `module`, Ruby and Elixir
                             // `file`, PHP `codeFile` — the extension is not a word
+  qualified?: Record<string, string>;
+                            // kinds the language names by a qualified path, with the separator
+                            // that ends the qualifier: Java `package` ".", Ruby `class` "::",
+                            // every file kind "/" — the qualifier's words weigh as incidental
   interfacePrefix?: true;   // C#: `IOrderService` → order, service (I + Upper + lower)
 };
 ```
@@ -4926,6 +4930,19 @@ character that is not a letter, a mark or a digit anyway — or `<=>`,
 `fileModules` flag was per PROFILE; file-ness is per KIND (Elixir's `file` is
 a path, its `module` the dotted `AcmeOrder.Registry`, whose `.Registry` a
 profile-wide flag would drop as an extension), so it became `fileKinds`.
+
+`qualified` was added when the aggregation was measured (M19a, below): a
+qualified name speaks its container's words again, on every entity the
+container holds. Full names made `acme` weigh 468 in the Ruby fixture and 392
+in the Elixir one, against about 50 for the next domain word, and `packages`
+168 in the TypeScript one. A kind is listed when the LANGUAGE names it by a
+path — Java's `package`, C#'s `namespace`, Clojure's `namespace` and Python's
+`module` by `.`, Elixir's `module` and `protocol` by `.`, Ruby's `class`,
+`module` and `constant` by `::`, PHP's `namespace` by `\`, every file kind by
+`/`; Go's package (`package order`) and Rust's module (`mod line`) are named by
+one identifier and are not listed. `validateProfile` gains
+`lexicon-not-a-separator` (empty, or holding a letter, a mark or a digit), and
+an undeclared qualified kind is `lexicon-unknown-kind`.
 
 `ProfileSchema` mirrors it (a test parses every shipped profile through it
 unchanged); `codegraph profiles --lang X` prints it in full, between the kinds
@@ -4941,12 +4958,16 @@ the five file kinds above. TypeScript reserves exactly ECMAScript's words, so
 the two profiles read one `ECMASCRIPT_LEXICON`.
 
 **The split** (`split.ts`): one function, `splitIdentifier(name, kind,
-lexicon)`, in six steps, each pinned by a table of hand cases per idiom:
+lexicon)` → `{tokens, qualifier, numeric, conventional}`, in six steps, each
+pinned by a table of hand cases per idiom:
 
 1. for a kind in `fileKinds`, drop the extension of the last path segment
-   (`legacy/acme-report.ts` → `legacy/acme-report`); then the interface
-   prefix when the flag is set and the name starts `I` + Upper + lower
-   (`IOrderService`, not `IO`);
+   (`legacy/acme-report.ts` → `legacy/acme-report`); for a kind in
+   `qualified`, cut the name at the LAST occurrence of its separator — the
+   words before it are the qualifier, counted in `qualifier`
+   (`AcmeOrder::Order::Line` → 3 of `acme`, `order`, `order`, `line`); then
+   the interface prefix on the own name when the flag is set and it starts
+   `I` + Upper + lower (`IOrderService`, not `IO`; `Acme.IOrder` → `order`);
 2. split on every character that is not a Unicode letter, mark or digit —
    universal, no data: `@total` → `total`, `valid?` → `valid`, `save!`,
    `name=`, `Order::Line`, `max_lines`, `acme-report`, `Repository\`1` →
@@ -4974,7 +4995,10 @@ a non-empty run of letters, marks and digits, lowercase, never digits only,
 and a slice of the lowered name; the same input gives the same tokens;
 `split(a + sep + b) = split(a) ++ split(b)` for any character that is not a
 letter, a mark or a digit — without a lexicon, since the file kinds, the
-interface prefix and a conventional name read the WHOLE name. A Σ is left
+interface prefix and a conventional name read the WHOLE name. Qualification
+moves no word: the tokens are the same with the qualified kinds removed, and
+for a qualified kind `qualifier` is the number of words of `a` in
+`a + separator + b`. A Σ is left
 out of the generator: its lower case depends on what follows it, so a
 token's lower case and its slice of the lowered name may differ (`ΟΔΟΣ` →
 `οδος`, pinned by hand).
@@ -5021,32 +5045,50 @@ recorded in the artifact and overridable with `--weights role=n,…`:
 | `operation` | 3 | something it does; the prefix is usually technical (`get`, `find`, `build`) |
 | `parameter`, `local` | 1 | incidental: the "variable buried deep in a method" of the issue |
 | `other` | 1 | no trait says what it is |
+| `qualifier` | 1 | not a role: the words before the last separator of a qualified name, whatever its role — a container's words, spoken again by every name it qualifies |
 
 An occurrence is one token in one name; a name carrying a word twice counts
-twice. Both the weighted sum and the raw occurrence count are kept — one is
-a judgement, the other a fact.
+twice, and is one carrier. Both the weighted sum and the raw occurrence count
+are kept — one is a judgement, the other a fact; a word weighing 0 still
+occurs.
 
-**Scopes and aggregation** (`aggregate.ts`). Scopes are the kept
-(view-filtered, non-stub) modules and types, plus the corpus root; an
-operation's table is computed on demand (`--scope ID`), not stored (§20.5).
-A scope's table is the union of the tables of every kept entity whose fold
-container it is: `term → { weight, occurrences, carriers }` where `carriers`
-is the number of distinct entities carrying the word. Per scope: `distinct`
-and `distinctDomain` (the cognitive-load proxy), total `weight` and
-`occurrences`, `skipped` by reason. Per term at the root: `spread.modules`
-and `spread.types` (how many scopes speak it) and `exclusive` (the modules
-whose table alone has it) — the overlap and the drift inputs.
+**Scopes and aggregation** (`aggregate.ts`, `buildVocabulary(graph,
+{view?, weights?, technical?, name?})`). Kept is the view's verdict on a
+non-stub entity; a stub never speaks, whatever the view — its name was chosen
+by another corpus (`String`). Scopes are the kept modules and types (by trait:
+TModule first), plus the corpus root; an operation's table is computed on
+demand (`--scope ID`), not stored (§20.5). A scope's table is the union of the
+tables of every kept entity whose fold container it is — the NEAREST: a nested
+type is its own scope, and its members are not its outer type's —
+`term → { weight, occurrences, carriers }` where `carriers` is the number of
+distinct entities carrying the word. Per scope: `entities` (each one unnamed,
+conventional, or counted in `roles` by its role), `skipped` by reason,
+`distinct` and `distinctDomain` (the cognitive-load proxy), total `weight` and
+`occurrences`. Per term: `modules` and `types` (how many scopes speak it) and
+`exclusive` (the one module scope whose table has it, when exactly one does) —
+the overlap and the drift inputs. A class is decided per language (Go
+reserves `type`, Java does not), so a word is interned once per class it
+takes; an entity's language is its model's, read from the union, never from
+its id. A kept entity no module contains counts at the root alone and is
+listed (`unplaced`); a language without a lexicon is split by the universal
+rules alone and listed (`withoutLexicon`). Every scope's parent is the
+nearest scope up the containment chain the model writes, else the root.
 
-**The artifact** `vocabulary.json`, kind `codegraph.vocabulary/1`: a header
-(generator, view descriptor, `weights`, `classes`, the technical list's
-digest, `langs`), `terms[]` interned and sorted with their class, `scopes[]`
-(root first, then modules then types in id order: `id`, `level`, `name`,
-`kind`, `parent` scope index, `terms: [termIndex, weight, occurrences,
-carriers][]` by weight descending then term) and `diagnostics` (skipped
-counts, entities the fold could not place). Every scope id is an entity the
-model declares and every index is in range — the closure property, tested.
-Size is measured on BroadleafCommerce (3 312 types, 502 modules) before any
-cap is considered; none is planned.
+**The artifact** `vocabulary.json`, kind `codegraph.vocabulary/1`
+(`artifact.ts`): a header (generator, view descriptor, `corpus`, `langs`,
+`weights`, `classes`, `technical: {words, sha256}` — the shared list's size
+and a sha256 over its sorted words, one per line), `terms[]` interned and
+sorted by text in code-unit order then class, `scopes[]` (root first, then
+modules then types in id order: `level`, `id`, `name`, `kind`, `parent` scope
+index, the counts above, `terms: [termIndex, weight, occurrences,
+carriers][]` by weight descending then term) and `diagnostics` (`unplaced`,
+`withoutLexicon`). Every scope id is a kept entity of its level, every index
+is in range, and the counts add up — the closure property, tested on the
+fixtures and on generated corpora, with conservation (every kept entity in one
+module scope or unplaced) and order-independence (the same bytes whatever the
+order entities arrive in). Compact by default; `pretty` writes one term and one
+scope per line, the snapshots' form. Size is measured on BroadleafCommerce
+(3 312 types, 502 modules) before any cap is considered; none is planned.
 
 **The command.** `codegraph vocabulary <models…> [--level corpus|module|type]
 [--scope ID] [--top N] [--class domain|technical|keyword|short|all]
@@ -5283,15 +5325,21 @@ never looks like a fact.
       `weight.ts`; the hand tables per idiom and the properties of §20.1;
       the unicode fixture through the splitter; the shared words out of
       the profiles.
-- [ ] `aggregate.ts` on `containingType`/`containingModule`, `artifact.ts`
-      (`codegraph.vocabulary/1`), `drift.ts`.
-- [ ] `codegraph vocabulary` (§20.1): the report, `--level`, `--scope`,
-      `--class`, `--weights`, `--technical`, `--drift`, `--out`, `--json`,
-      the view flags; usage errors for an unknown scope, role or class.
-- [ ] `fixtures/<lang>/expected/vocabulary.json` for the five fixtures,
-      byte-identical on every run; hand counts in each fixture's README
-      (`order` in the Java fixture: which names, which weights); the closure
-      and determinism properties over every fixture.
+- [x] `qualified` in the lexicon (the kinds named by a qualified path and
+      their separators), its validation code, `profiles --lang` printing it;
+      the splitter's `qualifier` count and the `qualifier` weight.
+- [x] `aggregate.ts` on `containingType`/`containingModule`, `artifact.ts`
+      (`codegraph.vocabulary/1`); the package now depends on the analyzer.
+- [ ] `drift.ts` and `codegraph vocabulary` (§20.1): the report, `--level`,
+      `--scope`, `--class`, `--weights`, `--technical`, `--drift`, `--out`,
+      `--json`, the view flags; usage errors for an unknown scope, role or
+      class.
+- [x] `fixtures/<lang>/expected/vocabulary.json` for the five fixtures and
+      `fixtures/unicode`, byte-identical on every run
+      (`CODEGRAPH_UPDATE_SNAPSHOTS=1` rewrites them); hand counts in each
+      fixture's README (`order` in the Java fixture: which names, which
+      weights), pinned by a test; the closure and determinism properties over
+      every fixture.
 - [ ] The coverage table of §20.1 filled on the fixtures, Broadleaf,
       codegraph itself, Mastodon and Plausible; the Broadleaf top ten
       reviewed; the technical list corrected as data where it leaked.
