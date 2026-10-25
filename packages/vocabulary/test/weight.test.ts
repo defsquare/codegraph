@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { PROFILES, TRAIT_NAMES, readModelFileSync, type Entity, type TraitName } from "@codegraph/core";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_WEIGHTS, ROLES, roleOf, structuralSlots, type Role } from "../src/weight.js";
+import { DEFAULT_WEIGHTS, ROLES, WEIGHT_KEYS, roleOf, structuralSlots, type Role } from "../src/weight.js";
 
 /**
  * The role of the entity carrying a name decides the weight of its words
@@ -30,8 +30,15 @@ describe("the roles and their default weights", () => {
       parameter: 1,
       local: 1,
       other: 1,
+      qualifier: 1,
     });
-    expect(Object.keys(DEFAULT_WEIGHTS).sort()).toEqual([...ROLES].sort());
+  });
+
+  // A qualifier (`AcmeOrder::` of `AcmeOrder::Order`) is not a role: it is the
+  // part of a name that names a container, whatever the name's role.
+  it("weigh every role, and a qualifier's words, once each", () => {
+    expect(WEIGHT_KEYS).toEqual([...ROLES, "qualifier"]);
+    expect(Object.keys(DEFAULT_WEIGHTS).sort()).toEqual([...WEIGHT_KEYS].sort());
   });
 });
 

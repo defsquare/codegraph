@@ -10,7 +10,10 @@ import type { Entity, EntityId } from "@codegraph/core";
 /** From the outermost container in; `other` is a named entity no role trait describes. */
 export const ROLES = ["module", "type", "operation", "attribute", "parameter", "local", "other"] as const;
 export type Role = (typeof ROLES)[number];
-export type Weights = Readonly<Record<Role, number>>;
+/** Every role, then the words of a name's qualifier, whatever its role (`AcmeOrder::` of `AcmeOrder::Order`). */
+export const WEIGHT_KEYS = [...ROLES, "qualifier"] as const;
+export type WeightKey = (typeof WEIGHT_KEYS)[number];
+export type Weights = Readonly<Record<WeightKey, number>>;
 
 export const DEFAULT_WEIGHTS: Weights = Object.freeze({
   module: 8, // a concept the corpus names once and refers to everywhere
@@ -20,6 +23,7 @@ export const DEFAULT_WEIGHTS: Weights = Object.freeze({
   parameter: 1, // incidental names
   local: 1,
   other: 1, // a TS namespace, a PHP code file: no trait says what it is
+  qualifier: 1, // a container's words, spoken again by every name it qualifies
 });
 
 /** The structural entities some entity lists as its parameters or its locals. */
