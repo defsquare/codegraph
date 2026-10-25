@@ -422,6 +422,28 @@ describe("validateProfile — the lexicon", () => {
     expect(codes(issues)).toEqual(["lexicon-unknown-kind"]);
     expect(issues[0]?.path).toBe("lexicon.fileKinds");
   });
+
+  it("accepts a qualified kind whose separator holds no word character", () => {
+    for (const separator of [".", "::", "/", "\\"]) {
+      expect(validateProfile(withLexicon({ ...base, qualified: { class: separator } })), separator).toEqual([]);
+    }
+  });
+
+  it("rejects a qualified kind the profile does not declare", () => {
+    const issues = validateProfile(withLexicon({ ...base, qualified: { module: "." } }));
+    expect(codes(issues)).toEqual(["lexicon-unknown-kind"]);
+    expect(issues[0]?.path).toBe("lexicon.qualified");
+  });
+
+  // A separator is where a qualifier ends: one holding a letter or a digit
+  // would cut a word in two, and an empty one would end the qualifier anywhere.
+  it("rejects a separator that is empty or holds a letter, a mark or a digit", () => {
+    for (const separator of ["", "a", "::x", "1", "\u0301"]) {
+      const issues = validateProfile(withLexicon({ ...base, qualified: { class: separator } }));
+      expect(codes(issues), JSON.stringify(separator)).toEqual(["lexicon-not-a-separator"]);
+      expect(issues[0]?.path).toBe("lexicon.qualified");
+    }
+  });
 });
 
 describe("ProfileSchema mirrors Profile", () => {
@@ -436,6 +458,7 @@ describe("ProfileSchema mirrors Profile", () => {
         technical: ["impl"],
         interfacePrefix: true,
         fileKinds: ["class"],
+        qualified: { class: "::" },
       },
     };
     expect(ProfileSchema.parse(full)).toEqual(full);

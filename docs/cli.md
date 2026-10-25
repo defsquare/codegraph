@@ -316,7 +316,7 @@ facts.
 Prints the language profiles core ships — the per-kind required and optional
 trait sets an extractor must respect, the edge kinds, the lexicon the
 vocabulary reads (reserved words, conventional names, technical words, file
-kinds), and the notes. `--lang L` prints one profile in full; `--json` prints
+kinds, qualified kinds and their separators), and the notes. `--lang L` prints one profile in full; `--json` prints
 the data as `{kind: "codegraph.profiles/1", profiles[]}`.
 
 ## The Java extractor

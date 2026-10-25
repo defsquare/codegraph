@@ -159,5 +159,6 @@ export const elixirProfile: Profile = {
       "phoenix", "pid", "plug", "schema", "server", "socket", "sup", "supervisor", "web",
     ],
     fileKinds: ["file"],
+    qualified: { file: "/", module: ".", protocol: "." },
   },
 };

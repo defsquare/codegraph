@@ -248,6 +248,7 @@ export const csharpProfile: Profile = {
     technical: [
       "attribute", "enumerable", "enumerator", "extension", "extensions", "linq",
     ],
+    qualified: { namespace: "." },
     interfacePrefix: true,
   },
 };

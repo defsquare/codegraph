@@ -199,6 +199,10 @@ function lexiconLines(lexicon: Lexicon | undefined): readonly string[] {
   ];
   if (lexicon.technical !== undefined) lines.push(`  technical         ${list([...lexicon.technical])}`);
   if (lexicon.fileKinds !== undefined) lines.push(`  file kinds        ${list([...lexicon.fileKinds])}`);
+  if (lexicon.qualified !== undefined) {
+    const kinds = Object.entries(lexicon.qualified).map(([kind, separator]) => `${kind} ${separator}`);
+    lines.push(`  qualified         ${list(kinds)}`);
+  }
   if (lexicon.interfacePrefix === true) lines.push("  interface prefix  yes");
   return lines;
 }
@@ -245,6 +249,7 @@ function canonicalLexicon(lexicon: Lexicon): Record<string, unknown> {
   };
   if (lexicon.technical !== undefined) out["technical"] = lexicon.technical;
   if (lexicon.fileKinds !== undefined) out["fileKinds"] = lexicon.fileKinds;
+  if (lexicon.qualified !== undefined) out["qualified"] = lexicon.qualified;
   if (lexicon.interfacePrefix !== undefined) out["interfacePrefix"] = lexicon.interfacePrefix;
   return out;
 }

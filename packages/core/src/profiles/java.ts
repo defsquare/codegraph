@@ -206,5 +206,6 @@ export const javaProfile: Profile = {
     technical: [
       "annotation", "bean", "beans", "ejb", "jaxb", "jdbc", "jndi", "jpa", "pojo", "servlet",
     ],
+    qualified: { package: "." },
   },
 };

@@ -136,5 +136,6 @@ export const rubyProfile: Profile = {
       "proc", "rake", "rakefile",
     ],
     fileKinds: ["file"],
+    qualified: { file: "/", class: "::", module: "::", constant: "::" },
   },
 };

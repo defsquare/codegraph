@@ -59,6 +59,13 @@ export interface Lexicon {
   readonly technical?: readonly string[] | undefined;
   /** Kinds whose name is a file path (`src/order.ts`): the extension is not a word. */
   readonly fileKinds?: readonly string[] | undefined;
+  /**
+   * Kinds the language names by a qualified path, each with the separator that
+   * ends a qualifier: a Ruby class `AcmeOrder::Order::Line`, a file
+   * `lib/order.rb`. What precedes the last separator names a container, so its
+   * words weigh as incidental ones; they are still words.
+   */
+  readonly qualified?: Readonly<Record<string, string>> | undefined;
   /** C#'s convention: `IOrderService` names an interface `OrderService`; the `I` is a marker, not a word. */
   readonly interfacePrefix?: true | undefined;
 }
@@ -69,6 +76,7 @@ export const LexiconSchema = z.object({
   conventional: z.array(z.string()),
   technical: z.array(z.string()).optional(),
   fileKinds: z.array(z.string()).optional(),
+  qualified: z.record(z.string(), z.string()).optional(),
   interfacePrefix: z.literal(true).optional(),
 });
 
@@ -107,6 +115,7 @@ export const VALIDATION_CODES = [
   "lexicon-not-a-word",
   "lexicon-keyword-overlap",
   "lexicon-unknown-kind",
+  "lexicon-not-a-separator",
 ] as const;
 export type ValidationCode = (typeof VALIDATION_CODES)[number];
 
@@ -467,11 +476,13 @@ export function validateProfile(profile: Profile): ValidationIssue[] {
 const SPLITTER_TOKEN = /^[\p{L}\p{M}\p{N}]+$/u;
 const LETTER = /\p{L}/u;
 const WHITESPACE = /\s/u;
+const WORD_CHARACTER = /[\p{L}\p{M}\p{N}]/u;
 
 /**
  * An entry that could never do what its list says: listed twice, a keyword no
  * word can equal, a technical word the splitter cannot yield, a name the
- * keyword class would claim first, a file kind the profile never declares.
+ * keyword class would claim first, a kind the profile never declares, a
+ * separator that would cut a word.
  */
 function lexiconIssues(lexicon: Lexicon, kinds: Profile["kinds"]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -548,6 +559,22 @@ function lexiconIssues(lexicon: Lexicon, kinds: Profile["kinds"]): ValidationIss
         code: "lexicon-unknown-kind",
         path: "lexicon.fileKinds",
         message: `file kind "${kind}" is not a kind the profile defines`,
+      });
+    }
+  }
+  for (const [kind, separator] of Object.entries(lexicon.qualified ?? {})) {
+    if (!Object.hasOwn(kinds, kind)) {
+      issues.push({
+        code: "lexicon-unknown-kind",
+        path: "lexicon.qualified",
+        message: `qualified kind "${kind}" is not a kind the profile defines`,
+      });
+    }
+    if (separator === "" || WORD_CHARACTER.test(separator)) {
+      issues.push({
+        code: "lexicon-not-a-separator",
+        path: "lexicon.qualified",
+        message: `${JSON.stringify(separator)} cannot end a qualifier: a separator is non-empty and holds no letter, mark or digit`,
       });
     }
   }

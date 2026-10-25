@@ -151,5 +151,6 @@ export const phpProfile: Profile = {
       "arr", "closure", "facade", "middleware", "php",
     ],
     fileKinds: ["codeFile"],
+    qualified: { codeFile: "/", namespace: "\\" },
   },
 };

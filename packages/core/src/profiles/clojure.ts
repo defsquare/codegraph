@@ -141,5 +141,6 @@ export const clojureProfile: Profile = {
     technical: [
       "coll", "kw", "ns", "seq", "sym", "xf", "xform",
     ],
+    qualified: { namespace: "." },
   },
 };

@@ -133,5 +133,6 @@ export const pythonProfile: Profile = {
     technical: [
       "dict", "kwargs", "metaclass", "py", "tuple",
     ],
+    qualified: { module: "." },
   },
 };
