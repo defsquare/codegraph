@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
@@ -179,5 +180,24 @@ describe("properties", () => {
       }),
       { numRuns: 60 },
     );
+  });
+});
+
+// The navigator's tab runs this very layout (PLAN.md §20.2). A value import
+// here would follow `@codegraph/vocabulary/cloud` into the browser bundle,
+// and with it the analyzer, core, zod and the SQLite loader.
+describe("the browser entry", () => {
+  it("imports types only", () => {
+    const source = readFileSync(new URL("../src/cloud.ts", import.meta.url), "utf8");
+    const imports = [...source.matchAll(/^import\s+([^;]*?)\s+from\s+"[^"]+"/gmu)].map((match) => match[1] ?? "");
+    expect(imports.length).toBeGreaterThan(0);
+    expect(imports.filter((what) => !what.startsWith("type "))).toEqual([]);
+  });
+
+  it("is published as @codegraph/vocabulary/cloud", () => {
+    const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+      exports: Record<string, { types: string; import: string }>;
+    };
+    expect(manifest.exports["./cloud"]).toEqual({ types: "./dist/cloud.d.ts", import: "./dist/cloud.js" });
   });
 });
