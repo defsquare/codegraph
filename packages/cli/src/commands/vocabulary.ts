@@ -8,6 +8,7 @@ import {
   operationScope,
   parseBusinessTerms,
   parseTechnicalWords,
+  vocabularyCloudSvg,
   vocabularyDrift,
   vocabularyToJsonString,
   type BusinessTerms,
@@ -32,7 +33,8 @@ import { resolveView, viewLabel } from "../view.js";
  * A SHELL over `@codegraph/vocabulary`, like `analyze` over the analyzer:
  * every count printed here is the artifact's, or an operation's counted by
  * the package on demand. This command picks the scope, the class and the
- * report, and writes the artifact on `--out` beside the report.
+ * report, and writes the artifact on `--out` and the cloud on `--svg` beside
+ * the report.
  *
  * The header IS part of the report: a count without its view, its weights and
  * its technical list is not a fact, so all three are stated on stdout.
@@ -82,6 +84,9 @@ export function vocabularyCommand(options: VocabularyOptions, io: IoSink): ExitC
           : [scopeOf(graph, artifact, options.scope, counting)];
       const top = options.top ?? (options.scope === undefined && options.level !== "corpus" ? 10 : 40);
       outLines(io, wordsReport(artifact, scopes, header, options, top));
+      // The parser let --svg through with one scope only: the corpus, or --scope's.
+      const [one] = scopes;
+      if (options.svg !== undefined && one !== undefined) writeCloud(io, options.svg, artifact, one, options.termClass, top);
     }
 
     if (options.out !== undefined) {
@@ -357,6 +362,23 @@ function scopeJson(
   const { terms: _terms, parent, ...counts } = scope;
   const around = parent === undefined ? undefined : (artifact.scopes[parent]?.id ?? null);
   return { ...counts, ...(around === undefined ? {} : { parent: around }), shown: rows.length, total, terms: rows };
+}
+
+function writeCloud(
+  io: IoSink,
+  path: string,
+  artifact: VocabularyArtifact,
+  scope: AnyScope,
+  termClass: VocabularyOptions["termClass"],
+  top: number,
+): void {
+  const svg = vocabularyCloudSvg(artifact, scope, { termClass, top });
+  io.writeFile(path, svg);
+  const { rows, total } = rowsOfClass(artifact, scope, termClass, top);
+  const what = termClass === "all" ? "" : `${termClass} `;
+  const count = rows.length === total ? plural(total, `${what}term`) : `${rows.length} of ${total} ${what}terms`;
+  const label = scope.level === "corpus" ? `corpus ${scope.name}` : `${scope.level} ${scope.name}`;
+  errLine(io, `wrote ${plural(Buffer.byteLength(svg, "utf8"), "byte")} to ${path} (cloud of ${label}: ${count}).`);
 }
 
 /* ------------------------------------------------------------ drift report */

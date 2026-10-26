@@ -264,6 +264,7 @@ describe("vocabulary through the store", () => {
           technical: undefined,
           drift: undefined,
           out: undefined,
+          svg: undefined,
           json: true,
           internalOnly: false,
           declaredOnly: false,

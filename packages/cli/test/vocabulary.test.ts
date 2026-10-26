@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readModelFileSync } from "@codegraph/core";
 import { buildGraph, loadModels } from "@codegraph/analyzer";
-import { buildVocabulary, vocabularyToJsonString } from "@codegraph/vocabulary";
+import { buildVocabulary, operationScope, vocabularyCloudSvg, vocabularyToJsonString } from "@codegraph/vocabulary";
 import { describe, expect, it } from "vitest";
 import type { VocabularyOptions } from "../src/args.js";
 import { vocabularyCommand } from "../src/commands/vocabulary.js";
@@ -32,6 +32,7 @@ function options(overrides: Partial<VocabularyOptions> = {}): VocabularyOptions 
     technical: undefined,
     drift: undefined,
     out: undefined,
+    svg: undefined,
     json: false,
     internalOnly: false,
     declaredOnly: false,
@@ -381,6 +382,37 @@ describe("vocabulary: --out", () => {
     const weights = { module: 8, type: 8, attribute: 4, operation: 3, parameter: 1, local: 1, other: 1, qualifier: 0 };
     expect(io.files().get(path)).toBe(vocabularyToJsonString(buildVocabulary(graph, { weights })));
     expect(io.stderr()).toMatch(/wrote \d+ bytes to .*vocabulary\.json \(vocabulary, view all, 85 terms, 23 scopes\)\./u);
+  });
+});
+
+describe("vocabulary: --svg", () => {
+  const graph = buildGraph(loadModels(readModelFileSync(FIXTURE), { sources: [FIXTURE] }).union);
+  const artifact = buildVocabulary(graph);
+  const svgPath = (): string => join(mkdtempSync(join(tmpdir(), "codegraph-cli-vocabulary-")), "cloud.svg");
+
+  it("draws the corpus cloud beside the report, and confirms on stderr", () => {
+    const path = svgPath();
+    const { io, code } = vocabularyTo({ svg: path });
+    expect(code).toBe(EXIT.OK);
+    expect(rows(io.stdout()).length).toBe(40);
+    expect(io.files().get(path)).toBe(vocabularyCloudSvg(artifact, artifact.scopes[0]!));
+    expect(io.stderr()).toMatch(/wrote \d+ bytes to .*cloud\.svg \(cloud of corpus src: 40 of 73 domain terms\)\./u);
+  });
+
+  it("draws the scope --scope names, with the class and the top it is given", () => {
+    const path = svgPath();
+    const { io } = vocabularyTo({ svg: path, scope: ABSTRACT_ORDER, termClass: "all", top: 3 });
+    const scope = artifact.scopes.find((candidate) => candidate.id === ABSTRACT_ORDER)!;
+    expect(io.files().get(path)).toBe(vocabularyCloudSvg(artifact, scope, { termClass: "all", top: 3 }));
+    expect(io.stderr()).toContain("(cloud of type AbstractOrder: 3 of 5 terms).");
+  });
+
+  it("draws an operation counted on demand", () => {
+    const path = svgPath();
+    const { io } = vocabularyTo({ svg: path, scope: `${ABSTRACT_ORDER}.price()` });
+    const scope = operationScope(graph, artifact, `${ABSTRACT_ORDER}.price()`, {})!;
+    expect(io.files().get(path)).toBe(vocabularyCloudSvg(artifact, scope));
+    expect(io.stderr()).toContain("(cloud of operation price: 1 domain term).");
   });
 });
 

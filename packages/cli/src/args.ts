@@ -440,6 +440,12 @@ export const VOCABULARY_SPEC: CommandSpec = {
       describe: "Also write the vocabulary.json artifact to this file.",
       placeholder: "FILE",
     },
+    {
+      name: "svg",
+      type: "string",
+      describe: "Also draw one scope's cloud to this SVG file: the corpus, or the --scope one; --class and --top pick its words.",
+      placeholder: "FILE",
+    },
     JSON_OPTION,
     ...VIEW_OPTIONS,
     NO_CACHE_OPTION,
@@ -1236,6 +1242,8 @@ export interface VocabularyOptions extends ModelInputOptions, ViewOptions, Cache
   readonly drift: string | undefined;
   /** `--out FILE`: the artifact, beside the report. */
   readonly out: string | undefined;
+  /** `--svg FILE`: the cloud of the one scope reported, beside the report. */
+  readonly svg: string | undefined;
   readonly json: boolean;
 }
 
@@ -2136,6 +2144,12 @@ function vocabularyOf(values: ParsedValues): Omit<VocabularyOptions, "models"> {
         : "--drift compares the business terms with every word, and lists the domain words no term contains.",
     );
   }
+  const svg = stringOf(values, "svg");
+  const level = stringOf(values, "level");
+  const many = drift !== undefined ? "--drift" : level !== undefined && level !== "corpus" ? `--level ${level}` : undefined;
+  if (svg !== undefined && many !== undefined) {
+    throw new UsageError(`--svg does not apply with ${many}`, "--svg draws one scope's cloud: the corpus, or the one --scope names.");
+  }
   return {
     level: (stringOf(values, "level") ?? "corpus") as ScopeLevel,
     scope,
@@ -2145,6 +2159,7 @@ function vocabularyOf(values: ParsedValues): Omit<VocabularyOptions, "models"> {
     technical: stringOf(values, "technical"),
     drift,
     out: stringOf(values, "out"),
+    svg,
     json: flagOf(values, "json"),
     ...viewOf(values),
     noCache: flagOf(values, "no-cache"),

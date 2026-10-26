@@ -312,6 +312,7 @@ describe("vocabulary", () => {
         technical: undefined,
         drift: undefined,
         out: undefined,
+        svg: undefined,
         json: false,
         internalOnly: false,
         declaredOnly: false,
@@ -341,6 +342,9 @@ describe("vocabulary", () => {
     });
     expect(parse(["vocabulary", "a.json", "--scope", "java:com.acme/Order", "--class", "all"])).toMatchObject({
       options: { scope: "java:com.acme/Order", termClass: "all" },
+    });
+    expect(parse(["vocabulary", "a.json", "--svg", "cloud.svg", "--level", "corpus"])).toMatchObject({
+      options: { svg: "cloud.svg", level: "corpus" },
     });
   });
 
@@ -384,6 +388,19 @@ describe("vocabulary", () => {
     ] as const) {
       const error = usageErrorFor(["vocabulary", "a.json", ...argv]);
       expect(error.message, argv.join(" ")).toContain(flag);
+    }
+  });
+
+  // A cloud is one scope's: the corpus, or the one --scope names.
+  it("refuses --svg with a report of many scopes", () => {
+    for (const [argv, message] of [
+      [["--level", "module"], "--svg does not apply with --level module"],
+      [["--level", "type"], "--svg does not apply with --level type"],
+      [["--drift", "g.txt"], "--svg does not apply with --drift"],
+    ] as const) {
+      const error = usageErrorFor(["vocabulary", "a.json", "--svg", "c.svg", ...argv]);
+      expect(error.message).toBe(message);
+      expect(error.hint ?? "").toContain("--scope");
     }
   });
 });
