@@ -161,6 +161,9 @@ importers:
       '@codegraph/viz':
         specifier: workspace:*
         version: link:../viz
+      '@codegraph/vocabulary':
+        specifier: workspace:*
+        version: link:../vocabulary
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

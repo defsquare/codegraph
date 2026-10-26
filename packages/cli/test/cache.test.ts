@@ -8,6 +8,7 @@ import { STORE_OPEN_OPTIONS, cacheStatus, loadSqlite, storePathFor } from "@code
 import type { AnalyzeOptions, ExportOptions } from "../src/args.js";
 import { analyzeCommand } from "../src/commands/analyze.js";
 import { exportCommand } from "../src/commands/export.js";
+import { vocabularyCommand } from "../src/commands/vocabulary.js";
 import { EXIT } from "../src/exit.js";
 import { captureIo, type CapturedIo } from "../src/io.js";
 
@@ -244,5 +245,36 @@ describe("a store that must not be reused", () => {
     const { io } = analyze([model]);
     expect(io.stdout()).not.toBe("");
     expect(cacheStatus(model).state).toBe("fresh");
+  });
+});
+
+describe("vocabulary through the store", () => {
+  it("counts the same words from the hydrated graph as from the file", () => {
+    const path = corpus("vocabulary");
+    const words = (noCache: boolean): CapturedIo => {
+      const io = captureIo();
+      vocabularyCommand(
+        {
+          models: [path],
+          level: "type",
+          scope: undefined,
+          top: undefined,
+          termClass: "all",
+          weights: {},
+          technical: undefined,
+          drift: undefined,
+          out: undefined,
+          json: true,
+          internalOnly: false,
+          declaredOnly: false,
+          noCache,
+        },
+        io,
+      );
+      return io;
+    };
+    const cached = words(false);
+    expect(cached.stderr()).toContain(`cache: ${storePathFor(path)}`);
+    expect(cached.stdout()).toBe(words(true).stdout());
   });
 });

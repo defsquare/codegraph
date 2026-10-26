@@ -3,6 +3,7 @@ import { basename, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { FOLD_LEVELS, FRAMEWORK_PROFILES, type FoldLevel } from "@codegraph/analyzer";
 import { METRIC_PREFIXES, SCALES, metricNames } from "@codegraph/city";
+import { SCOPE_LEVELS, TERM_CLASSES, WEIGHT_KEYS, type ScopeLevel, type TermClass, type WeightKey } from "@codegraph/vocabulary";
 import { defaultDataDir } from "./app/store.js";
 import { UsageError } from "./exit.js";
 
@@ -26,6 +27,7 @@ export const COMMAND_NAMES = [
   "export",
   "city",
   "navigator",
+  "vocabulary",
   "serve",
   "domain-facts",
   "explain",
@@ -369,6 +371,78 @@ export const NAVIGATOR_SPEC: CommandSpec = {
       describe: "Write the artifact to this file instead of stdout.",
       placeholder: "FILE",
     },
+  ],
+};
+
+/** `vocabulary --class`: one of the package's classes, or every one. */
+export const VOCABULARY_CLASSES = [...TERM_CLASSES, "all"] as const;
+export type VocabularyClass = (typeof VOCABULARY_CLASSES)[number];
+
+/**
+ * `codegraph vocabulary`: the words the model's names are made of (PLAN.md
+ * §20.1). The counts are `@codegraph/vocabulary`'s; this command picks the
+ * scope, the class and the report, and writes the artifact on `--out`.
+ */
+export const VOCABULARY_SPEC: CommandSpec = {
+  name: "vocabulary",
+  summary: "Report the words the model's names are made of, per corpus, module or type; or drift against a glossary.",
+  positional: MODELS_POSITIONAL_DEFAULTED,
+  options: [
+    {
+      name: "level",
+      type: "string",
+      describe: "The corpus's words, or one block per module or type, ranked by distinct terms (the cognitive-load report).",
+      choices: SCOPE_LEVELS,
+      defaultValue: "corpus",
+    },
+    {
+      name: "scope",
+      type: "string",
+      describe: "Report one scope: a module or type by its entity id, or an operation, counted on demand.",
+      placeholder: "ID",
+    },
+    {
+      name: "top",
+      type: "string",
+      describe: "Show the N heaviest words: 40 by default, 10 per block under --level module|type.",
+      placeholder: "N",
+      integer: true,
+    },
+    {
+      name: "class",
+      type: "string",
+      describe: "Which words to show.",
+      choices: VOCABULARY_CLASSES,
+      defaultValue: "domain",
+    },
+    {
+      name: "weights",
+      type: "string",
+      describe: `Override weights, e.g. type=6,qualifier=0. Keys: ${WEIGHT_KEYS.join(", ")}.`,
+      placeholder: "KEY=N,…",
+    },
+    {
+      name: "technical",
+      type: "string",
+      describe: "Replace the shared technical words with this file's, one word per line; each language's own still apply.",
+      placeholder: "FILE",
+    },
+    {
+      name: "drift",
+      type: "string",
+      describe:
+        "Compare with a glossary, one business term per line: the terms no scope of --level says (exit 3), and the domain words no term contains.",
+      placeholder: "FILE",
+    },
+    {
+      name: "out",
+      type: "string",
+      describe: "Also write the vocabulary.json artifact to this file.",
+      placeholder: "FILE",
+    },
+    JSON_OPTION,
+    ...VIEW_OPTIONS,
+    NO_CACHE_OPTION,
   ],
 };
 
@@ -1063,6 +1137,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   EXPORT_SPEC,
   CITY_SPEC,
   NAVIGATOR_SPEC,
+  VOCABULARY_SPEC,
   SERVE_SPEC,
   DOMAIN_FACTS_SPEC,
   EXPLAIN_SPEC,
@@ -1144,6 +1219,24 @@ export interface NavigatorOptions extends ModelInputOptions, ViewOptions, CacheO
   readonly name: string | undefined;
   /** `--out FILE`; undefined means stdout. */
   readonly out: string | undefined;
+}
+
+export interface VocabularyOptions extends ModelInputOptions, ViewOptions, CacheOptions {
+  readonly level: ScopeLevel;
+  /** `--scope ID`: one module, type or operation; undefined = every scope of `level`. */
+  readonly scope: string | undefined;
+  /** `--top N`; undefined lets each report pick its own default. */
+  readonly top: number | undefined;
+  readonly termClass: TermClass | "all";
+  /** `--weights`: the keys typed, laid over the defaults by the command. */
+  readonly weights: Readonly<Partial<Record<WeightKey, number>>>;
+  /** `--technical FILE`; undefined = the shared list. */
+  readonly technical: string | undefined;
+  /** `--drift FILE`: the glossary to compare with. */
+  readonly drift: string | undefined;
+  /** `--out FILE`: the artifact, beside the report. */
+  readonly out: string | undefined;
+  readonly json: boolean;
 }
 
 export interface ServeOptions extends ModelInputOptions, CityBuildOptions, CacheOptions {
@@ -1316,6 +1409,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "export"; readonly options: ExportOptions }
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
   | { readonly kind: "run"; readonly command: "navigator"; readonly options: NavigatorOptions }
+  | { readonly kind: "run"; readonly command: "vocabulary"; readonly options: VocabularyOptions }
   | { readonly kind: "run"; readonly command: "serve"; readonly options: ServeOptions }
   | { readonly kind: "run"; readonly command: "insights"; readonly options: InsightsOptions }
   | { readonly kind: "run"; readonly command: "domain-facts"; readonly options: DomainFactsOptions }
@@ -1811,6 +1905,8 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           out: stringOf(values, "out"),
         },
       };
+    case "vocabulary":
+      return { kind: "run", command: "vocabulary", options: { models, ...vocabularyOf(values) } };
     case "serve": {
       const app = appOf(values, spec, models);
       return {
@@ -2020,6 +2116,62 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         options: { lang: stringOf(values, "lang"), json: flagOf(values, "json") },
       };
   }
+}
+
+function vocabularyOf(values: ParsedValues): Omit<VocabularyOptions, "models"> {
+  const scope = stringOf(values, "scope");
+  const drift = stringOf(values, "drift");
+  // A flag the chosen report would not read is refused, never silently dropped.
+  const unread: readonly (readonly [boolean, string, string])[] = [
+    [scope !== undefined && stringOf(values, "level") !== undefined, "--level", "--scope"],
+    [scope !== undefined && drift !== undefined, "--drift", "--scope"],
+    [drift !== undefined && stringOf(values, "class") !== undefined, "--class", "--drift"],
+  ];
+  for (const [conflict, flag, report] of unread) {
+    if (!conflict) continue;
+    throw new UsageError(
+      `${flag} does not apply with ${report}`,
+      report === "--scope"
+        ? "--scope reports one scope; drop --level and --drift, or drop --scope."
+        : "--drift compares the business terms with every word, and lists the domain words no term contains.",
+    );
+  }
+  return {
+    level: (stringOf(values, "level") ?? "corpus") as ScopeLevel,
+    scope,
+    top: integerOf(values, "top"),
+    termClass: (stringOf(values, "class") ?? "domain") as TermClass | "all",
+    weights: weightsOf(stringOf(values, "weights")),
+    technical: stringOf(values, "technical"),
+    drift,
+    out: stringOf(values, "out"),
+    json: flagOf(values, "json"),
+    ...viewOf(values),
+    noCache: flagOf(values, "no-cache"),
+  };
+}
+
+/** `--weights type=6,qualifier=0`: a known key, once, weighing a number >= 0. */
+function weightsOf(raw: string | undefined): Partial<Record<WeightKey, number>> {
+  if (raw === undefined) return {};
+  const weights: Partial<Record<WeightKey, number>> = {};
+  for (const entry of raw.split(",")) {
+    const [key = "", value, ...rest] = entry.split("=").map((part) => part.trim());
+    const weight = Number(value);
+    if (value === undefined || value === "" || rest.length > 0 || key === "" || !Number.isFinite(weight) || weight < 0) {
+      throw new UsageError(
+        `invalid entry '${entry.trim()}' in --weights`,
+        "Each entry is KEY=N, N a number >= 0: --weights type=6,qualifier=0",
+      );
+    }
+    if (!(WEIGHT_KEYS as readonly string[]).includes(key)) {
+      throw new UsageError(`unknown role '${key}' in --weights`, `Valid keys: ${WEIGHT_KEYS.join(", ")}.`);
+    }
+    const role = key as WeightKey;
+    if (weights[role] !== undefined) throw new UsageError(`--weights weighs ${role} twice`, "Name each key once.");
+    weights[role] = weight;
+  }
+  return weights;
 }
 
 /** `--time`: unix seconds, or anything `Date.parse` reads (ISO dates). */
