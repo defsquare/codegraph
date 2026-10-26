@@ -67,6 +67,18 @@ export interface VocabularyScope {
   readonly terms: readonly TermRow[];
 }
 
+/**
+ * An operation's scope, computed on demand and never stored (PLAN.md §20.5):
+ * its rows index the artifact's `terms`, its parent the artifact's `scopes`.
+ */
+export interface OperationScope extends Omit<VocabularyScope, "level" | "parent"> {
+  readonly level: "operation";
+  readonly id: string;
+  readonly kind: string;
+  /** The nearest stored scope around it; the corpus when there is none. */
+  readonly parent: number;
+}
+
 export interface VocabularyDiagnostics {
   /** Kept entities no module contains, sorted: counted at the corpus alone. */
   readonly unplaced: readonly string[];

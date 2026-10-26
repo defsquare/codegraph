@@ -12,6 +12,7 @@ import {
 import {
   VOCABULARY_ARTEFACT_KIND,
   VOCABULARY_GENERATOR,
+  type OperationScope,
   type ScopeLevel,
   type TermRow,
   type VocabularyArtifact,
@@ -55,8 +56,6 @@ export function buildVocabulary(graph: CodeGraph, options: VocabularyOptions = {
   const weights = options.weights ?? DEFAULT_WEIGHTS;
   const technical = options.technical ?? DEFAULT_TECHNICAL;
   const folder = folderFor(graph);
-  const slots = structuralSlots(graph.entities.values());
-  const langOf = languagesOf(graph);
   const corpus = corpusOf(graph, options.name);
 
   const kept: Entity[] = [];
@@ -76,57 +75,13 @@ export function buildVocabulary(graph: CodeGraph, options: VocabularyOptions = {
 
   // --- the words: one entity at a time, into every scope it folds into ---
   const terms = new Interner();
-  const classifiers = new Map<string, Classify>();
-  const classifierOf = (lang: string): Classify => {
-    let classify = classifiers.get(lang);
-    if (classify === undefined) {
-      classify = createClassifier(getProfile(lang)?.lexicon, technical);
-      classifiers.set(lang, classify);
-    }
-    return classify;
-  };
+  const speak = speakerFor(graph, terms, weights, technical);
   const unplaced: EntityId[] = [];
   for (const entity of kept) {
     const module = modules.get(folder.containingModule(entity.id) ?? "");
     const type = types.get(folder.containingType(entity.id) ?? "");
     if (module === undefined) unplaced.push(entity.id);
-    const into = [root, ...(module === undefined ? [] : [module]), ...(type === undefined ? [] : [type])];
-    for (const scope of into) scope.entities += 1;
-
-    const name = entityName(entity);
-    if (name === undefined) {
-      for (const scope of into) scope.skipped.unnamed += 1;
-      continue;
-    }
-    const lang = langOf.get(entity.id) ?? "";
-    const split = splitIdentifier(name, entity.kind, getProfile(lang)?.lexicon);
-    if (split.conventional) {
-      for (const scope of into) scope.skipped.conventional += 1;
-      continue;
-    }
-    const role = roleOf(entity, slots);
-    const classify = classifierOf(lang);
-
-    // This entity's own table first: a word it says twice has one carrier.
-    const own = new Map<number, [number, number]>();
-    split.tokens.forEach((token, i) => {
-      const term = terms.intern(token, classify(token));
-      const row = own.get(term) ?? [0, 0];
-      row[0] += i < split.qualifier ? weights.qualifier : weights[role];
-      row[1] += 1;
-      own.set(term, row);
-    });
-    for (const scope of into) {
-      scope.skipped.numeric += split.numeric;
-      scope.roles[role] += 1;
-      for (const [term, [weight, occurrences]] of own) {
-        const row = scope.table.get(term) ?? [0, 0, 0];
-        row[0] += weight;
-        row[1] += occurrences;
-        row[2] += 1;
-        scope.table.set(term, row);
-      }
-    }
+    speak(entity, [root, ...(module === undefined ? [] : [module]), ...(type === undefined ? [] : [type])]);
   }
 
   // --- the artifact: terms sorted, scopes indexed, rows remapped --------
@@ -140,9 +95,7 @@ export function buildVocabulary(graph: CodeGraph, options: VocabularyOptions = {
 
   const spread = order.map(() => ({ modules: 0, types: 0, exclusive: -1 }));
   const scopes: VocabularyScope[] = tallies.map((scope, i) => {
-    const rows: TermRow[] = [...scope.table]
-      .map(([term, [weight, occurrences, carriers]]): TermRow => [index.get(term) ?? -1, weight, occurrences, carriers])
-      .sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+    const rows = rowsOf(scope, (term) => index.get(term) ?? -1);
     for (const [term] of rows) {
       const counts = spread[term];
       if (counts === undefined || scope.level === "corpus") continue;
@@ -175,6 +128,139 @@ export function buildVocabulary(graph: CodeGraph, options: VocabularyOptions = {
       withoutLexicon: graph.union.langs.filter((lang) => getProfile(lang)?.lexicon === undefined),
     },
   };
+}
+
+/**
+ * AN OPERATION'S WORDS, computed on demand (PLAN.md §20.1; §20.5 keeps them
+ * out of the artifact): the operation and every kept entity written inside it,
+ * lambdas and their parameters included, short of a type or module, which are
+ * scopes of their own. Counted as `buildVocabulary` counts a scope, under the
+ * same options, and indexed by the artifact's terms; `undefined` when `id` is
+ * no kept operation. An artifact built under other options is refused: its
+ * terms would not be this count's.
+ */
+export function operationScope(
+  graph: CodeGraph,
+  artifact: VocabularyArtifact,
+  id: EntityId,
+  options: VocabularyOptions = {},
+): OperationScope | undefined {
+  const view = options.view ?? identityView;
+  const operation = graph.entity(id);
+  if (operation === undefined || !isOperation(operation) || graph.isStub(id) || !view.entity(operation, graph)) {
+    return undefined;
+  }
+
+  const terms = new Interner(artifact.terms);
+  const speak = speakerFor(graph, terms, options.weights ?? DEFAULT_WEIGHTS, options.technical ?? DEFAULT_TECHNICAL);
+  const scope = tally("corpus", operation);
+  const pending: EntityId[] = [id];
+  for (let cursor = pending.pop(); cursor !== undefined; cursor = pending.pop()) {
+    const entity = graph.entity(cursor);
+    if (entity === undefined) continue;
+    if (!graph.isStub(cursor) && view.entity(entity, graph)) speak(entity, [scope]);
+    for (const child of graph.childrenOf(cursor)) {
+      const inner = graph.entity(child);
+      if (inner !== undefined && !hasTrait(inner, "TModule") && !hasTrait(inner, "TType")) pending.push(child);
+    }
+  }
+  if (terms.size() !== artifact.terms.length) {
+    throw new Error(`operationScope: ${id} speaks words the artifact does not hold — it was built under other options`);
+  }
+
+  const scopeIndex = new Map<EntityId, number>();
+  artifact.scopes.forEach((stored, i) => {
+    if (stored.id !== undefined) scopeIndex.set(stored.id, i);
+  });
+  const { level: _level, parent: _parent, ...counts } = scopeOf(
+    scope,
+    rowsOf(scope, (term) => term),
+    artifact.terms,
+    undefined,
+    artifact.corpus.name,
+  );
+  return {
+    ...counts,
+    level: "operation",
+    id,
+    kind: operation.kind,
+    parent: parentScope(graph, operation, scopeIndex) ?? 0,
+  };
+}
+
+/** An invocable that is no scope of its own: a C# delegate, TType + TInvocable, is a type. */
+function isOperation(entity: Entity): boolean {
+  return hasTrait(entity, "TInvocable") && !hasTrait(entity, "TModule") && !hasTrait(entity, "TType");
+}
+
+/**
+ * Counts one entity's words into every scope given: its role's weight per
+ * word, `qualifier` before the last separator, one carrier per word however
+ * often the name says it. The one counting rule of the artifact and of an
+ * operation's scope.
+ */
+function speakerFor(
+  graph: CodeGraph,
+  terms: Interner,
+  weights: Weights,
+  technical: readonly string[],
+): (entity: Entity, into: readonly Tally[]) => void {
+  const slots = structuralSlots(graph.entities.values());
+  const langOf = languagesOf(graph);
+  const classifiers = new Map<string, Classify>();
+  const classifierOf = (lang: string): Classify => {
+    let classify = classifiers.get(lang);
+    if (classify === undefined) {
+      classify = createClassifier(getProfile(lang)?.lexicon, technical);
+      classifiers.set(lang, classify);
+    }
+    return classify;
+  };
+
+  return (entity, into) => {
+    for (const scope of into) scope.entities += 1;
+    const name = entityName(entity);
+    if (name === undefined) {
+      for (const scope of into) scope.skipped.unnamed += 1;
+      return;
+    }
+    const lang = langOf.get(entity.id) ?? "";
+    const split = splitIdentifier(name, entity.kind, getProfile(lang)?.lexicon);
+    if (split.conventional) {
+      for (const scope of into) scope.skipped.conventional += 1;
+      return;
+    }
+    const role = roleOf(entity, slots);
+    const classify = classifierOf(lang);
+
+    // This entity's own table first: a word it says twice has one carrier.
+    const own = new Map<number, [number, number]>();
+    split.tokens.forEach((token, i) => {
+      const term = terms.intern(token, classify(token));
+      const row = own.get(term) ?? [0, 0];
+      row[0] += i < split.qualifier ? weights.qualifier : weights[role];
+      row[1] += 1;
+      own.set(term, row);
+    });
+    for (const scope of into) {
+      scope.skipped.numeric += split.numeric;
+      scope.roles[role] += 1;
+      for (const [term, [weight, occurrences]] of own) {
+        const row = scope.table.get(term) ?? [0, 0, 0];
+        row[0] += weight;
+        row[1] += occurrences;
+        row[2] += 1;
+        scope.table.set(term, row);
+      }
+    }
+  };
+}
+
+/** A scope's table as rows, by weight descending, then term. */
+function rowsOf(scope: Tally, termOf: (interned: number) => number): TermRow[] {
+  return [...scope.table]
+    .map(([term, [weight, occurrences, carriers]]): TermRow => [termOf(term), weight, occurrences, carriers])
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0]);
 }
 
 function tally(level: ScopeLevel, entity?: Entity): Tally {
@@ -246,6 +332,15 @@ function languagesOf(graph: CodeGraph): Map<EntityId, string> {
 class Interner {
   private readonly ids = new Map<string, Map<TermClass, number>>();
   private readonly entries: { readonly id: number; readonly text: string; readonly class: TermClass }[] = [];
+
+  /** Seeded with an artifact's terms, an interned word IS its index there. */
+  constructor(seed: readonly { readonly text: string; readonly class: TermClass }[] = []) {
+    for (const { text, class: termClass } of seed) this.intern(text, termClass);
+  }
+
+  size(): number {
+    return this.entries.length;
+  }
 
   intern(text: string, termClass: TermClass): number {
     let byClass = this.ids.get(text);
