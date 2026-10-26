@@ -5011,7 +5011,7 @@ yields whole (`defined?`, `__FILE__`, `set!`) classifies nothing, since the
 `file` of `upload_file` is not `__FILE__`; `short` when it is one code point
 that is not a mark (`i`, `e`, `x`, `𠀀` — length 2 stays: `id`, `db`, `io`
 are words); `technical` when it is in the shared list ∪ the profile's
-(`DEFAULT_TECHNICAL`, 125 words in the package: `get set is has to from of
+(`DEFAULT_TECHNICAL`, 138 words in the package: `get set is has to from of
 with by and or not new create build make init impl abstract base default
 util utils helper manager service repository controller handler factory
 provider dto dao entity model data info config exception error test mock
@@ -5087,8 +5087,8 @@ is in range, and the counts add up — the closure property, tested on the
 fixtures and on generated corpora, with conservation (every kept entity in one
 module scope or unplaced) and order-independence (the same bytes whatever the
 order entities arrive in). Compact by default; `pretty` writes one term and one
-scope per line, the snapshots' form. Size is measured on BroadleafCommerce
-(3 312 types, 502 modules) before any cap is considered; none is planned.
+scope per line, the snapshots' form. Size, measured on BroadleafCommerce
+(3 305 types, 502 modules): 2.9 MB compact, built in 0.29 s — no cap.
 
 **The command.** `codegraph vocabulary <models…> [--level corpus|module|type]
 [--scope ID] [--top N] [--class domain|technical|keyword|short|all]
@@ -5128,22 +5128,66 @@ object, `codegraph.vocabularyReport/1`, `report: "words" | "drift"`. The
 Specy `.domain` file as input is deferred (§20.5): the plain list first,
 because it exists in every company.
 
-**Measured** (the table this milestone fills — the numbers below are what to
-collect, not results):
+**Measured** (2026-10-26, Apple M1 Max, Node 26; `build` is
+`buildVocabulary` alone over a built graph, the median of five; `artifact`
+the compact `vocabulary.json`). Whole repositories as cloned, tests included:
+BroadleafCommerce at `26208e01de` (the Java jar), codegraph at `294e5cc`
+(`--src packages --src extractors/typescript`), Mastodon at `2bc820fb84` and
+Plausible at `9bc90b0063`:
 
 | corpus | kept entities | named | by role (module · type · operation · attribute · parameter · local) | skipped (unnamed · conventional · numeric) | distinct terms (domain) | artifact | build |
-|---|---|---|---|---|---|---|---|
-| `fixtures/java`, `csharp`, `typescript`, `elixir`, `ruby` | | | | | | | |
-| BroadleafCommerce (Java) | | | | | | | |
-| codegraph, self-hosted (TypeScript) | | | | | | | |
-| Mastodon (Ruby) — no locals by construction | | | | | | | |
-| Plausible (Elixir) — no locals by construction | | | | | | | |
+|---|---:|---:|---|---|---|---:|---:|
+| `fixtures/java` | 152 | 127 | 3 · 19 · 43 · 21 · 35 · 6 | 25 · 0 · 0 | 85 (73) | 17 KB | 1.2 ms |
+| `fixtures/csharp` | 210 | 178 | 4 · 26 · 45 · 38 · 54 · 9 | 32 · 2 · 0 | 113 (93) | 23 KB | 1.0 ms |
+| `fixtures/typescript` | 179 | 161 | 24 · 22 · 37 · 28 · 39 · 6 (+ 4 other) | 18 · 1 · 1 | 108 (87) | 29 KB | 0.8 ms |
+| `fixtures/elixir` | 181 | 167 | 23 · 28 · 50 · 11 · 49 · 0 | 14 · 6 · 1 | 97 (73) | 31 KB | 0.8 ms |
+| `fixtures/ruby` | 157 | 156 | 31 · 32 · 35 · 16 · 31 · 0 | 1 · 11 · 1 | 107 (87) | 36 KB | 0.9 ms |
+| BroadleafCommerce (Java) | 76 310 | 72 843 | 502 · 3 305 · 21 201 · 8 521 · 22 528 · 15 742 | 3 467 · 1 044 · 6 | 3 381 (3 191) | 2.9 MB | 290 ms |
+| codegraph, self-hosted (TypeScript) | 30 873 | 24 696 | 428 · 587 · 1 751 · 5 517 · 6 491 · 9 914 | 6 177 · 8 · 0 | 2 143 (1 994) | 0.8 MB | 71 ms |
+| Mastodon (Ruby) — no locals by construction | 20 358 | 20 276 | 3 379 · 2 360 · 8 906 · 2 373 · 3 058 · 0 | 82 · 200 · 652 | 2 447 (2 294) | 3.2 MB | 100 ms |
+| Plausible (Elixir) — no locals by construction | 16 435 | 15 520 | 1 300 · 1 355 · 5 052 · 1 273 · 6 416 · 0 | 915 · 124 · 306 | 1 999 (1 845) | 1.8 MB | 68 ms |
+
+What the unnamed are: Broadleaf's 3 140 constructors and 327 lambdas;
+codegraph's 6 154 arrow functions — a fifth of its entities, the price of a
+codebase written in `const f = () => …` callbacks, whose names are the
+attributes that hold them; Mastodon's 82 and Plausible's 915 anonymous
+parameters (splats, patterns). Mastodon's 652 numeric tokens are the
+timestamps of `db/migrate/` file names. The artifact grows with SCOPES, not
+entities: Mastodon's 5 739 (a file is a module) outweigh Broadleaf's 3 807 on
+a quarter of the entities. End to end, `codegraph vocabulary` on Broadleaf
+takes 2.2 s with `--no-cache` (the load dominates), Mastodon 0.8 s; no cap is
+needed.
 
 The Broadleaf top ten by weight under `domain` is the issue's sanity check
 — it must read as a commerce vocabulary (`order`, `product`, `customer`,
 `offer`, `sku`, `fulfillment`, `payment`, `catalog`…), and whatever
 technical word leaks into it names a missing entry of the shared list, fixed
-as data.
+as data. **Reviewed.** Under the 125-word list it read `order name type
+field item customer offer extension value product`; after the correction
+below, `order 8 588 · item 4 883 · customer 4 020 · offer 3 514 · product
+2 917 · admin 2 890 · group 2 666 · fulfillment 2 368 · category 2 319 ·
+payment 2 281` — `admin` is the back office, `group` the fulfillment group
+and the admin's field group, both Broadleaf's own words. **The correction**,
+13 words added to the shared list (125 → 138), each read off its carriers,
+never off its spelling: `name type value key map property field` (the data
+vocabulary of every language: `getName`, `propertyName`, `cacheKey`,
+`parsedValue`, `itemMap`, `FieldMetadata`), `extension extensions` (the
+`…ExtensionManager`/`…ExtensionHandler` pattern; moved from the C# profile,
+since a word two lists hold is the shared list's), `read` (the R of CRUD,
+missing from a list that claimed the CRUD verbs: `readStaticAssetById`), and,
+from Mastodon's top ten, `serializer`, `worker` (`app/serializers/`,
+`app/workers/`) and `index` (search indexes, database indexes, array
+positions, `index.ts`, the controller action — machinery in all four
+corpora). Kept as domain because their carriers are mixed: `policy`
+(Mastodon's Pundit policies, but also its privacy and quote-approval
+policies), `change`, `query`, `collection`. The others' top ten, after:
+codegraph `edge kind required optional graph file path module edges city` —
+its domain IS code, so the list costs it `type`, `name` and `index`, which a
+`--technical` file gives back; Mastodon `account status accounts statuses
+domain policy change collection user block` (`domain` is the federation's:
+domain blocks); Plausible `plausible site query team user change stats email
+event plan` (`plausible` is every module's namespace, as `acme` is the
+fixtures').
 
 ### 20.2 The cloud, the tab, the city channel (M19b)
 
@@ -5365,9 +5409,10 @@ never looks like a fact.
       fixture's README (`order` in the Java fixture: which names, which
       weights), pinned by a test; the closure and determinism properties over
       every fixture.
-- [ ] The coverage table of §20.1 filled on the fixtures, Broadleaf,
+- [x] The coverage table of §20.1 filled on the fixtures, Broadleaf,
       codegraph itself, Mastodon and Plausible; the Broadleaf top ten
-      reviewed; the technical list corrected as data where it leaked.
+      reviewed; the technical list corrected as data where it leaked
+      (13 words, 125 → 138).
 
 **M19b — the cloud, the tab, the city channel**
 
@@ -5504,7 +5549,7 @@ green; the coverage table and the cost filled in this section.
 | M18a | Ruby extractor — profile + skeleton | ✅ (2026-10-13, worktree `ruby-extractor`) `rb` profile in core (the eleventh: the module is the file, `class` and `module` are types below it, mixins are `traitUsage`, no interface — §19.2); `extractors/ruby/` in Rust on Prism 1.9.0 (`ruby-prism`, pinned), no Ruby to build or run; the core table distilled from RBS 4.2.0 `core/` with RBS's own parser (915 constants: 304 classes, 26 modules, 585 values); walking skeleton — files, classes and modules (the wrapper rule, one entity per declaring file, reopenings `attachedTo` their primary, a `String` patch attached to `<ruby>/String`), methods and parameters, `require`/`require_relative` by path and by load root, superclasses and mixins resolved lexically, the `derived` import, stubs — → `fixtures/ruby/expected/model.jsonl` (24 files, 102 entities / 38 edges) byte-identical to core's encoder and profile-valid with zero issues; 60 cargo tests (50 unit, 10 contract: snapshot, CRLF + reversed creation order, the CLI contract) + 16 core gate tests; `codegraph validate` OK; `bin/codegraph-ruby`; `build.sh --ruby` (a 1.2 MB binary) / `test.sh --ruby` with the release-binary `cmp`; `ruby-test` written in CI, not yet run there |
 | M18b | Ruby extractor — model | ✅ (2026-10-13, worktree `ruby-extractor`) `field` (an instance variable, its `attr_*`, a Struct member: one entity `@x`) and `constant` (keyed by full path, with its literal `value`); `Struct.new` / `Data.define` / `Class.new` / `Module.new` assigned to a constant as types, a `Struct.new` superclass as a `generated` inheritance; constant references resolved lexically then through the ancestors; the core table extended with superclasses, mixins and methods (RBS 4.2.0: 915 constants, 23 mixins, 2428 methods) so lookup crosses from the corpus into the VM's classes; the invocation tiers of §19.4 — `declared` where the receiver's class is written, `derived` for typed locals, typed instance variables and the sole-library-ancestor attribution, the language resolved with no edge, untyped receivers dropped and counted; `access` with read/write, `throws`, comments, `sloc` + `cyclomatic`, literals; the Ruby 1.8 require idioms, `load`, `autoload`, shebang scripts; `--explain-dropped`, every drop with its line → `fixtures/ruby/expected/model.jsonl` (27 files, 154 entities / 136 edges; 152 sites, 77.0 % resolved) byte-identical to core's encoder and profile-valid with zero issues; `ruby` in the metrics pass and the fifth `model.metrics.jsonl` (86 of 88 joined, `sloc = ploc` on all 86); 101 cargo tests (90 unit, 11 contract) + 24 core gate tests; the fixture in the analyzer, city, navigator, CLI `validate` and metrics suites; `validate`, `analyze`, `navigator`, `city --layout` and `serve` run on it, City and Navigate screenshots reviewed |
 | M18c | Ruby extractor — audit + oracles + distribution | ✅ (2026-10-13, worktree `ruby-extractor`; CI not yet run) rake 13.2.1, rubygems 3.6.2, Mastodon 4.3.0 and rails 8.0.2 audited `validate`-clean (100 / 794 / 2 541 / 3 334 files; 77.8 / 54.4 / 31.2 / 57.0 % of sites resolved, Mastodon's `app/`+`lib/` 62.1 %; rails in 4.7 s). Seven defects found and fixed test-first: a library namespace the corpus reopens below dropped as `namespace-only` (592 `Rails.*` in Mastodon); class methods given by an `included` hook unseen (now read where literal — plain Ruby and ActiveSupport::Concern — and `derived`); a library mixin ignored as a class-side candidate (`validates` charged to ActiveRecord::Base); a per-type `dynamic` flag clouding both sides; a compact declaration's qualifier not read; a constant qualified by a subclass stubbed below `<gems>`; `--explain-dropped` not saying what decided a drop. Oracles: Packwerk 3.3.1 over Mastodon — 4 289 of its 4 335 cross-file references in the model (98.9 %), the rest the wrapper rule; rake booted under its own tests — 1 006 of 1 012 declared methods held by the VM on the same line, 1 533 of 2 829 observed calls already edges. The trace tool (`trace/codegraph_trace.rb`, one file) and `--trace`: `generated` `traitUsage`, `dynamic-candidate` invocations with `candidates`, no entity added — exercised end to end in a container and `validate`-clean. `fixtures/ruby` → 31 files, 181 entities / 153 edges, 177 sites, 76.3 %; metrics 106 of 109 joined. 119 cargo tests (107 unit, 12 contract) + 27 core gate tests. Distribution wired: `ruby-native` on four Unix runners, the release loop, `Formula/codegraph-ruby.rb`, the catalogue row; `docs/ruby-extractor.md` |
-| M19a | Vocabulary — lexicon, split, artifact | `Profile.lexicon` on the eleven profiles (keywords, conventional names, affixes, separators — the profile half of #19), METAMODEL §5 row, printed by `profiles --lang`; `@codegraph/vocabulary`: one idiom-parametrized splitter with the acronym rule on Unicode categories, four term classes as tags (never filters), role weights recorded in the artifact, scopes = the fold's containers; `codegraph vocabulary` report, `--level`/`--scope`/`--class`/`--drift FILE`; five `vocabulary.json` snapshots byte-identical, closure and determinism properties; the coverage table of §20.1 filled on fixtures, Broadleaf, codegraph, Mastodon, Plausible |
+| M19a | Vocabulary — lexicon, split, artifact | ✅ (2026-10-26, five stacked PRs from #26, not yet merged; Broadleaf 76 310 entities → 3 381 terms in 0.29 s, 2.9 MB, its top ten a commerce vocabulary after 13 words joined the shared list) `Profile.lexicon` on the eleven profiles (keywords, conventional names, affixes, separators — the profile half of #19), METAMODEL §5 row, printed by `profiles --lang`; `@codegraph/vocabulary`: one idiom-parametrized splitter with the acronym rule on Unicode categories, four term classes as tags (never filters), role weights recorded in the artifact, scopes = the fold's containers; `codegraph vocabulary` report, `--level`/`--scope`/`--class`/`--drift FILE`; five `vocabulary.json` snapshots byte-identical, closure and determinism properties; the coverage table of §20.1 filled on fixtures, Broadleaf, codegraph, Mastodon, Plausible |
 | M19b | Vocabulary — cloud, tab, city channel | deterministic spiral layout with an injected measurer and the no-overlap property; `--svg` with the fixture snapshot; `serve` builds `/vocabulary.json` and answers `/carriers.json?scope=&term=`; the sixth navigator tab (scope follows the selection, chips, table, carriers → reveal), literals pinned, types-only import; `vocabulary:<term>` metric source through the CLI hook, city unchanged; the two demo images under `docs/` and the README section — the issue's fourth criterion |
 | M19c | Vocabulary — glossary in the explanation | `words` on every insight block — the words of the unit's name, its parameters' and (for a type) its fields', each with `in`, `concern` (domain / technical / ambiguous), `sense`, `meaning`, in that entity's context, asked in the SAME call that explains it; `glossary` on the module block reconciling its types' entries with `polysemous`; `PROMPT_VERSION` 2, the words `.optional()` in the record schema so every existing side-car round-trips byte-identical — no new record type, no format change; the store at version 2 with the `insight_word` projection (rebuilt on `--import`); readers `insights --word/--glossary/--polysemy/--concerns`, `vocabulary --drift-insights`, `/glossary.json`, the entries shown as inferences in both panels; the Broadleaf re-explanation priced by `--estimate` and measured; `docs/vocabulary.md` |
 
