@@ -25,8 +25,9 @@ share. Task-oriented walkthroughs live in the [README](../README.md).
   worked; the input did not). A CI job gating on model quality checks for `3`.
 - **`--json`** prints the same information as a machine-readable object.
 - **A sibling `model.db`** (the SQLite analysis store) is built on first use and
-  reused afterwards by `analyze`, `export`, `navigator`, `domain-facts` and
-  `explain`; on those, `--no-cache` reads the JSONL directly.
+  reused afterwards by `analyze`, `export`, `navigator`, `vocabulary`,
+  `domain-facts` and `explain`; on those, `--no-cache` reads the JSONL
+  directly.
 
 ## Synopsis
 
@@ -64,6 +65,11 @@ codegraph city     [model.jsonl] [--layout] [--out FILE]
 
 codegraph navigator [model.jsonl] [--out FILE]
                    [--name STR] [--internal-only] [--declared-only]
+
+codegraph vocabulary [model.jsonl] [--level corpus|module|type] [--scope ID]
+                   [--top N] [--class domain|technical|keyword|short|all]
+                   [--weights KEY=N,…] [--technical FILE] [--drift FILE]
+                   [--out FILE] [--json] [--internal-only] [--declared-only]
 
 codegraph domain-facts [model.jsonl] [--framework spring] [--out FILE]
                    [--internal-only] [--declared-only]
@@ -212,6 +218,21 @@ Unmeasured metrics are drawn at the channel minimum and labelled unmeasured.
 Writes the navigator artifact (`navigator.json`): the tree, one classified
 dependency row per base edge, and the cycle/coupling reports. Type and module
 nodes carry their entity id, which is how the city's buildings address them.
+
+### `vocabulary`
+The words the model's names are made of (never source): each `TNamed`
+entity's name split into words, classed `domain`, `technical`, `keyword` or
+`short`, and weighted by the role of what carries it. A type's or module's
+name weighs 8, an attribute's 4, an operation's 3, a parameter's or local's
+1, and the qualifier of a qualified name (`com.acme` of `com.acme.order`) 1.
+No flag prints the corpus's 40 heaviest domain words; `--level module|type`
+one block per scope, ranked by distinct terms (the cognitive-load report);
+`--scope ID` one module or type, or an operation counted on demand.
+`--weights` and `--technical FILE` change the scheme, and the header says
+which one counted. `--drift FILE` compares with a glossary, one business term
+per line: the terms no scope of `--level` says (exit `3`), the ones it says
+and where, and the domain words no term contains. `--out FILE` writes the
+`vocabulary.json` artifact (`codegraph.vocabulary/1`) beside the report.
 
 ### `domain-facts`
 One JSON artifact (`codegraph.domainFacts/1`) with one dossier per corpus
