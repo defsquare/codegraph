@@ -6,7 +6,7 @@
   "langs": ["java"],
   "weights": {"module":8,"type":8,"operation":3,"attribute":4,"parameter":1,"local":1,"other":1,"qualifier":1},
   "classes": ["domain","technical","keyword","short"],
-  "technical": {"words":125,"sha256":"c16bd05be59a0c3281696359e4b4f7b3efe7860512b4ab37519f8c3a063c95f7"},
+  "technical": {"words":138,"sha256":"4f34e69f52f50e3e1c1686953dc95d1b74d86b228323e94b9fd7eb8c28f30567"},
   "terms": [
     {"text":"ascii","class":"domain","modules":1,"types":1,"exclusive":1},
     {"text":"fullwidth","class":"domain","modules":1,"types":1,"exclusive":1},

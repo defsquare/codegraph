@@ -29,8 +29,9 @@ describe("one word, per language", () => {
     ["java", "order", "domain"],
     ["java", "new", "keyword"],
     ["java", "default", "keyword"],
-    // A contextual keyword is an identifier: Java's `record`, TypeScript's `type`.
-    ["java", "type", "domain"],
+    // A contextual keyword is an identifier, never a keyword: Java's `record`,
+    // TypeScript's `type` (technical by the shared list, not by the lexicon).
+    ["java", "type", "technical"],
     ["java", "record", "domain"],
     ["java", "get", "technical"],
     ["java", "bean", "technical"],
@@ -58,7 +59,7 @@ describe("one word, per language", () => {
     ["php", "once", "domain"],
     ["clj", "monitor", "domain"],
     ["clj", "recur", "keyword"],
-    ["ts", "type", "domain"],
+    ["ts", "type", "technical"],
     ["ts", "default", "keyword"],
     ["ts", "promise", "technical"],
     ["ts", "json", "technical"],
@@ -119,6 +120,15 @@ describe("DEFAULT_TECHNICAL", () => {
       factory provider dto dao entity model data info config exception error test mock spec
       com org net io src lib main app`.split(/\s+/);
     expect(DEFAULT_TECHNICAL).toEqual(expect.arrayContaining(seed));
+  });
+
+  // PLAN.md §20.1, measured: each named the machinery, not the business, in a
+  // real corpus's top ten — Broadleaf's `getName`, `propertyName`, `cacheKey`,
+  // `parsedValue`, `itemMap`, `…ExtensionManager`, `readStaticAssetById`;
+  // Mastodon's `app/serializers/`, `app/workers/` and `StatusesIndex`.
+  it("holds the words the coverage measurement found leaking", () => {
+    const leaked = `extension extensions field index key map name property read serializer type value worker`.split(" ");
+    expect(DEFAULT_TECHNICAL).toEqual(expect.arrayContaining(leaked));
   });
 
   // A profile's `technical` is the plumbing of THAT language, beyond the shared

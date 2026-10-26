@@ -64,12 +64,12 @@ models:    fixtures/java/expected/model.jsonl
 level:     corpus
 view:      all (nothing filtered — stubs and inferred edges included)
 weights:   module 8 · type 8 · operation 3 · attribute 4 · parameter 1 · local 1 · other 1 · qualifier 1
-technical: 125 shared words (sha256 c16bd05be59a) + each language's own
+technical: 138 shared words (sha256 4f34e69f52f5) + each language's own
 
 corpus src
   152 entities: 127 speak (module 3 · type 19 · operation 43 · attribute 21 · parameter 35 · local 6), 25 unnamed
-  85 distinct terms, 75 domain · weight 503 · 146 occurrences
-  domain: 5 of 75 terms (--top 5), by weight descending, ties by term
+  85 distinct terms, 73 domain · weight 503 · 146 occurrences
+  domain: 5 of 73 terms (--top 5), by weight descending, ties by term
 
   TERM      CLASS   WEIGHT  OCC  CARRIERS  MODULES  TYPES
   order     domain      40   12        12        3      4
@@ -94,7 +94,7 @@ said: 2 of 3 business terms
   Order       3 modules
   Order Line  1 module: java:com.acme.order
 
-code only: 4 of 73 domain words no business term contains (--top 4), by weight descending, ties by term
+code only: 4 of 71 domain words no business term contains (--top 4), by weight descending, ties by term
 
   TERM      WEIGHT  OCC  MODULES
   price         18    6        1

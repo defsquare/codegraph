@@ -120,7 +120,7 @@ describe("vocabulary: the corpus's words", () => {
       "weights:   module 8 · type 8 · operation 3 · attribute 4 · parameter 1 · local 1 · other 1 · qualifier 1",
     );
     expect(lines.find((line) => line.startsWith("technical: "))).toMatch(
-      /^technical: 125 shared words \(sha256 [0-9a-f]{12}\) \+ each language's own$/u,
+      /^technical: 138 shared words \(sha256 [0-9a-f]{12}\) \+ each language's own$/u,
     );
   });
 
@@ -130,8 +130,8 @@ describe("vocabulary: the corpus's words", () => {
     expect(lines).toContain(
       "  152 entities: 127 speak (module 3 · type 19 · operation 43 · attribute 21 · parameter 35 · local 6), 25 unnamed",
     );
-    expect(lines).toContain("  85 distinct terms, 75 domain · weight 503 · 146 occurrences");
-    expect(lines).toContain("  domain: 40 of 75 terms (--top 40), by weight descending, ties by term");
+    expect(lines).toContain("  85 distinct terms, 73 domain · weight 503 · 146 occurrences");
+    expect(lines).toContain("  domain: 40 of 73 terms (--top 40), by weight descending, ties by term");
     expect(rows(io.stdout())).toHaveLength(40);
   });
 
@@ -146,7 +146,7 @@ describe("vocabulary: the corpus's words", () => {
   it("shows the N heaviest with --top", () => {
     const stdout = vocabularyTo({ top: 2 }).io.stdout();
     expect(rows(stdout).map(([term]) => term)).toEqual(["order", "price"]);
-    expect(stdout).toContain("  domain: 2 of 75 terms (--top 2), by weight descending, ties by term");
+    expect(stdout).toContain("  domain: 2 of 73 terms (--top 2), by weight descending, ties by term");
   });
 
   it("is byte-identical across runs", () => {
@@ -171,12 +171,12 @@ describe("vocabulary: --json", () => {
       scope: null,
       view: { name: "all" },
       weights: { module: 8, qualifier: 1 },
-      technical: { words: 125 },
+      technical: { words: 138 },
       class: "domain",
       top: 2,
     });
     expect(json.scopes).toHaveLength(1);
-    expect(json.scopes[0]).toMatchObject({ level: "corpus", name: "src", distinct: 85, distinctDomain: 75, shown: 2, total: 75 });
+    expect(json.scopes[0]).toMatchObject({ level: "corpus", name: "src", distinct: 85, distinctDomain: 73, shown: 2, total: 73 });
     expect(json.scopes[0]?.terms).toEqual([
       { text: "order", class: "domain", weight: 40, occurrences: 12, carriers: 12, modules: 3, types: 4 },
       { text: "price", class: "domain", weight: 18, occurrences: 6, carriers: 6, modules: 1, types: 6 },
@@ -195,7 +195,7 @@ describe("vocabulary: --level module|type, the cognitive-load report", () => {
       "module java:com.acme.order.legacy (package com.acme.order.legacy)",
     ]);
     expect(io.stdoutLines()).toContain("3 modules, ranked by distinct terms descending, ties by id");
-    expect(io.stdoutLines()).toContain("  77 distinct terms, 68 domain · weight 433 · 126 occurrences");
+    expect(io.stdoutLines()).toContain("  77 distinct terms, 66 domain · weight 433 · 126 occurrences");
   });
 
   it("shows 10 words per block by default, --top N otherwise", () => {
@@ -316,7 +316,7 @@ describe("vocabulary: --drift", () => {
     expect(lines).toContain("said: 2 of 4 business terms");
     expect(lines.some((line) => /^ {2}Order Line$/u.test(line))).toBe(true);
     expect(lines.find((line) => line.startsWith("code only: "))).toBe(
-      "code only: 40 of 73 domain words no business term contains (--top 40), by weight descending, ties by term",
+      "code only: 40 of 71 domain words no business term contains (--top 40), by weight descending, ties by term",
     );
     expect(lines.find((line) => /^ {2}price /u.test(line))).toMatch(/^ {2}price +18 +6$/u);
     // A finding: the code does not say what the business says.

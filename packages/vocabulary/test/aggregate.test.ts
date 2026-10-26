@@ -226,8 +226,9 @@ describe("a word said twice", () => {
 });
 
 describe("several languages", () => {
-  // `type` is reserved by Go and an identifier to Java: one word, two classes,
-  // so two terms — a class is decided per language, never averaged.
+  // `type` is reserved by Go and a plain word to Java (on the shared technical
+  // list): one word, two classes, so two terms — a class is decided per
+  // language, never averaged.
   const graph = graphOf([
     { lang: "java", entities: [pkg("java:p", "shop"), cls("java:p/Type", "Type", "java:p")] },
     { lang: "go", entities: [pkg("go:q", "type")] },
@@ -236,7 +237,7 @@ describe("several languages", () => {
 
   it("interns a word once per class it takes", () => {
     expect(artifact.langs).toEqual(["go", "java"]);
-    expect(artifact.terms.filter((term) => term.text === "type").map((term) => term.class)).toEqual(["domain", "keyword"]);
+    expect(artifact.terms.filter((term) => term.text === "type").map((term) => term.class)).toEqual(["technical", "keyword"]);
     expect(artifact.corpus.roots).toEqual(["toy/go", "toy/java"]);
     expectClosed(artifact, graph);
   });
