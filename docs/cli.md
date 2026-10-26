@@ -260,7 +260,10 @@ and where, and the domain words no term contains. `--out FILE` writes the
 root of the weight, colour by class and nothing else, a legend stating the
 scope, weights, view and technical list, the same bytes on every run.
 [`vocabulary-broadleaf.svg`](vocabulary-broadleaf.svg) is BroadleafCommerce's,
-drawn with `--top 80`.
+drawn with `--top 80`. One word across the city is the `city` metric
+`vocabulary:<word>` (above):
+[`vocabulary-city-broadleaf.png`](vocabulary-city-broadleaf.png) is
+BroadleafCommerce's city with `--height vocabulary:order`.
 
 ### `domain-facts`
 One JSON artifact (`codegraph.domainFacts/1`) with one dossier per corpus
