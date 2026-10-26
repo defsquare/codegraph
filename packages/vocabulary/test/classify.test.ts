@@ -1,7 +1,7 @@
 import { PROFILES, getProfile, type Lexicon } from "@codegraph/core";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TECHNICAL, TERM_CLASSES, createClassifier, type TermClass } from "../src/classify.js";
+import { DEFAULT_TECHNICAL, TERM_CLASSES, createClassifier, parseTechnicalWords, type TermClass } from "../src/classify.js";
 
 /**
  * Classification, not filtering (PLAN.md §20 principle 3): every word is kept
@@ -150,5 +150,33 @@ describe("properties", () => {
         expect(classify(keyword.toLowerCase()), `${lang} ${keyword}`).toBe("keyword");
       }
     }
+  });
+});
+
+describe("parseTechnicalWords", () => {
+  it("reads one word per line, lowercased as the splitter lowers a token", () => {
+    expect(parseTechnicalWords("dto\nDAO\n  Bean  \r\nutf8\n")).toEqual({ words: ["dto", "dao", "bean", "utf8"], invalid: [] });
+  });
+
+  it("skips blank lines and # comments", () => {
+    expect(parseTechnicalWords("# plumbing\n\ndto\n#dao\n").words).toEqual(["dto"]);
+  });
+
+  it("refuses a line that is not one word, by its line number: it could never match a token", () => {
+    expect(parseTechnicalWords("dto\nHTTPServer\nvalue object\nfoo-bar\n2024\n")).toEqual({
+      words: ["dto"],
+      invalid: [
+        { line: 2, text: "HTTPServer" },
+        { line: 3, text: "value object" },
+        { line: 4, text: "foo-bar" },
+        { line: 5, text: "2024" },
+      ],
+    });
+  });
+
+  it("classifies by the words it read", () => {
+    const { words } = parseTechnicalWords("order\n");
+    expect(createClassifier(undefined, words)("order")).toBe("technical");
+    expect(createClassifier(undefined, words)("dto")).toBe("domain");
   });
 });

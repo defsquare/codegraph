@@ -1,4 +1,5 @@
 import type { Lexicon } from "@codegraph/core";
+import { splitIdentifier } from "./split.js";
 
 /**
  * The classes (PLAN.md §20.1): every word is kept and tagged, never filtered —
@@ -63,4 +64,27 @@ function isShort(token: string): boolean {
   let letters = 0;
   for (const char of token) if (!MARK.test(char) && ++letters > 1) return false;
   return true;
+}
+
+/**
+ * A technical list as a file holds it (`--technical FILE`): one word per line,
+ * lowercased as the splitter lowers a token; blank lines and `#` comments
+ * skipped. A line that is not one word could never match a token, so it is
+ * refused by its line number rather than kept.
+ */
+export function parseTechnicalWords(text: string): {
+  readonly words: readonly string[];
+  readonly invalid: readonly { readonly line: number; readonly text: string }[];
+} {
+  const words: string[] = [];
+  const invalid: { line: number; text: string }[] = [];
+  text.split("\n").forEach((raw, i) => {
+    const line = raw.trim();
+    if (line.length === 0 || line.startsWith("#")) return;
+    const { tokens } = splitIdentifier(line, "", undefined);
+    const [word] = tokens;
+    if (tokens.length === 1 && word !== undefined && WORD.test(line)) words.push(word);
+    else invalid.push({ line: i + 1, text: line });
+  });
+  return { words, invalid };
 }
