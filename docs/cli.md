@@ -229,6 +229,11 @@ With the change-history side-car `codegraph-metrics --history` writes beside
 the model (or `--history-metrics FILE`), `history:<measure>` reads the type's
 own blame and `history-file:<measure>` its file's history
 (`--height history-file:churn_recent`; docs/metrics.md §4).
+`vocabulary:<word>` is the word's weight in the names of the type and its
+members — the Vocabulary tab's type scope, under the default weights — so
+`--height vocabulary:order` shows where `order` lives. A type whose names
+never say the word weighs 0; a stub, whose names the vocabulary never reads,
+is unmeasured; a word no name in the view says is a usage error.
 Unmeasured metrics are drawn at the channel minimum and labelled unmeasured.
 
 ### `navigator`

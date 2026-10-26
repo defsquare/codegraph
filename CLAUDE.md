@@ -241,6 +241,8 @@ node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256
 #   role "pass" (codegraph-metrics): claims no files, runs `<pass> <model> --src <dir>` after the extractor
 ./bin/codegraph city model.jsonl --layout --out city.json        # the artifacts alone
 ./bin/codegraph navigator model.jsonl --out navigator.json
+./bin/codegraph vocabulary model.jsonl [--level module|type] [--scope ID] [--drift FILE] [--svg FILE]   # the names' words
+./bin/codegraph serve model.jsonl --height vocabulary:order --height-scale sqrt   # where one word lives, in the city
 ./bin/codegraph explain model.jsonl --src DIR --dry-run   # the walk plan, no call
 ./bin/codegraph explain model.jsonl --src DIR --estimate --price-in 0.10 --price-out 0.60   # tokens in/out + cost, no call
 OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-calls N] [--yes]

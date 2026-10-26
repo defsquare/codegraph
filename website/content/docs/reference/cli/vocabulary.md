@@ -55,6 +55,10 @@ The glossary is a plain text file, one business term per line; blank lines and `
 
 [`serve`](/docs/reference/cli/serve/)'s **Vocabulary** tab runs the same layout in the browser, measured in the page's own monospace face, over the scope selected in Navigate, and lists the names that carry a clicked word.
 
+## In the city
+
+One word across the whole city is the city metric `vocabulary:<word>`: `codegraph serve model.jsonl --height vocabulary:order` raises each building by the word's weight in its type scope, the number this command reports under `--level type`. A type that never says the word stands at the floor; [City metrics](/docs/reference/city-metrics/#vocabulary-form) has the rules.
+
 ## Exit codes
 
 `0` ok · `1` internal error (a bug) · `2` usage error · `3` findings.
