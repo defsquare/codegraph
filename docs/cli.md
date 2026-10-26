@@ -151,10 +151,24 @@ for the selection, incoming and outgoing dependencies classified by role, with
 the member that carries each, its provenance and its source anchor; **City** —
 the 3D code city, full-width, where a selected building's panel offers *Open
 in navigator* and lands on that type's Navigate entry with its dependencies;
-**Graph** (Cytoscape), **Cycles** (the precomputed tangle report) and
-**Coupling** (ranked metrics). The city's channels are the `city` flags
-below, so the page's city is exactly the artifact `city` would write. The
-server hands out `/navigator.json` and `/city.json`; stdout stays empty.
+**Graph** (Cytoscape), **Cycles** (the precomputed tangle report),
+**Coupling** (ranked metrics) and **Vocabulary** — the words of the selected
+scope's names (the corpus until a module or a type is selected; a member
+shows its type) as the cloud `vocabulary --svg` draws, measured in the page's
+font, and as a table of weight, occurrences, carriers and spread, with class
+chips and a top-N slider. The city's channels are the `city` flags below, so
+the page's city is exactly the artifact `city` would write. The server hands
+out `/navigator.json`, `/city.json` and `/vocabulary.json` (the vocabulary
+under its default weights and technical list); stdout stays empty.
+
+Clicking a word on the Vocabulary tab lists **the names that carry it** in
+that scope, heaviest first, each one click from its node in Navigate (a
+member reveals its type). The artifact counts and never lists, so this is the
+server's second lookup, `/carriers.json?term=WORD[&scope=ID][&class=CLASS][&limit=N]`,
+answered from the model it holds: the row's weight, occurrences and carriers,
+and the first `limit` (200) of them, whose weights add up to the row. An
+unknown scope or term is `404`; a request with no term, a class that is none
+or a text the scope speaks as two terms (`class` then chooses) is `400`.
 
 When `explain` has been run, a selected type or module also shows **what the
 model wrote about it** — the description, the domain concept, the model and
@@ -171,6 +185,8 @@ No model on argv. It binds `127.0.0.1:0` unless `--host`/`--port` say
 otherwise, prints exactly one JSON line on stdout — `{"port":N,"token":"…"}`
 — and serves every route under `/<token>/`: the page, `app` (the registry
 and the current project), `recent`, `navigator.json`, `city.json`,
+`vocabulary.json` (no `carriers.json`: the daemon holds no model between
+jobs, and the tab shows the counts without the names),
 `POST jobs` with `{"src": DIR-or-model.jsonl, "extractor"?: NAME}` and the
 `jobs/current` event stream (`started`, `phase`, `progress` — the
 extractor's own stderr lines — `done`, `failed`; `idle` when nothing runs).

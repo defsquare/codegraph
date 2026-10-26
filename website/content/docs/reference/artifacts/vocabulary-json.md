@@ -67,3 +67,18 @@ A type's words are those of everything that folds into it (`containingType`), a 
 | `qualifier` | 1 | not a role: the words before the last separator of a qualified name (`com.acme` of `com.acme.order`), whatever carries it |
 
 Roles come from traits, never from the kind. `--weights` overrides them, and the artifact records the weights it was counted with.
+
+## Carriers
+
+The artifact counts the names behind a row and never lists them, so it stays a few megabytes on a real corpus. [`serve`](/docs/reference/cli/serve/) answers the list one row at a time, at `/carriers.json?term=WORD[&scope=ID][&class=CLASS][&limit=N]`, from the model it holds and under the artifact's own counting:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `kind` | `"codegraph.carriers/1"` | |
+| `status` | `"found"` \| `"unknown-scope"` \| `"unknown-term"` \| `"ambiguous"` | `404` for the two unknowns; `ambiguous` (`400`) carries `classes` when the scope speaks the text as two terms |
+| `scope` | `{level, id?, name}` | the corpus when the request names no scope |
+| `term` | `{text, class}` | |
+| `weight`, `occurrences`, `total` | number | the row: `total` is its `carriers` |
+| `carriers` | object[] | the first `limit` (200 by default), by weight descending, then id: `name`, `kind`, `role`, `weight` and `occurrences` (what this name added to the row), `anchor`, and `id` on a type or module, `owner` (its type, else its module) on a member |
+
+The carriers' weights and occurrences add up to the row, and their number is its `carriers`.

@@ -39,6 +39,7 @@ Read only by the Vite configs, so only by `pnpm dev` in those packages. [`codegr
 |---|---|---|
 | `CITY_JSON` | `packages/viz/vite.config.ts` | absolute path to a `city.json`; the dev server serves it at `/city.json` |
 | `NAVIGATOR_JSON` | `packages/navigator-ui/vite.config.ts` | absolute path to a `navigator.json`; the dev server serves it at `/navigator.json` |
+| `VOCABULARY_JSON` | `packages/navigator-ui/vite.config.ts` | absolute path to a `vocabulary.json`; the dev server serves it at `/vocabulary.json`, for the Vocabulary tab |
 
 ```bash
 CITY_JSON=$PWD/city.json pnpm --filter @codegraph/viz dev

@@ -69,7 +69,10 @@ packages/navigator/  @codegraph/navigator — the navigator MODEL: the browsable
 packages/vocabulary/ @codegraph/vocabulary — the words of the model's NAMES
                      (never source): the universal splitter driven by each
                      profile's lexicon, the word classes (domain, technical,
-                     keyword, short) and the role weights. Pure computation.
+                     keyword, short) and the role weights; the cloud's layout
+                     and SVG; the carriers lookup (which names carry a word).
+                     Pure computation. Its `./cloud` entry is the layout alone
+                     and imports nothing: the one value a frontend may take.
 packages/insights/   @codegraph/insights — the bottom-up EXPLANATION walk: units
                      (operations → types → modules), SCC-condensed walk order,
                      context packs, prompts, Merkle fingerprints, plan/run, the
@@ -86,16 +89,20 @@ packages/viz/        @codegraph/viz — Three.js code city: renders a laid-out
                      ONLY package that may import three. Exports ONE thing,
                      `mountCityView(host)`, which navigator-ui embeds; its own
                      Vite app is the standalone page (replay/history).
-packages/navigator-ui/ @codegraph/navigator-ui — React model navigator, five
+packages/navigator-ui/ @codegraph/navigator-ui — React model navigator, six
                      tabs: Navigate (virtualized tree + fan-in/fan-out
                      evidence), City (the viz view, full-width, a building's
                      panel opens it in Navigate), Graph (Cytoscape+fcose
                      dependency graph, module/type modes), Cycles (the
                      artifact's precomputed tangle report), Coupling (ranked
-                     metrics). Reads navigator.json + city.json (guard-enforced),
-                     plus ONE lookup, `insight.json?id=…`: the selected type's or
-                     module's LLM explanation, shown as an inference, never a fact.
-                     It imports @codegraph/insights not even for types.
+                     metrics), Vocabulary (the selected scope's words as a
+                     cloud and a table). Reads navigator.json + city.json +
+                     vocabulary.json (guard-enforced), plus TWO lookups:
+                     `insight.json?id=…`, the selected type's or module's LLM
+                     explanation, shown as an inference, never a fact; and
+                     `carriers.json?term=…`, the names that carry a word.
+                     It imports @codegraph/insights not even for types, and
+                     @codegraph/vocabulary for types plus its `./cloud` layout.
                      The ONLY package that may import react and cytoscape; the
                      city comes through @codegraph/viz, never through three.
                      Vite app, no library.
