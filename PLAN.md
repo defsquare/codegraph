@@ -5234,7 +5234,21 @@ names carry the word (name, kind, role, anchor, and the id when the entity
 is a type or module — the hand-off key), from the in-memory model `serve`
 already holds; an unknown scope or term is 404, like `/insight.json`. The
 artifact stays small (counts, not lists) and a static host degrades to no
-evidence rather than to a bigger file.
+evidence rather than to a bigger file. **As built** (`carriers.ts`,
+`carriers-route.ts`): the counting rule moved to `reading.ts` so the
+artifact and the carriers read a name the same way, and A ROW IS THE SUM OF
+ITS CARRIERS — weights, occurrences and count — a property over every term
+of every scope of the six fixtures; an artifact counted under other weights,
+another list or another view is refused. A member carries no id and an
+`owner` (its type, else its module), the navigator's rule. No `scope` is the
+corpus; `class` disambiguates a text two languages class apart (`ambiguous`,
+400, lists the classes); `limit` defaults to 200 and `total` always counts
+them all. The index is built at the first answerable request, reading every
+kept entity once, and the graph is released then. The app daemon builds
+`vocabulary.json` with the other two, but holds no model between jobs, so it
+has no `/carriers.json`: the tab shows the counts and says why there are no
+names. On Broadleaf the artifact is 2.9 MB and `order` at the corpus has
+3 303 carriers.
 
 **The Vocabulary tab** (`navigator-ui`, the sixth): the cloud of the current
 scope — the corpus until a module or a type is selected in Navigate, then
@@ -5247,7 +5261,22 @@ and lists the carriers; a type or module among them reveals in Navigate (its
 `@codegraph/vocabulary` for TYPES only (the frontend rule), and the layout
 runs in the browser with the page's own measurer — the same function the
 CLI ran. Reviewed as screenshots on Broadleaf: the corpus, `catalog.domain`,
-`ProductImpl`.
+`ProductImpl`. **As built**: the layout is a VALUE import through
+`@codegraph/vocabulary/cloud`, a tsup entry of `cloud.ts` alone whose shared
+chunk imports nothing; the guard test allows that one specifier and keeps
+the package's index types-only. The measurer is `canvas.measureText` in the
+page's monospace face (the page sets identifiers in mono; so does the SVG),
+the colours the page's paper, dimmed and faint — no hue, since the page's
+four hues already mean direction, inference and selection. The scope chain
+(corpus › module › … › type) steps up by selecting the scope's node, the
+corpus by clearing the selection. The tab mounts on first visit and stays
+mounted, refetching `vocabulary.json` with each new navigator (the daemon's
+next job). Reviewed on Broadleaf at 1600×1000: the corpus reads `order item
+customer offer product admin group fulfillment category payment`;
+`ProductImpl` reads `product category all sale sku parent`; `catalog.domain`
+with `product` picked lists 239 carriers, and a parameter among them reveals
+its owner, `Category`, in Navigate; a page with no carriers route keeps the
+counts and says so.
 
 **The city channel**: `vocabulary:<term>` as a metric source for `--height`,
 `--color` and `--carry` — the term's weight in the building's type scope,
@@ -5434,11 +5463,11 @@ never looks like a fact.
 
 - [x] `layout.ts` and `svg.ts` with their properties and the SVG snapshot;
       `--svg` (the layout is `cloud.ts`).
-- [ ] `serve`: `/vocabulary.json` built with the two others,
+- [x] `serve`: `/vocabulary.json` built with the two others,
       `/carriers.json` as a lookup; both on the app daemon's page for free
       (the artifact rides the same build), the lookups following the
-      insight route's precedent.
-- [ ] The Vocabulary tab: cloud, chips, table, carriers, reveal; the
+      insight route's precedent (the daemon has neither lookup).
+- [x] The Vocabulary tab: cloud, chips, table, carriers, reveal; the
       literal-pinning and types-only boundary tests; screenshots on
       Broadleaf reviewed at user-facing sizes.
 - [ ] `vocabulary:<term>` metric source through the `metric(name)` hook;
