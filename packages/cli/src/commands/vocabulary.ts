@@ -502,7 +502,7 @@ function plural(count: number, noun: string, plural_ = `${noun}s`): string {
  * What makes the counts smaller or vaguer than the model, on stderr: an
  * unclean load, a language split with no lexicon, entities no module holds.
  */
-function vocabularyWarnings(
+export function vocabularyWarnings(
   source: { readonly clean: boolean; readonly paths: readonly string[] },
   artifact: VocabularyArtifact,
 ): readonly string[] {

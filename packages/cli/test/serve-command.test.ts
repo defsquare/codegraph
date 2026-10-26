@@ -8,7 +8,7 @@ import { INSIGHTS_GENERATOR, INSIGHTS_KIND, INSIGHTS_METAMODEL, PROMPT_VERSION, 
 import { parseInvocation, type ServeOptions } from "../src/args.js";
 import type { DaemonOptions } from "../src/app/daemon.js";
 import { defaultDataDir } from "../src/app/store.js";
-import { CITY_ROUTE, NAVIGATOR_ROUTE, registrySource, serveCommand } from "../src/commands/serve.js";
+import { CITY_ROUTE, NAVIGATOR_ROUTE, VOCABULARY_ROUTE, registrySource, serveCommand } from "../src/commands/serve.js";
 import { EXIT, UsageError } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
 import { runSync } from "../src/main.js";
@@ -88,15 +88,31 @@ function parse<T>(text: string | undefined): T {
   return JSON.parse(text ?? "") as T;
 }
 
-describe("serve: both artifacts, one server", () => {
-  it("hands the server the navigator AND the city, each at its own route", () => {
+describe("serve: three artifacts, one server", () => {
+  it("hands the server the navigator, the city and the vocabulary, each at its own route", () => {
     const { code, started } = serveTo();
     expect(code).toBe(EXIT.OK);
     expect(started).toHaveLength(1);
     const routes = started[0]?.routes ?? {};
-    expect(Object.keys(routes).sort()).toEqual([CITY_ROUTE, NAVIGATOR_ROUTE].sort());
+    expect(Object.keys(routes).sort()).toEqual([CITY_ROUTE, NAVIGATOR_ROUTE, VOCABULARY_ROUTE].sort());
     expect(parse<{ kind: string }>(routes[NAVIGATOR_ROUTE]).kind).toBe("codegraph.navigator/1");
     expect(parse<{ kind: string }>(routes[CITY_ROUTE]).kind).toBe("codegraph.city/1");
+    expect(parse<{ kind: string }>(routes[VOCABULARY_ROUTE]).kind).toBe("codegraph.vocabulary/1");
+  });
+
+  // The tab finds a selected node's words by its id: the vocabulary's type
+  // scopes must be the navigator's type nodes, under the same view.
+  it("counts the vocabulary under the SAME view and name, so its scopes are the navigator's nodes", () => {
+    const { started } = serveTo({ internalOnly: true, name: "shop" });
+    const routes = started[0]?.routes ?? {};
+    const navigator = parse<{ corpus: { name: string }; nodes: { id?: string; category: string }[] }>(routes[NAVIGATOR_ROUTE]);
+    const vocabulary = parse<{ corpus: { name: string }; view: unknown; scopes: { level: string; id?: string }[] }>(routes[VOCABULARY_ROUTE]);
+    expect(vocabulary.corpus.name).toBe("shop");
+    expect(vocabulary.view).toEqual(parse<{ view: unknown }>(routes[NAVIGATOR_ROUTE]).view);
+    const ids = new Set(navigator.nodes.filter((node) => node.category === "type" || node.category === "module").map((node) => node.id));
+    const scoped = vocabulary.scopes.filter((scope) => scope.level !== "corpus");
+    expect(scoped.length).toBeGreaterThan(0);
+    for (const scope of scoped) expect(ids.has(scope.id), scope.id).toBe(true);
   });
 
   it("lays the city out: the viewer refuses a city with no placement", () => {
@@ -313,7 +329,28 @@ describe("city and navigator no longer serve: one command does", () => {
   });
 });
 
-describe("serve hands the page ONE lookup: a selected node's explanation (M16c)", () => {
+describe("serve hands the page the carriers of a word (M19b)", () => {
+  it("registers /carriers.json, answered from the model it holds under the artifact's own counting", () => {
+    const { started } = serveTo({ internalOnly: true });
+    const lookup = started[0]?.lookups?.["/carriers.json"];
+    expect(lookup).toBeTypeOf("function");
+    const answer = lookup?.(new URLSearchParams({ term: "order", scope: "java:com.acme.order/OrderService" }));
+    expect(answer?.status).toBe(200);
+    expect(JSON.parse(answer?.body ?? "{}")).toMatchObject({
+      kind: "codegraph.carriers/1",
+      status: "found",
+      scope: { level: "type", name: "OrderService" },
+      term: { text: "order", class: "domain" },
+    });
+    // The vocabulary's row and the lookup's carriers are one count.
+    const vocabulary = parse<{ terms: { text: string }[]; scopes: { id?: string; terms: number[][] }[] }>(started[0]?.routes[VOCABULARY_ROUTE]);
+    const order = vocabulary.terms.findIndex((term) => term.text === "order");
+    const row = vocabulary.scopes.find((scope) => scope.id === "java:com.acme.order/OrderService")?.terms.find(([term]) => term === order);
+    expect(JSON.parse(answer?.body ?? "{}")).toMatchObject({ weight: row?.[1], occurrences: row?.[2], total: row?.[3] });
+  });
+});
+
+describe("serve hands the page a selected node's explanation (M16c)", () => {
   it("registers /insight.json beside the two artifacts, and a model nobody explained answers 404 — no file created", () => {
     const { started } = serveTo();
     const lookup = started[0]?.lookups?.["/insight.json"];
@@ -321,7 +358,7 @@ describe("serve hands the page ONE lookup: a selected node's explanation (M16c)"
     // The fixture has no store beside it: quiet, and asking must not make one.
     expect(lookup?.(new URLSearchParams({ id: "java:com.acme.order/Order" })).status).toBe(404);
     expect(existsSync(FIXTURE.replace(/\.jsonl$/u, ".insights.db"))).toBe(false);
-    expect(Object.keys(started[0]?.routes ?? {}).sort()).toEqual(["/city.json", "/navigator.json"]);
+    expect(Object.keys(started[0]?.routes ?? {}).sort()).toEqual(["/city.json", "/navigator.json", "/vocabulary.json"]);
     started[0]?.onClose?.();
   });
 
