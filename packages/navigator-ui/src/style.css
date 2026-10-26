@@ -1701,3 +1701,263 @@ button.twisty:hover {
   border-radius: 3px;
   padding: 3px 6px;
 }
+
+/* -------------------------------------------------------- vocabulary tab -- */
+
+/*
+ * The words of the selected scope's names. Size is weight; colour is the
+ * class and nothing else — the CLI's --svg rule in this page's palette:
+ * domain words in paper, technical dimmed, keywords and one-letter words
+ * faint. No hue: the four hues of this page already mean direction,
+ * inference and selection. The picked word wears the tree's selection.
+ */
+.vocabulary-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 14px 18px 0;
+}
+
+.vocabulary-toolbar {
+  flex: none;
+}
+
+.scope-chain {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.scope-link button {
+  color: var(--paper-dim);
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 2px;
+}
+
+.scope-link button:hover:not(:disabled) {
+  color: var(--paper);
+}
+
+.scope-link button.scope-here {
+  color: var(--paper);
+  text-decoration: none;
+  cursor: default;
+}
+
+.scope-level {
+  font-family: var(--sans);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--paper-faint);
+}
+
+.scope-sep {
+  margin: 0 2px;
+  color: var(--paper-faint);
+}
+
+.seg button.chip-technical:not(.seg-on) {
+  color: var(--paper-dim);
+}
+
+.seg button.chip-keyword:not(.seg-on),
+.seg button.chip-short:not(.seg-on) {
+  color: var(--paper-faint);
+}
+
+.top-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--paper-dim);
+}
+
+.top-slider input {
+  width: 120px;
+  accent-color: var(--paper-dim);
+}
+
+.top-value {
+  min-width: 2.5em;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+}
+
+.vocabulary-body {
+  display: flex;
+  flex: 1;
+  gap: 18px;
+  min-height: 0;
+}
+
+.cloud-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 3;
+  min-width: 0;
+  min-height: 0;
+}
+
+.cloud-pane > svg,
+.cloud-pane > .report-empty {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.cloud {
+  font-family: var(--mono);
+}
+
+.cloud-word {
+  text-anchor: middle;
+  dominant-baseline: central;
+  cursor: pointer;
+}
+
+.cloud-word:hover,
+.cloud-word:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.cloud-domain {
+  fill: var(--paper);
+  color: var(--paper);
+}
+
+.cloud-technical {
+  fill: var(--paper-dim);
+  color: var(--paper-dim);
+}
+
+.cloud-keyword,
+.cloud-short {
+  fill: var(--paper-faint);
+  color: var(--paper-faint);
+}
+
+.cloud-pick {
+  fill: #223040;
+  stroke: var(--paper);
+  stroke-width: 1;
+}
+
+.cloud-legend {
+  flex: none;
+  padding: 8px 0 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--paper-faint);
+}
+
+.cloud-legend p {
+  margin: 2px 0;
+}
+
+.vocabulary-aside {
+  flex: 2;
+  min-width: 300px;
+  max-width: 520px;
+  overflow: auto;
+  padding-bottom: 12px;
+}
+
+.words-table td {
+  font-family: var(--mono);
+}
+
+.words-table tr.selected td {
+  background: #223040;
+}
+
+.words-table .spread {
+  color: var(--paper-dim);
+  white-space: nowrap;
+}
+
+.word-button {
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 2px;
+}
+
+.word-button:hover {
+  text-decoration-color: var(--paper-dim);
+}
+
+.carriers {
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--ink-raised);
+}
+
+.carriers-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.carriers-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.carriers-head h2 span {
+  font-family: var(--mono);
+}
+
+.carriers-head .report-clear {
+  margin-left: auto;
+}
+
+.carrier-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.carrier-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.carrier-list .counterpart:disabled {
+  cursor: default;
+}
+
+.carrier-list .counterpart:disabled .counterpart-name {
+  text-decoration: none;
+}
+
+.carrier-weight {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--paper-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.carrier-where {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}

@@ -286,6 +286,9 @@ importers:
       '@codegraph/viz':
         specifier: workspace:*
         version: link:../viz
+      '@codegraph/vocabulary':
+        specifier: workspace:*
+        version: link:../vocabulary
       cytoscape:
         specifier: ^3.34.2
         version: 3.34.2
