@@ -88,11 +88,11 @@ export function serveCommand(options: ServeOptions, io: IoSink, deps: ServeDeps 
       view,
       ...(options.name === undefined ? {} : { name: options.name }),
     });
-    // The viewer refuses a city with no placement, so the layout is not optional.
-    const history = loadHistoryJoin(options.historyMetrics, options.models);
-    const city = layoutCity(cityOf(graph, options, history));
     const counting = { view, ...(options.name === undefined ? {} : { name: options.name }) };
     const vocabulary = buildVocabulary(graph, counting);
+    // The viewer refuses a city with no placement, so the layout is not optional.
+    const history = loadHistoryJoin(options.historyMetrics, options.models);
+    const city = layoutCity(cityOf(graph, options, history, vocabulary));
 
     // One "not clean" line for the page, then each artifact's own caveats.
     const built = { clean: true, paths: source.paths };

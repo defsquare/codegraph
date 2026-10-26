@@ -367,10 +367,11 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
         const view = resolveView(options.build);
         const named = options.build.name === undefined ? {} : { name: options.build.name };
         const navigatorModel = buildNavigator(graph, { view, ...named });
-        const cityModel = layoutCity(cityOf(graph, options.build));
+        const vocabularyModel = buildVocabulary(graph, { view, ...named });
+        const cityModel = layoutCity(cityOf(graph, options.build, undefined, vocabularyModel));
         navigator = navigatorToJsonString(navigatorModel);
         city = cityToJsonString(cityModel);
-        vocabulary = vocabularyToJsonString(buildVocabulary(graph, { view, ...named }));
+        vocabulary = vocabularyToJsonString(vocabularyModel);
         if (!source.clean) errLine(io, `job: warning — the model is not clean; the page was built anyway.`);
         record = {
           kind: PROJECT_KIND,

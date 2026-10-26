@@ -153,6 +153,28 @@ describe("serve: three artifacts, one server", () => {
     expect(city.bindings.find((binding) => binding.channel === "height")?.metric).toBe("methods");
   });
 
+  // "Where does order live": the city's building and the tab's type scope
+  // are one count, so the City tab and the Vocabulary tab cannot disagree.
+  it("measures vocabulary:<word> by the served vocabulary's type scopes", () => {
+    const { started } = serveTo({ height: "vocabulary:order" });
+    const routes = started[0]?.routes ?? {};
+    const vocabulary = parse<{
+      terms: { text: string }[];
+      scopes: { level: string; id?: string; terms: [number, number][] }[];
+    }>(routes[VOCABULARY_ROUTE]);
+    const city = parse<{ buildings: { id: string; isStub: boolean; metrics: Record<string, number | null> }[] }>(
+      routes[CITY_ROUTE],
+    );
+    const order = vocabulary.terms.findIndex((term) => term.text === "order");
+    const types = vocabulary.scopes.filter((scope) => scope.level === "type");
+    expect(types.length).toBe(city.buildings.filter((building) => !building.isStub).length);
+    for (const scope of types) {
+      const building = city.buildings.find((candidate) => candidate.id === scope.id);
+      const row = scope.terms.find(([term]) => term === order);
+      expect(building?.metrics["vocabulary:order"], scope.id).toBe(row?.[1] ?? 0);
+    }
+  });
+
   it("fails BEFORE loading models when the frontend is not built", () => {
     const io = captureIo();
     expect(() =>

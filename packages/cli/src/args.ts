@@ -256,7 +256,8 @@ function metricHelp(channel: string): string {
   return (
     `Metric driving ${channel}. Built in: ${metricNames().join(", ")}. ` +
     `Open forms: ${METRIC_PREFIXES.map((form) => `${form.prefix}<key>`).join(", ")}. ` +
-    `With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file).`
+    `With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). ` +
+    `From the names: vocabulary:<word> (the word's weight in the type's names).`
   );
 }
 
