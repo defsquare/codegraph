@@ -31,6 +31,16 @@ describe("helpModel", () => {
     expect(text).toContain("Reset view");
   });
 
+  // Height is whatever metric was bound (loc, fanIn, vocabulary:order…): the
+  // prose defers to the legend instead of naming one.
+  it("claims no metric of its own for a building's size", () => {
+    const text = helpModel(makeCity())
+      .sections.flatMap((section) => section.paragraphs)
+      .join(" ");
+    expect(text).toContain("named in the legend");
+    expect(text).not.toMatch(/more code|lines of code/);
+  });
+
   it("embeds the artifact-derived legend when a city is loaded", () => {
     const help = helpModel(makeCity());
     expect(help.legend.some((entry) => entry.label === "height = loc (linear)")).toBe(true);
