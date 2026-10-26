@@ -12,8 +12,8 @@ Every `TNamed` entity's name is split into words (`OrderLineRepository` → `ord
 ```
 codegraph vocabulary [model.jsonl...] [--level <corpus|module|type>] [--scope ID] [--top N]
                      [--class <domain|technical|keyword|short|all>] [--weights KEY=N,…]
-                     [--technical FILE] [--drift FILE] [--out FILE] [--json]
-                     [--internal-only] [--declared-only] [--no-cache]
+                     [--technical FILE] [--drift FILE] [--out FILE] [--svg FILE]
+                     [--json] [--internal-only] [--declared-only] [--no-cache]
 ```
 
 ## Arguments
@@ -34,6 +34,7 @@ codegraph vocabulary [model.jsonl...] [--level <corpus|module|type>] [--scope ID
 | `--technical FILE` | Replace the shared technical words with this file's, one word per line; each language's own still apply. | — |
 | `--drift FILE` | Compare with a glossary, one business term per line: the terms no scope of `--level` says (exit 3), and the domain words no term contains. | — |
 | `--out FILE` | Also write the [`vocabulary.json`](/docs/reference/artifacts/vocabulary-json/) artifact to this file. | — |
+| `--svg FILE` | Also draw one scope's cloud to this SVG file: the corpus, or the `--scope` one; `--class` and `--top` pick its words. | — |
 | `--json` | Print the same information as a machine-readable JSON object on stdout. | — |
 | `--internal-only` | Drop stub (external) entities and every edge touching one. | — |
 | `--declared-only` | Keep only `declared` facts; drop derived and dynamic-candidate edges. | — |
@@ -48,11 +49,15 @@ A type's words are those of everything that folds into it, a module's likewise, 
 
 The glossary is a plain text file, one business term per line; blank lines and `#` comments are skipped. Each term is split by the same universal rules, so `Order Line` meets `order` and `line`. A term is *said* by a scope when every one of its words is, whatever class the code gives the word, so `--level module` asks for all of them in one module. Nothing is stemmed: `lines` is not `line`. The report lists the terms no scope says with their missing words, the terms it says and where, and the `domain` words the code says that no term contains.
 
+## Cloud
+
+`--svg FILE` draws the cloud of the one scope the report shows, the corpus or the one `--scope` names, from the words `--class` and `--top` pick. A word's size follows the square root of its weight, so its area reads as the weight, and its colour says its class and nothing else: `domain` in ink, `technical` muted, `keyword` and `short` faint, with a dark palette for a dark page. Words are placed heaviest first, each at the first free point of a spiral out from the centre. The legend states the scope, the counts, the weights, the view and the technical list. The font is monospace, so the bytes are the same on every run and any machine.
+
 ## Exit codes
 
 `0` ok · `1` internal error (a bug) · `2` usage error · `3` findings.
 
-`3` when the load was not clean, or with `--drift` when a business term is said by no scope of the level. An unknown `--scope` id, an unknown `--weights` key or a `--technical` line that is not one word is a usage error.
+`3` when the load was not clean, or with `--drift` when a business term is said by no scope of the level. An unknown `--scope` id, an unknown `--weights` key or a `--technical` line that is not one word is a usage error, and so is `--svg` with `--level module|type` or `--drift`: a cloud is one scope's.
 
 ## Example
 

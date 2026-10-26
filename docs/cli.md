@@ -69,7 +69,8 @@ codegraph navigator [model.jsonl] [--out FILE]
 codegraph vocabulary [model.jsonl] [--level corpus|module|type] [--scope ID]
                    [--top N] [--class domain|technical|keyword|short|all]
                    [--weights KEY=N,…] [--technical FILE] [--drift FILE]
-                   [--out FILE] [--json] [--internal-only] [--declared-only]
+                   [--out FILE] [--svg FILE] [--json] [--internal-only]
+                   [--declared-only]
 
 codegraph domain-facts [model.jsonl] [--framework spring] [--out FILE]
                    [--internal-only] [--declared-only]
@@ -233,6 +234,12 @@ which one counted. `--drift FILE` compares with a glossary, one business term
 per line: the terms no scope of `--level` says (exit `3`), the ones it says
 and where, and the domain words no term contains. `--out FILE` writes the
 `vocabulary.json` artifact (`codegraph.vocabulary/1`) beside the report.
+`--svg FILE` draws the cloud of the one scope reported — the corpus, or
+`--scope`'s — from the words `--class` and `--top` pick: size on the square
+root of the weight, colour by class and nothing else, a legend stating the
+scope, weights, view and technical list, the same bytes on every run.
+[`vocabulary-broadleaf.svg`](vocabulary-broadleaf.svg) is BroadleafCommerce's,
+drawn with `--top 80`.
 
 ### `domain-facts`
 One JSON artifact (`codegraph.domainFacts/1`) with one dossier per corpus
