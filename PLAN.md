@@ -5094,7 +5094,8 @@ scope per line, the snapshots' form. Size, measured on BroadleafCommerce
 [--scope ID] [--top N] [--class domain|technical|keyword|short|all]
 [--weights …] [--technical FILE] [--drift FILE] [--out vocabulary.json]
 [--svg FILE] [--json] [--internal-only] [--declared-only] [--no-cache]`
-(`--svg` arrives with M19b's layout), a shell over the package like
+(`--svg`, M19b's, draws the one scope reported — the corpus or `--scope`'s —
+so it is a usage error with `--level module|type` or `--drift`), a shell over the package like
 `analyze` over the analyzer. Every report's
 header states the view, the weights and the technical list (its size, the
 first 12 hex of its digest, and the file it came from). No flag: the corpus
@@ -5201,7 +5202,14 @@ it. The text measurer is INJECTED — `measure(text, size) → { width, height }
 is exact for the font the SVG declares, and the browser passes
 `canvas.measureText` for its proportional face. Properties: no two placed
 boxes intersect; every box lies inside the reported viewBox; the same input
-gives the same positions; placement order is weight order.
+gives the same positions; placement order is weight order. **As built**
+(`cloud.ts`, type imports only, so a page runs it without the pipeline):
+12 to 56 px rounded to the pixel, 4 px kept clear on each side (2 px let
+neighbours touch on screen), the spiral stretched 2:1 for a landscape image,
+ties by text then class so ANY order of the same words lays out the same;
+the monospace measurer counts a combining mark as no cell and a Han, kana,
+Hangul or fullwidth character as two, as a terminal draws them; the spiral's
+points are whole pixels and the SVG rounds to 1/100 px.
 
 **SVG** (`svg.ts`): size by weight, colour by class and nothing else
 (`domain` in ink, `technical` muted, `keyword` and `short` faint — meaning
@@ -5210,6 +5218,14 @@ class filter and the counts, a monospace font stack. Deterministic bytes:
 `fixtures/java/expected/vocabulary.svg` is a snapshot, and the demo image is
 this command's output on a public corpus, committed under `docs/`.
 `codegraph vocabulary --svg FILE [--scope ID] [--top N] [--class …]`.
+**As built** (`vocabularyCloudSvg`): the palette is a stylesheet keyed by
+class, light and dark (`prefers-color-scheme`), so a word carries one class
+attribute and no fill; a key line appears when more than one class is drawn;
+the legend's three lines are the scope and its counts, the weights, and the
+view with the technical list's size and digest. `docs/vocabulary-broadleaf.svg`
+is BroadleafCommerce's corpus at `--top 80` (6.7 KB; 1.9 s end to end, the
+load dominating) — `order item customer product offer fulfillment payment sku
+cart catalog…`, the commerce vocabulary §20.1 asked for.
 
 **`serve`** builds `vocabulary.json` from the same graph and view as the two
 others and serves it at `/vocabulary.json`; evidence is a LOOKUP,
@@ -5416,8 +5432,8 @@ never looks like a fact.
 
 **M19b — the cloud, the tab, the city channel**
 
-- [ ] `layout.ts` and `svg.ts` with their properties and the SVG snapshot;
-      `--svg`.
+- [x] `layout.ts` and `svg.ts` with their properties and the SVG snapshot;
+      `--svg` (the layout is `cloud.ts`).
 - [ ] `serve`: `/vocabulary.json` built with the two others,
       `/carriers.json` as a lookup; both on the app daemon's page for free
       (the artifact rides the same build), the lookups following the
@@ -5428,9 +5444,9 @@ never looks like a fact.
 - [ ] `vocabulary:<term>` metric source through the `metric(name)` hook;
       `--color vocabulary:order` on Broadleaf reviewed as a screenshot.
 - [ ] The demo images: the corpus cloud of a public repository as SVG
-      (`docs/vocabulary-<corpus>.svg`) and the city coloured by one term,
-      with the README section that shows them — the issue's fourth
-      acceptance criterion.
+      (`docs/vocabulary-<corpus>.svg` — Broadleaf's, committed with `--svg`)
+      and the city coloured by one term, with the README section that shows
+      them — the issue's fourth acceptance criterion.
 
 **M19c — the glossary: words in the explanation**
 
