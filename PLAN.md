@@ -5093,17 +5093,40 @@ scope per line, the snapshots' form. Size is measured on BroadleafCommerce
 **The command.** `codegraph vocabulary <models…> [--level corpus|module|type]
 [--scope ID] [--top N] [--class domain|technical|keyword|short|all]
 [--weights …] [--technical FILE] [--drift FILE] [--out vocabulary.json]
-[--svg FILE] [--json] [--internal-only] [--declared-only]`. No flag: the
-corpus root's top 40 `domain` terms as a table — term, class, weight,
-occurrences, modules, types. `--level module`: one block per module, its top
-N and its `distinct` column, sorted by `distinct` descending — the
-cognitive-load report. `--drift FILE`: a plain text file, one business term
-per line; each term is split with the universal rules so `Order Line` meets
-`order` and `line`; a business term is SPOKEN in a scope when every one of
-its words is, and the report lists the business terms no scope speaks and
-the `domain` words the code speaks that no business term contains, by
-`--level`. The Specy `.domain` file as input is deferred (§20.5): the plain
-list first, because it exists in every company.
+[--svg FILE] [--json] [--internal-only] [--declared-only] [--no-cache]`
+(`--svg` arrives with M19b's layout), a shell over the package like
+`analyze` over the analyzer. Every report's
+header states the view, the weights and the technical list (its size, the
+first 12 hex of its digest, and the file it came from). No flag: the corpus
+root's top 40 `domain` terms as a table — term, class, weight, occurrences,
+carriers, modules, types. `--level module`: one block per module, its top N
+(10 by default) and its `distinct` column, sorted by `distinct` descending,
+ties by id — the cognitive-load report. `--scope ID`: a stored module or
+type, else an operation counted on demand (`operationScope`: the operation
+and every kept entity written inside it, lambdas included, short of a type
+or module, indexed by the artifact's terms; an artifact built under other
+options is refused); an unknown id, a stub, or a member that is no operation
+is a usage error that says what the id is. `--weights KEY=N,…` lays the keys
+typed over the defaults (an unknown or repeated key, or a weight below 0, is
+a usage error). `--technical FILE` replaces the shared list whole, one word
+per line, `#` comments skipped; a line the splitter does not yield as one
+word could never match a token and is refused by its number. `--out` writes
+the artifact (compact) beside the report. `--drift FILE`: a plain text file,
+one business term per line, `#` comments skipped, a term whose words repeat
+an earlier one's merged, a line naming no word warned about by its number;
+each term is split with the universal rules so `Order Line` meets `order`
+and `line`; a business term is SPOKEN in a scope when every one of its words
+is, whatever class the code gives it, and the report lists the business
+terms no scope of `--level` speaks (with the words no scope says at all, or
+"never together"), the ones it speaks and where, and the `domain` words the
+code speaks that no business term contains, summed over the level's scopes.
+Nothing is stemmed. A term spoken nowhere exits 3, as `analyze --report
+cycles` does for a cycle: a CI job can gate on the glossary. `--class` with
+`--drift`, and `--level` or `--drift` with `--scope`, are usage errors — a
+flag the report would not read is refused, never dropped. `--json` is one
+object, `codegraph.vocabularyReport/1`, `report: "words" | "drift"`. The
+Specy `.domain` file as input is deferred (§20.5): the plain list first,
+because it exists in every company.
 
 **Measured** (the table this milestone fills — the numbers below are what to
 collect, not results):
@@ -5330,10 +5353,12 @@ never looks like a fact.
       the splitter's `qualifier` count and the `qualifier` weight.
 - [x] `aggregate.ts` on `containingType`/`containingModule`, `artifact.ts`
       (`codegraph.vocabulary/1`); the package now depends on the analyzer.
-- [ ] `drift.ts` and `codegraph vocabulary` (§20.1): the report, `--level`,
-      `--scope`, `--class`, `--weights`, `--technical`, `--drift`, `--out`,
+- [x] `drift.ts` and `codegraph vocabulary` (§20.1): the report, `--level`,
+      `--scope` (an operation's scope on demand), `--class`, `--weights`,
+      `--technical`, `--drift` (exit 3 on a term spoken nowhere), `--out`,
       `--json`, the view flags; usage errors for an unknown scope, role or
-      class.
+      class; `docs/cli.md`, the website's command and `vocabulary.json`
+      pages.
 - [x] `fixtures/<lang>/expected/vocabulary.json` for the five fixtures and
       `fixtures/unicode`, byte-identical on every run
       (`CODEGRAPH_UPDATE_SNAPSHOTS=1` rewrites them); hand counts in each
