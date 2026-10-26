@@ -13,3 +13,4 @@ export * from "./artifact.js";
 export * from "./aggregate.js";
 export * from "./drift.js";
 export * from "./cloud.js";
+export * from "./svg.js";

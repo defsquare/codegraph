@@ -5,6 +5,7 @@ import { buildGraph, loadModels, type CodeGraph } from "@codegraph/analyzer";
 import { describe, expect, it } from "vitest";
 import { buildVocabulary } from "../src/aggregate.js";
 import { vocabularyToJsonString } from "../src/artifact.js";
+import { vocabularyCloudSvg } from "../src/svg.js";
 import { expectClosed } from "./closure.js";
 
 /**
@@ -42,6 +43,21 @@ describe.each(FIXTURES)("fixtures/%s", (fixture) => {
 
   it("is the same on a second run over a fresh graph", () => {
     expect(vocabularyToJsonString(buildVocabulary(graphOf(fixture)), { pretty: true })).toBe(text);
+  });
+});
+
+// The corpus cloud of one fixture, byte for byte (PLAN.md §20.2): the layout,
+// the sizes, the classes and the legend in one reviewable file.
+describe("fixtures/java/expected/vocabulary.svg", () => {
+  const artifact = buildVocabulary(graphOf("java"));
+  const corpus = artifact.scopes[0];
+  const svg = corpus === undefined ? "" : vocabularyCloudSvg(artifact, corpus);
+  const snapshot = path("java", "vocabulary.svg");
+  if (process.env["CODEGRAPH_UPDATE_SNAPSHOTS"] !== undefined) writeFileSync(snapshot, svg);
+
+  it("reproduces the corpus cloud exactly", () => {
+    expect(existsSync(snapshot), `${snapshot} is committed`).toBe(true);
+    expect(svg).toBe(readFileSync(snapshot, "utf8"));
   });
 });
 
