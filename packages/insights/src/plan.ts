@@ -73,9 +73,11 @@ export interface PlanOptions {
   readonly maxCalls: number | undefined;
   /** Undefined = everything is in scope. */
   readonly inScope: ((unit: Unit) => boolean) | undefined;
+  /** A module's glossary keeps its heaviest `terms` words (`--terms`). */
+  readonly terms: number;
 }
 
-export type PlanEnv = Omit<ContextEnv, "records" | "depth" | "maxLines">;
+export type PlanEnv = Omit<ContextEnv, "records" | "depth" | "maxLines" | "terms">;
 
 export function modelFor(level: Level, models: PlanOptions["models"]): string {
   return level === "operation" ? models.leaf : models.rollup;
@@ -104,6 +106,7 @@ export function unitFingerprint(
     // also a failed one — the record carries the run-time value.
     missingDependencies: [...missingDependencies].sort(),
     depth,
+    words: pack.words,
   });
 }
 
@@ -137,7 +140,7 @@ export function planRun(
   options: PlanOptions,
 ): RunPlan {
   const records = sourceOf(existing);
-  const contextEnv: ContextEnv = { ...env, records, depth: options.depth, maxLines: options.maxLines };
+  const contextEnv: ContextEnv = { ...env, records, depth: options.depth, maxLines: options.maxLines, terms: options.terms };
   const fingerprints = new Map<string, string>();
   const steps: PlanStep[] = [];
   const byLevel: Record<Level, LevelEstimate> = {
@@ -185,7 +188,7 @@ export function planRun(
       }
     }
     const promptTokens = prompts.reduce((sum, p) => sum + estimateTokens(p.system) + estimateTokens(p.user), 0);
-    const completionTokens = prompts.reduce((sum, p) => sum + estimateCompletionTokens(unit.level, p.memberIds.length), 0);
+    const completionTokens = prompts.reduce((sum, p) => sum + estimateCompletionTokens(unit.level, p.memberIds.length, p.asked), 0);
     statusOf.set(unit.id, status);
     byStatus[status] += 1;
     byLevel[unit.level].calls += prompts.length;

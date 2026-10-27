@@ -3,10 +3,12 @@ import { readModelFileSync, type Edge, type Entity, type Model } from "@codegrap
 import {
   buildDomainFacts,
   buildGraph,
+  entityName,
   loadModels,
   type CodeGraph,
   type DomainFacts,
 } from "@codegraph/analyzer";
+import type { Speller } from "../src/context.js";
 import { collectUnits, type UnitSet } from "../src/units.js";
 
 /** The committed Java snapshot — real Spoon output, with Javadoc and metrics. */
@@ -28,6 +30,23 @@ export function graphOf(entities: readonly Entity[], edges: readonly Edge[] = []
     edges: [...edges],
   };
   return buildGraph(loadModels(model, { sources: ["toy"] }).union);
+}
+
+/**
+ * A speller for tests, standing in for `@codegraph/vocabulary`'s: the camel-case
+ * words of an entity's name, lowercased, each once, one-letter words dropped;
+ * a module's words ranked as given.
+ */
+export function toySpeller(graph: CodeGraph, ranked: Readonly<Record<string, readonly string[]>> = {}): Speller {
+  return {
+    words: (id) => {
+      const entity = graph.entity(id);
+      const name = entity === undefined ? undefined : entityName(entity);
+      const words = (name ?? "").split(/(?=[A-Z])|[^A-Za-z]+/u).map((w) => w.toLowerCase()).filter((w) => w.length > 1);
+      return [...new Set(words)];
+    },
+    ranked: (moduleId) => ranked[moduleId] ?? [],
+  };
 }
 
 /** Graph + dossiers + units in one go, for the walk tests. */

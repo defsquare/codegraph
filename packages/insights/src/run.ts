@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { contextPackFor, type ContextEnv } from "./context.js";
+import { contextPackFor, type ContextEnv, type MemberPack } from "./context.js";
 import type { Unit } from "./order.js";
 import { unitFingerprint, type PlanEnv, type PlanStep, type RunPlan } from "./plan.js";
 import { renderPrompts, type Prompt } from "./prompt.js";
@@ -114,6 +114,8 @@ export interface RunOptions {
   readonly maxScc: number;
   readonly depth: number;
   readonly maxLines: number;
+  /** The plan's `terms`: a module's glossary cut. */
+  readonly terms: number;
   /** The natural key per entity id, when the caller has it. */
   readonly keyOf?: (id: string) => RecordKey | undefined;
   /** The side-car's failures from earlier runs: attempts are counted on, unattempted ones carried over. */
@@ -205,6 +207,33 @@ function parseAnswer(level: Level, prompt: Prompt, json: unknown): { blocks: Map
   return { blocks };
 }
 
+/**
+ * What is kept of an answer's words (PLAN.md §20.3). The words are GIVEN: an
+ * entry for a word the prompt did not list is dropped, a word given twice
+ * keeps its first entry, and `in` is restated from the split — a fact the
+ * prompt stated, not the model's judgement. A module's glossary likewise.
+ */
+function restateWords(block: Block, member: MemberPack | undefined): Block {
+  if (member === undefined) return block;
+  const asked = new Map<string, string[]>();
+  for (const { identifier, words } of member.names) {
+    for (const word of words) asked.set(word, [...(asked.get(word) ?? []), identifier]);
+  }
+  const once = <E extends { readonly word: string }>(entries: readonly E[] | undefined, keep: (word: string) => boolean): E[] => {
+    const seen = new Set<string>();
+    return (entries ?? []).flatMap((entry) => {
+      const word = entry.word.trim().toLowerCase();
+      if (!keep(word) || seen.has(word)) return [];
+      seen.add(word);
+      return [{ ...entry, word }];
+    });
+  };
+  const words = once(block.words, (word) => asked.has(word)).map((entry) => clampConfidence({ ...entry, in: asked.get(entry.word) ?? [] }));
+  if (!("glossary" in block)) return { ...block, words };
+  const listed = new Set(member.glossary.map((g) => g.word));
+  return { ...block, words, glossary: once(block.glossary, (word) => listed.has(word)) };
+}
+
 export async function executeRun(
   plan: RunPlan,
   env: PlanEnv,
@@ -230,7 +259,7 @@ export async function executeRun(
     if (previous.has(unit.id) && unit.members.some((member) => !explained(member))) carried.add(unit.id);
   };
   const counts = { llm: 0, template: 0, reused: 0, failed: 0, skipped: 0, calls: 0 };
-  const contextEnv: ContextEnv = { ...env, records: book, depth: options.depth, maxLines: options.maxLines };
+  const contextEnv: ContextEnv = { ...env, records: book, depth: options.depth, maxLines: options.maxLines, terms: options.terms };
 
   const describe = (id: string): { kind: string; name: string | undefined; file: string | undefined } => {
     const op = env.units.operations.get(id);
@@ -303,6 +332,7 @@ export async function executeRun(
     }
 
     const pack = contextPackFor(unit, contextEnv);
+    const memberOf = new Map(pack.members.map((member) => [member.id, member]));
     const prompts = renderPrompts(pack, options.maxScc);
     // The run-time fingerprint: a dependency that failed is missing too.
     const missing = unit.deps.filter((d) => {
@@ -332,7 +362,7 @@ export async function executeRun(
           if ("error" in answer) throw new RunAborted(`invalid answer after repair: ${answer.error}`);
         }
         const share = splitUsage(completion.usage, answer.blocks.size);
-        for (const [id, block] of answer.blocks) produced.push(record(unit, id, block, fingerprint, "llm", completion.model, share));
+        for (const [id, block] of answer.blocks) produced.push(record(unit, id, restateWords(block, memberOf.get(id)), fingerprint, "llm", completion.model, share));
       }
     } catch (error) {
       counts.calls += calls;
