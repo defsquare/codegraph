@@ -87,6 +87,7 @@ codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
 
 codegraph insights [model.jsonl] [--store FILE] [--json]
                    [--id ID | --failures | --runs |
+                    --word WORD | --glossary MODULE_ID | --polysemy | --concerns |
                     --level operation|type|module --concept NAME
                     --min-confidence X --max-confidence X --limit N]
 
@@ -327,13 +328,36 @@ invocation:
 - `--id ID` — one explanation whole: envelope, description, block. An id that
   was asked for and **failed** is answered with the reason, exit `3`; an id the
   store has never heard of is a usage error;
+- `--word WORD` — every explained entity whose names spell the word (looked up
+  lowercase, as `vocabulary` splits names), grouped by module: one
+  tab-separated line per entry — the module, `glossary` or the entity's level,
+  the id, the concern, the confidence, the sense, and the identifiers the word
+  is in. Each module's own glossary entry comes first (its last cell lists the
+  types' senses when the module flagged the word polysemous), then the module,
+  its types, its operations. A record is placed by its natural key; one
+  without a key is under `-`. The meaning is not shown: `--glossary` and `--id`
+  show it;
+- `--glossary MODULE_ID` — a module's glossary whole, one line per word: the
+  word, the concern, sense and meaning the module reconciled from its types,
+  and the types' senses where they disagree;
+- `--polysemy` — the words a module flagged, and the words two modules'
+  glossaries define differently (in concern or sense, case and spacing aside):
+  every module's entry for each, side by side, the most senses first. No
+  model call judges them across the corpus: a human does;
+- `--concerns` — per module: how many distinct words its records define, and
+  how many the model called `domain`, `technical` and `ambiguous` (a word two
+  units judged differently counts under both), the most-worded module first;
 - `--failures` — the units still owed, with the reason each failed;
 - `--runs` — the ledger, oldest first: when, which models, what each run
   explained and spent.
 
 `--json` makes each answer one kind-tagged document (`codegraph.insightsSummary/1`,
-`…List/1`, `…Failures/1`, `…Runs/1`; `--id --json` is the record exactly as the
-side-car carries it). The command writes nothing: the store is opened as a
+`…List/1`, `…Word/1`, `…Glossary/1`, `…Polysemy/1`, `…Concerns/1`, `…Failures/1`,
+`…Runs/1`; `--id --json` is the record exactly as the side-car carries it).
+A record a model explained under prompt 1 defines no words, so the word
+answers cannot see it: they say on stderr how many such records there are,
+the summary counts them, `--id` says so on the record, and `--glossary` on
+such a module says why it has none. The next `explain` re-explains them. The command writes nothing: the store is opened as a
 reader, a missing one is a usage error rather than a file that appears, and one
 written by a newer codegraph — or a SQLite file that is not an insights store —
 is named and left alone. One an older build wrote is refused and left alone too:

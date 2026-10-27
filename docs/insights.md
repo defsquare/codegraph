@@ -279,6 +279,26 @@ everything else on that page is extracted from source, and this is not.
 Operations are not shown: a navigator member node carries no entity id, and
 ids are never constructed.
 
+**The words' readers (M19c).** `glossary.ts` rolls the records' `words` and
+the modules' `glossary` up, over four more projections of the port:
+`wordHits(word)` (the `insight_word` index, joined to each record's envelope),
+`glossaryEntries(word?)` (each module block's `glossary`, through `json_each`
+over the module records alone), `concernRows()` (each module, word and concern
+once) and `withoutWords()`. A record is placed in its module by its natural
+key: core renders the module's id from the key's `lang` and `module`, and the
+groups are compared through `naturalKeyIndex`. The id is never parsed; a record
+without a key is placed nowhere, and still answered. The index holds what
+`->>` made of a word, which for a lone surrogate (no identifier spells one; a
+hand-edited side-car might) is not what the binding sends, so such a word is
+looked for by a scan. Either way, what is returned is what equals the word
+once parsed back from JSON. A record a model wrote under prompt 1 has no
+`words`: `wordsAbsence(record)` says so (`prompt-1`, or `templated` for a record
+no model wrote), and every report counts those records, since it cannot see
+them. `codegraph insights --word`, `--glossary`, `--polysemy` and `--concerns`
+print them (cli.md). On the synthetic store of Broadleaf's size,
+`--word order` prints its 549 entries and 19 glossary entries in under half a
+second, Node's start included.
+
 `@codegraph/insights` stays pure: `store.ts` is a port, and `store-sqlite.ts`
 is handed an OPEN database, so the path, the file and `node:sqlite` itself
 (one import site, in the analyzer's `store/sqlite.ts`) stay with the CLI.

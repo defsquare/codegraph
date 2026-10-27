@@ -5510,6 +5510,38 @@ and `confidence` are generated columns over it. The decisions:
   `WHERE word = 'order'` takes 0.5 ms, and the migration's backfill 0.6 s. The
   real Broadleaf side-car is owed.
 
+**As built — the store's readers (2026-10-27).** `codegraph insights --word`,
+`--glossary`, `--polysemy` and `--concerns`, over `glossary.ts` in
+`@codegraph/insights` and four projections of the port (`wordHits`,
+`glossaryEntries`, `concernRows`, `withoutWords`). The decisions:
+
+- **The module comes from the natural key.** `insights` opens the store alone,
+  so a record is placed by its key: core renders the module's id from `lang`
+  and `module`, groups compare through `naturalKeyIndex`, and the id is never
+  parsed. "Grouped module → type → operation" is by level within each module:
+  an operation is not nested under its type, which only the model knows.
+- **Tab-separated, like the command's other lists**, the module first so the
+  grouping survives `sort`. A module's glossary entry heads its group. The
+  entries show no `meaning`: the projection does not hold it, and `--glossary`
+  and `--id` read it from the block.
+- **Polysemy across modules** is two entries that differ in concern or in
+  sense, case and spacing aside: the wording varies from call to call, and an
+  exact comparison would list every word two modules define. The most senses
+  first.
+- **Concerns** count distinct words per concern, so a word two units of one
+  module judged differently counts under both.
+- **The prompt-1 answer** (`wordsAbsence`): a record a model wrote without
+  `words` is prompt 1's, one no model wrote is a template's. `--id` says which,
+  `--glossary` on such a module says why it has none, and the summary and every
+  word answer count what they cannot see.
+- **Lookup is exact for any string.** The `word` index holds what `->>` made of
+  the word; a lone surrogate's bytes are not the binding's, so such a word is
+  looked for by a scan, and JS equality decides either way.
+- **Measured** through the CLI on the synthetic store at Broadleaf's scale:
+  `--word order` (549 entries, 19 glossary entries) 0.46 s, `--polysemy`
+  0.48 s, `--concerns` 0.54 s, Node's start included. The re-explained
+  Broadleaf store is owed, as above.
+
 ### 20.4 Milestone split
 
 **M19a — the lexicon, the split, the artifact** (closes the profile half of #19)
@@ -5582,11 +5614,13 @@ and `confidence` are generated columns over it. The decisions:
       answer for a record explained under prompt `"1"`; on the fake client
       and live on the Java fixture; the §20.3 estimate replaced by the
       Broadleaf measurement. *(In: `--terms`, the estimate's per-word
-      figures, the fake-client run. Owed: the measurement, live runs, the
-      prompt-1 answer.)*
+      figures, the fake-client run, the prompt-1 answer. Owed: the
+      measurement, live runs.)*
 - [ ] Readers: `insights --word`, `--glossary`, `--polysemy`, `--concerns`;
       `vocabulary --drift-insights`; `/glossary.json`; the entries in the
-      Vocabulary tab and in the Navigate panel as inferences.
+      Vocabulary tab and in the Navigate panel as inferences. *(In: the four
+      `insights` readers. Owed: `--drift-insights`, `/glossary.json`, the tab
+      and the panel.)*
 - [ ] `docs/vocabulary.md` (the idioms per profile, the classes, the
       weights, the artifact, the three layers, the readers, the drift
       reports); README names the feature; `docs/cli.md` the command and the
