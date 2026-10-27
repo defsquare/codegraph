@@ -19,7 +19,7 @@ import {
 } from "../src/schema.js";
 import { decodeInsights, encodeInsightsToString } from "../src/sidecar.js";
 import { INSIGHTS_APPLICATION_ID, INSIGHTS_DB_VERSION, INSIGHT_ANSWER_KIND, InsightsStoreError, answerInsight, insightsStorePathFor } from "../src/store.js";
-import { storeBook, summaryOf } from "../src/records.js";
+import { memoryBook, storeBook, summaryOf } from "../src/records.js";
 import { sqliteInsightsStore } from "../src/store-sqlite.js";
 
 const memory = () => sqliteInsightsStore(loadSqlite().open(":memory:"));
@@ -83,12 +83,19 @@ const usageArb = fc.record(
 );
 const keyArb = fc.record({ lang: text, module: text, symbol: text, disambiguator: text }, { requiredKeys: ["lang", "module", "symbol"] });
 const confidence = fc.double({ noNaN: true, noDefaultInfinity: true });
-const blockArb = {
-  operation: fc.record({ name: wild, description: wild, confidence, domainTerms: fc.array(wild, { maxLength: 3 }), owner: fc.constantFrom("entity", "aggregate", "unknown") }).map((b) => ({ ...OPERATION, ...b })),
-  type: fc.record({ name: text, description: wild, confidence, identity: fc.option(text, { nil: null }), concept: fc.constantFrom("entity", "aggregate", "valueType") }).map((b) => ({ ...TYPE, ...b })),
-  module: fc.record({ name: text, description: wild, confidence, sharedKernelHint: fc.option(text, { nil: null }), boundedContextHint: fc.option(fc.record({ name: wild, rationale: wild }), { nil: null }) }).map((b) => ({ ...MODULE, ...b })),
-};
 const strip = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
+const wordArb = fc.record({ word: wild, in: fc.array(wild, { maxLength: 2 }), concern: fc.constantFrom("domain", "technical", "ambiguous"), sense: wild, meaning: wild, confidence });
+const glossaryArb = fc.record({
+  word: wild, concern: fc.constantFrom("domain", "technical", "ambiguous"), sense: wild, meaning: wild, polysemous: fc.boolean(),
+  senses: fc.array(fc.record({ in: wild, sense: wild }), { maxLength: 2 }),
+});
+// Prompt 2 adds them; a record explained under prompt 1 has neither.
+const wordsArb = maybe(fc.array(wordArb, { maxLength: 3 }));
+const blockArb = {
+  operation: fc.record({ name: wild, description: wild, confidence, domainTerms: fc.array(wild, { maxLength: 3 }), owner: fc.constantFrom("entity", "aggregate", "unknown"), words: wordsArb }).map((b) => strip({ ...OPERATION, ...b })),
+  type: fc.record({ name: text, description: wild, confidence, identity: fc.option(text, { nil: null }), concept: fc.constantFrom("entity", "aggregate", "valueType"), words: wordsArb }).map((b) => strip({ ...TYPE, ...b })),
+  module: fc.record({ name: text, description: wild, confidence, sharedKernelHint: fc.option(text, { nil: null }), boundedContextHint: fc.option(fc.record({ name: wild, rationale: wild }), { nil: null }), words: wordsArb, glossary: maybe(fc.array(glossaryArb, { maxLength: 2 })) }).map((b) => strip({ ...MODULE, ...b })),
+};
 
 const recordArb = (id: string): fc.Arbitrary<InsightRecord> =>
   fc.constantFrom("operation", "type", "module").chain((level) =>
@@ -249,6 +256,40 @@ describe("storeBook (M16b): the walk reads the store, one record at a time", () 
       }),
       { numRuns: 100 },
     );
+  });
+
+  it("the store's words ARE the record's, projected without the rest of the block; none under prompt 1", () => {
+    fc.assert(
+      fc.property(fc.uniqueArray(text.filter((s) => s !== ""), { minLength: 1, maxLength: 6 }).chain((ids) => fc.tuple(...ids.map(recordArb))), (records) => {
+        const store = memory();
+        try {
+          // Compared with what the side-car holds: JSON has no -0.
+          const file = decodeInsights(encodeInsightsToString(HEADER, records, eof(records.length)));
+          store.importFile(file);
+          const book = memoryBook(file.records);
+          for (const record of file.records) {
+            expect(store.words(record.id)).toEqual(record.block.words);
+            expect(book.words(record.id)).toEqual(record.block.words);
+          }
+          expect(store.words("\u0001 no such id")).toBeUndefined();
+        } finally {
+          store.close();
+        }
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("a book answers a type's words from the store, and keeps a put's words visible", () => {
+    const words = [{ word: "order", in: ["Order"], concern: "domain" as const, sense: "a purchase", meaning: "What a customer asks to buy.", confidence: 0.9 }];
+    const { store } = seeded();
+    const book = storeBook(store);
+    expect(book.words("t/A")).toBeUndefined();
+    expect(book.words("nope")).toBeUndefined();
+    const run = store.beginRun({ header: HEADER, startedAt: "t" });
+    book.begin(run);
+    void book.put("t/B", [{ ...type("t/B"), block: { ...TYPE, words } } as InsightRecord]);
+    expect(book.words("t/B")).toEqual(words);
   });
 
   it("put() is the store's commit: refused before a run begins, visible to the very next read after", () => {

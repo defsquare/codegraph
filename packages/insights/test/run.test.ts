@@ -98,7 +98,7 @@ async function run(existing: Map<string, InsightRecord>, options: Partial<PlanOp
   return { plan, result, emitted, layers, completer };
 }
 
-/** A book that counts what is asked of it: `fingerprint` is free, `summary` reads (a projection of) a block. */
+/** A book that counts what is asked of it: `fingerprint` is free, `summary` and `words` read (a projection of) a block. */
 function spyBook(records: Iterable<InsightRecord> = []) {
   const inner = memoryBook(records);
   const gets: string[] = [];
@@ -109,6 +109,10 @@ function spyBook(records: Iterable<InsightRecord> = []) {
     summary: (id) => {
       gets.push(id);
       return inner.summary(id);
+    },
+    words: (id) => {
+      gets.push(id);
+      return inner.words(id);
     },
     size: () => inner.size(),
     put: (unitId, unit) => {
