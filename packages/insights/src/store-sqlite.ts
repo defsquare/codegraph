@@ -5,7 +5,9 @@ import {
   InsightsEof,
   InsightsHeader,
   LEVELS,
+  type GlossaryEntry,
   type Level,
+  type WordConcern,
   type WordEntry,
 } from "./schema.js";
 import { conceptLabel, type RecordSummary } from "./records.js";
@@ -14,17 +16,21 @@ import {
   INSIGHTS_APPLICATION_ID,
   INSIGHTS_DB_VERSION,
   InsightsStoreError,
+  type ConcernRow,
   type ExportStamp,
+  type GlossaryHit,
   type InsightQuery,
   type InsightRow,
   type InsightStats,
   type InsightsStore,
+  type ListedWord,
   type OpenRun,
   type RunEnd,
   type RunHandle,
   type RunRow,
   type RunStart,
   type StoreOpenOptions,
+  type WordHit,
 } from "./store.js";
 
 /**
@@ -60,6 +66,13 @@ import {
  * index lookup rather than a scan of every block. It is written with its
  * record, in the same transaction, and rebuilt by an import: the block stays
  * the one copy that counts, and nothing is exported from the projection.
+ *
+ * ITS READERS NARROW IN SQL AND DECIDE IN JS. A word is looked up through the
+ * `word` index, which holds what `->>` made of it: a lone surrogate (no
+ * identifier spells one, a hand-edited side-car might) is not the bytes the
+ * binding sends for it, so such a word is looked for by a scan instead. Either
+ * way, and for the glossaries, what is returned is what equals the word once
+ * parsed back from JSON — never what SQLite's text comparison let through.
  */
 
 /** Index i takes a store from version i to i+1. Append; never edit a shipped entry. */
@@ -440,7 +453,55 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
       byOrigin,
       byConcept,
       usage: { promptTokens: Number(spent?.["p"] ?? 0), completionTokens: Number(spent?.["c"] ?? 0), ...(cost === undefined ? {} : { cost }) },
+      withoutWords: withoutWords(),
     };
+  };
+
+  // A template has no words by design (no model judged it): only a record a model wrote is owed them.
+  const selectWithoutWords = db.prepare("SELECT count(*) AS n FROM insight WHERE origin = 'llm' AND block -> '$.words' IS NULL");
+  const withoutWords = (): number => Number(selectWithoutWords.get()?.["n"] ?? 0);
+
+  const HIT_SQL =
+    "SELECT w.entry AS entry, i.id AS id, i.level AS level, i.kind AS kind, i.name AS name, i.model AS model, i.key_lang, i.key_module, i.key_symbol, i.key_disambiguator FROM insight_word w JOIN insight i ON i.id = w.id";
+  const hitsOfWord = db.prepare(`${HIT_SQL} WHERE w.word = ? ORDER BY w.rowid`);
+  const everyHit = db.prepare(`${HIT_SQL} ORDER BY w.rowid`);
+  const wordHits = (word: string): WordHit[] => {
+    const rows = /\p{Surrogate}/u.test(word) ? everyHit.iterate() : hitsOfWord.iterate(word);
+    const hits: WordHit[] = [];
+    for (const row of rows) {
+      const entry = JSON.parse(row["entry"] as string) as ListedWord;
+      if (entry.word !== word) continue;
+      const level = LEVELS[Number(row["level"])] as Level;
+      hits.push({ id: row["id"] as string, level, kind: row["kind"] as string, name: text(row, "name"), key: keyOf(row), model: text(row, "model"), entry });
+    }
+    // Side-car order; the sort is stable, so a record's entries stay in block order (rowid).
+    return hits.sort((a, b) => LEVEL_RANK[a.level] - LEVEL_RANK[b.level] || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  };
+
+  const selectGlossaries = db.prepare(
+    "SELECT g.value AS entry, i.id AS id, i.name AS name, i.model AS model, i.key_lang, i.key_module, i.key_symbol, i.key_disambiguator FROM insight i, json_each(i.block, '$.glossary') AS g WHERE i.level = ? ORDER BY i.rowid, g.key",
+  );
+  const glossaryEntries = (word?: string): GlossaryHit[] => {
+    const hits: GlossaryHit[] = [];
+    for (const row of selectGlossaries.iterate(LEVEL_RANK.module)) {
+      const entry = JSON.parse(row["entry"] as string) as GlossaryEntry;
+      if (word !== undefined && entry.word !== word) continue;
+      hits.push({ id: row["id"] as string, key: keyOf(row), name: text(row, "name"), model: text(row, "model"), entry });
+    }
+    return hits.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  };
+
+  // `->`: the word as JSON text, which keeps what a TEXT column would cut short.
+  const selectConcerns = db.prepare(
+    "SELECT DISTINCT i.key_lang, i.key_module, w.entry -> '$.word' AS word, w.concern AS concern FROM insight_word w JOIN insight i ON i.id = w.id",
+  );
+  const concernRows = (): ConcernRow[] => {
+    const rows = new Map<string, ConcernRow>();
+    for (const row of selectConcerns.iterate()) {
+      const out: ConcernRow = { lang: text(row, "key_lang"), module: text(row, "key_module"), word: JSON.parse(row["word"] as string) as string, concern: row["concern"] as WordConcern };
+      rows.set(JSON.stringify([out.lang ?? null, out.module ?? null, out.word, out.concern]), out);
+    }
+    return [...rows.values()];
   };
 
   const runs = (): RunRow[] =>
@@ -488,6 +549,10 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
     failures,
     query,
     stats,
+    wordHits,
+    glossaryEntries,
+    concernRows,
+    withoutWords,
     runs,
 
     fingerprints() {

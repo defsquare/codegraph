@@ -395,6 +395,8 @@ describe("a reader's questions (M16c): projections, never blocks — and a store
       byOrigin: { llm: 5, template: 1 },
       byConcept: { aggregate: 1, entity: 1, valueType: 1 },
       usage: { promptTokens: 0, completionTokens: 0 },
+      // A model wrote five of them and none has words: prompt 1's. The template is no model's.
+      withoutWords: 5,
     });
     // What the records that exist cost, from their own usage — it survives an import, the ledger does not.
     const paid = memory();
@@ -709,6 +711,59 @@ describe("version 2 (M19c): insight_word, a projection of every record's words",
       expect(after.prepare("SELECT count(*) AS n FROM insight").get()).toEqual({ n: 6 });
       after.close();
     });
+  });
+});
+
+describe("the word readers' projections (M19c): what the blocks say, never more", () => {
+  const hit = (r: InsightRecord, entry: WordEntry) => ({ id: r.id, level: r.level, kind: r.kind, name: r.name, key: r.key, model: r.model, entry: listed(entry) });
+  const asSet = <T>(rows: readonly T[]): string[] => rows.map((row) => JSON.stringify(row)).sort();
+
+  it("for any side-car, exact on any string: one word's entries, the glossaries, each concern once, the records without words", () => {
+    fc.assert(
+      fc.property(fileArb, (file) => {
+        const store = memory();
+        const { records } = decodeInsights(file);
+        store.importFile(decodeInsights(file));
+        const spelled = new Set(records.flatMap((r) => (r.block.words ?? []).map((w) => w.word)));
+        // Side-car order, then block order. The words are any strings, a lone surrogate (which the index cannot match) included.
+        for (const word of [...spelled, "\u{1F4E6}never"]) {
+          expect(store.wordHits(word)).toEqual(records.flatMap((r) => (r.block.words ?? []).filter((w) => w.word === word).map((w) => hit(r, w))));
+        }
+        const glossed = records.flatMap((r) => (r.level === "module" ? (r.block.glossary ?? []).map((entry) => ({ id: r.id, key: r.key, name: r.name, model: r.model, entry })) : []));
+        expect(store.glossaryEntries()).toEqual(glossed);
+        for (const word of new Set(glossed.map((g) => g.entry.word))) expect(store.glossaryEntries(word)).toEqual(glossed.filter((g) => g.entry.word === word));
+        const concerns = records.flatMap((r) => (r.block.words ?? []).map((w) => ({ lang: r.key?.lang, module: r.key?.module, word: w.word, concern: w.concern })));
+        expect(asSet(store.concernRows())).toEqual([...new Set(asSet(concerns))]);
+        expect(store.withoutWords()).toBe(records.filter((r) => r.origin === "llm" && r.block.words === undefined).length);
+        store.close();
+      }),
+      { numRuns: 60 },
+    );
+  });
+
+  it("answers in side-car order whatever order a run wrote the records in", () => {
+    const store = memory();
+    const run = store.beginRun({ header: HEADER, startedAt: "t" });
+    const glossary = [{ word: "order", concern: "domain" as const, sense: "a request", meaning: "m", polysemous: false, senses: [] }];
+    // A walk writes bottom-up and in its own order: rowids say nothing about the export's.
+    store.putUnit(run, "m/b", [{ t: "i", id: "m/b", level: "module", kind: "package", origin: "llm", fingerprint: FP, block: { ...MODULE, words: [ORDER], glossary } }]);
+    store.putUnit(run, "t/B", [{ ...type("t/B"), block: { ...TYPE, words: [ORDER] } } as InsightRecord]);
+    store.putUnit(run, "m/a", [{ t: "i", id: "m/a", level: "module", kind: "package", origin: "llm", fingerprint: FP, block: { ...MODULE, words: [ORDER], glossary } }]);
+    store.putUnit(run, "t/A", [{ ...type("t/A"), block: { ...TYPE, words: [ORDER] } } as InsightRecord]);
+    store.putUnit(run, "o/z", [op("o/z", { block: { ...OPERATION, words: [ORDER] } })]);
+    expect(store.wordHits("order").map((h) => h.id)).toEqual(["o/z", "t/A", "t/B", "m/a", "m/b"]);
+    expect(store.glossaryEntries().map((g) => g.id)).toEqual(["m/a", "m/b"]);
+    store.close();
+  });
+
+  it("a word no identifier can spell (a lone surrogate) is found exactly, and only it", () => {
+    const store = memory();
+    const odd = { ...ORDER, word: "\ud800" };
+    store.importFile(decodeInsights(encodeInsightsToString(HEADER, [{ ...type("t/Order"), block: { ...TYPE, words: [ORDER, LINES, odd] } } as InsightRecord], eof(1))));
+    expect(store.wordHits("order").map((h) => h.entry.word)).toEqual(["order"]);
+    expect(store.wordHits("\ud800").map((h) => h.entry.word)).toEqual(["\ud800"]);
+    expect(store.wordHits("\udc00")).toEqual([]);
+    store.close();
   });
 });
 
