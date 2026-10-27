@@ -38,12 +38,12 @@ function answer(request: LlmRequest): unknown {
   const block = (id: string): unknown => {
     const short = id.slice(id.lastIndexOf("/") + 1);
     if (level === "operation") {
-      return { name: short, description: `Explains ${short}.`, safe: false, idempotent: null, owner: "entity", handlesCommand: null, emits: [], preconditions: [], postconditions: [], invariantsEnforced: [], usesSpi: [], domainTerms: [], confidence: 0.6 };
+      return { name: short, description: `Explains ${short}.`, safe: false, idempotent: null, owner: "entity", handlesCommand: null, emits: [], preconditions: [], postconditions: [], invariantsEnforced: [], usesSpi: [], domainTerms: [], words: [], confidence: 0.6 };
     }
     if (level === "type") {
-      return { name: short, description: `Type ${short}.`, concept: "entity", eventKind: null, interfaceRole: null, aggregateRoot: null, containedIn: null, syncPattern: null, identity: null, fields: [], invariants: [], stateMachine: null, relatesTo: [], exposes: [], dependsOn: [], domainTerms: [], confidence: 0.6 };
+      return { name: short, description: `Type ${short}.`, concept: "entity", eventKind: null, interfaceRole: null, aggregateRoot: null, containedIn: null, syncPattern: null, identity: null, fields: [], invariants: [], stateMachine: null, relatesTo: [], exposes: [], dependsOn: [], domainTerms: [], words: [], confidence: 0.6 };
     }
-    return { name: short, description: `Module ${short}.`, apis: [], spis: [], dependsOn: [], concepts: [], boundedContextHint: null, sharedKernelHint: null, ubiquitousLanguage: [], confidence: 0.5 };
+    return { name: short, description: `Module ${short}.`, apis: [], spis: [], dependsOn: [], concepts: [], boundedContextHint: null, sharedKernelHint: null, ubiquitousLanguage: [], words: [], glossary: [], confidence: 0.5 };
   };
   const cycle = /Return one entry per id: (.+)\./u.exec(request.user)?.[1];
   return cycle === undefined ? block(unitId) : { members: cycle.split(", ").map((id) => ({ id, block: block(id) })) };

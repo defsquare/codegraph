@@ -48,17 +48,17 @@ const OPTIONS: PlanOptions = {
 };
 
 function operationBlock(name: string): OperationBlock {
-  return { name, description: `Explains ${name}.`, safe: true, idempotent: true, owner: "entity", handlesCommand: null, emits: [], preconditions: [], postconditions: [], invariantsEnforced: [], usesSpi: [], domainTerms: [], confidence: 0.7 };
+  return { name, description: `Explains ${name}.`, safe: true, idempotent: true, owner: "entity", handlesCommand: null, emits: [], preconditions: [], postconditions: [], invariantsEnforced: [], usesSpi: [], domainTerms: [], words: [], confidence: 0.7 };
 }
 function typeBlock(name: string): TypeBlock {
-  return { name, description: `Type ${name}.`, concept: "entity", eventKind: null, interfaceRole: null, aggregateRoot: null, containedIn: null, syncPattern: null, identity: "total", fields: [], invariants: [], stateMachine: null, relatesTo: [], exposes: [], dependsOn: [], domainTerms: [], confidence: 0.6 };
+  return { name, description: `Type ${name}.`, concept: "entity", eventKind: null, interfaceRole: null, aggregateRoot: null, containedIn: null, syncPattern: null, identity: "total", fields: [], invariants: [], stateMachine: null, relatesTo: [], exposes: [], dependsOn: [], domainTerms: [], words: [], confidence: 0.6 };
 }
 function moduleBlock(name: string): ModuleBlock {
-  return { name, description: `Module ${name}.`, apis: [], spis: [], dependsOn: [], concepts: [], boundedContextHint: null, sharedKernelHint: null, ubiquitousLanguage: [], confidence: 0.5 };
+  return { name, description: `Module ${name}.`, apis: [], spis: [], dependsOn: [], concepts: [], boundedContextHint: null, sharedKernelHint: null, ubiquitousLanguage: [], words: [], glossary: [], confidence: 0.5 };
 }
 
 /** Answers from the request alone: the unit id is on the first line, the member ids under "Return one entry per id". */
-function fakeCompleter(overrides: { badFirst?: Set<string>; failing?: Set<string>; throwing?: Map<string, unknown> } = {}): Completer & { requests: CompletionRequest[] } {
+function fakeCompleter(overrides: { badFirst?: Set<string>; failing?: Set<string>; throwing?: Map<string, unknown>; wordless?: Set<string> } = {}): Completer & { requests: CompletionRequest[] } {
   const requests: CompletionRequest[] = [];
   const seenBad = new Set<string>();
   const completer = (async (request: CompletionRequest) => {
@@ -69,6 +69,10 @@ function fakeCompleter(overrides: { badFirst?: Set<string>; failing?: Set<string
       level === "operation" ? operationBlock(id) : level === "type" ? typeBlock(id) : moduleBlock(id);
     if (overrides.throwing?.has(unitId)) throw overrides.throwing.get(unitId);
     if (overrides.failing?.has(unitId)) return { json: { nonsense: true }, model: request.model };
+    if (overrides.wordless?.has(unitId)) {
+      const { words: _, ...prompt1 } = blockFor(unitId) as OperationBlock;
+      return { json: prompt1, model: request.model };
+    }
     if (overrides.badFirst?.has(unitId) && !seenBad.has(unitId)) {
       seenBad.add(unitId);
       return { json: { wrong: "shape" }, model: request.model, usage: { promptTokens: 5, completionTokens: 1 } };
@@ -280,6 +284,14 @@ describe("executeRun", () => {
     // …and once h exists, g's fingerprint must change: a later run redoes it.
     const okPlan = planRun(corpus().walk, new Map(failed.result.records.map((r) => [r.id, r])), corpus().env, OPTIONS);
     expect(okPlan.steps.find((s) => s.unit.id === m("g"))?.status).toBe("llm");
+  });
+
+  it("asks again for an answer without its words, as prompt 1 answered, and records a failure after the second", async () => {
+    const failed = await run(new Map(), {}, fakeCompleter({ wordless: new Set([m("h")]) }));
+    expect(failed.result.failures.map((f) => [f.id, f.reason.kind])).toEqual([[m("h"), "invalid-answer"]]);
+    expect(failed.result.failures[0]?.reason.message).toContain("words");
+    const hRequests = failed.completer.requests.filter((r) => r.user.startsWith(`# Unit: operation ${m("h")}`));
+    expect(hRequests).toHaveLength(2);
   });
 
   it("concurrency does not change the record set", async () => {

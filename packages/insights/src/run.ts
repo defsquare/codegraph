@@ -5,7 +5,7 @@ import { unitFingerprint, type PlanEnv, type PlanStep, type RunPlan } from "./pl
 import { renderPrompts, type Prompt } from "./prompt.js";
 import { bookOf, type RecordBook } from "./records.js";
 import {
-  BLOCKS,
+  ANSWER_BLOCKS,
   clampConfidence,
   responseJsonSchema,
   sccResponseSchema,
@@ -192,7 +192,7 @@ function issuesOf(error: z.ZodError): string {
 /** Validate one answer; returns the blocks by member id or the validation message. */
 function parseAnswer(level: Level, prompt: Prompt, json: unknown): { blocks: Map<string, Block> } | { error: string } {
   if (prompt.shape === "block") {
-    const parsed = BLOCKS[level].safeParse(json);
+    const parsed = ANSWER_BLOCKS[level].safeParse(json);
     if (!parsed.success) return { error: issuesOf(parsed.error) };
     return { blocks: new Map([[prompt.memberIds[0] ?? "", clampConfidence(parsed.data as Block)]]) };
   }

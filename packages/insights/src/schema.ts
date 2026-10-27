@@ -25,6 +25,10 @@ import {
  * "optional" is expressed as `.nullable()`, never `.optional()`; and no
  * numeric or string constraints are emitted — `confidence` is clamped on
  * receipt rather than constrained in the schema.
+ *
+ * ONE EXCEPTION, BY VERSION: `words` and the module's `glossary` arrived with
+ * prompt 2, so a RECORD may lack them (explained under prompt 1, decoded and
+ * re-encoded to its own bytes) while an ANSWER may not (`ANSWER_BLOCKS`).
  */
 
 export const INSIGHTS_KIND = "codegraph.insights/1";
@@ -32,7 +36,7 @@ export const INSIGHTS_GENERATOR = "@codegraph/insights";
 /** The vocabulary a side-car speaks (see ddd.ts). */
 export const INSIGHTS_METAMODEL = "specy.domain/3";
 /** Bump whenever the prompt or a block shape changes: every fingerprint includes it. */
-export const PROMPT_VERSION = "1";
+export const PROMPT_VERSION = "2";
 
 export const LEVELS = ["operation", "type", "module"] as const;
 export type Level = (typeof LEVELS)[number];
@@ -40,6 +44,40 @@ export type Level = (typeof LEVELS)[number];
 const name = z.string();
 const description = z.string();
 const confidence = z.number();
+
+/** What a word of the code is about, as the model judged it in one unit (PLAN.md §20.3). */
+export const WORD_CONCERNS = ["domain", "technical", "ambiguous"] as const;
+export type WordConcern = (typeof WORD_CONCERNS)[number];
+
+/** One word a unit's names spell, as THIS unit uses it: one entry per word, the words given, never chosen. */
+export const WordEntry = z.object({
+  /** As the splitter spelled it, lowercase. */
+  word: z.string(),
+  /** The identifiers of this unit it appears in. */
+  in: z.array(z.string()),
+  concern: z.enum(WORD_CONCERNS),
+  /** A short label: what the word signifies here. */
+  sense: z.string(),
+  /** One sentence in this unit's context; an `ambiguous` word gives both senses. */
+  meaning: z.string(),
+  confidence,
+});
+export type WordEntry = z.infer<typeof WordEntry>;
+
+/** A module's reconciliation of what its types said a word means. */
+export const GlossaryEntry = z.object({
+  word: z.string(),
+  concern: z.enum(WORD_CONCERNS),
+  sense: z.string(),
+  meaning: z.string(),
+  /** Its types disagree on the word. */
+  polysemous: z.boolean(),
+  /** The disagreeing types and their senses, when they do. */
+  senses: z.array(z.object({ in: z.string(), sense: z.string() })),
+});
+export type GlossaryEntry = z.infer<typeof GlossaryEntry>;
+
+const words = z.array(WordEntry).optional();
 
 /** Specy § Operation. */
 export const OperationBlock = z.object({
@@ -58,6 +96,7 @@ export const OperationBlock = z.object({
   /** External capabilities the operation needs (persistence, messaging, a gateway…), as SPIs. */
   usesSpi: z.array(z.object({ name, capability: z.string() })),
   domainTerms: z.array(z.string()),
+  words,
   confidence,
 });
 export type OperationBlock = z.infer<typeof OperationBlock>;
@@ -89,6 +128,7 @@ export const TypeBlock = z.object({
   /** Ports this type needs from others, with the role they play for it. */
   dependsOn: z.array(z.object({ name, role: z.enum(INTERFACE_ROLES) })),
   domainTerms: z.array(z.string()),
+  words,
   confidence,
 });
 export type TypeBlock = z.infer<typeof TypeBlock>;
@@ -105,6 +145,9 @@ export const ModuleBlock = z.object({
   /** For a module in a dependency cycle: why the group is inseparable, or how to split it. */
   sharedKernelHint: z.string().nullable(),
   ubiquitousLanguage: z.array(z.object({ term: z.string(), definition: z.string() })),
+  words,
+  /** Over the words its types spell; `ubiquitousLanguage` is the model's own terms. */
+  glossary: z.array(GlossaryEntry).optional(),
   confidence,
 });
 export type ModuleBlock = z.infer<typeof ModuleBlock>;
@@ -113,9 +156,16 @@ export const BLOCKS = { operation: OperationBlock, type: TypeBlock, module: Modu
 export type Block = OperationBlock | TypeBlock | ModuleBlock;
 export type BlockOf<L extends Level> = z.infer<(typeof BLOCKS)[L]>;
 
+/** What a model must answer under this prompt: the blocks with every field prompt 2 added required. */
+export const ANSWER_BLOCKS = {
+  operation: OperationBlock.required({ words: true }),
+  type: TypeBlock.required({ words: true }),
+  module: ModuleBlock.required({ words: true, glossary: true }),
+} as const;
+
 /** What the model returns for a unit whose members form a cycle: one block per member id. */
 export function sccResponseSchema<L extends Level>(level: L) {
-  return z.object({ members: z.array(z.object({ id: z.string(), block: BLOCKS[level] })) });
+  return z.object({ members: z.array(z.object({ id: z.string(), block: ANSWER_BLOCKS[level] })) });
 }
 
 /** The natural key (core's `NaturalKey`), carried so a re-extraction re-joins without parsing ids. */
@@ -283,7 +333,7 @@ export function strictify(schema: JsonSchema): JsonSchema {
 
 /** The JSON Schema for a level's block, or for the cycle response of that level. */
 export function responseJsonSchema(level: Level, shape: "block" | "scc" = "block"): JsonSchema {
-  const zod = shape === "block" ? BLOCKS[level] : sccResponseSchema(level);
+  const zod = shape === "block" ? ANSWER_BLOCKS[level] : sccResponseSchema(level);
   return strictify(z.toJSONSchema(zod, { target: "draft-2020-12", io: "output" }) as JsonSchema);
 }
 
