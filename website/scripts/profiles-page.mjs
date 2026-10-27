@@ -31,7 +31,7 @@ function parse(text) {
   // `  keywords          a, b` … up to the blank line; absent rows stay absent.
   const lexicon = {};
   for (let i = lines.indexOf("lexicon:") + 1; i > 0 && i < lines.length && lines[i] !== ""; i++) {
-    const row = /^ {2}(keywords|conventional|technical|file kinds|interface prefix)\s+(.*)$/.exec(lines[i]);
+    const row = /^ {2}(keywords|conventional|technical|file kinds|qualified|interface prefix)\s+(.*)$/.exec(lines[i]);
     if (row) lexicon[row[1]] = row[2] === "(none)" ? [] : row[2].split(", ");
   }
   const notes = [];
@@ -91,6 +91,9 @@ for (const lang of langs) {
   out.push("- Conventional names: " + words(lx["conventional"]));
   if (lx["technical"]) out.push("- Technical words: " + words(lx["technical"]));
   if (lx["file kinds"]) out.push("- File kinds: " + words(lx["file kinds"]));
+  // `  qualified         class ::, file /`: a kind, a space, its separator.
+  const by = (entry) => entry.replace(/^(\S+) (.+)$/, "`$1` by `$2`");
+  if (lx["qualified"]) out.push("- Qualified kinds: " + lx["qualified"].map(by).join(" · "));
   if (lx["interface prefix"]) out.push("- Interface prefix: a leading `I` before Upper + lower is a marker, not a word");
   out.push("", "**Notes**", "");
   for (const note of p.notes) out.push("- " + note);

@@ -69,6 +69,12 @@ const SUCCESS_CASES: readonly Case[] = [
     argv: ["export", FIXTURE, "--format", "csv", "--level", "type", "--declared-only"],
     expected: EXIT.OK,
   },
+  { why: "the corpus's words", argv: ["vocabulary", FIXTURE], expected: EXIT.OK },
+  {
+    why: "the words per type, as json",
+    argv: ["vocabulary", FIXTURE, "--level", "type", "--json"],
+    expected: EXIT.OK,
+  },
 ];
 
 const USAGE_CASES: readonly Case[] = [
@@ -120,6 +126,10 @@ const USAGE_CASES: readonly Case[] = [
   },
   { why: "a positional profiles does not take", argv: ["profiles", FIXTURE], expected: EXIT.USAGE },
   { why: "an unknown language", argv: ["profiles", "--lang", "klingon"], expected: EXIT.USAGE },
+  { why: "an unknown word class", argv: ["vocabulary", FIXTURE, "--class", "nouns"], expected: EXIT.USAGE },
+  { why: "an unknown role to weigh", argv: ["vocabulary", FIXTURE, "--weights", "class=8"], expected: EXIT.USAGE },
+  // Raised inside the command, once the model says the id is not there.
+  { why: "an unknown scope", argv: ["vocabulary", FIXTURE, "--scope", "java:nowhere/Nothing"], expected: EXIT.USAGE },
 ];
 
 const FINDING_CASES: readonly Case[] = [
@@ -158,6 +168,7 @@ const FINDING_CASES: readonly Case[] = [
     argv: ["export", models.danglingReference, "--format", "dot"],
     expected: EXIT.FINDINGS,
   },
+  { why: "the words of a model with a self edge", argv: ["vocabulary", models.selfEdge], expected: EXIT.FINDINGS },
 ];
 
 /**

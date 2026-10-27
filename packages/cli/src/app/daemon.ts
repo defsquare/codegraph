@@ -22,8 +22,11 @@ import { RECENT_KIND, readRecent } from "./store.js";
  * in memory and a port open. SIGTERM does the same; the shell uses both.
  *
  * THE PAGE IS THE SAME PAGE. The frontend bundle is served under the token
- * with relative URLs, so `navigator.json` and `city.json` are fetched exactly
- * as `codegraph serve` hands them out today — no Tauri IPC, no CORS.
+ * with relative URLs, so `navigator.json`, `city.json` and `vocabulary.json`
+ * are fetched exactly as `codegraph serve` hands them out — no Tauri IPC, no
+ * CORS. The lookups are not: the daemon holds no store open and no model
+ * between jobs, so `insight.json` and `carriers.json` are 404s the page
+ * reads as "not here".
  */
 export const APP_KIND = "codegraph.app/1";
 
@@ -140,14 +143,17 @@ export function startDaemon(options: DaemonOptions): Server {
         return;
       }
       case "/navigator.json":
-      case "/city.json": {
+      case "/city.json":
+      case "/vocabulary.json": {
         if (method !== "GET" && method !== "HEAD") return methodNotAllowed(response, "GET, HEAD");
         const artifacts = runner.artifacts;
         if (artifacts === undefined) {
           response.writeHead(404).end();
           return;
         }
-        sendJson(response, 200, route === "/navigator.json" ? artifacts.navigator : artifacts.city, method);
+        const artifact =
+          route === "/navigator.json" ? artifacts.navigator : route === "/city.json" ? artifacts.city : artifacts.vocabulary;
+        sendJson(response, 200, artifact, method);
         return;
       }
       case "/jobs": {

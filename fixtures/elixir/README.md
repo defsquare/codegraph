@@ -57,3 +57,28 @@ must skip it, count it, and still write its file record.
 | `lib/acme_order/two_modules.ex` | Two `defmodule`s in one file, both children of it; `@channels` is an attribute whose value is an array of unevaluated atoms; `&Atom.to_string/1` a reference to `<otp>/Atom`; `alias AcmeOrder.Channel` inside the second names this file — a self-edge, dropped. | |
 | `lib/acme_order/promo#2024.ex` | A `#` in a file name → `promo%232024.ex` in the key, the written path in `name`; `%Money{money \| amount: …}` from another module: a READ of `Money.amount` in the head and a WRITE in the update. | `#` is a reserved separator of the rendered id; cross-module field accesses are what the navigator lists. |
 | `test/acme_order/order_test.exs` | `use ExUnit.Case` → `<otp>/ExUnit.Case`; the `test` blocks are module-level code, so their calls (`Order.create/2`, `Order.total/1`, `Money.zero/0`) are invocations FROM the test module; `%Line{…}` is a reference to `Line` whose fields are unbound (Ecto-injected). | Tests are corpus; a `test` macro's body is compile-time code of the module. |
+
+## The vocabulary: `pricing`, counted by hand
+
+`expected/vocabulary.json` is the words of this model's names
+(`@codegraph/vocabulary`, PLAN.md §20), rebuilt byte for byte by
+`pnpm --filter @codegraph/vocabulary test` (`CODEGRAPH_UPDATE_SNAPSHOTS=1`
+rewrites it). A word weighs the role of the entity whose name carries it —
+module and type 8, attribute 4, operation 3, parameter and local 1 — except a
+word of the name's qualifier, before the last separator of a qualified kind,
+which weighs 1. One word, counted by hand from the model and pinned by the
+vocabulary's tests:
+
+| name | kind | role | weight |
+|---|---|---|---|
+| `lib/acme_order/pricing.ex` | file | module | 8 |
+| `AcmeOrder.Pricing` | module | type | 8 |
+| `pricing` (`AcmeOrder.Order`'s struct field) | field | attribute | 4 |
+| `pricing_for` | function | operation | 3 |
+| `pricing` | parameter | parameter | 1 |
+| `lib/acme_order/pricing/premium.ex`, `…/standard.ex` | file | qualifier | 2 × 1 |
+| `AcmeOrder.Pricing.Premium`, `AcmeOrder.Pricing.Standard` | module | qualifier | 2 × 1 |
+
+**`pricing`: weight 28, 9 occurrences, 9 carriers.** A module's dots and a
+file's slashes both qualify: `AcmeOrder.Pricing.Premium` speaks `premium` at 8
+and `acme`, `order`, `pricing` at 1.

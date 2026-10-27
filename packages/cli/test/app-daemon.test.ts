@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -217,11 +217,12 @@ describe("the daemon's announcement and capability URL", () => {
     expect(await json(await fetch(`${base}/recent`))).toEqual({ kind: "codegraph.recent/1", projects: [] });
     expect((await fetch(`${base}/navigator.json`)).status).toBe(404);
     expect((await fetch(`${base}/city.json`)).status).toBe(404);
+    expect((await fetch(`${base}/vocabulary.json`)).status).toBe(404);
   });
 });
 
 describe("POST /jobs: a folder becomes the page", () => {
-  it("detects the extractor, runs it with progress on the SSE route, builds both artifacts", async () => {
+  it("detects the extractor, runs it with progress on the SSE route, builds the three artifacts", async () => {
     const { base, dataDir } = await daemon();
     const accepted = await post(base, { src: JAVA_SRC });
     expect(accepted.status).toBe(202);
@@ -245,6 +246,11 @@ describe("POST /jobs: a folder becomes the page", () => {
     const city = await json<{ kind: string; layout?: unknown }>(await fetch(`${base}/city.json`));
     expect(city.kind).toBe("codegraph.city/1");
     expect(city.layout).toBeDefined();
+    const vocabulary = await json<{ kind: string; corpus: { name: string } }>(await fetch(`${base}/vocabulary.json`));
+    expect(vocabulary).toMatchObject({ kind: "codegraph.vocabulary/1", corpus: { name: "src" } });
+    // The carriers are a lookup over a model held in memory; the daemon holds
+    // none between jobs, so the page shows the counts without the evidence.
+    expect((await fetch(`${base}/carriers.json?term=order`)).status).toBe(404);
 
     // Everything lives under --data-dir: the model, its store, the artifacts.
     const projects = readFileSync(join(dataDir, "recent.json"), "utf8");
@@ -271,6 +277,23 @@ describe("POST /jobs: a folder becomes the page", () => {
     const extract = second.find((event) => event.event === "phase" && (event.data as { phase: string }).phase === "extract");
     expect((extract?.data as { detail: string }).detail).toContain("unchanged");
     expect(readFileSync(log, "utf8").trim().split("\n")).toHaveLength(1);
+  });
+
+  // A project built before the vocabulary existed has no vocabulary.json: its page is rebuilt, not reused.
+  it("rebuilds the page when an artifact is missing from the project directory", async () => {
+    const { base, dataDir } = await daemon();
+    expect((await post(base, { src: JAVA_SRC })).status).toBe(202);
+    await events(base);
+    const vocabularyPath = join(projectDirFor(dataDir, JAVA_SRC), "vocabulary.json");
+    expect(existsSync(vocabularyPath)).toBe(true);
+    rmSync(vocabularyPath);
+
+    expect((await post(base, { src: JAVA_SRC })).status).toBe(202);
+    const second = await events(base);
+    const build = second.find((event) => event.event === "phase" && (event.data as { phase: string }).phase === "build");
+    expect((build?.data as { detail: string }).detail).toContain("building the navigator, the city and the vocabulary");
+    expect(existsSync(vocabularyPath)).toBe(true);
+    expect((await fetch(`${base}/vocabulary.json`)).status).toBe(200);
   });
 
   it("re-runs the extractor when a claimed file changed", async () => {

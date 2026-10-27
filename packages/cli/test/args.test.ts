@@ -1,4 +1,5 @@
 import { basename } from "node:path";
+import { SCOPE_LEVELS, TERM_CLASSES, WEIGHT_KEYS } from "@codegraph/vocabulary";
 import { describe, expect, it } from "vitest";
 import {
   ANALYZE_SPEC,
@@ -16,6 +17,7 @@ import {
   renderHelp,
   usageLine,
   VALIDATE_SPEC,
+  VOCABULARY_SPEC,
   type Invocation,
 } from "../src/args.js";
 import { EXIT, UsageError } from "../src/exit.js";
@@ -292,6 +294,114 @@ describe("profiles", () => {
     const error = usageErrorFor(["profiles", "model.jsonl"]);
     expect(error.message).toContain("no positional arguments");
     expect(error.hint ?? "").toContain(usageLine(PROFILES_SPEC));
+  });
+});
+
+describe("vocabulary", () => {
+  it("defaults to the corpus's domain words, every flag unset", () => {
+    expect(parse(["vocabulary", "a.json"])).toEqual({
+      kind: "run",
+      command: "vocabulary",
+      options: {
+        models: ["a.json"],
+        level: "corpus",
+        scope: undefined,
+        top: undefined,
+        termClass: "domain",
+        weights: {},
+        technical: undefined,
+        drift: undefined,
+        out: undefined,
+        svg: undefined,
+        json: false,
+        internalOnly: false,
+        declaredOnly: false,
+        noCache: false,
+      },
+    });
+  });
+
+  it("takes every flag", () => {
+    const argv = ["vocabulary", "a.json", "--level", "module", "--top", "5", "--weights", "type=6, qualifier=0,local=0.5"];
+    const flags = ["--technical", "tech.txt", "--drift", "glossary.txt", "--out", "v.json", "--json", "--internal-only", "--declared-only", "--no-cache"];
+    expect(parse([...argv, ...flags])).toMatchObject({
+      command: "vocabulary",
+      options: {
+        level: "module",
+        top: 5,
+        termClass: "domain",
+        weights: { type: 6, qualifier: 0, local: 0.5 },
+        technical: "tech.txt",
+        drift: "glossary.txt",
+        out: "v.json",
+        json: true,
+        internalOnly: true,
+        declaredOnly: true,
+        noCache: true,
+      },
+    });
+    expect(parse(["vocabulary", "a.json", "--scope", "java:com.acme/Order", "--class", "all"])).toMatchObject({
+      options: { scope: "java:com.acme/Order", termClass: "all" },
+    });
+    expect(parse(["vocabulary", "a.json", "--svg", "cloud.svg", "--level", "corpus"])).toMatchObject({
+      options: { svg: "cloud.svg", level: "corpus" },
+    });
+  });
+
+  it("offers the package's levels and classes, not a copy", () => {
+    const help = renderHelp(VOCABULARY_SPEC);
+    expect(help).toContain(`--level <${SCOPE_LEVELS.join("|")}>`);
+    expect(help).toContain(`--class <${[...TERM_CLASSES, "all"].join("|")}>`);
+    for (const key of WEIGHT_KEYS) expect(help).toContain(key);
+  });
+
+  it("rejects an unknown class, naming the valid ones", () => {
+    const error = usageErrorFor(["vocabulary", "a.json", "--class", "nouns"]);
+    expect(error.message).toContain("--class");
+    expect(error.hint ?? "").toContain("domain, technical, keyword, short, all");
+  });
+
+  it("rejects an unknown role in --weights, naming the valid ones", () => {
+    const error = usageErrorFor(["vocabulary", "a.json", "--weights", "class=8"]);
+    expect(error.message).toBe("unknown role 'class' in --weights");
+    expect(error.hint ?? "").toContain(WEIGHT_KEYS.join(", "));
+  });
+
+  it("rejects a --weights entry that is no role=number, or a number below 0", () => {
+    for (const bad of ["type", "type=", "=8", "type=heavy", "type=-1", "type=Infinity", "", "type=8,,module=8"]) {
+      const error = usageErrorFor(["vocabulary", "a.json", "--weights", bad]);
+      expect(error.message, bad).toContain("--weights");
+    }
+  });
+
+  it("rejects a role weighed twice", () => {
+    expect(usageErrorFor(["vocabulary", "a.json", "--weights", "type=8,type=4"]).message).toBe(
+      "--weights weighs type twice",
+    );
+  });
+
+  it("refuses the flags --scope or --drift would leave unread", () => {
+    for (const [argv, flag] of [
+      [["--scope", "x", "--level", "module"], "--level"],
+      [["--scope", "x", "--drift", "g.txt"], "--drift"],
+      [["--drift", "g.txt", "--class", "all"], "--class"],
+    ] as const) {
+      const error = usageErrorFor(["vocabulary", "a.json", ...argv]);
+      expect(error.message, argv.join(" ")).toContain(flag);
+    }
+  });
+
+  // A cloud is one scope's: the corpus, or the one --scope names.
+  it("refuses --svg with a report of many scopes", () => {
+    for (const [argv, message] of [
+      [["--level", "module"], "--svg does not apply with --level module"],
+      [["--level", "type"], "--svg does not apply with --level type"],
+      [["--drift", "g.txt"], "--svg does not apply with --drift"],
+    ] as const) {
+      const error = usageErrorFor(["vocabulary", "a.json", "--svg", "c.svg", ...argv]);
+      expect(error.message).toBe(message);
+      expect(error.hint ?? "").toContain("--scope");
+    }
   });
 });
 

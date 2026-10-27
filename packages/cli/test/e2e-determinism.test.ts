@@ -40,6 +40,9 @@ const INVOCATIONS: readonly (readonly string[])[] = [
   // The explain plan: no model call, no key — the walk order and estimates alone.
   ["explain", FIXTURE, "--dry-run"],
   ["explain", FIXTURE, "--dry-run", "--json"],
+  ["vocabulary", FIXTURE],
+  ["vocabulary", FIXTURE, "--level", "module", "--class", "all", "--json"],
+  ["vocabulary", FIXTURE, "--scope", "java:com.acme.order/AbstractOrder.price()"],
   // The collation fixture: its identifiers order differently under UTF-16 code
   // units (what codegraph uses) than under UTF-8 bytes (what a database would),
   // so it is the one input where "sorted" is not a single answer.
@@ -47,6 +50,7 @@ const INVOCATIONS: readonly (readonly string[])[] = [
   ["analyze", UNICODE, "--report", "deps", "--level", "type"],
   ["export", UNICODE, "--format", "csv", "--level", "type"],
   ["export", UNICODE, "--format", "json", "--level", "type"],
+  ["vocabulary", UNICODE, "--class", "all"],
 ];
 
 describe("stdout is byte-identical across runs", () => {

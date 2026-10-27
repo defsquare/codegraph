@@ -123,3 +123,25 @@ Spoon 11.5.0, `setNoClasspath(true)`, `setComplianceLevel(17)`,
 
 Re-measure with a throwaway Spoon program, not from memory, whenever this
 corpus changes.
+
+## The vocabulary: `order`, counted by hand
+
+`expected/vocabulary.json` is the words of this model's names
+(`@codegraph/vocabulary`, PLAN.md §20), rebuilt byte for byte by
+`pnpm --filter @codegraph/vocabulary test` (`CODEGRAPH_UPDATE_SNAPSHOTS=1`
+rewrites it). A word weighs the role of the entity whose name carries it —
+module and type 8, attribute 4, operation 3, parameter and local 1 — except a
+word of the name's qualifier, before the last separator of a qualified kind,
+which weighs 1. One word, counted by hand from the model and pinned by the
+vocabulary's tests:
+
+| name | kind | role | weight |
+|---|---|---|---|
+| `com.acme.order` | package | module | 8 |
+| `AbstractOrder`, `Order`, `OrderService` | class | type | 3 × 8 |
+| `order` × 5 (`both`, `freeOf`, `notifyShipped`, `bill`, a lambda) | parameter | parameter | 5 × 1 |
+| `order` (in `archive`) | localVariable | local | 1 |
+| `com.acme.order.adapter`, `com.acme.order.legacy` | package | qualifier | 2 × 1 |
+
+**`order` at the corpus: weight 40, 12 occurrences, 12 carriers.** The two
+`orders` parameters of `archive` are another word: nothing stems.

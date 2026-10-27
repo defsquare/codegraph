@@ -161,6 +161,9 @@ importers:
       '@codegraph/viz':
         specifier: workspace:*
         version: link:../viz
+      '@codegraph/vocabulary':
+        specifier: workspace:*
+        version: link:../vocabulary
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -283,6 +286,9 @@ importers:
       '@codegraph/viz':
         specifier: workspace:*
         version: link:../viz
+      '@codegraph/vocabulary':
+        specifier: workspace:*
+        version: link:../vocabulary
       cytoscape:
         specifier: ^3.34.2
         version: 3.34.2
@@ -367,6 +373,31 @@ importers:
       vite:
         specifier: ^7.1.0
         version: 7.3.6(@types/node@22.20.1)(tsx@4.23.12)
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
+
+  packages/vocabulary:
+    dependencies:
+      '@codegraph/analyzer':
+        specifier: workspace:*
+        version: link:../analyzer
+      '@codegraph/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.1
+      fast-check:
+        specifier: 'catalog:'
+        version: 4.9.0
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
       vitest:
         specifier: 'catalog:'
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)

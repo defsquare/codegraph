@@ -384,7 +384,7 @@ implemented* (robustness test of the schema).
 | `kinds` | `Record<kind, {required: TraitName[], optional: TraitName[]}>` | the licit trait compositions per entity kind |
 | `edges` | EdgeKind[] | edge kinds this language can emit |
 | `notes` | string[] | documented static-analysis blind spots (reflection, `Class.forName`, dynamic `require`, macros pre-expansion, …) |
-| `lexicon` | `{keywords, conventional, technical?, fileKinds?, interfacePrefix?}` | the language's words, for the vocabulary (§5.3): reserved words, names the language dictates, plumbing words, kinds whose name is a file path, C#'s interface marker |
+| `lexicon` | `{keywords, conventional, technical?, fileKinds?, qualified?, interfacePrefix?}` | the language's words, for the vocabulary (§5.3): reserved words, names the language dictates, plumbing words, kinds whose name is a file path or a qualified path, C#'s interface marker |
 
 **Validation** of an entity against its profile:
 1. `kind` exists in the profile;
@@ -437,14 +437,16 @@ lexicon, optional on a profile and present on every shipped one:
 | `conventional` | whole identifiers the language or its runtime dictates — overrides, protocol members, operators (`toString`, `__init__`, `<=>`). Their words say nothing about the domain, so such a name contributes none |
 | `technical` | plumbing words of the language beyond the vocabulary's shared list, spelled as the splitter yields them (lowercase letters and digits) |
 | `fileKinds` | kinds whose name is a file path (TypeScript's `module`, Ruby's `file`): the extension is not a word |
+| `qualified` | kinds the language names by a qualified path, each with the separator that ends the qualifier: a Java `package` by `.`, a Ruby `class` by `::`, every file kind by `/`. The words before the last separator name a container (`AcmeOrder::` of `AcmeOrder::Order`), so they weigh as incidental words — still counted, never dropped |
 | `interfacePrefix` | `true` in C# alone: `IOrderService` names an interface `OrderService` |
 
 `validateProfile` rejects an entry that could never do what its list says:
 listed twice (`lexicon-duplicate`); a keyword with no letter or a name holding
 whitespace, a technical entry the splitter cannot yield (`lexicon-not-a-word`);
 a conventional name or technical word a keyword already claims
-(`lexicon-keyword-overlap`); a file kind the profile does not define
-(`lexicon-unknown-kind`). The lexicon is not on the wire: `schemas/` is
+(`lexicon-keyword-overlap`); a file or qualified kind the profile does not
+define (`lexicon-unknown-kind`); a separator that is empty or holds a letter, a
+mark or a digit (`lexicon-not-a-separator`). The lexicon is not on the wire: `schemas/` is
 unchanged by it.
 
 ---

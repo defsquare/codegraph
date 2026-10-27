@@ -25,8 +25,9 @@ share. Task-oriented walkthroughs live in the [README](../README.md).
   worked; the input did not). A CI job gating on model quality checks for `3`.
 - **`--json`** prints the same information as a machine-readable object.
 - **A sibling `model.db`** (the SQLite analysis store) is built on first use and
-  reused afterwards by `analyze`, `export`, `navigator`, `domain-facts` and
-  `explain`; on those, `--no-cache` reads the JSONL directly.
+  reused afterwards by `analyze`, `export`, `navigator`, `vocabulary`,
+  `domain-facts` and `explain`; on those, `--no-cache` reads the JSONL
+  directly.
 
 ## Synopsis
 
@@ -64,6 +65,12 @@ codegraph city     [model.jsonl] [--layout] [--out FILE]
 
 codegraph navigator [model.jsonl] [--out FILE]
                    [--name STR] [--internal-only] [--declared-only]
+
+codegraph vocabulary [model.jsonl] [--level corpus|module|type] [--scope ID]
+                   [--top N] [--class domain|technical|keyword|short|all]
+                   [--weights KEY=N,…] [--technical FILE] [--drift FILE]
+                   [--out FILE] [--svg FILE] [--json] [--internal-only]
+                   [--declared-only]
 
 codegraph domain-facts [model.jsonl] [--framework spring] [--out FILE]
                    [--internal-only] [--declared-only]
@@ -144,10 +151,24 @@ for the selection, incoming and outgoing dependencies classified by role, with
 the member that carries each, its provenance and its source anchor; **City** —
 the 3D code city, full-width, where a selected building's panel offers *Open
 in navigator* and lands on that type's Navigate entry with its dependencies;
-**Graph** (Cytoscape), **Cycles** (the precomputed tangle report) and
-**Coupling** (ranked metrics). The city's channels are the `city` flags
-below, so the page's city is exactly the artifact `city` would write. The
-server hands out `/navigator.json` and `/city.json`; stdout stays empty.
+**Graph** (Cytoscape), **Cycles** (the precomputed tangle report),
+**Coupling** (ranked metrics) and **Vocabulary** — the words of the selected
+scope's names (the corpus until a module or a type is selected; a member
+shows its type) as the cloud `vocabulary --svg` draws, measured in the page's
+font, and as a table of weight, occurrences, carriers and spread, with class
+chips and a top-N slider. The city's channels are the `city` flags below, so
+the page's city is exactly the artifact `city` would write. The server hands
+out `/navigator.json`, `/city.json` and `/vocabulary.json` (the vocabulary
+under its default weights and technical list); stdout stays empty.
+
+Clicking a word on the Vocabulary tab lists **the names that carry it** in
+that scope, heaviest first, each one click from its node in Navigate (a
+member reveals its type). The artifact counts and never lists, so this is the
+server's second lookup, `/carriers.json?term=WORD[&scope=ID][&class=CLASS][&limit=N]`,
+answered from the model it holds: the row's weight, occurrences and carriers,
+and the first `limit` (200) of them, whose weights add up to the row. An
+unknown scope or term is `404`; a request with no term, a class that is none
+or a text the scope speaks as two terms (`class` then chooses) is `400`.
 
 When `explain` has been run, a selected type or module also shows **what the
 model wrote about it** — the description, the domain concept, the model and
@@ -164,6 +185,8 @@ No model on argv. It binds `127.0.0.1:0` unless `--host`/`--port` say
 otherwise, prints exactly one JSON line on stdout — `{"port":N,"token":"…"}`
 — and serves every route under `/<token>/`: the page, `app` (the registry
 and the current project), `recent`, `navigator.json`, `city.json`,
+`vocabulary.json` (no `carriers.json`: the daemon holds no model between
+jobs, and the tab shows the counts without the names),
 `POST jobs` with `{"src": DIR-or-model.jsonl, "extractor"?: NAME}` and the
 `jobs/current` event stream (`started`, `phase`, `progress` — the
 extractor's own stderr lines — `done`, `failed`; `idle` when nothing runs).
@@ -206,12 +229,41 @@ With the change-history side-car `codegraph-metrics --history` writes beside
 the model (or `--history-metrics FILE`), `history:<measure>` reads the type's
 own blame and `history-file:<measure>` its file's history
 (`--height history-file:churn_recent`; docs/metrics.md §4).
+`vocabulary:<word>` is the word's weight in the names of the type and its
+members — the Vocabulary tab's type scope, under the default weights — so
+`--height vocabulary:order` shows where `order` lives. A type whose names
+never say the word weighs 0; a stub, whose names the vocabulary never reads,
+is unmeasured; a word no name in the view says is a usage error.
 Unmeasured metrics are drawn at the channel minimum and labelled unmeasured.
 
 ### `navigator`
 Writes the navigator artifact (`navigator.json`): the tree, one classified
 dependency row per base edge, and the cycle/coupling reports. Type and module
 nodes carry their entity id, which is how the city's buildings address them.
+
+### `vocabulary`
+The words the model's names are made of (never source): each `TNamed`
+entity's name split into words, classed `domain`, `technical`, `keyword` or
+`short`, and weighted by the role of what carries it. A type's or module's
+name weighs 8, an attribute's 4, an operation's 3, a parameter's or local's
+1, and the qualifier of a qualified name (`com.acme` of `com.acme.order`) 1.
+No flag prints the corpus's 40 heaviest domain words; `--level module|type`
+one block per scope, ranked by distinct terms (the cognitive-load report);
+`--scope ID` one module or type, or an operation counted on demand.
+`--weights` and `--technical FILE` change the scheme, and the header says
+which one counted. `--drift FILE` compares with a glossary, one business term
+per line: the terms no scope of `--level` says (exit `3`), the ones it says
+and where, and the domain words no term contains. `--out FILE` writes the
+`vocabulary.json` artifact (`codegraph.vocabulary/1`) beside the report.
+`--svg FILE` draws the cloud of the one scope reported — the corpus, or
+`--scope`'s — from the words `--class` and `--top` pick: size on the square
+root of the weight, colour by class and nothing else, a legend stating the
+scope, weights, view and technical list, the same bytes on every run.
+[`vocabulary-broadleaf.svg`](vocabulary-broadleaf.svg) is BroadleafCommerce's,
+drawn with `--top 80`. One word across the city is the `city` metric
+`vocabulary:<word>` (above):
+[`vocabulary-city-broadleaf.png`](vocabulary-city-broadleaf.png) is
+BroadleafCommerce's city with `--height vocabulary:order`.
 
 ### `domain-facts`
 One JSON artifact (`codegraph.domainFacts/1`) with one dossier per corpus
@@ -316,7 +368,7 @@ facts.
 Prints the language profiles core ships — the per-kind required and optional
 trait sets an extractor must respect, the edge kinds, the lexicon the
 vocabulary reads (reserved words, conventional names, technical words, file
-kinds), and the notes. `--lang L` prints one profile in full; `--json` prints
+kinds, qualified kinds and their separators), and the notes. `--lang L` prints one profile in full; `--json` prints
 the data as `{kind: "codegraph.profiles/1", profiles[]}`.
 
 ## The Java extractor

@@ -116,6 +116,9 @@ describe("one language's full spec", () => {
       `  conventional      ${lexicon.conventional.length === 0 ? "(none)" : lexicon.conventional.join(", ")}`,
       ...(lexicon.technical === undefined ? [] : [`  technical         ${lexicon.technical.join(", ")}`]),
       ...(lexicon.fileKinds === undefined ? [] : [`  file kinds        ${lexicon.fileKinds.join(", ")}`]),
+      ...(lexicon.qualified === undefined
+        ? []
+        : [`  qualified         ${Object.entries(lexicon.qualified).map(([kind, sep]) => `${kind} ${sep}`).join(", ")}`]),
       ...(lexicon.interfacePrefix === true ? ["  interface prefix  yes"] : []),
     ];
     expect(start, "no lexicon section").toBeGreaterThan(0);
@@ -140,6 +143,14 @@ describe("one language's full spec", () => {
     expect(invoke(["profiles", "--lang", "java"]).io.stdout()).not.toContain("interface prefix");
     expect(invoke(["profiles", "--lang", "ts"]).io.stdout()).toContain("\n  file kinds        module\n");
     expect(invoke(["profiles", "--lang", "java"]).io.stdout()).not.toContain("file kinds");
+  });
+
+  it("prints each qualified kind with its separator, only where a profile declares them", () => {
+    expect(invoke(["profiles", "--lang", "rb"]).io.stdout()).toContain(
+      "\n  qualified         file /, class ::, module ::, constant ::\n",
+    );
+    expect(invoke(["profiles", "--lang", "php"]).io.stdout()).toContain("\n  qualified         codeFile /, namespace \\\n");
+    expect(invoke(["profiles", "--lang", "go"]).io.stdout()).not.toContain("qualified");
   });
 
   it("prints the declaration spaces exactly where a profile declares them", () => {
@@ -192,8 +203,9 @@ describe("--json prints the profile data as-is", () => {
       const [json] = payload(["profiles", "--lang", lang]) as readonly Profile[];
       return Object.keys(json?.lexicon ?? {});
     };
-    expect(keysOf("csharp")).toEqual(["keywords", "conventional", "technical", "interfacePrefix"]);
-    expect(keysOf("ts")).toEqual(["keywords", "conventional", "technical", "fileKinds"]);
+    expect(keysOf("csharp")).toEqual(["keywords", "conventional", "technical", "qualified", "interfacePrefix"]);
+    expect(keysOf("ts")).toEqual(["keywords", "conventional", "technical", "fileKinds", "qualified"]);
+    expect(keysOf("go")).toEqual(["keywords", "conventional", "technical"]);
   });
 
   it("says the same thing as the text form (decision 8)", () => {

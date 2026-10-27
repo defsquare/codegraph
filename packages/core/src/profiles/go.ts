@@ -125,7 +125,7 @@ export const goProfile: Profile = {
       "MarshalJSON", "UnmarshalJSON", "MarshalText", "UnmarshalText", "ServeHTTP",
     ],
     technical: [
-      "cfg", "cmd", "ctx", "err", "errs", "internal", "mu", "mutex", "pkg", "srv", "svc", "wg",
+      "cfg", "cmd", "errs", "internal", "mu", "pkg", "srv", "svc", "wg",
     ],
   },
 };

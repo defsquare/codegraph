@@ -842,4 +842,31 @@ describe("the lexicon of every shipped profile", () => {
       ts: ["module"],
     });
   });
+
+  // A kind is qualified when the LANGUAGE names it by a path: a Java package is
+  // `com.acme.order`, a Ruby class `AcmeOrder::Order::Line`, an Elixir module
+  // `AcmeOrder.Pricing`. Go's package and Rust's module are named by one
+  // identifier (`package order`, `mod line`), their paths being something else.
+  it("declares exactly the kinds a language names by a qualified path", () => {
+    const qualified = Object.fromEntries(
+      profiles.flatMap(([lang, profile]) => (profile.lexicon?.qualified === undefined ? [] : [[lang, profile.lexicon.qualified]])),
+    );
+    expect(qualified).toEqual({
+      clj: { namespace: "." },
+      csharp: { namespace: "." },
+      ex: { file: "/", module: ".", protocol: "." },
+      java: { package: "." },
+      js: { module: "/" },
+      php: { codeFile: "/", namespace: "\\" },
+      python: { module: "." },
+      rb: { file: "/", class: "::", module: "::", constant: "::" },
+      ts: { module: "/" },
+    });
+  });
+
+  it("qualifies every file kind by its directories", () => {
+    for (const [lang, profile] of profiles) {
+      for (const kind of profile.lexicon?.fileKinds ?? []) expect(profile.lexicon?.qualified?.[kind], `${lang}:${kind}`).toBe("/");
+    }
+  });
 });

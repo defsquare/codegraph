@@ -4884,7 +4884,7 @@ Seven principles, locked up front:
 5. **Scope membership is the fold's.** A type's words are the words of
    everything that folds into its building (`containingType`), a module's
    likewise (`containingModule`), the corpus's every kept entity — the same
-   membership the city uses, so a `vocabulary:order` channel colours the
+   membership the city uses, so a `vocabulary:order` channel measures the
    building whose words were counted. Attachment is NOT followed, as the
    fold does not: a Ruby reopening speaks in the file it is written in.
 6. **Deterministic bytes.** Terms interned and sorted, scopes in id order,
@@ -4914,6 +4914,10 @@ lexicon?: {
                             // splitter yields it: bean, jdbc (Java); concern (Ruby); live, web (Elixir)
   fileKinds?: string[];     // kinds whose name is a file path: TS/JS `module`, Ruby and Elixir
                             // `file`, PHP `codeFile` — the extension is not a word
+  qualified?: Record<string, string>;
+                            // kinds the language names by a qualified path, with the separator
+                            // that ends the qualifier: Java `package` ".", Ruby `class` "::",
+                            // every file kind "/" — the qualifier's words weigh as incidental
   interfacePrefix?: true;   // C#: `IOrderService` → order, service (I + Upper + lower)
 };
 ```
@@ -4926,6 +4930,19 @@ character that is not a letter, a mark or a digit anyway — or `<=>`,
 `fileModules` flag was per PROFILE; file-ness is per KIND (Elixir's `file` is
 a path, its `module` the dotted `AcmeOrder.Registry`, whose `.Registry` a
 profile-wide flag would drop as an extension), so it became `fileKinds`.
+
+`qualified` was added when the aggregation was measured (M19a, below): a
+qualified name speaks its container's words again, on every entity the
+container holds. Full names made `acme` weigh 468 in the Ruby fixture and 392
+in the Elixir one, against about 50 for the next domain word, and `packages`
+168 in the TypeScript one. A kind is listed when the LANGUAGE names it by a
+path — Java's `package`, C#'s `namespace`, Clojure's `namespace` and Python's
+`module` by `.`, Elixir's `module` and `protocol` by `.`, Ruby's `class`,
+`module` and `constant` by `::`, PHP's `namespace` by `\`, every file kind by
+`/`; Go's package (`package order`) and Rust's module (`mod line`) are named by
+one identifier and are not listed. `validateProfile` gains
+`lexicon-not-a-separator` (empty, or holding a letter, a mark or a digit), and
+an undeclared qualified kind is `lexicon-unknown-kind`.
 
 `ProfileSchema` mirrors it (a test parses every shipped profile through it
 unchanged); `codegraph profiles --lang X` prints it in full, between the kinds
@@ -4941,57 +4958,85 @@ the five file kinds above. TypeScript reserves exactly ECMAScript's words, so
 the two profiles read one `ECMASCRIPT_LEXICON`.
 
 **The split** (`split.ts`): one function, `splitIdentifier(name, kind,
-lexicon)`, in six steps, each pinned by a table of hand cases per idiom:
+lexicon)` → `{tokens, qualifier, numeric, conventional}`, in six steps, each
+pinned by a table of hand cases per idiom:
 
 1. for a kind in `fileKinds`, drop the extension of the last path segment
-   (`legacy/acme-report.ts` → `legacy/acme-report`); then the interface
-   prefix when the flag is set and the name starts `I` + Upper + lower
-   (`IOrderService`, not `IO`);
+   (`legacy/acme-report.ts` → `legacy/acme-report`); for a kind in
+   `qualified`, cut the name at the LAST occurrence of its separator — the
+   words before it are the qualifier, counted in `qualifier`
+   (`AcmeOrder::Order::Line` → 3 of `acme`, `order`, `order`, `line`); then
+   the interface prefix on the own name when the flag is set and it starts
+   `I` + Upper + lower (`IOrderService`, not `IO`; `Acme.IOrder` → `order`);
 2. split on every character that is not a Unicode letter, mark or digit —
    universal, no data: `@total` → `total`, `valid?` → `valid`, `save!`,
    `name=`, `Order::Line`, `max_lines`, `acme-report`, `Repository\`1` →
    `repository`, `1`;
-3. camel-case boundaries with the acronym rule — lower→Upper, and an
-   Upper run followed by Upper + lower splits before its last letter
+3. camel-case boundaries with the acronym rule — lower→Upper, digit→Upper,
+   and an Upper run followed by Upper + lower splits before its last letter
    (`HTTPServer` → `http`, `server`; `getURLString` → `get`, `url`,
    `string`; `XMLHttpRequest` → `xml`, `http`, `request`) — on Unicode
    letter categories, not ASCII (`fixtures/unicode` is the test: `ＡFullwidth`
    and `𠀀Supplementary` must split and lowercase without a replacement
-   character);
-4. a digit run attaches to the token before it (`utf8`, `md5`, `v2`); a
-   token that is only digits is dropped and counted (`skipped.numeric`);
+   character). A caseless letter (`𠀀`, `注`) counts as lower; a mark takes
+   the case of the letter it sits on, so a decomposed `é` never splits;
+4. a digit run stays with the letters around it — only an Upper after it
+   breaks (`utf8`, `md5`, `v2`, `i18n`, `http2`; `Utf8Encoder` → `utf8`,
+   `encoder`); a token that is only digits is dropped and counted
+   (`skipped.numeric`);
 5. lowercase (`toLowerCase`, locale-independent: a Turkish-locale machine
    must write the same bytes);
 6. a `conventional` identifier is skipped whole BEFORE step 1 and counted
    (`skipped.conventional`): `toString` must not contribute `string`,
    `handle_call` must not contribute `call`.
 
-Properties (fast-check over identifiers the grammar admits): no empty token;
-every token lowercase; every token is, case-insensitively, a substring of
-the input with the affixes removed; the same input gives the same tokens;
-`split(a + sep + b) = split(a) ++ split(b)` for any lexicon separator.
+Properties (fast-check over identifiers the grammar admits): every token is
+a non-empty run of letters, marks and digits, lowercase, never digits only,
+and a slice of the lowered name; the same input gives the same tokens;
+`split(a + sep + b) = split(a) ++ split(b)` for any character that is not a
+letter, a mark or a digit — without a lexicon, since the file kinds, the
+interface prefix and a conventional name read the WHOLE name. Qualification
+moves no word: the tokens are the same with the qualified kinds removed, and
+for a qualified kind `qualifier` is the number of words of `a` in
+`a + separator + b`. A Σ is left
+out of the generator: its lower case depends on what follows it, so a
+token's lower case and its slice of the lowered name may differ (`ΟΔΟΣ` →
+`οδος`, pinned by hand).
 
 **The classes** (`classify.ts`), a closed set `TERM_CLASSES = ["domain",
 "technical", "keyword", "short"]`, decided per TOKEN in this order:
 `keyword` when the lowercased token equals a lowercased lexicon keyword
-(`type`, `default`, `case`, `new`, `end`); `short` when it is one character
-(`i`, `e`, `x` — length 2 stays: `id`, `db`, `io` are words); `technical`
-when it is in the shared list ∪ the profile's (`DEFAULT_TECHNICAL`, ~80
-words in the package: `get set is has to from of with by and or not new
-create build make init impl abstract base default util utils helper manager
-service repository controller handler factory provider dto dao entity model
-data info config exception error test mock spec com org net io src lib main
-app`…, overridable whole with `--technical FILE`, its digest recorded in the
-artifact); else `domain`. The list is contestable by construction — which is
-why it is data in one place and the artifact says which one it used.
+(`type`, `default`, `case`, `new`, `end`) — a keyword the splitter never
+yields whole (`defined?`, `__FILE__`, `set!`) classifies nothing, since the
+`file` of `upload_file` is not `__FILE__`; `short` when it is one code point
+that is not a mark (`i`, `e`, `x`, `𠀀` — length 2 stays: `id`, `db`, `io`
+are words); `technical` when it is in the shared list ∪ the profile's
+(`DEFAULT_TECHNICAL`, 138 words in the package: `get set is has to from of
+with by and or not new create build make init impl abstract base default
+util utils helper manager service repository controller handler factory
+provider dto dao entity model data info config exception error test mock
+spec com org net io src lib main app`, the CRUD verbs, the web and format
+words…, overridable whole with `--technical FILE`, its digest recorded in
+the artifact — the profile's own words apply either way); else `domain`. The
+list is contestable by construction — which is why it is data in one place
+and the artifact says which one it used. It holds what every language
+shares: a word two lexicons listed (`args`, `opts`, `ctx`, `err`,
+`callback`, `str`, `mutex`, `mixin`, `async`) moved into it, and a test
+keeps it disjoint from every profile's `technical`.
 
 **Roles and weights** (`weight.ts`). The role of the entity carrying a name
-comes from its traits, never its kind (the navigator's rule): `module`
-(TModule), `type` (TType), `operation` (TInvocable), `parameter` / `local`
-(TStructural listed in the parent's `parameters[]` / `localVariables[]`),
-`attribute` (every other TStructural: fields, constants, properties, module
-attributes). Default weights, recorded in the artifact and overridable with
-`--weights role=n,…`:
+comes from its traits, never its kind (the navigator's rule), first match
+winning: `module` (TModule), `type` (TType — a C# delegate, TType +
+TInvocable, is a type), `operation` (TInvocable — a Clojure fn-var too),
+`parameter` / `local` (TStructural listed in some entity's `parameters[]` /
+`localVariables[]`), `attribute` (every other TStructural: fields,
+constants, properties, module attributes), and `other` — a named entity no
+role trait describes (TypeScript's `namespace`, PHP's `codeFile`, Python's
+`decorator`), whose words still count (principle 1). Built on the fixtures,
+one parameter is listed nowhere: the C# indexer's, a child of its
+`property`, which the C# profile gives no `TWithParameters`; it weighs as
+an attribute until the model lists it, pinned by id. Default weights,
+recorded in the artifact and overridable with `--weights role=n,…`:
 
 | role | weight | why |
 |---|---|---|
@@ -4999,64 +5044,151 @@ attributes). Default weights, recorded in the artifact and overridable with
 | `attribute` | 4 | a thing the type holds — nouns, usually domain |
 | `operation` | 3 | something it does; the prefix is usually technical (`get`, `find`, `build`) |
 | `parameter`, `local` | 1 | incidental: the "variable buried deep in a method" of the issue |
+| `other` | 1 | no trait says what it is |
+| `qualifier` | 1 | not a role: the words before the last separator of a qualified name, whatever its role — a container's words, spoken again by every name it qualifies |
 
 An occurrence is one token in one name; a name carrying a word twice counts
-twice. Both the weighted sum and the raw occurrence count are kept — one is
-a judgement, the other a fact.
+twice, and is one carrier. Both the weighted sum and the raw occurrence count
+are kept — one is a judgement, the other a fact; a word weighing 0 still
+occurs.
 
-**Scopes and aggregation** (`aggregate.ts`). Scopes are the kept
-(view-filtered, non-stub) modules and types, plus the corpus root; an
-operation's table is computed on demand (`--scope ID`), not stored (§20.5).
-A scope's table is the union of the tables of every kept entity whose fold
-container it is: `term → { weight, occurrences, carriers }` where `carriers`
-is the number of distinct entities carrying the word. Per scope: `distinct`
-and `distinctDomain` (the cognitive-load proxy), total `weight` and
-`occurrences`, `skipped` by reason. Per term at the root: `spread.modules`
-and `spread.types` (how many scopes speak it) and `exclusive` (the modules
-whose table alone has it) — the overlap and the drift inputs.
+**Scopes and aggregation** (`aggregate.ts`, `buildVocabulary(graph,
+{view?, weights?, technical?, name?})`). Kept is the view's verdict on a
+non-stub entity; a stub never speaks, whatever the view — its name was chosen
+by another corpus (`String`). Scopes are the kept modules and types (by trait:
+TModule first), plus the corpus root; an operation's table is computed on
+demand (`--scope ID`), not stored (§20.5). A scope's table is the union of the
+tables of every kept entity whose fold container it is — the NEAREST: a nested
+type is its own scope, and its members are not its outer type's —
+`term → { weight, occurrences, carriers }` where `carriers` is the number of
+distinct entities carrying the word. Per scope: `entities` (each one unnamed,
+conventional, or counted in `roles` by its role), `skipped` by reason,
+`distinct` and `distinctDomain` (the cognitive-load proxy), total `weight` and
+`occurrences`. Per term: `modules` and `types` (how many scopes speak it) and
+`exclusive` (the one module scope whose table has it, when exactly one does) —
+the overlap and the drift inputs. A class is decided per language (Go
+reserves `type`, Java does not), so a word is interned once per class it
+takes; an entity's language is its model's, read from the union, never from
+its id. A kept entity no module contains counts at the root alone and is
+listed (`unplaced`); a language without a lexicon is split by the universal
+rules alone and listed (`withoutLexicon`). Every scope's parent is the
+nearest scope up the containment chain the model writes, else the root.
 
-**The artifact** `vocabulary.json`, kind `codegraph.vocabulary/1`: a header
-(generator, view descriptor, `weights`, `classes`, the technical list's
-digest, `langs`), `terms[]` interned and sorted with their class, `scopes[]`
-(root first, then modules then types in id order: `id`, `level`, `name`,
-`kind`, `parent` scope index, `terms: [termIndex, weight, occurrences,
-carriers][]` by weight descending then term) and `diagnostics` (skipped
-counts, entities the fold could not place). Every scope id is an entity the
-model declares and every index is in range — the closure property, tested.
-Size is measured on BroadleafCommerce (3 312 types, 502 modules) before any
-cap is considered; none is planned.
+**The artifact** `vocabulary.json`, kind `codegraph.vocabulary/1`
+(`artifact.ts`): a header (generator, view descriptor, `corpus`, `langs`,
+`weights`, `classes`, `technical: {words, sha256}` — the shared list's size
+and a sha256 over its sorted words, one per line), `terms[]` interned and
+sorted by text in code-unit order then class, `scopes[]` (root first, then
+modules then types in id order: `level`, `id`, `name`, `kind`, `parent` scope
+index, the counts above, `terms: [termIndex, weight, occurrences,
+carriers][]` by weight descending then term) and `diagnostics` (`unplaced`,
+`withoutLexicon`). Every scope id is a kept entity of its level, every index
+is in range, and the counts add up — the closure property, tested on the
+fixtures and on generated corpora, with conservation (every kept entity in one
+module scope or unplaced) and order-independence (the same bytes whatever the
+order entities arrive in). Compact by default; `pretty` writes one term and one
+scope per line, the snapshots' form. Size, measured on BroadleafCommerce
+(3 305 types, 502 modules): 2.9 MB compact, built in 0.29 s — no cap.
 
 **The command.** `codegraph vocabulary <models…> [--level corpus|module|type]
 [--scope ID] [--top N] [--class domain|technical|keyword|short|all]
 [--weights …] [--technical FILE] [--drift FILE] [--out vocabulary.json]
-[--svg FILE] [--json] [--internal-only] [--declared-only]`. No flag: the
-corpus root's top 40 `domain` terms as a table — term, class, weight,
-occurrences, modules, types. `--level module`: one block per module, its top
-N and its `distinct` column, sorted by `distinct` descending — the
-cognitive-load report. `--drift FILE`: a plain text file, one business term
-per line; each term is split with the universal rules so `Order Line` meets
-`order` and `line`; a business term is SPOKEN in a scope when every one of
-its words is, and the report lists the business terms no scope speaks and
-the `domain` words the code speaks that no business term contains, by
-`--level`. The Specy `.domain` file as input is deferred (§20.5): the plain
-list first, because it exists in every company.
+[--svg FILE] [--json] [--internal-only] [--declared-only] [--no-cache]`
+(`--svg`, M19b's, draws the one scope reported — the corpus or `--scope`'s —
+so it is a usage error with `--level module|type` or `--drift`), a shell over the package like
+`analyze` over the analyzer. Every report's
+header states the view, the weights and the technical list (its size, the
+first 12 hex of its digest, and the file it came from). No flag: the corpus
+root's top 40 `domain` terms as a table — term, class, weight, occurrences,
+carriers, modules, types. `--level module`: one block per module, its top N
+(10 by default) and its `distinct` column, sorted by `distinct` descending,
+ties by id — the cognitive-load report. `--scope ID`: a stored module or
+type, else an operation counted on demand (`operationScope`: the operation
+and every kept entity written inside it, lambdas included, short of a type
+or module, indexed by the artifact's terms; an artifact built under other
+options is refused); an unknown id, a stub, or a member that is no operation
+is a usage error that says what the id is. `--weights KEY=N,…` lays the keys
+typed over the defaults (an unknown or repeated key, or a weight below 0, is
+a usage error). `--technical FILE` replaces the shared list whole, one word
+per line, `#` comments skipped; a line the splitter does not yield as one
+word could never match a token and is refused by its number. `--out` writes
+the artifact (compact) beside the report. `--drift FILE`: a plain text file,
+one business term per line, `#` comments skipped, a term whose words repeat
+an earlier one's merged, a line naming no word warned about by its number;
+each term is split with the universal rules so `Order Line` meets `order`
+and `line`; a business term is SPOKEN in a scope when every one of its words
+is, whatever class the code gives it, and the report lists the business
+terms no scope of `--level` speaks (with the words no scope says at all, or
+"never together"), the ones it speaks and where, and the `domain` words the
+code speaks that no business term contains, summed over the level's scopes.
+Nothing is stemmed. A term spoken nowhere exits 3, as `analyze --report
+cycles` does for a cycle: a CI job can gate on the glossary. `--class` with
+`--drift`, and `--level` or `--drift` with `--scope`, are usage errors — a
+flag the report would not read is refused, never dropped. `--json` is one
+object, `codegraph.vocabularyReport/1`, `report: "words" | "drift"`. The
+Specy `.domain` file as input is deferred (§20.5): the plain list first,
+because it exists in every company.
 
-**Measured** (the table this milestone fills — the numbers below are what to
-collect, not results):
+**Measured** (2026-10-26, Apple M1 Max, Node 26; `build` is
+`buildVocabulary` alone over a built graph, the median of five; `artifact`
+the compact `vocabulary.json`). Whole repositories as cloned, tests included:
+BroadleafCommerce at `26208e01de` (the Java jar), codegraph at `294e5cc`
+(`--src packages --src extractors/typescript`), Mastodon at `2bc820fb84` and
+Plausible at `9bc90b0063`:
 
 | corpus | kept entities | named | by role (module · type · operation · attribute · parameter · local) | skipped (unnamed · conventional · numeric) | distinct terms (domain) | artifact | build |
-|---|---|---|---|---|---|---|---|
-| `fixtures/java`, `csharp`, `typescript`, `elixir`, `ruby` | | | | | | | |
-| BroadleafCommerce (Java) | | | | | | | |
-| codegraph, self-hosted (TypeScript) | | | | | | | |
-| Mastodon (Ruby) — no locals by construction | | | | | | | |
-| Plausible (Elixir) — no locals by construction | | | | | | | |
+|---|---:|---:|---|---|---|---:|---:|
+| `fixtures/java` | 152 | 127 | 3 · 19 · 43 · 21 · 35 · 6 | 25 · 0 · 0 | 85 (73) | 17 KB | 1.2 ms |
+| `fixtures/csharp` | 210 | 178 | 4 · 26 · 45 · 38 · 54 · 9 | 32 · 2 · 0 | 113 (93) | 23 KB | 1.0 ms |
+| `fixtures/typescript` | 179 | 161 | 24 · 22 · 37 · 28 · 39 · 6 (+ 4 other) | 18 · 1 · 1 | 108 (87) | 29 KB | 0.8 ms |
+| `fixtures/elixir` | 181 | 167 | 23 · 28 · 50 · 11 · 49 · 0 | 14 · 6 · 1 | 97 (73) | 31 KB | 0.8 ms |
+| `fixtures/ruby` | 157 | 156 | 31 · 32 · 35 · 16 · 31 · 0 | 1 · 11 · 1 | 107 (87) | 36 KB | 0.9 ms |
+| BroadleafCommerce (Java) | 76 310 | 72 843 | 502 · 3 305 · 21 201 · 8 521 · 22 528 · 15 742 | 3 467 · 1 044 · 6 | 3 381 (3 191) | 2.9 MB | 290 ms |
+| codegraph, self-hosted (TypeScript) | 30 873 | 24 696 | 428 · 587 · 1 751 · 5 517 · 6 491 · 9 914 | 6 177 · 8 · 0 | 2 143 (1 994) | 0.8 MB | 71 ms |
+| Mastodon (Ruby) — no locals by construction | 20 358 | 20 276 | 3 379 · 2 360 · 8 906 · 2 373 · 3 058 · 0 | 82 · 200 · 652 | 2 447 (2 294) | 3.2 MB | 100 ms |
+| Plausible (Elixir) — no locals by construction | 16 435 | 15 520 | 1 300 · 1 355 · 5 052 · 1 273 · 6 416 · 0 | 915 · 124 · 306 | 1 999 (1 845) | 1.8 MB | 68 ms |
+
+What the unnamed are: Broadleaf's 3 140 constructors and 327 lambdas;
+codegraph's 6 154 arrow functions — a fifth of its entities, the price of a
+codebase written in `const f = () => …` callbacks, whose names are the
+attributes that hold them; Mastodon's 82 and Plausible's 915 anonymous
+parameters (splats, patterns). Mastodon's 652 numeric tokens are the
+timestamps of `db/migrate/` file names. The artifact grows with SCOPES, not
+entities: Mastodon's 5 739 (a file is a module) outweigh Broadleaf's 3 807 on
+a quarter of the entities. End to end, `codegraph vocabulary` on Broadleaf
+takes 2.2 s with `--no-cache` (the load dominates), Mastodon 0.8 s; no cap is
+needed.
 
 The Broadleaf top ten by weight under `domain` is the issue's sanity check
 — it must read as a commerce vocabulary (`order`, `product`, `customer`,
 `offer`, `sku`, `fulfillment`, `payment`, `catalog`…), and whatever
 technical word leaks into it names a missing entry of the shared list, fixed
-as data.
+as data. **Reviewed.** Under the 125-word list it read `order name type
+field item customer offer extension value product`; after the correction
+below, `order 8 588 · item 4 883 · customer 4 020 · offer 3 514 · product
+2 917 · admin 2 890 · group 2 666 · fulfillment 2 368 · category 2 319 ·
+payment 2 281` — `admin` is the back office, `group` the fulfillment group
+and the admin's field group, both Broadleaf's own words. **The correction**,
+13 words added to the shared list (125 → 138), each read off its carriers,
+never off its spelling: `name type value key map property field` (the data
+vocabulary of every language: `getName`, `propertyName`, `cacheKey`,
+`parsedValue`, `itemMap`, `FieldMetadata`), `extension extensions` (the
+`…ExtensionManager`/`…ExtensionHandler` pattern; moved from the C# profile,
+since a word two lists hold is the shared list's), `read` (the R of CRUD,
+missing from a list that claimed the CRUD verbs: `readStaticAssetById`), and,
+from Mastodon's top ten, `serializer`, `worker` (`app/serializers/`,
+`app/workers/`) and `index` (search indexes, database indexes, array
+positions, `index.ts`, the controller action — machinery in all four
+corpora). Kept as domain because their carriers are mixed: `policy`
+(Mastodon's Pundit policies, but also its privacy and quote-approval
+policies), `change`, `query`, `collection`. The others' top ten, after:
+codegraph `edge kind required optional graph file path module edges city` —
+its domain IS code, so the list costs it `type`, `name` and `index`, which a
+`--technical` file gives back; Mastodon `account status accounts statuses
+domain policy change collection user block` (`domain` is the federation's:
+domain blocks); Plausible `plausible site query team user change stats email
+event plan` (`plausible` is every module's namespace, as `acme` is the
+fixtures').
 
 ### 20.2 The cloud, the tab, the city channel (M19b)
 
@@ -5070,7 +5202,14 @@ it. The text measurer is INJECTED — `measure(text, size) → { width, height }
 is exact for the font the SVG declares, and the browser passes
 `canvas.measureText` for its proportional face. Properties: no two placed
 boxes intersect; every box lies inside the reported viewBox; the same input
-gives the same positions; placement order is weight order.
+gives the same positions; placement order is weight order. **As built**
+(`cloud.ts`, type imports only, so a page runs it without the pipeline):
+12 to 56 px rounded to the pixel, 4 px kept clear on each side (2 px let
+neighbours touch on screen), the spiral stretched 2:1 for a landscape image,
+ties by text then class so ANY order of the same words lays out the same;
+the monospace measurer counts a combining mark as no cell and a Han, kana,
+Hangul or fullwidth character as two, as a terminal draws them; the spiral's
+points are whole pixels and the SVG rounds to 1/100 px.
 
 **SVG** (`svg.ts`): size by weight, colour by class and nothing else
 (`domain` in ink, `technical` muted, `keyword` and `short` faint — meaning
@@ -5079,6 +5218,14 @@ class filter and the counts, a monospace font stack. Deterministic bytes:
 `fixtures/java/expected/vocabulary.svg` is a snapshot, and the demo image is
 this command's output on a public corpus, committed under `docs/`.
 `codegraph vocabulary --svg FILE [--scope ID] [--top N] [--class …]`.
+**As built** (`vocabularyCloudSvg`): the palette is a stylesheet keyed by
+class, light and dark (`prefers-color-scheme`), so a word carries one class
+attribute and no fill; a key line appears when more than one class is drawn;
+the legend's three lines are the scope and its counts, the weights, and the
+view with the technical list's size and digest. `docs/vocabulary-broadleaf.svg`
+is BroadleafCommerce's corpus at `--top 80` (6.7 KB; 1.9 s end to end, the
+load dominating) — `order item customer product offer fulfillment payment sku
+cart catalog…`, the commerce vocabulary §20.1 asked for.
 
 **`serve`** builds `vocabulary.json` from the same graph and view as the two
 others and serves it at `/vocabulary.json`; evidence is a LOOKUP,
@@ -5087,7 +5234,21 @@ names carry the word (name, kind, role, anchor, and the id when the entity
 is a type or module — the hand-off key), from the in-memory model `serve`
 already holds; an unknown scope or term is 404, like `/insight.json`. The
 artifact stays small (counts, not lists) and a static host degrades to no
-evidence rather than to a bigger file.
+evidence rather than to a bigger file. **As built** (`carriers.ts`,
+`carriers-route.ts`): the counting rule moved to `reading.ts` so the
+artifact and the carriers read a name the same way, and A ROW IS THE SUM OF
+ITS CARRIERS — weights, occurrences and count — a property over every term
+of every scope of the six fixtures; an artifact counted under other weights,
+another list or another view is refused. A member carries no id and an
+`owner` (its type, else its module), the navigator's rule. No `scope` is the
+corpus; `class` disambiguates a text two languages class apart (`ambiguous`,
+400, lists the classes); `limit` defaults to 200 and `total` always counts
+them all. The index is built at the first answerable request, reading every
+kept entity once, and the graph is released then. The app daemon builds
+`vocabulary.json` with the other two, but holds no model between jobs, so it
+has no `/carriers.json`: the tab shows the counts and says why there are no
+names. On Broadleaf the artifact is 2.9 MB and `order` at the corpus has
+3 303 carriers.
 
 **The Vocabulary tab** (`navigator-ui`, the sixth): the cloud of the current
 scope — the corpus until a module or a type is selected in Navigate, then
@@ -5100,15 +5261,50 @@ and lists the carriers; a type or module among them reveals in Navigate (its
 `@codegraph/vocabulary` for TYPES only (the frontend rule), and the layout
 runs in the browser with the page's own measurer — the same function the
 CLI ran. Reviewed as screenshots on Broadleaf: the corpus, `catalog.domain`,
-`ProductImpl`.
+`ProductImpl`. **As built**: the layout is a VALUE import through
+`@codegraph/vocabulary/cloud`, a tsup entry of `cloud.ts` alone whose shared
+chunk imports nothing; the guard test allows that one specifier and keeps
+the package's index types-only. The measurer is `canvas.measureText` in the
+page's monospace face (the page sets identifiers in mono; so does the SVG),
+the colours the page's paper, dimmed and faint — no hue, since the page's
+four hues already mean direction, inference and selection. The scope chain
+(corpus › module › … › type) steps up by selecting the scope's node, the
+corpus by clearing the selection. The tab mounts on first visit and stays
+mounted, refetching `vocabulary.json` with each new navigator (the daemon's
+next job). Reviewed on Broadleaf at 1600×1000: the corpus reads `order item
+customer offer product admin group fulfillment category payment`;
+`ProductImpl` reads `product category all sale sku parent`; `catalog.domain`
+with `product` picked lists 239 carriers, and a parameter among them reveals
+its owner, `Category`, in Navigate; a page with no carriers route keeps the
+counts and says so.
 
 **The city channel**: `vocabulary:<term>` as a metric source for `--height`,
-`--color` and `--carry` — the term's weight in the building's type scope,
+`--footprint` and `--carry` — the term's weight in the building's type scope,
 `undefined` where the type does not speak it, so an unmeasured building is
 floored and labelled, never zeroed. Wired through the CLI's `metric(name)`
 hook exactly as `history:` is (`history-metrics.ts`); `@codegraph/city` is
-unchanged. `codegraph serve model.jsonl --color vocabulary:order` is "where
+unchanged. `codegraph serve model.jsonl --height vocabulary:order` is "where
 does `order` live" — the issue's city link, and the second demo image.
+
+**As built** (`vocabulary-metric.ts`): a HEIGHT, not a colour — this plan
+first said `--color`, but the city's one colour channel is the framework's
+categorical `role`, and a weight is a magnitude. A type whose names never say
+the word weighs **0**, not `undefined`: its names were read and zero is what
+they say, and `undefined` there would have printed "N unmeasured" on every
+such city for a measured fact. `undefined` stays for a building with no type
+scope — a stub, whose names the vocabulary never reads. The word goes
+through the splitter (`Order` is `order`; `OrderLine`, two words, is a usage
+error); the classes two languages give one text add up, the metric being
+about the text; a word no name in the view says is a usage error rather than
+a flat city that looks like an answer. `serve` and the app job hand `cityOf`
+the artifact they serve; `city` counts one only when a `vocabulary:` metric
+is named. On Broadleaf 627 of 3 305 types say `order`, the tallest
+`OrderServiceImpl` (203), the towers in `core.order.service` and
+`core.offer`: `docs/vocabulary-city-broadleaf.png` is the City tab at
+`--height-scale sqrt` (the root lifts a type that says the word once off the
+floor: 589 of the 627 rise above 5 of 40 units, against 92 on a linear
+scale), arrows hidden and the tower selected so its panel shows the number. The viewer's help no longer says a
+taller tower "holds more code": height is whatever the legend names.
 
 ### 20.3 The glossary: words in the explanation (M19c)
 
@@ -5256,40 +5452,50 @@ never looks like a fact.
       specification; conventional names from its runtime), `codegraph
       profiles --lang` printing it; the lexicon's validation codes and tests; `schemas/`
       unchanged, proven by the drift check.
-- [ ] `packages/vocabulary/` (`@codegraph/vocabulary`, depends on core and
+- [x] `packages/vocabulary/` (`@codegraph/vocabulary`, depends on core and
       analyzer only): `split.ts`, `classify.ts` with `DEFAULT_TECHNICAL`,
-      `weight.ts`, `aggregate.ts` on `containingType`/`containingModule`,
-      `artifact.ts` (`codegraph.vocabulary/1`), `drift.ts`; the hand tables
-      per idiom and the properties of §20.1; the unicode fixture through the
-      splitter.
-- [ ] `codegraph vocabulary` (§20.1): the report, `--level`, `--scope`,
-      `--class`, `--weights`, `--technical`, `--drift`, `--out`, `--json`,
-      the view flags; usage errors for an unknown scope, role or class.
-- [ ] `fixtures/<lang>/expected/vocabulary.json` for the five fixtures,
-      byte-identical on every run; hand counts in each fixture's README
-      (`order` in the Java fixture: which names, which weights); the closure
-      and determinism properties over every fixture.
-- [ ] The coverage table of §20.1 filled on the fixtures, Broadleaf,
+      `weight.ts`; the hand tables per idiom and the properties of §20.1;
+      the unicode fixture through the splitter; the shared words out of
+      the profiles.
+- [x] `qualified` in the lexicon (the kinds named by a qualified path and
+      their separators), its validation code, `profiles --lang` printing it;
+      the splitter's `qualifier` count and the `qualifier` weight.
+- [x] `aggregate.ts` on `containingType`/`containingModule`, `artifact.ts`
+      (`codegraph.vocabulary/1`); the package now depends on the analyzer.
+- [x] `drift.ts` and `codegraph vocabulary` (§20.1): the report, `--level`,
+      `--scope` (an operation's scope on demand), `--class`, `--weights`,
+      `--technical`, `--drift` (exit 3 on a term spoken nowhere), `--out`,
+      `--json`, the view flags; usage errors for an unknown scope, role or
+      class; `docs/cli.md`, the website's command and `vocabulary.json`
+      pages.
+- [x] `fixtures/<lang>/expected/vocabulary.json` for the five fixtures and
+      `fixtures/unicode`, byte-identical on every run
+      (`CODEGRAPH_UPDATE_SNAPSHOTS=1` rewrites them); hand counts in each
+      fixture's README (`order` in the Java fixture: which names, which
+      weights), pinned by a test; the closure and determinism properties over
+      every fixture.
+- [x] The coverage table of §20.1 filled on the fixtures, Broadleaf,
       codegraph itself, Mastodon and Plausible; the Broadleaf top ten
-      reviewed; the technical list corrected as data where it leaked.
+      reviewed; the technical list corrected as data where it leaked
+      (13 words, 125 → 138).
 
 **M19b — the cloud, the tab, the city channel**
 
-- [ ] `layout.ts` and `svg.ts` with their properties and the SVG snapshot;
-      `--svg`.
-- [ ] `serve`: `/vocabulary.json` built with the two others,
+- [x] `layout.ts` and `svg.ts` with their properties and the SVG snapshot;
+      `--svg` (the layout is `cloud.ts`).
+- [x] `serve`: `/vocabulary.json` built with the two others,
       `/carriers.json` as a lookup; both on the app daemon's page for free
       (the artifact rides the same build), the lookups following the
-      insight route's precedent.
-- [ ] The Vocabulary tab: cloud, chips, table, carriers, reveal; the
+      insight route's precedent (the daemon has neither lookup).
+- [x] The Vocabulary tab: cloud, chips, table, carriers, reveal; the
       literal-pinning and types-only boundary tests; screenshots on
       Broadleaf reviewed at user-facing sizes.
-- [ ] `vocabulary:<term>` metric source through the `metric(name)` hook;
-      `--color vocabulary:order` on Broadleaf reviewed as a screenshot.
-- [ ] The demo images: the corpus cloud of a public repository as SVG
-      (`docs/vocabulary-<corpus>.svg`) and the city coloured by one term,
-      with the README section that shows them — the issue's fourth
-      acceptance criterion.
+- [x] `vocabulary:<term>` metric source through the `metric(name)` hook;
+      `--height vocabulary:order` on Broadleaf reviewed as a screenshot.
+- [x] The demo images: the corpus cloud of a public repository as SVG
+      (`docs/vocabulary-<corpus>.svg` — Broadleaf's, committed with `--svg`)
+      and the city raised by one term, with the README section that shows
+      them — the issue's fourth acceptance criterion.
 
 **M19c — the glossary: words in the explanation**
 
@@ -5408,8 +5614,8 @@ green; the coverage table and the cost filled in this section.
 | M18a | Ruby extractor — profile + skeleton | ✅ (2026-10-13, worktree `ruby-extractor`) `rb` profile in core (the eleventh: the module is the file, `class` and `module` are types below it, mixins are `traitUsage`, no interface — §19.2); `extractors/ruby/` in Rust on Prism 1.9.0 (`ruby-prism`, pinned), no Ruby to build or run; the core table distilled from RBS 4.2.0 `core/` with RBS's own parser (915 constants: 304 classes, 26 modules, 585 values); walking skeleton — files, classes and modules (the wrapper rule, one entity per declaring file, reopenings `attachedTo` their primary, a `String` patch attached to `<ruby>/String`), methods and parameters, `require`/`require_relative` by path and by load root, superclasses and mixins resolved lexically, the `derived` import, stubs — → `fixtures/ruby/expected/model.jsonl` (24 files, 102 entities / 38 edges) byte-identical to core's encoder and profile-valid with zero issues; 60 cargo tests (50 unit, 10 contract: snapshot, CRLF + reversed creation order, the CLI contract) + 16 core gate tests; `codegraph validate` OK; `bin/codegraph-ruby`; `build.sh --ruby` (a 1.2 MB binary) / `test.sh --ruby` with the release-binary `cmp`; `ruby-test` written in CI, not yet run there |
 | M18b | Ruby extractor — model | ✅ (2026-10-13, worktree `ruby-extractor`) `field` (an instance variable, its `attr_*`, a Struct member: one entity `@x`) and `constant` (keyed by full path, with its literal `value`); `Struct.new` / `Data.define` / `Class.new` / `Module.new` assigned to a constant as types, a `Struct.new` superclass as a `generated` inheritance; constant references resolved lexically then through the ancestors; the core table extended with superclasses, mixins and methods (RBS 4.2.0: 915 constants, 23 mixins, 2428 methods) so lookup crosses from the corpus into the VM's classes; the invocation tiers of §19.4 — `declared` where the receiver's class is written, `derived` for typed locals, typed instance variables and the sole-library-ancestor attribution, the language resolved with no edge, untyped receivers dropped and counted; `access` with read/write, `throws`, comments, `sloc` + `cyclomatic`, literals; the Ruby 1.8 require idioms, `load`, `autoload`, shebang scripts; `--explain-dropped`, every drop with its line → `fixtures/ruby/expected/model.jsonl` (27 files, 154 entities / 136 edges; 152 sites, 77.0 % resolved) byte-identical to core's encoder and profile-valid with zero issues; `ruby` in the metrics pass and the fifth `model.metrics.jsonl` (86 of 88 joined, `sloc = ploc` on all 86); 101 cargo tests (90 unit, 11 contract) + 24 core gate tests; the fixture in the analyzer, city, navigator, CLI `validate` and metrics suites; `validate`, `analyze`, `navigator`, `city --layout` and `serve` run on it, City and Navigate screenshots reviewed |
 | M18c | Ruby extractor — audit + oracles + distribution | ✅ (2026-10-13, worktree `ruby-extractor`; CI not yet run) rake 13.2.1, rubygems 3.6.2, Mastodon 4.3.0 and rails 8.0.2 audited `validate`-clean (100 / 794 / 2 541 / 3 334 files; 77.8 / 54.4 / 31.2 / 57.0 % of sites resolved, Mastodon's `app/`+`lib/` 62.1 %; rails in 4.7 s). Seven defects found and fixed test-first: a library namespace the corpus reopens below dropped as `namespace-only` (592 `Rails.*` in Mastodon); class methods given by an `included` hook unseen (now read where literal — plain Ruby and ActiveSupport::Concern — and `derived`); a library mixin ignored as a class-side candidate (`validates` charged to ActiveRecord::Base); a per-type `dynamic` flag clouding both sides; a compact declaration's qualifier not read; a constant qualified by a subclass stubbed below `<gems>`; `--explain-dropped` not saying what decided a drop. Oracles: Packwerk 3.3.1 over Mastodon — 4 289 of its 4 335 cross-file references in the model (98.9 %), the rest the wrapper rule; rake booted under its own tests — 1 006 of 1 012 declared methods held by the VM on the same line, 1 533 of 2 829 observed calls already edges. The trace tool (`trace/codegraph_trace.rb`, one file) and `--trace`: `generated` `traitUsage`, `dynamic-candidate` invocations with `candidates`, no entity added — exercised end to end in a container and `validate`-clean. `fixtures/ruby` → 31 files, 181 entities / 153 edges, 177 sites, 76.3 %; metrics 106 of 109 joined. 119 cargo tests (107 unit, 12 contract) + 27 core gate tests. Distribution wired: `ruby-native` on four Unix runners, the release loop, `Formula/codegraph-ruby.rb`, the catalogue row; `docs/ruby-extractor.md` |
-| M19a | Vocabulary — lexicon, split, artifact | `Profile.lexicon` on the eleven profiles (keywords, conventional names, affixes, separators — the profile half of #19), METAMODEL §5 row, printed by `profiles --lang`; `@codegraph/vocabulary`: one idiom-parametrized splitter with the acronym rule on Unicode categories, four term classes as tags (never filters), role weights recorded in the artifact, scopes = the fold's containers; `codegraph vocabulary` report, `--level`/`--scope`/`--class`/`--drift FILE`; five `vocabulary.json` snapshots byte-identical, closure and determinism properties; the coverage table of §20.1 filled on fixtures, Broadleaf, codegraph, Mastodon, Plausible |
-| M19b | Vocabulary — cloud, tab, city channel | deterministic spiral layout with an injected measurer and the no-overlap property; `--svg` with the fixture snapshot; `serve` builds `/vocabulary.json` and answers `/carriers.json?scope=&term=`; the sixth navigator tab (scope follows the selection, chips, table, carriers → reveal), literals pinned, types-only import; `vocabulary:<term>` metric source through the CLI hook, city unchanged; the two demo images under `docs/` and the README section — the issue's fourth criterion |
+| M19a | Vocabulary — lexicon, split, artifact | ✅ (2026-10-26, five stacked PRs from #26, not yet merged; Broadleaf 76 310 entities → 3 381 terms in 0.29 s, 2.9 MB, its top ten a commerce vocabulary after 13 words joined the shared list) `Profile.lexicon` on the eleven profiles (keywords, conventional names, affixes, separators — the profile half of #19), METAMODEL §5 row, printed by `profiles --lang`; `@codegraph/vocabulary`: one idiom-parametrized splitter with the acronym rule on Unicode categories, four term classes as tags (never filters), role weights recorded in the artifact, scopes = the fold's containers; `codegraph vocabulary` report, `--level`/`--scope`/`--class`/`--drift FILE`; five `vocabulary.json` snapshots byte-identical, closure and determinism properties; the coverage table of §20.1 filled on fixtures, Broadleaf, codegraph, Mastodon, Plausible |
+| M19b | Vocabulary — cloud, tab, city channel | ✅ (2026-10-26, three stacked PRs from #31, not yet merged; Broadleaf's cloud and its city raised by `order` are the demo images) deterministic spiral layout with an injected measurer and the no-overlap property; `--svg` with the fixture snapshot; `serve` builds `/vocabulary.json` and answers `/carriers.json?scope=&term=`; the sixth navigator tab (scope follows the selection, chips, table, carriers → reveal), literals pinned, types-only import; `vocabulary:<term>` metric source through the CLI hook, city unchanged; the two demo images under `docs/` and the README section — the issue's fourth criterion |
 | M19c | Vocabulary — glossary in the explanation | `words` on every insight block — the words of the unit's name, its parameters' and (for a type) its fields', each with `in`, `concern` (domain / technical / ambiguous), `sense`, `meaning`, in that entity's context, asked in the SAME call that explains it; `glossary` on the module block reconciling its types' entries with `polysemous`; `PROMPT_VERSION` 2, the words `.optional()` in the record schema so every existing side-car round-trips byte-identical — no new record type, no format change; the store at version 2 with the `insight_word` projection (rebuilt on `--import`); readers `insights --word/--glossary/--polysemy/--concerns`, `vocabulary --drift-insights`, `/glossary.json`, the entries shown as inferences in both panels; the Broadleaf re-explanation priced by `--estimate` and measured; `docs/vocabulary.md` |
 
 ## 22. Decisions made in this plan (deltas vs. the design doc)
@@ -5525,7 +5731,7 @@ green; the coverage table and the cost filled in this section.
 | The idiom is profile data (M19, #19) | `Profile.lexicon`: keywords, conventional member names, technical additions, separators, prefixes, suffixes, the C# interface prefix, file-named modules; one splitter reads it | invariant 8: a profile is specifiable without being implemented; the algorithm knows no language, and a language without an extractor still gets its idiom |
 | Term classes are tags (M19) | every token kept and tagged `domain / technical / keyword / short`; a consumer filters; the technical list is data with its digest in the artifact | "not shown" must stay distinguishable from "not there" (the §3.8 absence rule applied to words); drift needs the technical words; the list is contestable by construction, so it is overridable and named |
 | Vocabulary weights (M19) | by role from traits — type and module 8, attribute 4, operation 3, parameter and local 1 — recorded in the artifact beside the raw occurrence count | a count without its scheme is not a fact (the city's `bindings` rule); the issue asks that a class name outweigh a buried variable, and nouns outweigh verbs whose prefix is technical |
-| Vocabulary scopes (M19) | a scope's words are those of every entity whose fold container it is (`containingType`/`containingModule`); attachment not followed; operations on demand, not in the artifact | the same membership the city uses, so `vocabulary:<term>` colours the building whose words were counted; the navigator addresses types and modules only |
+| Vocabulary scopes (M19) | a scope's words are those of every entity whose fold container it is (`containingType`/`containingModule`); attachment not followed; operations on demand, not in the artifact | the same membership the city uses, so `vocabulary:<term>` measures the building whose words were counted; the navigator addresses types and modules only |
 | Cloud layout (M19b) | pure deterministic geometry in the package — weight-ordered spiral, axis-aligned boxes, an injected text measurer with a monospace default; no `d3-cloud` | the demo image is an SVG the CLI writes and a fixture snapshots, so the layout must run in Node and give the same bytes; the browser passes `measureText` into the same function |
 | Carriers are a lookup (M19b) | the artifact carries counts per (scope, term); the carrying entities come from `/carriers.json?scope=&term=` over the model `serve` holds | lists per term per scope would multiply the artifact for evidence a page asks for one word at a time; a static host degrades to no evidence rather than a bigger file (the `/insight.json` precedent) |
 | Glossary tied to the entity (M19c) | each explained unit's block carries `words`: the words its name (and its parameters' or fields' names) is made of, with sense and concern in that entity's context, asked in the explanation call itself; the module block reconciles its types' words into `glossary`; scopes and the corpus roll up from the records | a meaning belongs to the entity that uses the word, and the context pack of that entity is the one place the pipeline has its source, facts and dependencies' explanations together; a scope has a vocabulary, not a meaning — the two earlier drafts (a standalone command over a term table; a second request per scope) asked at the wrong altitude |

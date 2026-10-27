@@ -29,7 +29,7 @@ export function helpModel(city: CityLayout | null): HelpModel {
         "This is your code as a city: every district is a module (a package), " +
           "every building is a type declared there. Building dimensions follow " +
           "the metrics named in the legend below — a taller tower holds more " +
-          "code; nothing is decorative.",
+          "of its height metric; nothing is decorative.",
         "A washed-out building is a stub: an external type the model only " +
           "glimpsed through its uses. Nested plates are nested modules, " +
           "exactly as the model declares them.",

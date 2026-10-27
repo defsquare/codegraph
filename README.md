@@ -29,7 +29,7 @@ Codegraph turns source code into a dependency model you can query, draw as a
 have a language model explain bottom-up. It does this without building the
 code: the extractors run on sources alone (no classpath, jars, etc.).
 
-Four questions, four commands:
+Five questions, five commands:
 
 | Question | Command | What you get |
 |---|---|---|
@@ -37,6 +37,7 @@ Four questions, four commands:
 | What exactly depends on what? | `codegraph serve` → Navigate tab | a browsable tree with every incoming and outgoing dependency, the member that carries it, and the source line that proves it |
 | How did it get this way? | `codegraph scm` / `replay` | churn, hotspots, ownership, co-change, and a city whose timeline scrubs the years |
 | What does it mean? | `codegraph explain` | one plain-language explanation per method, class and package, written leaves-first so every summary rests on already-explained parts |
+| What language does it speak? | `codegraph vocabulary` / `serve` → Vocabulary tab | the words of every name, split per language idiom and weighted by what carries them: a word cloud per package or class, drift against your glossary, one word across the city |
 
 Plus the plumbing you need to trust the answers: `validate` for the model,
 `analyze` for coupling and cycles, `export` for DOT, CSV, JSON and PlantUML.
@@ -203,6 +204,53 @@ desaturated when the dependency is an inference rather than a declared fact,
 and red for the edges whose cut would break a cycle. Hover a building for
 its raw numbers. Unmeasured metrics are drawn at the minimum and labelled as
 unmeasured rather than faked.
+
+### Read its vocabulary
+
+Every name in the model is split into words the way its language writes
+names (`OrderItemImpl` → `order`, `item`, `impl`), and each word weighs what
+carries it: 8 for a class or a package, 4 for a field, 3 for a method, 1 for
+a parameter or a local. Words are tagged `domain`, `technical`, `keyword` or
+`short`, never dropped. Only names are read, never source, and no language
+model is called.
+
+```bash
+codegraph vocabulary broadleaf.jsonl                            # the 40 heaviest domain words
+codegraph vocabulary broadleaf.jsonl --top 80 --svg cloud.svg   # and the cloud, as an SVG image
+codegraph vocabulary broadleaf.jsonl --level module             # per package, most distinct words first
+codegraph vocabulary broadleaf.jsonl --drift glossary.txt       # the business terms no name says; exit 3
+codegraph serve broadleaf.jsonl --height vocabulary:order --height-scale sqrt   # where does `order` live?
+```
+
+<p align="center">
+  <img src="docs/vocabulary-broadleaf.svg" width="860"
+       alt="The word cloud of BroadleafCommerce: order, item, customer, offer, product, admin, group, fulfillment, category and payment are the largest of 80 domain words.">
+</p>
+
+<p align="center">
+  <sub>The 80 heaviest domain words of
+  <a href="https://github.com/BroadleafCommerce/BroadleafCommerce">BroadleafCommerce</a>'s
+  names: <code>order item customer offer product admin group fulfillment
+  category payment…</code> A word's area is its weight; the legend states the
+  weights, the view and the technical list it was counted under.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/vocabulary-city-broadleaf.png" width="860"
+       alt="BroadleafCommerce's code city with each building raised by the weight of the word order in its names: the order service and offer packages stand as towers, most other types stay flat, and the selected OrderServiceImpl shows vocabulary:order 203.">
+</p>
+
+<p align="center">
+  <sub>The same corpus as a city, each class raised by how much its names say
+  <code>order</code> (<code>--height vocabulary:order --height-scale sqrt</code>).
+  The towers are <code>core.order.service</code> and <code>core.offer</code>;
+  flat tiles never say the word. The selected tower is
+  <code>OrderServiceImpl</code>, weight 203.</sub>
+</p>
+
+On `serve`'s Vocabulary tab, the cloud and its table follow the package or
+class selected in Navigate, and clicking a word lists the names that carry it,
+each one click from its node.
 
 ### Mine the history
 

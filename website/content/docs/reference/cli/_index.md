@@ -4,7 +4,7 @@ linkTitle: CLI
 weight: 1
 ---
 
-`codegraph` is one command with fifteen sub-commands. Every sub-command prints its own options with `codegraph <command> --help`; the pages below are that output, with the conventions the commands share stated once here.
+`codegraph` is one command with sixteen sub-commands. Every sub-command prints its own options with `codegraph <command> --help`; the pages below are that output, with the conventions the commands share stated once here.
 
 ```
 codegraph <command> [options]
@@ -24,7 +24,7 @@ global options:
 
 **`--json`** prints the same information as a machine-readable object on stdout.
 
-**A sibling `model.db`** — the SQLite analysis store — is built on first use and reused afterwards. `--no-cache` reads the JSONL directly; it is accepted by `analyze`, `export`, `navigator`, `domain-facts` and `explain`.
+**A sibling `model.db`** — the SQLite analysis store — is built on first use and reused afterwards. `--no-cache` reads the JSONL directly; it is accepted by `analyze`, `export`, `navigator`, `vocabulary`, `domain-facts` and `explain`.
 
 **Exit codes** distinguish a broken tool from a broken model: `0` success, `1` an internal bug, `2` a usage error, `3` findings. See [Exit codes](/docs/reference/exit-codes/).
 
@@ -38,6 +38,7 @@ global options:
 | [`export`](/docs/reference/cli/export/) | Write the folded graph as DOT, JSON, CSV or PlantUML. |
 | [`city`](/docs/reference/cli/city/) | Write the code city: modules as districts, types as buildings. |
 | [`navigator`](/docs/reference/cli/navigator/) | Explore the model: a searchable tree with per-node dependency detail. |
+| [`vocabulary`](/docs/reference/cli/vocabulary/) | Report the words the model's names are made of, per corpus, module or type; or drift against a glossary. |
 | [`domain-facts`](/docs/reference/cli/domain-facts/) | Write per-type domain dossiers: joined facts for domain extraction. |
 | [`explain`](/docs/reference/cli/explain/) | Explain every operation, type and module with an LLM, bottom-up, into a side-car. |
 | [`scm`](/docs/reference/cli/scm/) | Mine a repository's history into a deterministic `history.jsonl`. |

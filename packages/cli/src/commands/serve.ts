@@ -1,10 +1,12 @@
 import { readFileSync, statSync } from "node:fs";
 import { buildNavigator, navigatorToJsonString } from "@codegraph/navigator";
 import { cityToJsonString, layoutCity } from "@codegraph/city";
+import { buildVocabulary, vocabularyCarriers, vocabularyToJsonString } from "@codegraph/vocabulary";
 import type { AppOptions, ServeOptions } from "../args.js";
 import { startDaemon, type DaemonOptions } from "../app/daemon.js";
 import { createJobRunner } from "../app/jobs.js";
 import { parseRegistry, type Registry } from "../app/registry.js";
+import { CARRIERS_ROUTE, carriersLookup } from "../carriers-route.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { loadHistoryJoin } from "../history-metrics.js";
 import { INSIGHT_ROUTE, insightLookup } from "../insight-route.js";
@@ -15,27 +17,31 @@ import { navigatorAssets, startArtifactServer, type ArtifactServerOptions, type 
 import { resolveView } from "../view.js";
 import { cityOf, cityWarnings } from "./city.js";
 import { navigatorWarnings } from "./navigator.js";
+import { vocabularyWarnings } from "./vocabulary.js";
 
 /**
  * `codegraph serve <model.jsonl...> [--port N] [--host ADDR] [city metrics…]`.
  *
  * ONE PAGE OVER A MODEL: the navigator (tree, fan-in/fan-out evidence, graph,
- * cycles, coupling) with the 3D city as one of its tabs. Both artifacts are
- * built here, from the SAME graph under the SAME view, so a building clicked
- * in the city names exactly the entity the tree reveals — the two artifacts
- * share the entity ids, and the page joins them on nothing else.
+ * cycles, coupling, vocabulary) with the 3D city as one of its tabs. The three
+ * artifacts are built here, from the SAME graph under the SAME view, so a
+ * building clicked in the city names exactly the entity the tree reveals, and
+ * a type's words are found by the id of its tree node — the artifacts share
+ * the entity ids, and the page joins them on nothing else.
  *
  * The CLI stays inside its box (decision 7): the transforms live in
- * `@codegraph/navigator` and `@codegraph/city`, the frontend is the prebuilt
- * `@codegraph/navigator-ui` bundle (which embeds `@codegraph/viz`), and this
- * command only resolves flags, loads models and hands the server two JSON
- * routes — `/navigator.json` and `/city.json`, each exactly the file the
- * respective command's `--out` would have written.
+ * `@codegraph/navigator`, `@codegraph/city` and `@codegraph/vocabulary`, the
+ * frontend is the prebuilt `@codegraph/navigator-ui` bundle (which embeds
+ * `@codegraph/viz`), and this command only resolves flags, loads models and
+ * hands the server three JSON routes — `/navigator.json`, `/city.json` and
+ * `/vocabulary.json`, each exactly the file the respective command's `--out`
+ * would have written (the vocabulary under its default weights and list).
  *
- * ONE ROUTE IS NOT AN ARTIFACT: `/insight.json?id=…`, a selected node's
- * explanation, looked up in `<model>.insights.db` when asked for (M16c). No
- * store means a 404 the page ignores — a model nobody explained looks exactly
- * as it did.
+ * TWO ROUTES ARE NOT ARTIFACTS: `/insight.json?id=…`, a selected node's
+ * explanation, looked up in `<model>.insights.db` when asked for (M16c) — no
+ * store means a 404 the page ignores, so a model nobody explained looks
+ * exactly as it did; and `/carriers.json?term=…`, the names that carry a word
+ * of the vocabulary, answered from the model this command holds (M19b).
  *
  * Stdout stays empty: the server is the destination. Warnings and the reach
  * announcement are stderr. The command returns at once; the live server is
@@ -65,6 +71,7 @@ const REAL_SERVE: ServeDeps = {
 
 export const NAVIGATOR_ROUTE = "/navigator.json";
 export const CITY_ROUTE = "/city.json";
+export const VOCABULARY_ROUTE = "/vocabulary.json";
 
 export function serveCommand(options: ServeOptions, io: IoSink, deps: ServeDeps = REAL_SERVE): ExitCode {
   // Resolve the assets FIRST: an unbuilt frontend must fail before a large
@@ -81,9 +88,11 @@ export function serveCommand(options: ServeOptions, io: IoSink, deps: ServeDeps 
       view,
       ...(options.name === undefined ? {} : { name: options.name }),
     });
+    const counting = { view, ...(options.name === undefined ? {} : { name: options.name }) };
+    const vocabulary = buildVocabulary(graph, counting);
     // The viewer refuses a city with no placement, so the layout is not optional.
     const history = loadHistoryJoin(options.historyMetrics, options.models);
-    const city = layoutCity(cityOf(graph, options, history));
+    const city = layoutCity(cityOf(graph, options, history, vocabulary));
 
     // One "not clean" line for the page, then each artifact's own caveats.
     const built = { clean: true, paths: source.paths };
@@ -96,16 +105,20 @@ export function serveCommand(options: ServeOptions, io: IoSink, deps: ServeDeps 
           ]),
       ...navigatorWarnings(built, navigator),
       ...cityWarnings(built, city),
+      ...vocabularyWarnings(built, vocabulary),
     ]);
 
     // Beside the FIRST model, like explain's default; --insights names it otherwise. Opened on first request.
     const insights = insightLookup(options.insights ?? storePathForModel(options.models[0] ?? ""));
+    // Holds the graph until the first answerable request builds the index, then lets it go.
+    const carriers = carriersLookup(() => vocabularyCarriers(graph, vocabulary, counting));
     deps.startServer({
       routes: {
         [NAVIGATOR_ROUTE]: navigatorToJsonString(navigator),
         [CITY_ROUTE]: cityToJsonString(city),
+        [VOCABULARY_ROUTE]: vocabularyToJsonString(vocabulary),
       },
-      lookups: { [INSIGHT_ROUTE]: insights.handle },
+      lookups: { [INSIGHT_ROUTE]: insights.handle, [CARRIERS_ROUTE]: carriers.handle },
       onClose: () => insights.close(),
       label: "codegraph",
       assets,

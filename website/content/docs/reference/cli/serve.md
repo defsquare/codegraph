@@ -5,7 +5,7 @@ weight: 5
 
 Serve the navigator with the code city as a tab, over this model.
 
-One page, built from one graph under one view: the **Navigate** tab (tree and per-node incoming/outgoing dependencies), the **City** tab (the 3D city, full-width; a selected building offers *Open in navigator*, which reveals that type on Navigate), then **Graph**, **Cycles** and **Coupling**. The server hands out `/navigator.json` and `/city.json` — each exactly the file [`navigator`](/docs/reference/cli/navigator/) and [`city --layout`](/docs/reference/cli/city/) would have written — beside the built frontend. Stdout stays empty; the process runs until Ctrl-C.
+One page, built from one graph under one view: the **Navigate** tab (tree and per-node incoming/outgoing dependencies), the **City** tab (the 3D city, full-width; a selected building offers *Open in navigator*, which reveals that type on Navigate), then **Graph**, **Cycles**, **Coupling** and **Vocabulary** (the selected scope's words as a cloud and a table; a word lists the names that carry it, each one click from Navigate). The server hands out `/navigator.json`, `/city.json` and `/vocabulary.json` — each exactly the file [`navigator`](/docs/reference/cli/navigator/), [`city --layout`](/docs/reference/cli/city/) and [`vocabulary --out`](/docs/reference/cli/vocabulary/) would have written — beside the built frontend, and answers two lookups: `/insight.json?id=ID`, a node's explanation from the insights store, and `/carriers.json?term=WORD[&scope=ID][&class=CLASS][&limit=N]`, the names of a scope that carry a word, from the model it holds (`404` for an unknown scope or term, `400` for a request it cannot ask). Stdout stays empty; the process runs until Ctrl-C.
 
 ## Synopsis
 
@@ -25,9 +25,9 @@ codegraph serve --app [--data-dir DIR] [--extractors FILE] [--port N] [--host AD
 | Option | Meaning | Default |
 |---|---|---|
 | `--name STR` | Display name for the corpus in the page header; defaults to the basename of each model's root. | — |
-| `--height METRIC` | Metric driving building height. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). | `loc` |
+| `--height METRIC` | Metric driving building height. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). From the names: vocabulary:<word> (the word's weight in the type's names). | `loc` |
 | `--height-scale <linear\|sqrt\|log>` | How height follows its metric. | `linear` |
-| `--footprint METRIC` | Metric driving building footprint. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). | `members` |
+| `--footprint METRIC` | Metric driving building footprint. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). From the names: vocabulary:<word> (the word's weight in the type's names). | `members` |
 | `--footprint-scale <linear\|sqrt\|log>` | How the footprint SIDE follows its metric; sqrt makes the AREA proportional. | `sqrt` |
 | `--carry M1,M2` | Extra metrics to measure onto every building, comma-separated, bound to nothing. | — |
 | `--history-metrics FILE` | The change-history side-car the history:/history-file: metrics read (what 'codegraph-metrics --history' wrote). | `<model>.history-metrics.jsonl` beside each model |
@@ -54,8 +54,9 @@ loop for that app: run it from a checkout and open the URL in a browser.
   the token every route is `404`; a request whose `Origin` header is not the
   page's own is `403`.
 - **Routes.** The page and its assets; `app` (the registered extractors and
-  the current project); `recent`; `navigator.json` and `city.json` (the
-  current project's artifacts, `404` until one is open); `POST jobs` with
+  the current project); `recent`; `navigator.json`, `city.json` and
+  `vocabulary.json` (the current project's artifacts, `404` until one is
+  open; no `carriers.json`, since the daemon holds no model between jobs); `POST jobs` with
   `{"src": "<folder or model.jsonl>", "extractor"?: "<name>"}` → `202` with
   the job, `409` while another runs, `422` when several extractors claim the
   folder (`candidates`, most files first — the page asks, never guesses),
@@ -73,8 +74,8 @@ loop for that app: run it from a checkout and open the URL in a browser.
   census of the folder's file extensions (dot-directories and `node_modules`
   skipped) against every entry's `extensions`.
 - **`--data-dir`** holds one directory per opened folder — its `model.jsonl`,
-  the `model.db` cache built beside it, `navigator.json`, `city.json` and a
-  `project.json` — plus `recent.json`. Reopening a folder whose claimed files
+  the `model.db` cache built beside it, `navigator.json`, `city.json`,
+  `vocabulary.json` and a `project.json` — plus `recent.json`. Reopening a folder whose claimed files
   have the same paths, sizes and mtimes skips the extractor; the build is
   skipped too when the city flags have not changed.
 - **It dies with its parent:** stdin EOF and SIGTERM both close the server

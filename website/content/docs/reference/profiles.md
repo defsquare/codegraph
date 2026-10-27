@@ -56,7 +56,8 @@ A profile that is specified but has no shipped extractor is complete, not defici
 
 - Reserved words: `def` · `if` · `do` · `let` · `quote` · `var` · `fn` · `loop` · `recur` · `throw` · `try` · `catch` · `finally` · `monitor-enter` · `monitor-exit` · `new` · `set!` · `nil` · `true` · `false`
 - Conventional names: `-main` · `-init` · `-post-init` · `-toString` · `-equals` · `-hashCode`
-- Technical words: `coll` · `ctx` · `kw` · `ns` · `opts` · `seq` · `sym` · `xf` · `xform`
+- Technical words: `coll` · `kw` · `ns` · `seq` · `sym` · `xf` · `xform`
+- Qualified kinds: `namespace` by `.`
 
 **Notes**
 
@@ -100,7 +101,8 @@ A profile that is specified but has no shipped extractor is complete, not defici
 
 - Reserved words: `abstract` · `as` · `base` · `bool` · `break` · `byte` · `case` · `catch` · `char` · `checked` · `class` · `const` · `continue` · `decimal` · `default` · `delegate` · `do` · `double` · `else` · `enum` · `event` · `explicit` · `extern` · `false` · `finally` · `fixed` · `float` · `for` · `foreach` · `goto` · `if` · `implicit` · `in` · `int` · `interface` · `internal` · `is` · `lock` · `long` · `namespace` · `new` · `null` · `object` · `operator` · `out` · `override` · `params` · `private` · `protected` · `public` · `readonly` · `ref` · `return` · `sbyte` · `sealed` · `short` · `sizeof` · `stackalloc` · `static` · `string` · `struct` · `switch` · `this` · `throw` · `true` · `try` · `typeof` · `uint` · `ulong` · `unchecked` · `unsafe` · `ushort` · `using` · `virtual` · `void` · `volatile` · `while`
 - Conventional names: `ToString` · `Equals` · `GetHashCode` · `Finalize` · `Main` · `CompareTo` · `Dispose` · `DisposeAsync` · `GetEnumerator` · `GetAsyncEnumerator` · `MoveNext` · `MoveNextAsync` · `Clone` · `Deconstruct` · `this[]` · `op_Addition` · `op_Subtraction` · `op_Multiply` · `op_Division` · `op_Modulus` · `op_Equality` · `op_Inequality` · `op_LessThan` · `op_GreaterThan` · `op_LessThanOrEqual` · `op_GreaterThanOrEqual` · `op_Implicit` · `op_Explicit` · `op_UnaryNegation` · `op_UnaryPlus` · `op_LogicalNot` · `op_OnesComplement` · `op_Increment` · `op_Decrement` · `op_True` · `op_False` · `op_BitwiseAnd` · `op_BitwiseOr` · `op_ExclusiveOr` · `op_LeftShift` · `op_RightShift` · `op_UnsignedRightShift`
-- Technical words: `args` · `async` · `attribute` · `enumerable` · `enumerator` · `extension` · `extensions` · `linq`
+- Technical words: `attribute` · `enumerable` · `enumerator` · `linq`
+- Qualified kinds: `namespace` by `.`
 - Interface prefix: a leading `I` before Upper + lower is a marker, not a word
 
 **Notes**
@@ -147,8 +149,9 @@ A profile that is specified but has no shipped extractor is complete, not defici
 
 - Reserved words: `true` · `false` · `nil` · `when` · `and` · `or` · `not` · `in` · `fn` · `do` · `end` · `catch` · `rescue` · `after` · `else`
 - Conventional names: `__using__` · `__before_compile__` · `__after_compile__` · `__after_verify__` · `__on_definition__` · `__struct__` · `__info__` · `__deriving__` · `__impl__` · `__protocol__` · `start_link` · `child_spec` · `init` · `handle_call` · `handle_cast` · `handle_info` · `handle_continue` · `terminate` · `code_change` · `format_status` · `to_string` · `inspect` · `@moduledoc` · `@doc` · `@typedoc` · `@spec` · `@type` · `@typep` · `@opaque` · `@callback` · `@macrocallback` · `@optional_callbacks` · `@impl` · `@behaviour` · `@derive` · `@enforce_keys` · `@external_resource` · `@compile` · `@deprecated` · `@dialyzer` · `@on_load` · `@vsn` · `@before_compile` · `@after_compile` · `@after_verify` · `@on_definition` · `@nifs` · `@fallback_to_any` · `@file`
-- Technical words: `attrs` · `behaviour` · `callback` · `changeset` · `conn` · `ecto` · `ets` · `gen` · `live` · `mix` · `opts` · `otp` · `phoenix` · `pid` · `plug` · `repo` · `schema` · `server` · `socket` · `sup` · `supervisor` · `web`
+- Technical words: `attrs` · `behaviour` · `changeset` · `conn` · `ecto` · `ets` · `gen` · `live` · `mix` · `otp` · `phoenix` · `pid` · `plug` · `schema` · `server` · `socket` · `sup` · `supervisor` · `web`
 - File kinds: `file`
+- Qualified kinds: `file` by `/` · `module` by `.` · `protocol` by `.`
 
 **Notes**
 
@@ -195,7 +198,7 @@ A profile that is specified but has no shipped extractor is complete, not defici
 
 - Reserved words: `break` · `case` · `chan` · `const` · `continue` · `default` · `defer` · `else` · `fallthrough` · `for` · `func` · `go` · `goto` · `if` · `import` · `interface` · `map` · `package` · `range` · `return` · `select` · `struct` · `switch` · `type` · `var`
 - Conventional names: `init` · `main` · `String` · `GoString` · `Error` · `Unwrap` · `Is` · `As` · `Len` · `Less` · `Swap` · `MarshalJSON` · `UnmarshalJSON` · `MarshalText` · `UnmarshalText` · `ServeHTTP`
-- Technical words: `cfg` · `cmd` · `ctx` · `err` · `errs` · `internal` · `mu` · `mutex` · `pkg` · `srv` · `svc` · `wg`
+- Technical words: `cfg` · `cmd` · `errs` · `internal` · `mu` · `pkg` · `srv` · `svc` · `wg`
 
 **Notes**
 
@@ -233,6 +236,7 @@ A profile that is specified but has no shipped extractor is complete, not defici
 - Reserved words: `abstract` · `assert` · `boolean` · `break` · `byte` · `case` · `catch` · `char` · `class` · `const` · `continue` · `default` · `do` · `double` · `else` · `enum` · `extends` · `final` · `finally` · `float` · `for` · `goto` · `if` · `implements` · `import` · `instanceof` · `int` · `interface` · `long` · `native` · `new` · `package` · `private` · `protected` · `public` · `return` · `short` · `static` · `strictfp` · `super` · `switch` · `synchronized` · `this` · `throw` · `throws` · `transient` · `try` · `void` · `volatile` · `while` · `true` · `false` · `null`
 - Conventional names: `toString` · `equals` · `hashCode` · `clone` · `finalize` · `main` · `compareTo` · `iterator` · `hasNext` · `valueOf` · `serialVersionUID` · `readObject` · `writeObject` · `readObjectNoData` · `readResolve` · `writeReplace`
 - Technical words: `annotation` · `bean` · `beans` · `ejb` · `jaxb` · `jdbc` · `jndi` · `jpa` · `pojo` · `servlet`
+- Qualified kinds: `package` by `.`
 
 **Notes**
 
@@ -273,8 +277,9 @@ A profile that is specified but has no shipped extractor is complete, not defici
 
 - Reserved words: `await` · `break` · `case` · `catch` · `class` · `const` · `continue` · `debugger` · `default` · `delete` · `do` · `else` · `enum` · `export` · `extends` · `false` · `finally` · `for` · `function` · `if` · `import` · `in` · `instanceof` · `new` · `null` · `return` · `super` · `switch` · `this` · `throw` · `true` · `try` · `typeof` · `var` · `void` · `while` · `with` · `yield` · `implements` · `interface` · `let` · `package` · `private` · `protected` · `public` · `static`
 - Conventional names: `constructor` · `toString` · `toLocaleString` · `valueOf` · `toJSON` · `[Symbol.iterator]` · `[Symbol.asyncIterator]` · `[Symbol.hasInstance]` · `[Symbol.toPrimitive]` · `[Symbol.toStringTag]` · `[Symbol.dispose]` · `[Symbol.asyncDispose]`
-- Technical words: `args` · `async` · `callback` · `cb` · `fn` · `json` · `opts` · `promise` · `prototype`
+- Technical words: `cb` · `fn` · `promise` · `prototype`
 - File kinds: `module`
+- Qualified kinds: `module` by `/`
 
 **Notes**
 
@@ -315,8 +320,9 @@ A profile that is specified but has no shipped extractor is complete, not defici
 
 - Reserved words: `__halt_compiler` · `abstract` · `and` · `array` · `as` · `break` · `callable` · `case` · `catch` · `class` · `clone` · `const` · `continue` · `declare` · `default` · `die` · `do` · `echo` · `else` · `elseif` · `empty` · `enddeclare` · `endfor` · `endforeach` · `endif` · `endswitch` · `endwhile` · `eval` · `exit` · `extends` · `final` · `finally` · `fn` · `for` · `foreach` · `function` · `global` · `goto` · `if` · `implements` · `include` · `include_once` · `instanceof` · `insteadof` · `interface` · `isset` · `list` · `match` · `namespace` · `new` · `or` · `print` · `private` · `protected` · `public` · `readonly` · `require` · `require_once` · `return` · `static` · `switch` · `throw` · `trait` · `try` · `unset` · `use` · `var` · `while` · `xor` · `yield` · `__CLASS__` · `__DIR__` · `__FILE__` · `__FUNCTION__` · `__LINE__` · `__METHOD__` · `__NAMESPACE__` · `__PROPERTY__` · `__TRAIT__` · `true` · `false` · `null`
 - Conventional names: `__construct` · `__destruct` · `__call` · `__callStatic` · `__get` · `__set` · `__isset` · `__unset` · `__sleep` · `__wakeup` · `__serialize` · `__unserialize` · `__toString` · `__invoke` · `__set_state` · `__clone` · `__debugInfo`
-- Technical words: `arr` · `closure` · `facade` · `middleware` · `php` · `str`
+- Technical words: `arr` · `closure` · `facade` · `middleware` · `php`
 - File kinds: `codeFile`
+- Qualified kinds: `codeFile` by `/` · `namespace` by `\`
 
 **Notes**
 
@@ -351,7 +357,8 @@ A profile that is specified but has no shipped extractor is complete, not defici
 
 - Reserved words: `False` · `None` · `True` · `and` · `as` · `assert` · `async` · `await` · `break` · `class` · `continue` · `def` · `del` · `elif` · `else` · `except` · `finally` · `for` · `from` · `global` · `if` · `import` · `in` · `is` · `lambda` · `nonlocal` · `not` · `or` · `pass` · `raise` · `return` · `try` · `while` · `with` · `yield`
 - Conventional names: `self` · `cls` · `__init__` · `__new__` · `__del__` · `__repr__` · `__str__` · `__bytes__` · `__format__` · `__hash__` · `__bool__` · `__eq__` · `__ne__` · `__lt__` · `__le__` · `__gt__` · `__ge__` · `__len__` · `__iter__` · `__next__` · `__aiter__` · `__anext__` · `__reversed__` · `__contains__` · `__getitem__` · `__setitem__` · `__delitem__` · `__missing__` · `__getattr__` · `__getattribute__` · `__setattr__` · `__delattr__` · `__dir__` · `__get__` · `__set__` · `__delete__` · `__set_name__` · `__call__` · `__enter__` · `__exit__` · `__aenter__` · `__aexit__` · `__await__` · `__init_subclass__` · `__class_getitem__` · `__post_init__` · `__add__` · `__sub__` · `__mul__` · `__matmul__` · `__truediv__` · `__floordiv__` · `__mod__` · `__pow__` · `__neg__` · `__pos__` · `__abs__` · `__invert__` · `__and__` · `__or__` · `__xor__` · `__lshift__` · `__rshift__` · `__int__` · `__float__` · `__index__` · `__round__` · `__copy__` · `__deepcopy__` · `__reduce__` · `__getstate__` · `__setstate__` · `__slots__` · `__all__` · `__name__` · `__main__` · `__doc__` · `__dict__`
-- Technical words: `args` · `dict` · `kwargs` · `metaclass` · `mixin` · `py` · `str` · `tuple`
+- Technical words: `dict` · `kwargs` · `metaclass` · `py` · `tuple`
+- Qualified kinds: `module` by `.`
 
 **Notes**
 
@@ -384,8 +391,9 @@ A profile that is specified but has no shipped extractor is complete, not defici
 
 - Reserved words: `__ENCODING__` · `__LINE__` · `__FILE__` · `BEGIN` · `END` · `alias` · `and` · `begin` · `break` · `case` · `class` · `def` · `defined?` · `do` · `else` · `elsif` · `end` · `ensure` · `false` · `for` · `if` · `in` · `module` · `next` · `nil` · `not` · `or` · `redo` · `rescue` · `retry` · `return` · `self` · `super` · `then` · `true` · `undef` · `unless` · `until` · `when` · `while` · `yield`
 - Conventional names: `initialize` · `initialize_copy` · `to_s` · `to_str` · `to_a` · `to_ary` · `to_h` · `to_hash` · `to_proc` · `inspect` · `hash` · `eql?` · `==` · `===` · `=~` · `!~` · `!=` · `<=>` · `<` · `>` · `<=` · `>=` · `+` · `-` · `*` · `/` · `%` · `**` · `<<` · `>>` · `&` · `|` · `^` · `~` · `!` · `+@` · `-@` · `[]` · `[]=` · `each` · `coerce` · `method_missing` · `respond_to_missing?` · `respond_to?` · `included` · `extended` · `inherited` · `prepended` · `method_added` · `const_missing`
-- Technical words: `accessor` · `attr` · `concern` · `concerns` · `ext` · `gem` · `gemspec` · `klass` · `lambda` · `mixin` · `proc` · `rake` · `rakefile`
+- Technical words: `accessor` · `attr` · `concern` · `concerns` · `ext` · `gem` · `gemspec` · `klass` · `lambda` · `proc` · `rake` · `rakefile`
 - File kinds: `file`
+- Qualified kinds: `file` by `/` · `class` by `::` · `module` by `::` · `constant` by `::`
 
 **Notes**
 
@@ -441,7 +449,7 @@ A profile that is specified but has no shipped extractor is complete, not defici
 
 - Reserved words: `as` · `async` · `await` · `break` · `const` · `continue` · `crate` · `dyn` · `else` · `enum` · `extern` · `false` · `fn` · `for` · `if` · `impl` · `in` · `let` · `loop` · `match` · `mod` · `move` · `mut` · `pub` · `ref` · `return` · `self` · `Self` · `static` · `struct` · `super` · `trait` · `true` · `type` · `unsafe` · `use` · `where` · `while` · `abstract` · `become` · `box` · `do` · `final` · `gen` · `macro` · `override` · `priv` · `try` · `typeof` · `unsized` · `virtual` · `yield`
 - Conventional names: `main` · `fmt` · `drop` · `clone` · `clone_from` · `eq` · `ne` · `partial_cmp` · `cmp` · `deref` · `deref_mut` · `into_iter` · `from_str` · `try_from` · `try_into` · `as_ref` · `as_mut` · `borrow_mut` · `index_mut` · `default` · `poll`
-- Technical words: `arc` · `buf` · `cell` · `ctx` · `err` · `ffi` · `iter` · `mutex` · `ok` · `opt` · `rc` · `refcell` · `rs` · `rx` · `sys` · `tx` · `vec`
+- Technical words: `arc` · `buf` · `cell` · `ffi` · `iter` · `ok` · `opt` · `rc` · `refcell` · `rs` · `rx` · `sys` · `tx` · `vec`
 
 **Notes**
 
@@ -485,8 +493,9 @@ Declaration spaces: `abstractClass`, `arrowFunction`, `class`, `enum`, `function
 
 - Reserved words: `await` · `break` · `case` · `catch` · `class` · `const` · `continue` · `debugger` · `default` · `delete` · `do` · `else` · `enum` · `export` · `extends` · `false` · `finally` · `for` · `function` · `if` · `import` · `in` · `instanceof` · `new` · `null` · `return` · `super` · `switch` · `this` · `throw` · `true` · `try` · `typeof` · `var` · `void` · `while` · `with` · `yield` · `implements` · `interface` · `let` · `package` · `private` · `protected` · `public` · `static`
 - Conventional names: `constructor` · `toString` · `toLocaleString` · `valueOf` · `toJSON` · `[Symbol.iterator]` · `[Symbol.asyncIterator]` · `[Symbol.hasInstance]` · `[Symbol.toPrimitive]` · `[Symbol.toStringTag]` · `[Symbol.dispose]` · `[Symbol.asyncDispose]`
-- Technical words: `args` · `async` · `callback` · `cb` · `fn` · `json` · `opts` · `promise` · `prototype`
+- Technical words: `cb` · `fn` · `promise` · `prototype`
 - File kinds: `module`
+- Qualified kinds: `module` by `/`
 
 **Notes**
 
