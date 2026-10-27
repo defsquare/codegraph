@@ -4,6 +4,9 @@ import { createInterface } from "node:readline/promises";
 import { ModelBuilder, readModelRecordsSync } from "@codegraph/core";
 import { FRAMEWORK_PROFILES, buildDomainFacts, folderFor, loadSqlite } from "@codegraph/analyzer";
 import {
+  COMPLETION_TOKENS_PER_BLOCK,
+  COMPLETION_TOKENS_PER_GLOSSARY_ENTRY,
+  COMPLETION_TOKENS_PER_WORD,
   INSIGHTS_GENERATOR,
   INSIGHTS_KIND,
   INSIGHTS_METAMODEL,
@@ -39,6 +42,7 @@ import {
   type Unit,
 } from "@codegraph/insights";
 import { clientFromEnv, resolveProvider, type LlmClient, type Provider } from "@codegraph/llm";
+import { buildVocabulary, definitionSpeller, rankedWords, type VocabularyArtifact } from "@codegraph/vocabulary";
 import type { ExplainOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, errLines, outLine, type IoSink } from "../io.js";
@@ -218,7 +222,10 @@ export async function explainCommand(
 
     const srcRoot = resolveSourceRoot(options, graph.union.models[0]?.root, units, seam);
     const reader = createSourceReader((relative) => seam.fs.readFile(join(srcRoot, relative)));
-    const env: PlanEnv = { graph, facts, units, reader, unitOf: walk.unitOf };
+    // The words a prompt asks to define are the cloud's (PLAN.md §20.3); the module weights are counted on first ask.
+    let vocabulary: VocabularyArtifact | undefined;
+    const speller = { words: definitionSpeller(graph), ranked: (id: string) => rankedWords((vocabulary ??= buildVocabulary(graph, { view })), id) };
+    const env: PlanEnv = { graph, facts, units, reader, unitOf: walk.unitOf, speller };
 
     const journal = `${out}.journal`;
     const loaded = loadExisting(out, storePath, journal, seam, io);
@@ -246,6 +253,7 @@ export async function explainCommand(
       force: options.force,
       maxCalls: options.maxCalls,
       inScope: options.retryFailed ? retryScope(previousFailures, walk) : scopePredicate(options.scope, graph, units),
+      terms: options.terms,
     });
 
     if (!source.clean) {
@@ -300,7 +308,7 @@ export async function explainCommand(
     const book: StoreBook = loaded.storeBook ?? storeBook(writing);
     book.begin(run);
 
-    const result = await executeRun(plan, env, book, complete, { maxScc: options.maxScc, depth: options.depth, maxLines: options.maxLines, previousFailures, ...(keyOf === undefined ? {} : { keyOf }) }, {
+    const result = await executeRun(plan, env, book, complete, { maxScc: options.maxScc, depth: options.depth, maxLines: options.maxLines, terms: options.terms, previousFailures, ...(keyOf === undefined ? {} : { keyOf }) }, {
       concurrency: options.concurrency,
       onFailure: (failure) => writing.fail(run, failure),
       onStep: (event) => {
@@ -760,7 +768,7 @@ function printEstimate(plan: RunPlan, options: ExplainOptions, io: IoSink): void
         ...(cost === undefined ? {} : { cost }),
         assumptions: {
           promptTokens: "characters of the rendered prompts / 4",
-          completionTokens: "measured block averages: operation 450, type 650, module 900 tokens, per block asked for",
+          completionTokens: `measured block averages: ${outputAssumption()}`,
           excluded: "repair re-asks, rate-limit retries",
         },
       }),
@@ -793,9 +801,15 @@ function estimateLines(plan: RunPlan, options: ExplainOptions): string[] {
   } else {
     lines.push("  cost: pass --price-in USD --price-out USD (per million tokens) for a figure");
   }
-  lines.push("  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages (operation 450, type 650, module 900) per block asked for.");
+  lines.push(`  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages: ${outputAssumption()}.`);
   lines.push("  not included: repair re-asks, rate-limit retries. Records already in the side-car are reused, not re-sent.");
   return lines;
+}
+
+/** What the output figure assumes, from the constants it is computed with. */
+function outputAssumption(): string {
+  const { operation, type, module } = COMPLETION_TOKENS_PER_BLOCK;
+  return `operation ${operation}, type ${type}, module ${module} tokens per block asked for, plus an estimated ${COMPLETION_TOKENS_PER_WORD} per word and ${COMPLETION_TOKENS_PER_GLOSSARY_ENTRY} per glossary entry asked to define`;
 }
 
 /**

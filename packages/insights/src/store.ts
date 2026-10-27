@@ -1,4 +1,4 @@
-import type { FailureRecord, InsightRecord, InsightsEof, InsightsHeader, Level, Origin, RecordUsage } from "./schema.js";
+import type { FailureRecord, InsightRecord, InsightsEof, InsightsHeader, Level, Origin, RecordUsage, WordEntry } from "./schema.js";
 import type { RecordSummary } from "./records.js";
 import type { InsightsFile } from "./sidecar.js";
 
@@ -147,6 +147,8 @@ export interface InsightsStore {
   fingerprints(): Map<string, string>;
   /** What a prompt quotes of one record, projected WITHOUT reading the rest of its block. */
   summary(id: string): RecordSummary | undefined;
+  /** One record's `words`, projected likewise; undefined with no record, or one explained under prompt 1. */
+  words(id: string): readonly WordEntry[] | undefined;
   /** The records that exist among `ids`, in side-car order. */
   get(ids: readonly string[]): InsightRecord[];
   failures(): FailureRecord[];

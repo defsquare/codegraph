@@ -6,6 +6,7 @@ import {
   InsightsHeader,
   LEVELS,
   type Level,
+  type WordEntry,
 } from "./schema.js";
 import { conceptLabel, type RecordSummary } from "./records.js";
 import { LEVEL_RANK, sortFailures, sortRecords, type InsightsFile } from "./sidecar.js";
@@ -324,6 +325,12 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
     };
   };
 
+  const selectWords = db.prepare("SELECT block -> '$.words' AS words FROM insight WHERE id = ?");
+  const words = (id: string): readonly WordEntry[] | undefined => {
+    const value = selectWords.get(id)?.["words"];
+    return typeof value === "string" ? (JSON.parse(value) as WordEntry[]) : undefined;
+  };
+
   /** Every id in SIDE-CAR order — decided here, in JS (see the header) — without reading a block. */
   const orderedIds = (): string[] => {
     const statement = db.prepare("SELECT id, level FROM insight");
@@ -460,6 +467,7 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
     },
 
     summary,
+    words,
     get,
 
     exported() {

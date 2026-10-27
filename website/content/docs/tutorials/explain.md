@@ -65,12 +65,12 @@ codegraph explain order.jsonl --src "$SRC" --dry-run
 
 ```text
 explain plan: 77 units in 8 layers
-  operation     57 units     48 calls ~70459 prompt tokens
-  type          17 units     17 calls ~28078 prompt tokens
-  module         3 units      3 calls ~4249 prompt tokens
+  operation     57 units     48 calls ~78148 prompt tokens
+  type          17 units     17 calls ~31001 prompt tokens
+  module         3 units      3 calls ~5334 prompt tokens
   statuses: llm 68, template 9, reuse 0, skip-scope 0, skip-budget 0
   models: openai/gpt-5.6-luna (operations), openai/gpt-5.6-luna (types, modules); depth 1
-  total: 68 calls, ~102786 prompt tokens in, ~36650 completion tokens out
+  total: 68 calls, ~114483 prompt tokens in, ~41670 completion tokens out
 
 llm         L0 operation java:com.acme.order.adapter/LedgerAdapter.<init>() calls=1 ~1461tok
 llm         L0 operation java:com.acme.order.adapter/LedgerAdapter.post(java.lang.Object) calls=1 ~1468tok
@@ -122,13 +122,13 @@ explain estimate: order.jsonl
   models: openai/gpt-5.6-luna (operations), openai/gpt-5.6-luna (types, modules); depth 1
 
   level        calls   input tokens  output tokens
-  operation       48         70 459         21 600
-  type            17         28 078         12 350
-  module           3          4 249          2 700
-  total           68        102 786         36 650
+  operation       48         78 148         23 550
+  type            17         31 001         13 730
+  module           3          5 334          4 390
+  total           68        114 483         41 670
 
-  cost at $0.1/M in, $0.6/M out: $0.0323
-  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages (operation 450, type 650, module 900) per block asked for.
+  cost at $0.1/M in, $0.6/M out: $0.0365
+  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages: operation 450, type 650, module 900 tokens per block asked for, plus an estimated 30 per word and 40 per glossary entry asked to define.
   not included: repair re-asks, rate-limit retries. Records already in the side-car are reused, not re-sent.
 ```
 
@@ -154,10 +154,10 @@ codegraph explain order.jsonl --src "$SRC" --estimate --scope java:com.acme.orde
   calls: 3 (template 9, reuse 0, skipped 65)
 
   level        calls   input tokens  output tokens
-  operation        1          1 422            450
-  type             1          1 575            650
-  module           1          1 308            900
-  total            3          4 305          2 000
+  operation        1          1 584            480
+  type             1          1 744            740
+  module           1          1 594          1 050
+  total            3          4 922          2 270
 ```
 
 Sixty-eight calls became three.
@@ -231,7 +231,8 @@ Records are appended to a `.journal` as they arrive and the sorted side-car is
 rewritten at every layer, so an interrupted run resumes where it stopped.
 
 **What it cost, measured.** A full live run over this corpus with
-`openai/gpt-5.6-luna` was **77 units, 68 calls, about six cents**, and produced
+`openai/gpt-5.6-luna`, under prompt 1 (before units were asked to define their
+words), was **77 units, 68 calls, about six cents**, and produced
 blocks in the Specy vocabulary — `Order` recognised as an entity with an
 identity, the module `com.acme.order` described by its APIs and the SPI it
 depends on.

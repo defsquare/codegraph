@@ -5443,6 +5443,41 @@ and the Navigate explanation panel renders `words` and `glossary` through
 the same generic `blockFacts` it renders everything else with: an inference
 never looks like a fact.
 
+**As built — layer 2 (2026-10-27).** As designed, with these decisions:
+
+- **The own name's words only.** A qualifier's words are its container's,
+  asked where they are the own name: `com.acme.order` is asked for `order`,
+  `AcmeOrder::OrderLine` for `order, line`. `definitionSpeller` in
+  `@codegraph/vocabulary` (`define.ts`) splits and classifies exactly as the
+  cloud does and keeps `domain` and `technical`; it takes no technical list,
+  since that list only moves a word between two classes that are both asked.
+- **A port, not an import.** `@codegraph/insights` imports nothing from the
+  vocabulary, not even types: the context env takes a `Speller`
+  (`words(id)`, `ranked(moduleId)`) and the CLI hands in `definitionSpeller`
+  and `rankedWords` over the run's `buildVocabulary`, built on first ask.
+- **Kept on receipt.** The words are given: an entry for a word the prompt
+  did not list is dropped, a word given twice keeps its first entry, and
+  `in` is restated from the split, a fact the prompt stated. A module's
+  glossary is filtered the same way. An answer without `words` (or a
+  module's without `glossary`) gets the repair re-ask, then a failure.
+- **Templated records carry no `words`**: no model judged them. The
+  definition of done's "every record carries `words`" holds for every
+  record a model wrote.
+- **The glossary's candidates** are the words its types' prompts asked
+  (their names and fields), ordered by the module's vocabulary row order (an
+  unranked word after, by text) and cut at `--terms`. The module prompt
+  shows, per word, each type's `concern`, `sense` and `meaning`, or "no type
+  defined it", read through `RecordSource.words(id)` (a `block -> '$.words'`
+  projection in the store) only when the prompt renders.
+- **Fingerprints** take, per member, the identifiers and words asked and a
+  module's glossary words; never what a type said of them. The same
+  `--terms` reuses every module, and another redoes exactly the modules whose
+  cut moved.
+- **The estimate** adds 30 completion tokens per word and 40 per glossary
+  entry, this section's figures, until a run measures them. On the Java
+  fixture the plan goes from 102 786 to 114 483 prompt tokens (+11%) and
+  from 36 650 to 41 670 completion tokens (+14%).
+
 ### 20.4 Milestone split
 
 **M19a — the lexicon, the split, the artifact** (closes the profile half of #19)
@@ -5499,7 +5534,7 @@ never looks like a fact.
 
 **M19c — the glossary: words in the explanation**
 
-- [ ] `words` on the three blocks and `glossary` on the module block,
+- [x] `words` on the three blocks and `glossary` on the module block,
       `.optional()` in the record schema and required on the wire;
       `PROMPT_VERSION = "2"`; the *Words to define* prompt section fed by
       `@codegraph/vocabulary` (types only, through the env); the module
@@ -5513,7 +5548,9 @@ never looks like a fact.
       completions (`COMPLETION_TOKENS_PER_BLOCK` re-measured); a reader's
       answer for a record explained under prompt `"1"`; on the fake client
       and live on the Java fixture; the §20.3 estimate replaced by the
-      Broadleaf measurement.
+      Broadleaf measurement. *(In: `--terms`, the estimate's per-word
+      figures, the fake-client run. Owed: the measurement, live runs, the
+      prompt-1 answer.)*
 - [ ] Readers: `insights --word`, `--glossary`, `--polysemy`, `--concerns`;
       `vocabulary --drift-insights`; `/glossary.json`; the entries in the
       Vocabulary tab and in the Navigate panel as inferences.

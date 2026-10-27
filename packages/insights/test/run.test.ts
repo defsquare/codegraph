@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { Edge, Entity } from "@codegraph/core";
 import { buildWalk } from "../src/order.js";
 import { planRun, retryScope, type PlanEnv, type PlanOptions } from "../src/plan.js";
+import { COMPLETION_TOKENS_PER_GLOSSARY_ENTRY, COMPLETION_TOKENS_PER_WORD } from "../src/prompt.js";
 import { memoryBook, type RecordBook } from "../src/records.js";
 import { executeRun, type Completer, type CompletionRequest } from "../src/run.js";
 import type { Block, FailureRecord, InsightRecord, ModuleBlock, OperationBlock, TypeBlock } from "../src/schema.js";
 import { createSourceReader, mapReader } from "../src/source.js";
-import { edge, field, graphOf, method, pkg, prepared, type } from "./fixture.js";
+import { edge, field, graphOf, method, pkg, prepared, toySpeller, type } from "./fixture.js";
 
 const P = "java:p";
 const T = "java:p/T";
@@ -33,7 +34,7 @@ function corpus(extraEdges: Edge[] = []) {
   const graph = graphOf(entities, edges);
   const { facts, units } = prepared(graph);
   const walk = buildWalk(units, graph);
-  const env: PlanEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map([["T.java", SOURCE]]))), unitOf: walk.unitOf };
+  const env: PlanEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map([["T.java", SOURCE]]))), unitOf: walk.unitOf, speller: toySpeller(graph) };
   return { graph, units, walk, env };
 }
 
@@ -45,30 +46,71 @@ const OPTIONS: PlanOptions = {
   force: false,
   maxCalls: undefined,
   inScope: undefined,
+  terms: 60,
 };
 
 function operationBlock(name: string): OperationBlock {
-  return { name, description: `Explains ${name}.`, safe: true, idempotent: true, owner: "entity", handlesCommand: null, emits: [], preconditions: [], postconditions: [], invariantsEnforced: [], usesSpi: [], domainTerms: [], confidence: 0.7 };
+  return { name, description: `Explains ${name}.`, safe: true, idempotent: true, owner: "entity", handlesCommand: null, emits: [], preconditions: [], postconditions: [], invariantsEnforced: [], usesSpi: [], domainTerms: [], words: [], confidence: 0.7 };
 }
 function typeBlock(name: string): TypeBlock {
-  return { name, description: `Type ${name}.`, concept: "entity", eventKind: null, interfaceRole: null, aggregateRoot: null, containedIn: null, syncPattern: null, identity: "total", fields: [], invariants: [], stateMachine: null, relatesTo: [], exposes: [], dependsOn: [], domainTerms: [], confidence: 0.6 };
+  return { name, description: `Type ${name}.`, concept: "entity", eventKind: null, interfaceRole: null, aggregateRoot: null, containedIn: null, syncPattern: null, identity: "total", fields: [], invariants: [], stateMachine: null, relatesTo: [], exposes: [], dependsOn: [], domainTerms: [], words: [], confidence: 0.6 };
 }
 function moduleBlock(name: string): ModuleBlock {
-  return { name, description: `Module ${name}.`, apis: [], spis: [], dependsOn: [], concepts: [], boundedContextHint: null, sharedKernelHint: null, ubiquitousLanguage: [], confidence: 0.5 };
+  return { name, description: `Module ${name}.`, apis: [], spis: [], dependsOn: [], concepts: [], boundedContextHint: null, sharedKernelHint: null, ubiquitousLanguage: [], words: [], glossary: [], confidence: 0.5 };
 }
 
-/** Answers from the request alone: the unit id is on the first line, the member ids under "Return one entry per id". */
-function fakeCompleter(overrides: { badFirst?: Set<string>; failing?: Set<string>; throwing?: Map<string, unknown> } = {}): Completer & { requests: CompletionRequest[] } {
+/** The words a prompt lists for one member, by identifier: the lines under its "Words to define". */
+function wordsAsked(user: string, id: string): Map<string, string[]> {
+  // The member's own heading: its id also appears in other members' sections.
+  const start = user.split("\n").findIndex((line) => line.startsWith("### ") && line.includes(`(${id})`));
+  const section = start < 0 ? "" : user.split("\n").slice(start).join("\n").split(/\n#{2,3} /u)[0] ?? "";
+  const asked = new Map<string, string[]>();
+  const head = section.indexOf("Words to define");
+  if (head < 0) return asked;
+  for (const line of section.slice(head).split("\n").slice(1)) {
+    const match = /^- `(.+)`: (.+)$/u.exec(line);
+    if (match === null) break;
+    for (const word of (match[2] ?? "").split(", ")) asked.set(word, [...(asked.get(word) ?? []), match[1] ?? ""]);
+  }
+  return asked;
+}
+
+/** The words a module prompt asks it to reconcile, in order. */
+function glossaryAsked(user: string): string[] {
+  const head = user.indexOf("Words its types define");
+  if (head < 0) return [];
+  return user
+    .slice(head)
+    .split("\n")
+    .slice(1)
+    .flatMap((line) => {
+      const match = /^- ([^:]+)(?:: no type defined it)?$/u.exec(line);
+      return match === null ? [] : [match[1] ?? ""];
+    });
+}
+
+/** Answers from the request alone: the unit id is on the first line, the member ids under "Return one entry per id", the words under "Words to define". */
+function fakeCompleter(overrides: { badFirst?: Set<string>; failing?: Set<string>; throwing?: Map<string, unknown>; wordless?: Set<string>; words?: (id: string) => unknown } = {}): Completer & { requests: CompletionRequest[] } {
   const requests: CompletionRequest[] = [];
   const seenBad = new Set<string>();
   const completer = (async (request: CompletionRequest) => {
     requests.push(request);
     const unitId = /^# Unit: \w+ (\S+)/u.exec(request.user)?.[1] ?? "";
     const level = request.schemaName.replace(/^codegraph_/u, "").replace(/_cycle$/u, "");
-    const blockFor = (id: string): Block =>
-      level === "operation" ? operationBlock(id) : level === "type" ? typeBlock(id) : moduleBlock(id);
+    const blockFor = (id: string): Block => {
+      const block = level === "operation" ? operationBlock(id) : level === "type" ? typeBlock(id) : moduleBlock(id);
+      const words =
+        overrides.words?.(id) ??
+        [...wordsAsked(request.user, id)].map(([word, identifiers]) => ({ word, in: identifiers, concern: "domain", sense: `${word} sense`, meaning: `What ${word} means in ${id}.`, confidence: 0.8 }));
+      const glossary = glossaryAsked(request.user).map((word) => ({ word, concern: "domain", sense: `${word} sense`, meaning: `What ${word} means here.`, polysemous: false, senses: [] }));
+      return (level === "module" ? { ...block, words, glossary } : { ...block, words }) as Block;
+    };
     if (overrides.throwing?.has(unitId)) throw overrides.throwing.get(unitId);
     if (overrides.failing?.has(unitId)) return { json: { nonsense: true }, model: request.model };
+    if (overrides.wordless?.has(unitId)) {
+      const { words: _, ...prompt1 } = blockFor(unitId) as OperationBlock;
+      return { json: prompt1, model: request.model };
+    }
     if (overrides.badFirst?.has(unitId) && !seenBad.has(unitId)) {
       seenBad.add(unitId);
       return { json: { wrong: "shape" }, model: request.model, usage: { promptTokens: 5, completionTokens: 1 } };
@@ -86,7 +128,7 @@ async function run(existing: Map<string, InsightRecord>, options: Partial<PlanOp
   const plan = planRun(walk, existing, env, { ...OPTIONS, ...options });
   const emitted: string[] = [];
   const layers: number[] = [];
-  const result = await executeRun(plan, env, existing, completer, { maxScc: 12, depth: 1, maxLines: 100, previousFailures }, {
+  const result = await executeRun(plan, env, existing, completer, { maxScc: 12, depth: 1, maxLines: 100, terms: 60, previousFailures }, {
     concurrency,
     onRecord: (r) => void emitted.push(r.id),
     onLayer: (l) => void layers.push(l),
@@ -94,7 +136,7 @@ async function run(existing: Map<string, InsightRecord>, options: Partial<PlanOp
   return { plan, result, emitted, layers, completer };
 }
 
-/** A book that counts what is asked of it: `fingerprint` is free, `summary` reads (a projection of) a block. */
+/** A book that counts what is asked of it: `fingerprint` is free, `summary` and `words` read (a projection of) a block. */
 function spyBook(records: Iterable<InsightRecord> = []) {
   const inner = memoryBook(records);
   const gets: string[] = [];
@@ -105,6 +147,10 @@ function spyBook(records: Iterable<InsightRecord> = []) {
     summary: (id) => {
       gets.push(id);
       return inner.summary(id);
+    },
+    words: (id) => {
+      gets.push(id);
+      return inner.words(id);
     },
     size: () => inner.size(),
     put: (unitId, unit) => {
@@ -147,7 +193,7 @@ describe("lazy reads (M16b): a block is read only when a prompt quotes it", () =
     const { walk, env } = corpus();
     const spy = spyBook(first.result.records);
     const plan = planRun(walk, spy.book, env, OPTIONS);
-    const result = await executeRun(plan, env, spy.book, fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100 }, { concurrency: 1 });
+    const result = await executeRun(plan, env, spy.book, fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100, terms: 60 }, { concurrency: 1 });
     expect(spy.gets).toEqual([]);
     expect(spy.puts).toEqual([m("getTotal")]);
     expect(result.counts.records).toBe(first.result.records.length);
@@ -162,7 +208,7 @@ describe("lazy reads (M16b): a block is read only when a prompt quotes it", () =
     const spy = spyBook();
     const plan = planRun(walk, spy.book, env, OPTIONS);
     const planGets = spy.gets.length;
-    await executeRun(plan, env, spy.book, fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100 }, { concurrency: 1 });
+    await executeRun(plan, env, spy.book, fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100, terms: 60 }, { concurrency: 1 });
     const asked = new Set(spy.gets.slice(planGets));
     // g quotes h, f quotes g, T quotes its operations, p quotes T. Nobody quotes the module or f's caller.
     expect([...asked].sort()).toEqual([T, m("f"), m("g"), m("getTotal"), m("h")].sort());
@@ -173,7 +219,7 @@ describe("lazy reads (M16b): a block is read only when a prompt quotes it", () =
     const { walk, env } = corpus();
     const plan = planRun(walk, new Map(), env, OPTIONS);
     const seen: unknown[][] = [];
-    await executeRun(plan, env, new Map(), fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100 }, {
+    await executeRun(plan, env, new Map(), fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100, terms: 60 }, {
       concurrency: 1,
       onLayer: (...args) => void seen.push(args),
     });
@@ -193,7 +239,8 @@ describe("planRun", () => {
     expect(plan.estimates.calls).toBe(5);
     expect(plan.estimates.byStatus).toEqual({ llm: 5, template: 1, reuse: 0, "skip-scope": 0, "skip-budget": 0 });
     expect(plan.estimates.promptTokens).toBeGreaterThan(0);
-    expect(plan.estimates.completionTokens).toBe(3 * 450 + 650 + 900);
+    // The type defines `total` (its field), the module `java` (its name) and reconciles `total`.
+    expect(plan.estimates.completionTokens).toBe(3 * 450 + (650 + COMPLETION_TOKENS_PER_WORD) + (900 + COMPLETION_TOKENS_PER_WORD + COMPLETION_TOKENS_PER_GLOSSARY_ENTRY));
     expect(plan.estimates.byLevel.operation.completionTokens).toBe(3 * 450);
     expect(plan.steps.find((s) => s.unit.id === m("getTotal"))?.completionTokens).toBe(0);
     expect(plan.steps.find((s) => s.unit.id === m("h"))?.model).toBe("leaf-model");
@@ -282,6 +329,55 @@ describe("executeRun", () => {
     expect(okPlan.steps.find((s) => s.unit.id === m("g"))?.status).toBe("llm");
   });
 
+  it("asks again for an answer without its words, as prompt 1 answered, and records a failure after the second", async () => {
+    const failed = await run(new Map(), {}, fakeCompleter({ wordless: new Set([m("h")]) }));
+    expect(failed.result.failures.map((f) => [f.id, f.reason.kind])).toEqual([[m("h"), "invalid-answer"]]);
+    expect(failed.result.failures[0]?.reason.message).toContain("words");
+    const hRequests = failed.completer.requests.filter((r) => r.user.startsWith(`# Unit: operation ${m("h")}`));
+    expect(hRequests).toHaveLength(2);
+  });
+
+  it("every record the model wrote defines the words its prompt listed; a templated one defines none", async () => {
+    const { result, completer } = await run(new Map());
+    const byId = new Map(result.records.map((r) => [r.id, r]));
+    expect(byId.get(T)?.block.words?.map((w) => [w.word, w.in])).toEqual([["total", ["total"]]]);
+    expect(byId.get(P)?.block.words?.map((w) => w.word)).toEqual(["java"]);
+    const module = byId.get(P);
+    expect(module?.level === "module" ? module.block.glossary?.map((g) => g.word) : undefined).toEqual(["total"]);
+    expect(byId.get(m("getTotal"))?.origin).toBe("template");
+    expect(byId.get(m("getTotal"))?.block).not.toHaveProperty("words");
+    for (const record of result.records.filter((r) => r.origin === "llm")) {
+      const prompt = completer.requests.find((r) => r.user.includes(`(${record.id})`) && r.user.startsWith(`# Unit: ${record.level} `));
+      expect(record.block.words?.map((w) => w.word)).toEqual([...wordsAsked(prompt?.user ?? "", record.id).keys()]);
+    }
+  });
+
+  it("keeps of an answer's words one entry per word listed, restating `in` from the split", async () => {
+    const answered = [
+      { word: "TOTAL", in: ["somewhere"], concern: "domain", sense: "a sum", meaning: "What the type adds up.", confidence: 7 },
+      { word: "total", in: [], concern: "technical", sense: "again", meaning: "A second entry.", confidence: 0.5 },
+      { word: "invented", in: ["total"], concern: "domain", sense: "made up", meaning: "Not in any name.", confidence: 0.5 },
+    ];
+    const { result } = await run(new Map(), {}, fakeCompleter({ words: (id) => (id === T ? answered : undefined) }));
+    const words = result.records.find((r) => r.id === T)?.block.words;
+    expect(words).toEqual([{ word: "total", in: ["total"], concern: "domain", sense: "a sum", meaning: "What the type adds up.", confidence: 1 }]);
+  });
+
+  it("keeps of a module's glossary one entry per word it was asked to reconcile", async () => {
+    const completer = fakeCompleter();
+    const inner = completer as Completer;
+    const doubled: Completer = async (request) => {
+      const completion = await inner(request);
+      if (!request.schemaName.startsWith("codegraph_module")) return completion;
+      const block = completion.json as ModuleBlock;
+      const extra = { word: "basket", concern: "domain", sense: "s", meaning: "m", polysemous: false, senses: [] };
+      return { ...completion, json: { ...block, glossary: [...(block.glossary ?? []), ...(block.glossary ?? []), extra] } };
+    };
+    const { result } = await run(new Map(), {}, Object.assign(doubled, { requests: completer.requests }));
+    const module = result.records.find((r) => r.id === P);
+    expect(module?.level === "module" && module.block.glossary?.map((g) => g.word)).toEqual(["total"]);
+  });
+
   it("concurrency does not change the record set", async () => {
     const serial = await run(new Map(), {}, fakeCompleter(), 1);
     const parallel = await run(new Map(), {}, fakeCompleter(), 4);
@@ -292,7 +388,7 @@ describe("executeRun", () => {
     const { walk, env } = corpus([edge("invocation", m("h"), m("f"))]);
     const plan = planRun(walk, new Map(), env, OPTIONS);
     const completer = fakeCompleter();
-    const result = await executeRun(plan, env, new Map(), completer, { maxScc: 12, depth: 1, maxLines: 100 }, { concurrency: 1 });
+    const result = await executeRun(plan, env, new Map(), completer, { maxScc: 12, depth: 1, maxLines: 100, terms: 60 }, { concurrency: 1 });
     const cycle = plan.steps.find((s) => s.unit.members.length === 3);
     expect(cycle?.calls).toBe(1);
     // One call, three blocks asked for: the output estimate scales with the members.
@@ -337,7 +433,7 @@ describe("executeRun", () => {
     const { walk, env } = corpus();
     const plan = planRun(walk, new Map(), env, OPTIONS);
     const seen: string[][] = [];
-    await executeRun(plan, env, new Map(), fakeCompleter({ failing: new Set([m("h")]) }), { maxScc: 12, depth: 1, maxLines: 100 }, {
+    await executeRun(plan, env, new Map(), fakeCompleter({ failing: new Set([m("h")]) }), { maxScc: 12, depth: 1, maxLines: 100, terms: 60 }, {
       concurrency: 1,
       onLayer: (_layer, failures) => void seen.push(failures.map((f) => f.id)),
     });
@@ -349,7 +445,7 @@ describe("executeRun", () => {
     const { walk, env } = corpus([edge("invocation", m("h"), m("f"))]);
     const plan = planRun(walk, new Map(), env, OPTIONS);
     const units: { unit: string; ids: string[] }[] = [];
-    const result = await executeRun(plan, env, new Map(), fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100 }, {
+    const result = await executeRun(plan, env, new Map(), fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100, terms: 60 }, {
       concurrency: 1,
       onUnit: (records, step) => void units.push({ unit: step.unit.id, ids: records.map((r) => r.id) }),
     });
@@ -363,7 +459,7 @@ describe("executeRun", () => {
     const { walk, env } = corpus();
     const plan = planRun(walk, new Map(), env, OPTIONS);
     const events: string[] = [];
-    const result = await executeRun(plan, env, new Map(), fakeCompleter({ throwing: new Map([[m("h"), credits]]) }), { maxScc: 12, depth: 1, maxLines: 100 }, {
+    const result = await executeRun(plan, env, new Map(), fakeCompleter({ throwing: new Map([[m("h"), credits]]) }), { maxScc: 12, depth: 1, maxLines: 100, terms: 60 }, {
       concurrency: 1,
       onFailure: (failure, step) => void events.push(`failed ${failure.id} in ${step.unit.id} (attempt ${failure.attempts})`),
       onLayer: (layer) => void events.push(`layer ${layer}`),
@@ -410,7 +506,7 @@ describe("executeRun", () => {
     const { walk, env } = corpus();
     const plan = planRun(walk, new Map(), env, OPTIONS);
     const completer = fakeCompleter({ throwing: new Map([[m("h"), credits]]) });
-    const result = await executeRun(plan, env, new Map(), completer, { maxScc: 12, depth: 1, maxLines: 100 }, {
+    const result = await executeRun(plan, env, new Map(), completer, { maxScc: 12, depth: 1, maxLines: 100, terms: 60 }, {
       concurrency: 1,
       onStep: (e) => void steps.push(`${e.step.unit.id} ${e.outcome}${e.aborted === true ? " aborted" : ""}`),
     });

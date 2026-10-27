@@ -31,19 +31,47 @@ function sourceFiles(): Map<string, string> {
 }
 const SOURCES = sourceFiles();
 
-/** Answers a valid block from the request alone, like the insights run tests. */
+/** The words a prompt lists for one member, by identifier: the lines under its "Words to define". */
+function wordsAsked(user: string, id: string): Map<string, string[]> {
+  // The member's own heading: its id also appears in other members' sections.
+  const start = user.split("\n").findIndex((line) => line.startsWith("### ") && line.includes(`(${id})`));
+  const section = start < 0 ? "" : user.split("\n").slice(start).join("\n").split(/\n#{2,3} /u)[0] ?? "";
+  const asked = new Map<string, string[]>();
+  const head = section.indexOf("Words to define");
+  if (head < 0) return asked;
+  for (const line of section.slice(head).split("\n").slice(1)) {
+    const match = /^- `(.+)`: (.+)$/u.exec(line);
+    if (match === null) break;
+    for (const word of (match[2] ?? "").split(", ")) asked.set(word, [...(asked.get(word) ?? []), match[1] ?? ""]);
+  }
+  return asked;
+}
+
+/** The words a module prompt asks it to reconcile, in order. */
+function glossaryAsked(user: string): string[] {
+  const head = user.indexOf("Words its types define");
+  if (head < 0) return [];
+  return user.slice(head).split("\n").slice(1).flatMap((line) => {
+    const match = /^- ([^:\s]+)(?:: no type defined it)?$/u.exec(line);
+    return match === null ? [] : [match[1] ?? ""];
+  });
+}
+
+/** Answers a valid block from the request alone, like the insights run tests: every listed word defined, once. */
 function answer(request: LlmRequest): unknown {
   const unitId = /^# Unit: \w+ (\S+)/u.exec(request.user)?.[1] ?? "";
   const level = request.schema.name.replace(/^codegraph_/u, "").replace(/_cycle$/u, "");
   const block = (id: string): unknown => {
     const short = id.slice(id.lastIndexOf("/") + 1);
+    const words = [...wordsAsked(request.user, id)].map(([word, identifiers]) => ({ word, in: identifiers, concern: "domain", sense: `${word} in ${short}`, meaning: `What ${word} means in ${short}.`, confidence: 0.7 }));
     if (level === "operation") {
-      return { name: short, description: `Explains ${short}.`, safe: false, idempotent: null, owner: "entity", handlesCommand: null, emits: [], preconditions: [], postconditions: [], invariantsEnforced: [], usesSpi: [], domainTerms: [], confidence: 0.6 };
+      return { name: short, description: `Explains ${short}.`, safe: false, idempotent: null, owner: "entity", handlesCommand: null, emits: [], preconditions: [], postconditions: [], invariantsEnforced: [], usesSpi: [], domainTerms: [], words, confidence: 0.6 };
     }
     if (level === "type") {
-      return { name: short, description: `Type ${short}.`, concept: "entity", eventKind: null, interfaceRole: null, aggregateRoot: null, containedIn: null, syncPattern: null, identity: null, fields: [], invariants: [], stateMachine: null, relatesTo: [], exposes: [], dependsOn: [], domainTerms: [], confidence: 0.6 };
+      return { name: short, description: `Type ${short}.`, concept: "entity", eventKind: null, interfaceRole: null, aggregateRoot: null, containedIn: null, syncPattern: null, identity: null, fields: [], invariants: [], stateMachine: null, relatesTo: [], exposes: [], dependsOn: [], domainTerms: [], words, confidence: 0.6 };
     }
-    return { name: short, description: `Module ${short}.`, apis: [], spis: [], dependsOn: [], concepts: [], boundedContextHint: null, sharedKernelHint: null, ubiquitousLanguage: [], confidence: 0.5 };
+    const glossary = glossaryAsked(request.user).map((word) => ({ word, concern: "domain", sense: `${word} in ${short}`, meaning: `What ${word} means in ${short}.`, polysemous: false, senses: [] }));
+    return { name: short, description: `Module ${short}.`, apis: [], spis: [], dependsOn: [], concepts: [], boundedContextHint: null, sharedKernelHint: null, ubiquitousLanguage: [], words, glossary, confidence: 0.5 };
   };
   const cycle = /Return one entry per id: (.+)\./u.exec(request.user)?.[1];
   return cycle === undefined ? block(unitId) : { members: cycle.split(", ").map((id) => ({ id, block: block(id) })) };
@@ -162,6 +190,61 @@ describe("explain --dry-run", () => {
     expect(outcome).toBeInstanceOf(Promise);
     expect(await outcome).toBe(EXIT.OK);
     expect(io.stdout()).toContain("codegraph.explainPlan/1");
+  });
+});
+
+describe("explain asks for the words of the names (PLAN.md §20.3)", () => {
+  const explained = async (argv: readonly string[] = []) => {
+    const machine = seamWith({ OPENROUTER_API_KEY: KEY });
+    expect(await explainCommand(options(["--out", OUT, ...argv]), captureIo(), machine.seam)).toBe(EXIT.OK);
+    return { records: decodeInsights(machine.disk.get(OUT)!).records, calls: machine.client.calls };
+  };
+
+  it("lists each identifier's words as the vocabulary splits them, and never their class", async () => {
+    const { calls } = await explained();
+    const order = calls.find((c) => c.user.startsWith("# Unit: type java:com.acme.order/Order\n"))?.user ?? "";
+    expect(order).toContain("Words to define in `words` (each once, with every identifier it appears in):\n- `Order`: order\n- `MAX_LINES`: max, lines\n");
+    expect(order.slice(order.indexOf("Words to define"))).not.toMatch(/\b(domain|technical|keyword|short)\b/u);
+    const service = calls.find((c) => c.user.startsWith("# Unit: type java:com.acme.order/OrderService\n"))?.user ?? "";
+    expect(service).toContain("- `OrderService`: order, service\n");
+  });
+
+  it("every record the model wrote defines its words; a module reconciles its types', heaviest first", async () => {
+    const { records } = await explained();
+    for (const record of records) {
+      if (record.origin === "template") expect(record.block).not.toHaveProperty("words");
+      else expect(record.block.words, record.id).toBeDefined();
+    }
+    const service = records.find((r) => r.id === "java:com.acme.order/OrderService");
+    expect(service?.block.words?.map((w) => [w.word, w.in])).toEqual([["order", ["OrderService"]], ["service", ["OrderService"]], ["ledger", ["ledger"]]]);
+    const module = records.find((r) => r.id === "java:com.acme.order");
+    const glossary = module?.level === "module" ? (module.block.glossary ?? []) : [];
+    expect(glossary[0]?.word).toBe("order");
+    expect(glossary.length).toBeGreaterThan(10);
+  });
+
+  it("--terms N cuts a module's glossary to its N heaviest words", async () => {
+    const { records, calls } = await explained(["--terms", "2"]);
+    const module = records.find((r) => r.id === "java:com.acme.order");
+    expect(module?.level === "module" ? module.block.glossary?.map((g) => g.word) : undefined).toEqual(["order", "basket"]);
+    for (const call of calls.filter((c) => c.schema.name.startsWith("codegraph_module"))) expect(glossaryAsked(call.user).length).toBeLessThanOrEqual(2);
+  });
+
+  it("--terms is part of what a module was explained from: the same N reuses it, another redoes modules alone", async () => {
+    const machine = seamWith({ OPENROUTER_API_KEY: KEY });
+    await explainCommand(options(["--out", OUT, "--terms", "2"]), captureIo(), machine.seam);
+    const first = machine.client.calls.length;
+    await explainCommand(options(["--out", OUT, "--terms", "2"]), captureIo(), machine.seam);
+    expect(machine.client.calls.length).toBe(first);
+    await explainCommand(options(["--out", OUT, "--terms", "3"]), captureIo(), machine.seam);
+    const redone = machine.client.calls.slice(first).map((c) => c.schema.name);
+    expect(redone.length).toBeGreaterThan(0);
+    expect(new Set(redone)).toEqual(new Set(["codegraph_module"]));
+  });
+
+  it("--terms must be a whole number >= 1", () => {
+    expect(() => options(["--terms", "0"])).toThrow(/invalid value '0' for --terms/u);
+    expect(options([]).terms).toBe(60);
   });
 });
 
@@ -578,14 +661,23 @@ describe("explain --estimate", () => {
     const report = JSON.parse(json.stdout()) as { kind: string; calls: number; promptTokens: number; completionTokens: number; cost: number; byLevel: Record<string, { completionTokens: number }> };
     expect(report.kind).toBe("codegraph.explainEstimate/1");
     expect(report.calls).toBe(68);
-    // Output = one measured block average per block asked for: a cycle call asks for several.
+    // Output = one measured block average per block asked for (a cycle call asks for several), plus
+    // 30 tokens per word and 40 per glossary entry its prompt asks — counted here on the prompts a run sends.
     const per = { operation: 450, type: 650, module: 900 } as const;
-    const calls = { operation: 48, type: 17, module: 3 } as const;
+    const ran = seamWith({ OPENROUTER_API_KEY: KEY });
+    await explainCommand(options(["--out", OUT]), captureIo(), ran.seam);
+    const expected = { operation: 0, type: 0, module: 0 };
+    for (const call of ran.client.calls) {
+      const level = call.schema.name.replace(/^codegraph_/u, "").replace(/_cycle$/u, "") as keyof typeof per;
+      const unit = /^# Unit: \w+ (\S+)/u.exec(call.user)?.[1] ?? "";
+      const members = /Return one entry per id: (.+)\./u.exec(call.user)?.[1]?.split(", ") ?? [unit];
+      const words = members.reduce((n, id) => n + wordsAsked(call.user, id).size, 0);
+      expected[level] += per[level] * members.length + 30 * words + 40 * glossaryAsked(call.user).length;
+    }
     let sum = 0;
     for (const level of ["operation", "type", "module"] as const) {
       const tokens = report.byLevel[level]?.completionTokens ?? 0;
-      expect(tokens % per[level]).toBe(0);
-      expect(tokens).toBeGreaterThanOrEqual(calls[level] * per[level]);
+      expect(tokens, level).toBe(expected[level]);
       sum += tokens;
     }
     expect(report.completionTokens).toBe(sum);

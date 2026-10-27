@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import { CONCEPT_DEFINITIONS, DOMAIN_CONCEPTS } from "../src/ddd.js";
 import type { OperationBlock } from "../src/schema.js";
 import {
+  ANSWER_BLOCKS,
   BLOCKS,
   InsightRecord,
   LEVELS,
+  PROMPT_VERSION,
+  WORD_CONCERNS,
   clampConfidence,
   responseJsonSchema,
   responseSchemaName,
@@ -106,5 +109,81 @@ describe("blocks and records", () => {
     expect(InsightRecord.safeParse({ ...base, level: "operation", block: operation }).success).toBe(true);
     expect(InsightRecord.safeParse({ ...base, level: "type", block: operation }).success).toBe(false);
     expect(BLOCKS.operation.safeParse(operation).success).toBe(true);
+  });
+});
+
+describe("the words of a unit's names (prompt 2, PLAN.md §20.3)", () => {
+  const v1: OperationBlock = {
+    name: "bill",
+    description: "Bills the order.",
+    safe: false,
+    idempotent: null,
+    owner: "entity",
+    handlesCommand: null,
+    emits: [],
+    preconditions: [],
+    postconditions: [],
+    invariantsEnforced: [],
+    usesSpi: [],
+    domainTerms: ["order"],
+    confidence: 0.8,
+  };
+  const word = { word: "bill", in: ["bill"], concern: "domain", sense: "invoice", meaning: "To charge the customer for the order.", confidence: 0.9 };
+  const record = { t: "i", id: "java:p/A.bill()", level: "operation", kind: "method", origin: "llm", block: v1, fingerprint: "a".repeat(64) };
+
+  it("is a new prompt: every fingerprint moves", () => {
+    expect(PROMPT_VERSION).toBe("2");
+  });
+
+  it("decodes a record explained under prompt 1, and re-encodes it to its own bytes", () => {
+    const parsed = InsightRecord.parse(record);
+    expect(JSON.stringify(parsed)).toBe(JSON.stringify(record));
+    expect("words" in parsed.block).toBe(false);
+  });
+
+  it("keeps a record's words and a module's glossary, after the block's own keys", () => {
+    const parsed = InsightRecord.parse({ ...record, block: { ...v1, confidence: 0.8, words: [word] } });
+    expect(Object.keys(parsed.block).slice(-2)).toEqual(["words", "confidence"]);
+    const module = InsightRecord.parse({
+      ...record,
+      level: "module",
+      kind: "package",
+      block: {
+        name: "billing",
+        description: "Billing.",
+        apis: [],
+        spis: [],
+        dependsOn: [],
+        concepts: [],
+        boundedContextHint: null,
+        sharedKernelHint: null,
+        ubiquitousLanguage: [],
+        confidence: 0.5,
+        glossary: [{ word: "bill", concern: "domain", sense: "invoice", meaning: "What a customer owes.", polysemous: true, senses: [{ in: "Invoice", sense: "invoice" }, { in: "Beak", sense: "a beak" }] }],
+        words: [word],
+      },
+    });
+    expect(Object.keys(module.block).slice(-3)).toEqual(["words", "glossary", "confidence"]);
+  });
+
+  it("asks every level for its words, and a module for its glossary, on the wire", () => {
+    for (const level of LEVELS) {
+      const schema = responseJsonSchema(level);
+      expect(schema["required"]).toContain("words");
+      const items = ((schema["properties"] as Record<string, { items?: Record<string, unknown> }>)["words"]?.items ?? {}) as Record<string, unknown>;
+      expect(Object.keys(items["properties"] as object)).toEqual(["word", "in", "concern", "sense", "meaning", "confidence"]);
+      expect((items["properties"] as Record<string, { enum?: string[] }>)["concern"]?.enum).toEqual([...WORD_CONCERNS]);
+    }
+    expect(responseJsonSchema("module")["required"]).toContain("glossary");
+    expect(responseJsonSchema("type")["required"]).not.toContain("glossary");
+  });
+
+  it("refuses an answer without its words, though a record may lack them", () => {
+    expect(BLOCKS.operation.safeParse(v1).success).toBe(true);
+    expect(ANSWER_BLOCKS.operation.safeParse(v1).success).toBe(false);
+    expect(ANSWER_BLOCKS.operation.safeParse({ ...v1, words: [] }).success).toBe(true);
+    expect(sccResponseSchema("operation").safeParse({ members: [{ id: "x", block: v1 }] }).success).toBe(false);
+    expect(sccResponseSchema("operation").safeParse({ members: [{ id: "x", block: { ...v1, words: [word] } }] }).success).toBe(true);
+    expect(ANSWER_BLOCKS.operation.safeParse({ ...v1, words: [{ ...word, concern: "layer" }] }).success).toBe(false);
   });
 });
