@@ -52,6 +52,14 @@ import {
  * would come back SHORTER, silently. So a column string holding U+0000 is
  * refused at write; everything a model or a provider worded (block, reason,
  * metadata) is stored as JSON text, where both are escapes and survive.
+ *
+ * A RECORD'S WORDS ARE A PROJECTION (version 2, M19c). `insight_word` holds one
+ * row per entry of a block's `words`: the entry as JSON text, less its
+ * `meaning` (a sentence, read from the block when an answer shows it), with
+ * generated columns over it, so "every entity that defines `order`" is an
+ * index lookup rather than a scan of every block. It is written with its
+ * record, in the same transaction, and rebuilt by an import: the block stays
+ * the one copy that counts, and nothing is exported from the projection.
  */
 
 /** Index i takes a store from version i to i+1. Append; never edit a shipped entry. */
@@ -109,6 +117,23 @@ CREATE TABLE failure (
   run_id INTEGER REFERENCES run(id)
 );
 `,
+  // A version-1 block can hold words already (a build that asked prompt 2 before its store was version 2): projected here.
+  `
+CREATE TABLE insight_word (
+  id TEXT NOT NULL REFERENCES insight(id),
+  entry TEXT NOT NULL,
+  word TEXT GENERATED ALWAYS AS (entry ->> '$.word') VIRTUAL,
+  concern TEXT GENERATED ALWAYS AS (entry ->> '$.concern') VIRTUAL,
+  sense TEXT GENERATED ALWAYS AS (entry ->> '$.sense') VIRTUAL,
+  confidence REAL GENERATED ALWAYS AS (entry ->> '$.confidence') VIRTUAL
+);
+CREATE INDEX insight_word_id ON insight_word(id);
+CREATE INDEX insight_word_word ON insight_word(word);
+
+INSERT INTO insight_word (id, entry)
+  SELECT insight.id, json_remove(entry.value, '$.meaning') FROM insight, json_each(insight.block, '$.words') AS entry
+  ORDER BY insight.rowid, entry.key;
+`,
 ];
 
 const INSIGHT_COLUMNS =
@@ -147,7 +172,9 @@ function migrate(db: SqliteDatabase, readOnly: boolean): void {
     // A reader brings nothing up to date: an empty file is not a store, and an older one waits for a run to migrate it.
     if (tables === 0) throw new InsightsStoreError("this file is not an insights store (it is empty)");
     if (version < INSIGHTS_DB_VERSION) {
-      throw new InsightsStoreError(`this insights store is at version ${version} and this build reads ${INSIGHTS_DB_VERSION}; any 'codegraph explain' run on it migrates it`);
+      throw new InsightsStoreError(
+        `this insights store is at version ${version} and this build reads ${INSIGHTS_DB_VERSION}: a reader never migrates it, and any 'codegraph explain' on it does, '--dry-run' included, which calls no model`,
+      );
     }
   }
   if (version > INSIGHTS_DB_VERSION) {
@@ -242,6 +269,8 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
   const insertInsight = db.prepare(`INSERT OR REPLACE INTO insight (${INSIGHT_COLUMNS}, run_id) VALUES (${"?, ".repeat(18)}?)`);
   const insertFailure = db.prepare(`INSERT OR REPLACE INTO failure (${FAILURE_COLUMNS}, run_id) VALUES (${"?, ".repeat(14)}?)`);
   const deleteFailure = db.prepare("DELETE FROM failure WHERE id = ?");
+  const deleteWords = db.prepare("DELETE FROM insight_word WHERE id = ?");
+  const insertWord = db.prepare("INSERT INTO insight_word (id, entry) VALUES (?, ?)");
   const getMeta = db.prepare("SELECT value FROM meta WHERE key = ?");
   const setMeta = db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)");
   const dropMeta = db.prepare("DELETE FROM meta WHERE key = ?");
@@ -263,9 +292,11 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
     return typeof value === "string" ? (JSON.parse(value) as unknown) : undefined;
   };
 
-  /** Validated BEFORE the first bind, so a bad member aborts its unit with nothing written. */
+  /** Validated BEFORE the first bind, so a bad member aborts its unit with nothing written. Its words go with it. */
   const writeRecord = (input: InsightRecord, run: number | null): void => {
     const r = InsightRecord.parse(input);
+    // First: the replaced record's words must not outlive it, and the row they reference is about to be replaced.
+    deleteWords.run(r.id);
     insertInsight.run(
       nullable(r.id), LEVEL_RANK[r.level], nullable(r.kind), nullable(r.name), nullable(r.file),
       nullable(r.key?.lang), nullable(r.key?.module), nullable(r.key?.symbol), nullable(r.key?.disambiguator),
@@ -276,6 +307,7 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
       JSON.stringify(r.block),
       run,
     );
+    for (const { meaning: _meaning, ...listed } of r.block.words ?? []) insertWord.run(r.id, JSON.stringify(listed));
   };
 
   const writeFailure = (input: FailureRecord, run: number | null): void => {
@@ -485,7 +517,7 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
 
     importFile(file: InsightsFile) {
       transaction(() => {
-        db.exec("DELETE FROM insight; DELETE FROM failure;");
+        db.exec("DELETE FROM insight_word; DELETE FROM insight; DELETE FROM failure;");
         for (const record of file.records) writeRecord(record, null);
         for (const failure of file.failures) writeFailure(failure, null);
         setMeta.run("header", JSON.stringify(InsightsHeader.parse(file.header)));
