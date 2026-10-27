@@ -97,15 +97,20 @@ const blockArb = {
   module: fc.record({ name: text, description: wild, confidence, sharedKernelHint: fc.option(text, { nil: null }), boundedContextHint: fc.option(fc.record({ name: wild, rationale: wild }), { nil: null }), words: wordsArb, glossary: maybe(fc.array(glossaryArb, { maxLength: 2 })) }).map((b) => strip({ ...MODULE, ...b })),
 };
 
+// Built once, never per draw: a regex arbitrary costs a parse, and drawing a fresh one per record timed this suite out on CI.
+const fingerprintArb = fc.stringMatching(/^[0-9a-f]{64}$/u);
+const envelopeArb = (level: "operation" | "type" | "module") =>
+  fc.record({
+    key: maybe(keyArb), kind: text, name: maybe(text), file: maybe(text), scc: maybe(fc.array(text, { maxLength: 3 })),
+    origin: fc.constantFrom("llm", "template"), block: blockArb[level as "operation"], fingerprint: fingerprintArb,
+    model: maybe(text), usage: maybe(usageArb), metadata: maybe(fc.dictionary(text, text, { maxKeys: 3 })),
+  });
+const ENVELOPES = { operation: envelopeArb("operation"), type: envelopeArb("type"), module: envelopeArb("module") };
 const recordArb = (id: string): fc.Arbitrary<InsightRecord> =>
-  fc.constantFrom("operation", "type", "module").chain((level) =>
-    fc
-      .record({
-        key: maybe(keyArb), kind: text, name: maybe(text), file: maybe(text), scc: maybe(fc.array(text, { maxLength: 3 })),
-        origin: fc.constantFrom("llm", "template"), block: blockArb[level as "operation"], fingerprint: fc.stringMatching(/^[0-9a-f]{64}$/u),
-        model: maybe(text), usage: maybe(usageArb), metadata: maybe(fc.dictionary(text, text, { maxKeys: 3 })),
-      })
-      .map((r) => strip({ t: "i", id, level, ...r }) as unknown as InsightRecord),
+  fc.oneof(
+    ...(["operation", "type", "module"] as const).map((level) =>
+      ENVELOPES[level].map((r) => strip({ t: "i", id, level, ...r }) as unknown as InsightRecord),
+    ),
   );
 
 const failureArb = (id: string): fc.Arbitrary<FailureRecord> =>
