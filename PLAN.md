@@ -5478,6 +5478,38 @@ never looks like a fact.
   fixture the plan goes from 102 786 to 114 483 prompt tokens (+11%) and
   from 36 650 to 41 670 completion tokens (+14%).
 
+**As built — the store (2026-10-27).** `INSIGHTS_DB_VERSION = 2`. Migration 1
+creates `insight_word (id, entry)`, indexed on `word` and on `id`. `entry` is
+the word entry as JSON text, without its `meaning`; `word`, `concern`, `sense`
+and `confidence` are generated columns over it. The decisions:
+
+- **JSON text with generated columns, as `insight` has.** These strings come
+  from a model or a side-car, and a plain column cannot hold U+0000 (the binding
+  reads it back cut short). The round-trip property's words are binary strings,
+  and they import whole. `in` rides in `entry`: it is a reserved word in SQL.
+- **No `meaning`.** A sentence per entry was a third of the table at Broadleaf's
+  scale. An answer that shows it reads the block, by the M16b rule this
+  section's table cites.
+- **Backfilled after all.** This section said there was nothing to backfill,
+  but a build that asked prompt 2 while its store was still at version 1 (#35)
+  writes words into version-1 blocks. The migration projects them.
+- **Written per record**, in the unit's transaction: first the replaced
+  record's rows are deleted, then the record is written, then its rows. An
+  import deletes the whole table and rebuilds it from the blocks. There is one
+  row per entry, a repeated word included: the projection says what the block
+  says.
+- **A reader still refuses an older store** (M16c). The refusal now names the
+  free way out: any `explain` on the store migrates it, `--dry-run` included. So
+  `serve`'s panel shows nothing on a version-1 store until then.
+- **Tested from a real file.** `packages/insights/test/fixtures/store-v1.sql`
+  is the `.dump` of a store the version-1 build wrote (6 records, 2 failures, a
+  run, 2 blocks with words), kept with the export that build wrote.
+- **Scale, on a synthetic side-car** with Broadleaf's counts and this section's
+  word estimates (28 206 records, 131 190 entries): the import takes 1.5 s and
+  the export is byte-identical. The projection is 22 MB of a 91 MB store,
+  `WHERE word = 'order'` takes 0.5 ms, and the migration's backfill 0.6 s. The
+  real Broadleaf side-car is owed.
+
 ### 20.4 Milestone split
 
 **M19a — the lexicon, the split, the artifact** (closes the profile half of #19)
@@ -5540,10 +5572,11 @@ never looks like a fact.
       `@codegraph/vocabulary` (types only, through the env); the module
       prompt quoting its types' entries through a `RecordSource.words(id)`
       projection; the word list in the fingerprint inputs.
-- [ ] The store at version 2: migration 1 creating `insight_word`, written
+- [x] The store at version 2: migration 1 creating `insight_word`, written
       per record in the unit's transaction and rebuilt on `--import`; the
       migration tests of §20.3; the round-trip property unchanged and green
-      on every existing side-car.
+      on every existing side-car. *(The real Broadleaf side-car is owed;
+      measured on a synthetic one at its scale.)*
 - [ ] `--terms N`; `--dry-run`/`--estimate` reflecting the longer
       completions (`COMPLETION_TOKENS_PER_BLOCK` re-measured); a reader's
       answer for a record explained under prompt `"1"`; on the fake client
