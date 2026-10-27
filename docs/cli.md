@@ -81,7 +81,7 @@ codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
                    [--model SLUG] [--rollup-model SLUG] [--depth N]
                    [--max-calls N] [--max-tokens N] [--scope IDS]
                    [--concurrency N]
-                   [--max-lines N] [--max-scc N] [--force] [--retry-failed]
+                   [--max-lines N] [--max-scc N] [--terms N] [--force] [--retry-failed]
                    [--export | --import FILE] [--yes] [--json]
                    [--framework spring] [--internal-only] [--declared-only]
 
@@ -303,7 +303,11 @@ interactive terminal it is required. A unit that could not be explained exits
 side-car; `--retry-failed` redoes just those units and their direct
 dependents. A `401`/`402`/`403` aborts the run instead of failing every
 remaining unit the same way; `--max-tokens N` caps what one answer may cost,
-which on a prepaid account is what keeps a low balance from refusing every call. Design record: [insights.md](insights.md).
+which on a prepaid account is what keeps a low balance from refusing every call.
+Each unit is also asked for the meaning of the words its names spell (`words`:
+its own name, an operation's parameters, a type's fields, split as `vocabulary`
+splits them), and a module reconciles what its types said into a `glossary`
+of its heaviest `--terms N` words (default 60). Design record: [insights.md](insights.md).
 
 ### `insights`
 Asks the insights store what `explain` has written — and opens nothing else:

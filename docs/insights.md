@@ -103,6 +103,27 @@ The system message carries the Specy definitions, one line per concept, and
 the task per level. A cycle asks for one entry per member id. A cycle larger
 than `--max-scc` is chunked: each chunk sees the others' signatures only.
 
+**The words of the names (prompt 2, PLAN.md §20.3).** Every unit is also asked
+what the words of its names mean in it: a section *Words to define* lists, per
+identifier, the words of its own name and of an operation's parameters or a
+type's fields, split by `@codegraph/vocabulary` (injected as a `Speller`: the
+insights package runs no splitter). Short words and keywords are not asked; the
+deterministic class is withheld, so the judgement — `domain`, `technical` or
+`ambiguous` — is the model's. The answer is one `words` entry per word, with
+its `sense` and its `meaning` in this unit. The words are given, not chosen: on
+receipt an entry for a word not listed is dropped, a repeat keeps the first,
+and `in` is restated from the split. A module is also shown what its types
+said of the words they spell — read from the store through a `words(id)`
+projection, as summaries are, and only when its prompt renders — heaviest
+first by the vocabulary's module weights, cut at `--terms N`, and answers a
+`glossary` that reconciles them, flagging a word its types disagree on as
+`polysemous`. Templated records carry no `words`.
+
+`PROMPT_VERSION` is `"2"`. A record explained under prompt 1 keeps decoding and
+re-encoding to its own bytes (`words` and `glossary` are optional in the record
+schema) and stays in the store until a run replaces it; the answer schema
+requires both, and an answer without them gets the repair re-ask.
+
 ## IN-4 · The side-car and its determinism
 
     {"t":"header","kind":"codegraph.insights/1",…,"metamodel":"specy.domain/3",…}
@@ -247,8 +268,11 @@ is handed an OPEN database, so the path, the file and `node:sqlite` itself
 
 Every record carries a sha256 over what it was computed from: the prompt
 version, the model slug, the level, the source slices, the comments, the
-signatures, a digest of the facts shown, the **fingerprints of the units it
-depended on**, and the ids of dependencies that had no record. Merkle-style:
+signatures, a digest of the facts shown, the words its prompt asks to define
+and a module's glossary words (so a lexicon correction re-explains exactly the
+units whose words it changed, and another `--terms` exactly the modules whose
+cut moved), the **fingerprints of the units it depended on**, and the ids of
+dependencies that had no record. Merkle-style:
 change one leaf's source and exactly its transitive dependents and containers
 change; nothing else does. The explanation text is deliberately **not**
 hashed — a non-deterministic answer must never cascade re-runs.

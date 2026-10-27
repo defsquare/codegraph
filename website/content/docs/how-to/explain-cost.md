@@ -19,12 +19,12 @@ codegraph explain model.jsonl --src fixtures/java/src --dry-run
 
 ```text
 explain plan: 77 units in 8 layers
-  operation     57 units     48 calls ~70459 prompt tokens
-  type          17 units     17 calls ~28078 prompt tokens
-  module         3 units      3 calls ~4249 prompt tokens
+  operation     57 units     48 calls ~78148 prompt tokens
+  type          17 units     17 calls ~31001 prompt tokens
+  module         3 units      3 calls ~5334 prompt tokens
   statuses: llm 68, template 9, reuse 0, skip-scope 0, skip-budget 0
   models: openai/gpt-5.6-luna (operations), openai/gpt-5.6-luna (types, modules); depth 1
-  total: 68 calls, ~102786 prompt tokens in, ~36650 completion tokens out
+  total: 68 calls, ~114483 prompt tokens in, ~41670 completion tokens out
 
 llm         L0 operation java:com.acme.order.adapter/LedgerAdapter.<init>() calls=1 ~1461tok
 template    L0 operation java:com.acme.order.legacy/List.head()
@@ -43,13 +43,13 @@ codegraph explain model.jsonl --src fixtures/java/src \
 
 ```text
   level        calls   input tokens  output tokens
-  operation       48         70 459         21 600
-  type            17         28 078         12 350
-  module           3          4 249          2 700
-  total           68        102 786         36 650
+  operation       48         78 148         23 550
+  type            17         31 001         13 730
+  module           3          5 334          4 390
+  total           68        114 483         41 670
 
-  cost at $0.1/M in, $0.6/M out: $0.0323
-  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages (operation 450, type 650, module 900) per block asked for.
+  cost at $0.1/M in, $0.6/M out: $0.0365
+  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages: operation 450, type 650, module 900 tokens per block asked for, plus an estimated 30 per word and 40 per glossary entry asked to define.
   not included: repair re-asks, rate-limit retries. Records already in the side-car are reused, not re-sent.
 ```
 

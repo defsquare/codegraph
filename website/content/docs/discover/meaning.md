@@ -46,11 +46,11 @@ codegraph explain app.jsonl --src ~/src/app/src/main/java --dry-run
 
 ```text
 explain plan: 77 units in 8 layers
-  operation     57 units     48 calls ~70459 prompt tokens
-  type          17 units     17 calls ~28078 prompt tokens
-  module         3 units      3 calls ~4249 prompt tokens
+  operation     57 units     48 calls ~78148 prompt tokens
+  type          17 units     17 calls ~31001 prompt tokens
+  module         3 units      3 calls ~5334 prompt tokens
   statuses: llm 68, template 9, reuse 0, skip-scope 0, skip-budget 0
-  total: 68 calls, ~102786 prompt tokens in, ~36650 completion tokens out
+  total: 68 calls, ~114483 prompt tokens in, ~41670 completion tokens out
 ```
 
 ```bash
@@ -59,7 +59,7 @@ codegraph explain app.jsonl --src ~/src/app/src/main/java \
 ```
 
 ```text
-  cost at $0.1/M in, $0.6/M out: $0.0323
+  cost at $0.1/M in, $0.6/M out: $0.0365
 ```
 
 Prices are dollars per million tokens for the model you intend to use; the
@@ -184,6 +184,9 @@ business rules in it.
 - The `unknown` and low-confidence records: the reading list for a human.
 - The ubiquitous language the module records propose (`ubiquitousLanguage`):
   the glossary of the business, extracted from the code.
+- The words the code spells, as each module's `glossary` reconciles them,
+  and the ones it flags `polysemous`: a word its types use in different
+  senses is a boundary to look at.
 
 Next: [Domain](/docs/discover/domain/).
 
