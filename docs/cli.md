@@ -336,7 +336,9 @@ invocation:
 side-car carries it). The command writes nothing: the store is opened as a
 reader, a missing one is a usage error rather than a file that appears, and one
 written by a newer codegraph — or a SQLite file that is not an insights store —
-is named and left alone.
+is named and left alone. One an older build wrote is refused and left alone too:
+any `codegraph explain` on it migrates it, `--dry-run` included, which calls no
+model.
 
 ### `scm`
 Mines a repository's git history into a deterministic `history.jsonl`:

@@ -1,9 +1,10 @@
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import fc from "fast-check";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadSqlite } from "@codegraph/analyzer";
+import { loadSqlite, type SqliteDatabase } from "@codegraph/analyzer";
 import {
   INSIGHTS_GENERATOR,
   INSIGHTS_KIND,
@@ -16,6 +17,7 @@ import {
   type ModuleBlock,
   type OperationBlock,
   type TypeBlock,
+  type WordEntry,
 } from "../src/schema.js";
 import { decodeInsights, encodeInsightsToString } from "../src/sidecar.js";
 import { INSIGHTS_APPLICATION_ID, INSIGHTS_DB_VERSION, INSIGHT_ANSWER_KIND, InsightsStoreError, answerInsight, insightsStorePathFor } from "../src/store.js";
@@ -575,6 +577,138 @@ describe("never disposable: a store is migrated or refused, never rebuilt", () =
     sqliteInsightsStore(db);
     expect(db.prepare("PRAGMA application_id").get()).toEqual({ application_id: INSIGHTS_APPLICATION_ID });
     expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: INSIGHTS_DB_VERSION });
+  });
+});
+
+/* ── version 2 (M19c): a record's words, projected into insight_word ── */
+
+/** What `insight_word` holds, per id, in row order: each entry as JSON decodes it. */
+function projected(db: SqliteDatabase): Map<string, unknown[]> {
+  const out = new Map<string, unknown[]>();
+  for (const row of db.prepare("SELECT id, entry FROM insight_word ORDER BY rowid").all()) {
+    const id = row["id"] as string;
+    out.set(id, [...(out.get(id) ?? []), JSON.parse(row["entry"] as string) as unknown]);
+  }
+  return out;
+}
+
+/** An entry as the projection lists it: its `meaning` stays in the block. */
+const listed = ({ meaning: _meaning, ...entry }: WordEntry): Omit<WordEntry, "meaning"> => entry;
+/** What it must hold: each record's `words`, in block order; a record without any has no row. */
+const wordsOf = (records: readonly InsightRecord[]): Map<string, unknown[]> =>
+  new Map(records.filter((r) => (r.block.words ?? []).length > 0).map((r) => [r.id, (r.block.words ?? []).map(listed)]));
+
+const ORDER: WordEntry = { word: "order", in: ["Order"], concern: "domain", sense: "a request", meaning: "What a customer asked for.", confidence: 0.9 };
+const LINES: WordEntry = { word: "lines", in: ["lines"], concern: "domain", sense: "its items", meaning: "What the order holds.", confidence: 0.7 };
+
+describe("version 2 (M19c): insight_word, a projection of every record's words", () => {
+  it("is every record's words in block order, for any side-car; an import rebuilds it whole", () => {
+    fc.assert(
+      fc.property(fileArb, fileArb, (first, second) => {
+        const db = loadSqlite().open(":memory:");
+        const store = sqliteInsightsStore(db);
+        // Compared with the DECODED file, as the round trip is: JSON has no -0.
+        store.importFile(decodeInsights(first));
+        expect(projected(db)).toEqual(wordsOf(decodeInsights(first).records));
+        store.importFile(decodeInsights(second));
+        expect(projected(db)).toEqual(wordsOf(decodeInsights(second).records));
+        store.close();
+      }),
+      { numRuns: 60 },
+    );
+  });
+
+  it("a put replaces a record's words with its new ones, in the unit's transaction", () => {
+    const db = loadSqlite().open(":memory:");
+    const store = sqliteInsightsStore(db);
+    const run = store.beginRun({ header: HEADER, startedAt: "t" });
+    const order = (words?: WordEntry[]): InsightRecord => ({ ...type("t/Order"), block: { ...TYPE, ...(words === undefined ? {} : { words }) } }) as InsightRecord;
+    store.putUnit(run, "t/Order", [order([ORDER, LINES])]);
+    expect(projected(db)).toEqual(new Map([["t/Order", [listed(ORDER), listed(LINES)]]]));
+    store.putUnit(run, "t/Order", [order([LINES])]);
+    expect(projected(db)).toEqual(new Map([["t/Order", [listed(LINES)]]]));
+    // Explained again without words (a template): no row is left to say otherwise.
+    store.putUnit(run, "t/Order", [order()]);
+    expect(projected(db)).toEqual(new Map());
+    // A unit refused whole writes none of its members' words.
+    store.putUnit(run, "t/Order", [order([ORDER])]);
+    const bad = { ...op("o/c"), fingerprint: "short" } as InsightRecord;
+    expect(() => store.putUnit(run, "t/Basket", [{ ...type("t/Basket"), block: { ...TYPE, words: [LINES] } } as InsightRecord, bad])).toThrow();
+    expect(projected(db)).toEqual(new Map([["t/Order", [listed(ORDER)]]]));
+    store.close();
+  });
+
+  /*
+   * THE FIRST RUNG OF THE LADDER TO RUN ON A REAL FILE. fixtures/store-v1.sql is a store the version-1 build
+   * wrote (write-store-v1.mjs says what it holds): a side-car imported under prompt 1, then a run of a build
+   * that already asked prompt 2's words while its store was still version 1 — so two blocks hold words.
+   */
+  describe("from version 1", () => {
+    const V1_SQL = fileURLToPath(new URL("./fixtures/store-v1.sql", import.meta.url));
+    const V1_EXPORT = readFileSync(fileURLToPath(new URL("./fixtures/store-v1.insights.jsonl", import.meta.url)), "utf8");
+    let dir: string | undefined;
+    afterEach(() => {
+      if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+      dir = undefined;
+    });
+    const v1Store = (): string => {
+      dir = mkdtempSync(join(tmpdir(), "insights-v1-"));
+      const path = join(dir, "model.insights.db");
+      const db = loadSqlite().open(path);
+      db.exec(readFileSync(V1_SQL, "utf8"));
+      db.close();
+      return path;
+    };
+    /** Opens as the CLI does: a refused open closes its connection. */
+    const open = (path: string, readOnly = false) => {
+      const db = loadSqlite().open(path);
+      try {
+        return { db, store: sqliteInsightsStore(db, { readOnly }) };
+      } catch (error) {
+        db.close();
+        throw error;
+      }
+    };
+
+    it("migrates with its records, failures, ledger and stamps intact, and exports the bytes the version-1 build did", () => {
+      const path = v1Store();
+      const { db, store } = open(path);
+      expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 2 });
+      expect(store.stats()).toMatchObject({ records: 6, failures: 2, byLevel: { operation: 3, type: 2, module: 1 }, byOrigin: { llm: 5, template: 1 } });
+      expect(store.runs()).toMatchObject([{ id: 1, startedAt: "2026-10-27T10:00:00.000Z", finishedAt: "2026-10-27T10:05:00.000Z", counts: { llm: 2, calls: 2 } }]);
+      expect(store.exported()).toEqual({ path: "model.insights.jsonl", size: 4321, mtimeMs: 1760950800000 });
+      expect(exportOf(store)).toBe(V1_EXPORT);
+      // The words already in its blocks are projected: a version-1 block CAN hold them.
+      expect(projected(db)).toEqual(wordsOf(decodeInsights(V1_EXPORT).records));
+      expect(projected(db).size).toBe(2);
+      store.close();
+      // Migrated once: reopened, it is version 2 and the same store.
+      const again = open(path);
+      expect(exportOf(again.store)).toBe(V1_EXPORT);
+      expect(projected(again.db).size).toBe(2);
+      again.store.close();
+      expect(readdirSync(dir!)).toEqual(["model.insights.db"]);
+    });
+
+    it("a reader refuses it, names the way to migrate without a call, and leaves its bytes alone", () => {
+      const path = v1Store();
+      const before = readFileSync(path);
+      expect(() => open(path, true)).toThrow(/at version 1 and this build reads 2.*--dry-run/u);
+      expect(readFileSync(path).equals(before)).toBe(true);
+    });
+
+    it("a migration that fails leaves it at version 1 with every record", () => {
+      const path = v1Store();
+      // Any failure mid-migration will do: here, the table migration 1 creates is already there.
+      const db = loadSqlite().open(path);
+      db.exec("CREATE TABLE insight_word (stray INTEGER)");
+      db.close();
+      expect(() => open(path)).toThrow(/from version 1 failed; it was left at version 1/u);
+      const after = loadSqlite().open(path);
+      expect(after.prepare("PRAGMA user_version").get()).toEqual({ user_version: 1 });
+      expect(after.prepare("SELECT count(*) AS n FROM insight").get()).toEqual({ n: 6 });
+      after.close();
+    });
   });
 });
 

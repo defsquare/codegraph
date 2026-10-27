@@ -43,7 +43,8 @@ export function insightLookup(storePath: string): InsightLookup {
     try {
       store = sqliteInsightsStore(db, { readOnly: true });
     } catch {
-      // Not ours, or from a newer build: nothing this page can show. `codegraph insights` says why.
+      // Not ours, from a newer build, or from an older one no explain has migrated yet: nothing this page can show.
+      // `codegraph insights` says why.
       db.close();
     }
     return store;

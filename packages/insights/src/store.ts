@@ -18,8 +18,8 @@ import type { InsightsFile } from "./sidecar.js";
  * does not carry, and it is declared losable.
  */
 
-/** Bumped with every migration appended to the adapter's ladder — never regenerated. */
-export const INSIGHTS_DB_VERSION = 1;
+/** Bumped with every migration appended to the adapter's ladder — never regenerated. 2: `insight_word` (M19c). */
+export const INSIGHTS_DB_VERSION = 2;
 
 /** `PRAGMA application_id`: "CGI1". A SQLite file that is not ours is refused, not migrated. */
 export const INSIGHTS_APPLICATION_ID = 0x43474931;

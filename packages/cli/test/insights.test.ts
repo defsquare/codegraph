@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadSqlite } from "@codegraph/analyzer";
 import {
@@ -216,6 +217,23 @@ describe("codegraph insights: no store, or not ours", () => {
       expect(io.stderr()).toMatch(/not an insights store/u);
     } finally {
       rmSync(other);
+    }
+  });
+
+  it("a store an older build wrote is refused, with the way to migrate it that calls no model, and left alone", () => {
+    const older = join(dir, "older.insights.db");
+    const v1 = loadSqlite().open(older);
+    v1.exec(readFileSync(fileURLToPath(new URL("../../insights/test/fixtures/store-v1.sql", import.meta.url)), "utf8"));
+    v1.close();
+    const before = readFileSync(older);
+    const io = captureIo();
+    try {
+      expect(runSync(["insights", model, "--store", older], io)).toBe(EXIT.USAGE);
+      expect(io.stderr()).toMatch(/at version 1 and this build reads 2/u);
+      expect(io.stderr()).toMatch(/'codegraph explain' on it does, '--dry-run' included/u);
+      expect(readFileSync(older).equals(before)).toBe(true);
+    } finally {
+      rmSync(older);
     }
   });
 });

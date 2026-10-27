@@ -37,7 +37,7 @@ codegraph serve --app [--data-dir DIR] [--extractors FILE] [--port N] [--host AD
 | `--internal-only` | Drop stub (external) entities and every edge touching one. | — |
 | `--declared-only` | Keep only `declared` facts; drop derived and dynamic-candidate edges. | — |
 | `--no-cache` | Read the model.jsonl directly; never build or reuse a sibling model.db. | — |
-| `--insights FILE` | The insights store behind the page's explanation panel (what 'codegraph explain' wrote). With none, the page simply shows no explanations. | `<model>.insights.db` beside the first model |
+| `--insights FILE` | The insights store behind the page's explanation panel (what 'codegraph explain' wrote). With none, or one an older codegraph wrote that no 'codegraph explain' has migrated yet, the page shows no explanations. | `<model>.insights.db` beside the first model |
 | `--app` | The desktop app's daemon: no model on argv; bind 127.0.0.1:0 under a per-launch token, print one JSON line {port, token} on stdout, open folders through POST /jobs, exit when stdin closes. | — |
 | `--data-dir DIR` | With --app: where models, their model.db caches, the page's artifacts and the recents live. | the OS application-data directory, `codegraph/` under it |
 | `--extractors FILE` | With --app: the extractor registry, a JSON list of { name, path, extensions[], launch?, env? } — the daemon runs an entry, never a language. | — (only model.jsonl files open) |
