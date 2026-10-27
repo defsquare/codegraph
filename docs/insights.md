@@ -188,6 +188,23 @@ id would come back shorter); and the tables are **rowid tables** (`WITHOUT
 ROWID` keeps kilobyte-wide rows in interior pages: 96 MB against 57 MB on
 Broadleaf, for no faster read).
 
+**Version 2: the words, projected (M19c).** `insight_word` holds one row per
+entry of a block's `words`: the entry as JSON text, without its `meaning` (a
+sentence, read from the block when an answer shows it), with `word`, `concern`,
+`sense` and `confidence` as generated columns over it, indexed on `word` and
+on `id`. "Every entity that defines `order`" is then an index lookup, where it
+would otherwise scan every block. A record's rows are written with it, in the
+same transaction, after the rows of the record it replaces are deleted, and
+`--import` rebuilds the table from the blocks. Nothing is exported from it: the
+block stays the one copy that counts, so `decode → import → export` is
+untouched. Migration 1 creates the table and projects the words a version-1
+block already holds. A build that asked prompt 2 while its store was still at
+version 1 wrote some. It is the first rung of the ladder to run on a real file,
+and its tests start from one the version-1 build wrote
+(`packages/insights/test/fixtures/store-v1.sql`): the records, failures, ledger
+and export stamp come through intact, the export is the same bytes, a reader
+refuses the file untouched, and a migration that fails leaves it at version 1.
+
 A `run` table is the one thing the store holds that the side-car does not: one
 row per run — when, which models and provider, counts, usage, why it aborted.
 The trailer only ever knew the last run. It is declared losable: delete the
@@ -233,7 +250,9 @@ Broadleaf, the graph the rest.
 
 **The store's readers (M16c).** A reader gets the store with `{ readOnly:
 true }`: no migration, and SQLite itself refuses every write (`PRAGMA
-query_only`). It is handed an ordinary connection rather than a read-only file
+query_only`). So a store an older build wrote is refused rather than read; the
+refusal says that any `codegraph explain` on it migrates it, `--dry-run`
+included, which calls no model. It is handed an ordinary connection rather than a read-only file
 handle, because the latter — the first attempt — may not clean up after itself
 and stranded `-wal`/`-shm` beside the model. What a reader asks never reads a
 block: `query()` returns ROWS (envelope, description, and the same
