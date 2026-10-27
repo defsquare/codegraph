@@ -126,4 +126,20 @@ export const clojureProfile: Profile = {
     "Runtime resolution (`resolve`, `requiring-resolve`, `eval`, `(var-get (ns-resolve ...))`) and dynamically computed `require` are static blind spots: no `import` or `invocation` edge is emitted for them.",
     "`:refer :all` and `:refer` bring vars into scope without qualification; the `import` edge is namespace -> namespace, so the module layer stays exact even when a symbol's origin needs var resolution.",
   ],
+
+  lexicon: {
+    // The special forms of clojure.org's reference (with `try`'s `catch` and `finally`) and the
+    // literals `nil`, `true`, `false`. The interop form `.` has no letter to match.
+    keywords: [
+      "def", "if", "do", "let", "quote", "var", "fn", "loop", "recur", "throw", "try", "catch",
+      "finally", "monitor-enter", "monitor-exit", "new", "set!", "nil", "true", "false",
+    ],
+    // The `gen-class` prefix's entry point, constructor hooks and `Object` overrides.
+    conventional: [
+      "-main", "-init", "-post-init", "-toString", "-equals", "-hashCode",
+    ],
+    technical: [
+      "coll", "ctx", "kw", "ns", "opts", "seq", "sym", "xf", "xform",
+    ],
+  },
 };

@@ -1,5 +1,5 @@
 import { compareIds, toJsonString } from "@codegraph/analyzer";
-import { PROFILES, getProfile, type Profile } from "@codegraph/core";
+import { PROFILES, getProfile, type Lexicon, type Profile } from "@codegraph/core";
 import type { ProfilesOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, outLines, type IoSink } from "../io.js";
@@ -11,7 +11,8 @@ import { errLine, outLines, type IoSink } from "../io.js";
  *  - Read `PROFILES` / `getProfile(lang)` from `@codegraph/core`. Profiles are
  *    DATA (CLAUDE.md invariant 8): print them, never synthesize one.
  *  - No `--lang`: list every shipped profile. With `--lang`: print that
- *    profile's kinds (required/optional traits), edge kinds, spaces and notes.
+ *    profile's kinds (required/optional traits), edge kinds, spaces, lexicon
+ *    and notes.
  *  - An unknown `--lang` is a USAGE error (exit 2) naming the languages that do
  *    exist — no model was involved, so it cannot be a finding.
  *  - `--json` prints the profile data on stdout; deterministic key and array
@@ -135,7 +136,7 @@ function summaryLines(profiles: readonly Profile[]): readonly string[] {
 /**
  * The full spec for one language: every kind with its licit trait composition,
  * the licensed edge kinds, the declaration spaces where the profile declares
- * any, and the notes in full.
+ * any, the lexicon, and the notes in full.
  *
  * Kinds are printed in sorted order so the same profile always renders the same
  * bytes and two languages can be diffed against each other; trait lists print
@@ -169,6 +170,9 @@ function specLines(profile: Profile): readonly string[] {
   }
 
   lines.push("");
+  lines.push(...lexiconLines(profile.lexicon));
+
+  lines.push("");
   lines.push("notes:");
   if (noteCount === 0) {
     lines.push("  (none)");
@@ -180,10 +184,30 @@ function specLines(profile: Profile): readonly string[] {
 }
 
 /**
+ * The words the vocabulary splitter reads (PLAN.md §20.1), every entry, in the
+ * order the profile declares it: a reader asking why `newOrder` gave no `new`
+ * looks for `new` here. Between the kinds and the notes, because the notes stay
+ * last — a reader of this text (the website's page) takes all that follows
+ * `notes:` as notes. The optional rows print only where the profile declares them.
+ */
+function lexiconLines(lexicon: Lexicon | undefined): readonly string[] {
+  if (lexicon === undefined) return ["lexicon:", "  (none)"];
+  const lines = [
+    "lexicon:",
+    `  keywords          ${list([...lexicon.keywords])}`,
+    `  conventional      ${list([...lexicon.conventional])}`,
+  ];
+  if (lexicon.technical !== undefined) lines.push(`  technical         ${list([...lexicon.technical])}`);
+  if (lexicon.fileKinds !== undefined) lines.push(`  file kinds        ${list([...lexicon.fileKinds])}`);
+  if (lexicon.interfacePrefix === true) lines.push("  interface prefix  yes");
+  return lines;
+}
+
+/**
  * The profile as JSON: the same data, with a canonical key and kind order so
  * that identical inputs produce byte-identical stdout (decision 6). Nothing is
- * added, renamed or defaulted — `space` and `notes` stay absent where the
- * profile omits them, because their absence is itself profile information.
+ * added, renamed or defaulted — `space`, `notes` and `lexicon` stay absent where
+ * the profile omits them, because their absence is itself profile information.
  */
 function canonicalProfile(profile: Profile): Record<string, unknown> {
   const kinds: Record<string, unknown> = {};
@@ -208,6 +232,19 @@ function canonicalProfile(profile: Profile): Record<string, unknown> {
     out["space"] = space;
   }
   if (profile.notes !== undefined) out["notes"] = profile.notes;
+  if (profile.lexicon !== undefined) out["lexicon"] = canonicalLexicon(profile.lexicon);
 
+  return out;
+}
+
+/** The lexicon's keys in one fixed order; an absent key stays absent, never `[]` or `false`. */
+function canonicalLexicon(lexicon: Lexicon): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    keywords: lexicon.keywords,
+    conventional: lexicon.conventional,
+  };
+  if (lexicon.technical !== undefined) out["technical"] = lexicon.technical;
+  if (lexicon.fileKinds !== undefined) out["fileKinds"] = lexicon.fileKinds;
+  if (lexicon.interfacePrefix !== undefined) out["interfacePrefix"] = lexicon.interfacePrefix;
   return out;
 }

@@ -30,7 +30,47 @@ export interface Profile {
   readonly space?: Readonly<Record<string, readonly Space[]>> | undefined;
   /** Documented static-analysis blind spots (reflection, macros, dynamic require…). */
   readonly notes?: readonly string[] | undefined;
+  /** The language's words, for the vocabulary (PLAN.md §20.1); absent, the universal rules apply alone. */
+  readonly lexicon?: Lexicon | undefined;
 }
+
+/**
+ * What the vocabulary splitter must know about a language and cannot derive
+ * (METAMODEL.md §5, PLAN.md §20.1). Splitting itself is universal — every
+ * character that is not a letter, a mark or a digit ends a word, and so does a
+ * camel-case boundary — so sigils, separators and suffixes (`@total`,
+ * `valid?`, `Order::Line`, `` Repository`1 ``) need no data here.
+ */
+export interface Lexicon {
+  /**
+   * The reserved words of the language's specification, as it spells them: the
+   * identifiers its grammar forbids. A contextual keyword (`record`, `var`,
+   * TypeScript's `type`) is a legal identifier, often a domain word, and is not
+   * listed; nor is an entry with no letter (Java's `_`), which no word can equal.
+   */
+  readonly keywords: readonly string[];
+  /**
+   * Whole identifiers the language or its runtime dictates — an override, a
+   * protocol member, an operator: `toString`, `__init__`, `<=>`. Their words
+   * say nothing about the domain, so such a name contributes none.
+   */
+  readonly conventional: readonly string[];
+  /** Plumbing words of this language beyond the shared technical list, as the splitter yields them. */
+  readonly technical?: readonly string[] | undefined;
+  /** Kinds whose name is a file path (`src/order.ts`): the extension is not a word. */
+  readonly fileKinds?: readonly string[] | undefined;
+  /** C#'s convention: `IOrderService` names an interface `OrderService`; the `I` is a marker, not a word. */
+  readonly interfacePrefix?: true | undefined;
+}
+
+/** Zod mirror of {@link Lexicon}. */
+export const LexiconSchema = z.object({
+  keywords: z.array(z.string()),
+  conventional: z.array(z.string()),
+  technical: z.array(z.string()).optional(),
+  fileKinds: z.array(z.string()).optional(),
+  interfacePrefix: z.literal(true).optional(),
+});
 
 /** Zod mirror of {@link Profile}, for validating profile data loaded from JSON. */
 export const ProfileSchema = z.object({
@@ -45,6 +85,7 @@ export const ProfileSchema = z.object({
   edges: z.array(EdgeKind),
   space: z.record(z.string(), z.array(Space)).optional(),
   notes: z.array(z.string()).optional(),
+  lexicon: LexiconSchema.optional(),
 });
 
 /** The closed set of validation codes. Consumers match on these, not on messages. */
@@ -62,6 +103,10 @@ export const VALIDATION_CODES = [
   "required-optional-overlap",
   "space-not-allowed",
   "unknown-space-kind",
+  "lexicon-duplicate",
+  "lexicon-not-a-word",
+  "lexicon-keyword-overlap",
+  "lexicon-unknown-kind",
 ] as const;
 export type ValidationCode = (typeof VALIDATION_CODES)[number];
 
@@ -409,6 +454,100 @@ export function validateProfile(profile: Profile): ValidationIssue[] {
         code: "unknown-edge-kind",
         path: "edges",
         message: `${edge} is not part of the canonical edge vocabulary`,
+      });
+    }
+  }
+
+  if (profile.lexicon !== undefined) issues.push(...lexiconIssues(profile.lexicon, profile.kinds));
+
+  return issues;
+}
+
+/** What the splitter yields: a lowercase run of letters, marks and digits. */
+const SPLITTER_TOKEN = /^[\p{L}\p{M}\p{N}]+$/u;
+const LETTER = /\p{L}/u;
+const WHITESPACE = /\s/u;
+
+/**
+ * An entry that could never do what its list says: listed twice, a keyword no
+ * word can equal, a technical word the splitter cannot yield, a name the
+ * keyword class would claim first, a file kind the profile never declares.
+ */
+function lexiconIssues(lexicon: Lexicon, kinds: Profile["kinds"]): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const lists: readonly (readonly [string, readonly string[] | undefined])[] = [
+    ["keywords", lexicon.keywords],
+    ["conventional", lexicon.conventional],
+    ["technical", lexicon.technical],
+    ["fileKinds", lexicon.fileKinds],
+  ];
+  for (const [name, entries] of lists) {
+    const seen = new Set<string>();
+    for (const entry of entries ?? []) {
+      if (seen.has(entry)) {
+        issues.push({ code: "lexicon-duplicate", path: `lexicon.${name}`, message: `${JSON.stringify(entry)} is listed twice` });
+      }
+      seen.add(entry);
+    }
+  }
+
+  for (const keyword of lexicon.keywords) {
+    if (!LETTER.test(keyword) || WHITESPACE.test(keyword)) {
+      issues.push({
+        code: "lexicon-not-a-word",
+        path: "lexicon.keywords",
+        message: `${JSON.stringify(keyword)} is not a word: a keyword holds a letter and no whitespace`,
+      });
+    }
+  }
+  for (const name of lexicon.conventional) {
+    if (name === "" || WHITESPACE.test(name)) {
+      issues.push({
+        code: "lexicon-not-a-word",
+        path: "lexicon.conventional",
+        message: `${JSON.stringify(name)} is not an identifier: it is empty or holds whitespace`,
+      });
+    }
+  }
+  for (const word of lexicon.technical ?? []) {
+    if (!SPLITTER_TOKEN.test(word) || word !== word.toLowerCase()) {
+      issues.push({
+        code: "lexicon-not-a-word",
+        path: "lexicon.technical",
+        message: `${JSON.stringify(word)} can never match: the splitter yields lowercase runs of letters and digits`,
+      });
+    }
+  }
+
+  // Exact for a conventional NAME (a whole identifier); lowercased for a technical
+  // WORD, because classification lowercases a token and tries `keyword` first.
+  const keywords = new Set(lexicon.keywords);
+  const loweredKeywords = new Set(lexicon.keywords.map((keyword) => keyword.toLowerCase()));
+  for (const name of lexicon.conventional) {
+    if (keywords.has(name)) {
+      issues.push({
+        code: "lexicon-keyword-overlap",
+        path: "lexicon.conventional",
+        message: `${name} is a keyword: a conventional name is one the language lets you write`,
+      });
+    }
+  }
+  for (const word of lexicon.technical ?? []) {
+    if (loweredKeywords.has(word)) {
+      issues.push({
+        code: "lexicon-keyword-overlap",
+        path: "lexicon.technical",
+        message: `${word} is a keyword: classification decides that first, so it is never technical`,
+      });
+    }
+  }
+
+  for (const kind of lexicon.fileKinds ?? []) {
+    if (!Object.hasOwn(kinds, kind)) {
+      issues.push({
+        code: "lexicon-unknown-kind",
+        path: "lexicon.fileKinds",
+        message: `file kind "${kind}" is not a kind the profile defines`,
       });
     }
   }

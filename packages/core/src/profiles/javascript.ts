@@ -1,4 +1,5 @@
 import type { Profile } from "../profile.js";
+import { ECMASCRIPT_LEXICON } from "./ecmascript.js";
 
 /**
  * JavaScript — the untyped baseline. Two absences carry information:
@@ -110,4 +111,7 @@ export const javascriptProfile: Profile = {
     "Getters/setters are emitted as `method` entities; reads and writes of the underlying value at call sites are `access` edges, so a property read that runs code is visible as access, not invocation.",
     "Class fields and object literal members share the `property` kind; object literals used as namespaces therefore appear as a `variable` with `property` children.",
   ],
+
+  // The module is the file: its name is a path whose extension is not a word.
+  lexicon: { ...ECMASCRIPT_LEXICON, fileKinds: ["module"] },
 };

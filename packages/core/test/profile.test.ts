@@ -6,6 +6,7 @@ import type { Model } from "../src/model.js";
 import { SCHEMA_VERSION } from "../src/model.js";
 import {
   type Profile,
+  ProfileSchema,
   validateEntity,
   validateModel,
   validateProfile,
@@ -344,6 +345,106 @@ describe("validateProfile", () => {
     const issues = validateProfile(overlapping);
     expect(codes(issues)).toEqual(["required-optional-overlap"]);
     expect(issues[0]?.path).toBe("kinds.class");
+  });
+});
+
+/**
+ * The lexicon (PLAN.md §20.1) is profile data like the rest: what a language
+ * reserves, the names it dictates, its plumbing words. These rules catch an
+ * entry that could never do what its list says — a duplicate, a word the
+ * splitter cannot yield, a name the classification would decide otherwise.
+ */
+describe("validateProfile — the lexicon", () => {
+  const withLexicon = (lexicon: Profile["lexicon"]): Profile => ({ ...demo, lexicon });
+  const base = { keywords: ["class", "new", "Self"], conventional: ["toString", "<=>"] };
+
+  it("accepts a well-formed lexicon, and a profile with none", () => {
+    expect(validateProfile(demo)).toEqual([]);
+    expect(
+      validateProfile(
+        withLexicon({ ...base, technical: ["impl", "utf8"], interfacePrefix: true, fileKinds: ["class"] }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("rejects an entry listed twice, naming the list", () => {
+    const issues = validateProfile(withLexicon({ keywords: ["new", "new"], conventional: [] }));
+    expect(codes(issues)).toEqual(["lexicon-duplicate"]);
+    expect(issues[0]?.path).toBe("lexicon.keywords");
+    for (const list of ["conventional", "technical", "fileKinds"] as const) {
+      const twice = validateProfile(withLexicon({ ...base, [list]: list === "fileKinds" ? ["class", "class"] : ["main", "main"] }));
+      expect(codes(twice), list).toEqual(["lexicon-duplicate"]);
+      expect(twice[0]?.path).toBe(`lexicon.${list}`);
+    }
+  });
+
+  it("rejects a keyword no word can equal: no letter, or whitespace inside", () => {
+    for (const keyword of ["_", ".", "", "yield from"]) {
+      const issues = validateProfile(withLexicon({ ...base, keywords: [keyword] }));
+      expect(codes(issues), JSON.stringify(keyword)).toEqual(["lexicon-not-a-word"]);
+      expect(issues[0]?.path).toBe("lexicon.keywords");
+    }
+  });
+
+  it("rejects a conventional identifier that is empty or holds whitespace", () => {
+    for (const name of ["", "to s"]) {
+      expect(codes(validateProfile(withLexicon({ ...base, conventional: [name] }))), JSON.stringify(name)).toEqual([
+        "lexicon-not-a-word",
+      ]);
+    }
+  });
+
+  it("rejects a technical entry the splitter could never yield", () => {
+    // The splitter yields lowercase runs of letters, marks and digits: these never match a token.
+    for (const word of ["Bean", "core_ext", "to-do", "", "a b"]) {
+      const issues = validateProfile(withLexicon({ ...base, technical: [word] }));
+      expect(codes(issues), JSON.stringify(word)).toEqual(["lexicon-not-a-word"]);
+      expect(issues[0]?.path).toBe("lexicon.technical");
+    }
+    expect(validateProfile(withLexicon({ ...base, technical: ["résumé", "md5"] }))).toEqual([]);
+  });
+
+  it("rejects a conventional identifier that is also a keyword", () => {
+    const issues = validateProfile(withLexicon({ keywords: ["new"], conventional: ["new"] }));
+    expect(codes(issues)).toEqual(["lexicon-keyword-overlap"]);
+    expect(issues[0]?.path).toBe("lexicon.conventional");
+  });
+
+  it("rejects a technical word a keyword already claims, whatever the keyword's case", () => {
+    // Classification lowercases and decides `keyword` first: `self` from `Self` is never technical.
+    const issues = validateProfile(withLexicon({ ...base, technical: ["self"] }));
+    expect(codes(issues)).toEqual(["lexicon-keyword-overlap"]);
+    expect(issues[0]?.path).toBe("lexicon.technical");
+  });
+
+  it("rejects a file kind the profile does not declare", () => {
+    const issues = validateProfile(withLexicon({ ...base, fileKinds: ["module"] }));
+    expect(codes(issues)).toEqual(["lexicon-unknown-kind"]);
+    expect(issues[0]?.path).toBe("lexicon.fileKinds");
+  });
+});
+
+describe("ProfileSchema mirrors Profile", () => {
+  it("keeps every key of a profile with a full lexicon — nothing stripped, nothing added", () => {
+    const full: Profile = {
+      ...demo,
+      space: { class: ["type"] },
+      notes: ["a blind spot"],
+      lexicon: {
+        keywords: ["class"],
+        conventional: ["toString"],
+        technical: ["impl"],
+        interfacePrefix: true,
+        fileKinds: ["class"],
+      },
+    };
+    expect(ProfileSchema.parse(full)).toEqual(full);
+  });
+
+  it("reads an absent interface prefix as absent, never as false", () => {
+    const lexicon = { keywords: ["class"], conventional: [] };
+    expect(ProfileSchema.parse({ ...demo, lexicon }).lexicon).toEqual(lexicon);
+    expect(ProfileSchema.safeParse({ ...demo, lexicon: { ...lexicon, interfacePrefix: false } }).success).toBe(false);
   });
 });
 

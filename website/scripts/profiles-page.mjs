@@ -22,11 +22,17 @@ function parse(text) {
   const summary = /summary: (\d+) kinds, (\d+) edge kinds, (\d+) notes/.exec(lines.find((l) => l.startsWith("summary:")));
   const edges = lines.find((l) => l.startsWith("edge kinds:")).slice("edge kinds:".length).split(",").map((s) => s.trim());
   const kinds = [];
-  for (let i = lines.indexOf("kinds:") + 1; i < lines.length && !lines[i].startsWith("notes:"); i++) {
-    const kind = /^  (\S+)$/.exec(lines[i]);
+  for (let i = lines.indexOf("kinds:") + 1; i < lines.length && lines[i] !== "lexicon:" && !lines[i].startsWith("notes:"); i++) {
+    const kind = /^ {2}(\S+)$/.exec(lines[i]);
     if (kind) { kinds.push({ name: kind[1], required: [], optional: [] }); continue; }
-    const traits = /^    (required|optional)\s+(.*)$/.exec(lines[i]);
+    const traits = /^ {4}(required|optional)\s+(.*)$/.exec(lines[i]);
     if (traits) kinds.at(-1)[traits[1]] = traits[2].split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  // `  keywords          a, b` … up to the blank line; absent rows stay absent.
+  const lexicon = {};
+  for (let i = lines.indexOf("lexicon:") + 1; i > 0 && i < lines.length && lines[i] !== ""; i++) {
+    const row = /^ {2}(keywords|conventional|technical|file kinds|interface prefix)\s+(.*)$/.exec(lines[i]);
+    if (row) lexicon[row[1]] = row[2] === "(none)" ? [] : row[2].split(", ");
   }
   const notes = [];
   for (let n = lines.indexOf("notes:") + 1; n < lines.length; n++) {
@@ -34,7 +40,7 @@ function parse(text) {
     if (l.startsWith("  - ")) notes.push(l.slice(4));
     else if (l.trim() !== "" && notes.length) notes[notes.length - 1] += "\n" + l;
   }
-  return { counts: summary.slice(1).map(Number), edges, kinds, notes: notes.map((note) => FENCED.reduce((s, f) => s.replaceAll("`" + f + "`", "``" + f + "``"), note)) };
+  return { counts: summary.slice(1).map(Number), edges, kinds, lexicon, notes: notes.map((note) => FENCED.reduce((s, f) => s.replaceAll("`" + f + "`", "``" + f + "``"), note)) };
 }
 
 const profiles = Object.fromEntries(langs.map((lang) => [lang, parse(codegraph("profiles", "--lang", lang))]));
@@ -46,7 +52,7 @@ linkTitle: Language profiles
 weight: 4
 ---
 
-The profiles \`@codegraph/core\` ships: per entity kind, the traits an extractor must emit and the traits it may emit, plus the edge kinds the language can produce and the profile's documented blind spots.
+The profiles \`@codegraph/core\` ships: per entity kind, the traits an extractor must emit and the traits it may emit, plus the edge kinds the language can produce, the words the vocabulary reads of it, and the profile's documented blind spots.
 
 {{< callout type="info" >}}
 Generated content. Every table on this page is a rendering of \`codegraph profiles --json\`; run it for the machine-readable form.
@@ -78,6 +84,14 @@ for (const lang of langs) {
   out.push("**Edge kinds:** " + p.edges.map((e) => "`" + e + "`").join(" · "), "");
   out.push("| Kind | Required traits | Optional traits |", "|---|---|---|");
   for (const k of p.kinds) out.push(`| \`${k.name}\` | ${tick(k.required)} | ${tick(k.optional)} |`);
+  const lx = p.lexicon;
+  const words = (xs) => (xs.length === 0 ? "(none)" : xs.map((x) => "`" + x + "`").join(" · "));
+  out.push("", "**Lexicon** — what the [vocabulary](/docs/reference/metamodel/profiles/#the-lexicon) reads of this language", "");
+  out.push("- Reserved words: " + words(lx["keywords"]));
+  out.push("- Conventional names: " + words(lx["conventional"]));
+  if (lx["technical"]) out.push("- Technical words: " + words(lx["technical"]));
+  if (lx["file kinds"]) out.push("- File kinds: " + words(lx["file kinds"]));
+  if (lx["interface prefix"]) out.push("- Interface prefix: a leading `I` before Upper + lower is a marker, not a word");
   out.push("", "**Notes**", "");
   for (const note of p.notes) out.push("- " + note);
 }

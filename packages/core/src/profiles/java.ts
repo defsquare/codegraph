@@ -183,4 +183,28 @@ export const javaProfile: Profile = {
     "Spoon materializes the implicit constructor of an anonymous class with synthetic parameters named `$anonymousN`. They are emitted (implicit members are, deliberately, so that `new Foo()` does not dangle), so the model contains a handful of parameter entities nobody wrote, carrying no anchor of their own — 5 of 15338 entities on commons-lang.",
     "The metrics pass (`codegraph-metrics`, PLAN.md §18) joins big-code-analysis spaces to entities on their anchors. Spoon starts a declaration AFTER its annotations and tree-sitter AT them; the pass bridges the two when nothing but annotation lines lies between (a LEADING join — most of a Spring corpus). It measures nothing on a lambda (big-code-analysis opens no space for one and charges its cognitive, exits and ABC to the enclosing method), on an implicit constructor (anchored on its class) or on an annotation element (no body): those carry none of the pass's keys.",
   ],
+
+  lexicon: {
+    // JLS 21 §3.9 (reserved keywords) and §3.10.3/§3.10.8 (the literals `true`, `false`, `null`).
+    // `_` is a keyword too, with no letter to match. Contextual keywords (`record`, `var`,
+    // `yield`, `sealed`, `permits`, `when`, the module words) are identifiers.
+    keywords: [
+      "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const",
+      "continue", "default", "do", "double", "else", "enum", "extends", "final", "finally",
+      "float", "for", "goto", "if", "implements", "import", "instanceof", "int", "interface",
+      "long", "native", "new", "package", "private", "protected", "public", "return", "short",
+      "static", "strictfp", "super", "switch", "synchronized", "this", "throw", "throws",
+      "transient", "try", "void", "volatile", "while", "true", "false", "null",
+    ],
+    // `java.lang.Object`'s overrides, the entry point, and the
+    // `Comparable`/`Iterable`/`Serializable` contracts.
+    conventional: [
+      "toString", "equals", "hashCode", "clone", "finalize", "main", "compareTo", "iterator",
+      "hasNext", "valueOf", "serialVersionUID", "readObject", "writeObject", "readObjectNoData",
+      "readResolve", "writeReplace",
+    ],
+    technical: [
+      "annotation", "bean", "beans", "ejb", "jaxb", "jdbc", "jndi", "jpa", "pojo", "servlet",
+    ],
+  },
 };

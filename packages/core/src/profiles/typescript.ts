@@ -1,6 +1,7 @@
 import type { TraitName } from "../names.js";
 import type { Space } from "../primitives.js";
 import type { Profile } from "../profile.js";
+import { ECMASCRIPT_LEXICON } from "./ecmascript.js";
 
 /**
  * TypeScript profile (v2, PLAN.md §14.2 — the compiler-API extractor's
@@ -246,4 +247,7 @@ export const typescriptProfile: Profile = {
     "A written value (TWithValue) is emitted for a `const` variable, a `readonly` property, an enum member and a parameter default whose initializer is CONSTANT-SHAPED — a literal, `-N`, an enum member, a type used as a value, arrays and operator expressions over those. TypeScript folds nothing at the declaration, so `4 * 25` rides `unevaluated` with its source text where Java would fold it; an enum member's value is the checker's computed constant. An initializer that is code — a call, a `new`, a function, an object literal — carries no value at all: absence is a claim. Such an initializer's calls and accesses are edges FROM the variable or property (the narrowest declared owner), which then carries TWithInvocations/TWithAccesses.",
     "The metrics pass (`codegraph-metrics`, PLAN.md §18): namespaces, enums, type aliases, interface members without a body and ambient declarations have no big-code-analysis space and carry none of the pass's keys. An exported class's decorators precede tree-sitter's class node; the pass joins across the decorator lines. In a `.tsx` file big-code-analysis's `ploc` can count a line or two fewer than this extractor's `sloc` (a JSX text token counts every line it spans here), so the join's witness differs there by that much.",
   ],
+
+  // The module is the file: its name is a path whose extension is not a word.
+  lexicon: { ...ECMASCRIPT_LEXICON, fileKinds: ["module"] },
 };
