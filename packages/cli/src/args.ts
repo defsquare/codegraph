@@ -758,7 +758,7 @@ export type InsightLevel = (typeof INSIGHT_LEVELS)[number];
  */
 export const INSIGHTS_SPEC: CommandSpec = {
   name: "insights",
-  summary: "Query what `explain` has written: a summary, a list, one explanation, the run ledger.",
+  summary: "Query what `explain` has written: a summary, a list, one explanation, the words and their glossary, the run ledger.",
   positional: {
     name: "model.jsonl",
     describe: "The model whose insights store (<model>.insights.db, beside it) to read. The model itself is not opened.",
@@ -811,6 +811,35 @@ export const INSIGHTS_SPEC: CommandSpec = {
       describe: "Stop a list after N rows (side-car order: operations, types, modules, by id).",
       placeholder: "N",
       integer: true,
+    },
+    {
+      name: "word",
+      type: "string",
+      describe:
+        "List every explained entity whose names spell this word (split as 'codegraph vocabulary' splits names: lowercase), " +
+        "by module: the module's glossary entry, then the module, its types, its operations — each with the concern, " +
+        "confidence and sense the model gave the word there, and the identifiers it is in. One index lookup.",
+      placeholder: "WORD",
+    },
+    {
+      name: "glossary",
+      type: "string",
+      describe:
+        "Print a module's glossary whole: each word its types spell, with the concern, sense and meaning the module " +
+        "reconciled from them, and the types' own senses where they disagree.",
+      placeholder: "MODULE_ID",
+    },
+    {
+      name: "polysemy",
+      type: "boolean",
+      describe:
+        "List the words a module flagged as meaning different things to its types, and the words two modules' glossaries " +
+        "define differently: every module's entry, side by side, the most senses first.",
+    },
+    {
+      name: "concerns",
+      type: "boolean",
+      describe: "Per module: how many distinct words its records define, and how many the model judged domain, technical, ambiguous.",
     },
     {
       name: "failures",
@@ -1314,7 +1343,7 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
 }
 
 /** What `insights` prints: exactly one of these, decided by the flags. */
-export type InsightsMode = "summary" | "list" | "one" | "failures" | "runs";
+export type InsightsMode = "summary" | "list" | "one" | "word" | "glossary" | "polysemy" | "concerns" | "failures" | "runs";
 
 export interface InsightsOptions {
   /** The model path the store sits beside; never opened. */
@@ -1323,6 +1352,10 @@ export interface InsightsOptions {
   readonly store: string | undefined;
   readonly mode: InsightsMode;
   readonly id: string | undefined;
+  /** `--word WORD`, looked up lowercase. */
+  readonly word: string | undefined;
+  /** `--glossary MODULE_ID`. */
+  readonly glossary: string | undefined;
   readonly level: InsightLevel | undefined;
   readonly concept: string | undefined;
   readonly minConfidence: number | undefined;
@@ -2013,18 +2046,30 @@ export function parseInvocation(argv: readonly string[]): Invocation {
     }
     case "insights": {
       const id = stringOf(values, "id");
+      const word = stringOf(values, "word");
+      const glossary = stringOf(values, "glossary");
       const filters = ["level", "concept", "min-confidence", "max-confidence", "limit"].filter((name) => stringOf(values, name) !== undefined);
-      // One question per invocation: the four shapes print different things.
-      const asked = [id === undefined ? undefined : "--id", flagOf(values, "failures") ? "--failures" : undefined, flagOf(values, "runs") ? "--runs" : undefined, filters.length === 0 ? undefined : `--${filters[0] ?? ""}`].filter(
-        (flag): flag is string => flag !== undefined,
-      );
+      // One question per invocation: each shape prints a different thing.
+      const questions: readonly (readonly [InsightsMode, string | undefined])[] = [
+        ["one", id === undefined ? undefined : "--id"],
+        ["word", word === undefined ? undefined : "--word"],
+        ["glossary", glossary === undefined ? undefined : "--glossary"],
+        ["polysemy", flagOf(values, "polysemy") ? "--polysemy" : undefined],
+        ["concerns", flagOf(values, "concerns") ? "--concerns" : undefined],
+        ["failures", flagOf(values, "failures") ? "--failures" : undefined],
+        ["runs", flagOf(values, "runs") ? "--runs" : undefined],
+        ["list", filters[0] === undefined ? undefined : `--${filters[0]}`],
+      ];
+      const asked = questions.filter(([, flag]) => flag !== undefined);
       if (asked.length > 1) {
         throw new UsageError(
-          `${asked.join(" and ")} ask different questions`,
-          "Pass one of: --id ID (one explanation), a list filter (--level, --concept, --min/--max-confidence), --failures, --runs — or none, for the summary.",
+          `${asked.map(([, flag]) => flag).join(" and ")} ask different questions`,
+          "Pass one of: --id ID (one explanation), a list filter (--level, --concept, --min/--max-confidence), --word WORD, " +
+            "--glossary MODULE_ID, --polysemy, --concerns, --failures, --runs — or none, for the summary.",
         );
       }
-      const mode: InsightsMode = id !== undefined ? "one" : flagOf(values, "failures") ? "failures" : flagOf(values, "runs") ? "runs" : filters.length > 0 ? "list" : "summary";
+      if (word?.trim() === "") throw new UsageError("--word needs a word", "A word as 'codegraph vocabulary' lists it, e.g. --word order.");
+      const mode: InsightsMode = asked[0]?.[0] ?? "summary";
       return {
         kind: "run",
         command: "insights",
@@ -2033,6 +2078,8 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           store: stringOf(values, "store"),
           mode,
           id,
+          word,
+          glossary,
           level: stringOf(values, "level") as InsightLevel | undefined,
           concept: stringOf(values, "concept"),
           minConfidence: confidenceOf(values, "min-confidence"),

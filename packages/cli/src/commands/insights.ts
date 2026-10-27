@@ -2,9 +2,15 @@ import { existsSync } from "node:fs";
 import { loadSqlite } from "@codegraph/analyzer";
 import {
   InsightsStoreError,
+  WORD_CONCERNS,
   answerInsight,
+  concernsReport,
+  polysemyReport,
   sqliteInsightsStore,
+  wordReport,
+  wordsAbsence,
   type FailureRecord,
+  type GlossaryEntry,
   type InsightRecord,
   type InsightRow,
   type InsightsStore,
@@ -29,8 +35,10 @@ import { storePathForModel } from "../insights-paths.js";
  *
  * ONE QUESTION PER INVOCATION, each with its own shape: the summary (no flag),
  * a list of ROWS — envelope and description, never blocks — one explanation
- * whole (`--id`), what is owed (`--failures`), the ledger (`--runs`). stdout is
- * the answer; `--json` makes it one kind-tagged document.
+ * whole (`--id`), the words (`--word`, `--glossary`, `--polysemy`,
+ * `--concerns`: M19c's readers, `glossary.ts`), what is owed (`--failures`),
+ * the ledger (`--runs`). stdout is the answer; `--json` makes it one kind-tagged
+ * document.
  */
 export function insightsCommand(options: InsightsOptions, io: IoSink): ExitCode {
   const path = options.store ?? storePathForModel(options.model);
@@ -43,6 +51,14 @@ export function insightsCommand(options: InsightsOptions, io: IoSink): ExitCode 
         return list(store, options, io);
       case "one":
         return one(store, options.id ?? "", path, options, io);
+      case "word":
+        return word(store, options.word ?? "", options, io);
+      case "glossary":
+        return glossary(store, options.glossary ?? "", path, options, io);
+      case "polysemy":
+        return polysemy(store, options, io);
+      case "concerns":
+        return concerns(store, options, io);
       case "failures":
         return failures(store, options, io);
       case "runs":
@@ -96,6 +112,9 @@ function summary(store: InsightsStore, path: string, options: InsightsOptions, i
   lines.push(stats.failures === 0 ? "  nothing owed: every unit asked for has a record" : `  ${plural(stats.failures, "failure")} owed — 'codegraph insights --failures' lists them, 'codegraph explain --retry-failed' redoes them`);
   lines.push(`  these records cost ${stats.usage.promptTokens} prompt + ${stats.usage.completionTokens} completion tokens${usd(stats.usage.cost)} (their own usage; failed and replaced calls are in the ledger only)`);
   lines.push(`  ledger: ${ledgerTotal(ledger)}`);
+  if (stats.withoutWords > 0) {
+    lines.push(`  ${stats.withoutWords} explained under prompt 1, before words were asked: the next 'codegraph explain' re-explains them`);
+  }
   const open = ledger.filter((run) => run.finishedAt === undefined);
   if (open.length > 0) lines.push(`  ${plural(open.length, "run")} never finished (still going, or killed): its records are kept`);
   outLine(io, lines.join("\n"));
@@ -161,14 +180,21 @@ function one(store: InsightsStore, id: string, path: string, options: InsightsOp
   }
 }
 
+const ABSENT_WORDS = {
+  "prompt-1": "  words: not defined — explained under prompt 1, before words were asked; the next 'codegraph explain' re-explains it",
+  templated: "  words: none — templated, no model judged it",
+} as const;
+
 function recordText(record: InsightRecord): string {
   const { description, confidence, ...rest } = record.block;
   const concept = typeConcept(record);
   const usage = record.usage === undefined ? undefined : `${record.usage.promptTokens} + ${record.usage.completionTokens} tokens${usd(record.usage.cost)}`;
+  const absence = wordsAbsence(record);
   return [
     record.id,
     `  ${[`${record.level} (${record.kind})`, concept, `confidence ${confidence.toFixed(2)}`].filter((part) => part !== undefined).join(" · ")}`,
     `  ${[record.file, record.origin, record.model, usage].filter((part) => part !== undefined).join(" · ")}`,
+    ...(absence === undefined ? [] : [ABSENT_WORDS[absence]]),
     "",
     description,
     "",
@@ -183,6 +209,86 @@ function typeConcept(record: InsightRecord): string | undefined {
 
 function failureReason(failure: FailureRecord): string {
   return `${failure.reason.kind}${failure.reason.status === undefined ? "" : ` ${failure.reason.status}`}: ${failure.reason.message}`;
+}
+
+/** What every word answer is blind to, on stderr, where a pipe does not read it. */
+function noteWithoutWords(count: number, io: IoSink): void {
+  if (count === 0) return;
+  errLine(io, `note: ${plural(count, "record")} a model wrote under prompt 1 define${count === 1 ? "s" : ""} no words; the next 'codegraph explain' re-explains ${count === 1 ? "it" : "them"}.`);
+}
+
+/** A cell for a placed-nowhere module: a record without a natural key. */
+const moduleCell = (module: string | undefined): string => module ?? "-";
+
+/** The types' senses of a word their module flagged; an empty cell when they agree. */
+function polysemyCell(entry: GlossaryEntry): string {
+  return entry.polysemous ? `polysemous: ${entry.senses.map((s) => `${s.in} "${s.sense}"`).join(" · ")}` : "";
+}
+
+/** One tab-separated line per entry, the module first so the grouping survives `sort`: module, what, id, concern, confidence, sense, and the identifiers (or the flag). */
+function word(store: InsightsStore, asked: string, options: InsightsOptions, io: IoSink): ExitCode {
+  const report = wordReport(store, asked);
+  if (options.json) {
+    outLine(io, JSON.stringify({ kind: "codegraph.insightsWord/1", ...report }));
+    return EXIT.OK;
+  }
+  const lines = report.modules.flatMap((group) => [
+    ...group.glossary.map((g) => [moduleCell(group.module), "glossary", g.id, g.entry.concern, "", g.entry.sense, polysemyCell(g.entry)].join("\t")),
+    ...group.entries.map((e) => [moduleCell(group.module), e.level, e.id, e.entry.concern, e.entry.confidence.toFixed(2), e.entry.sense, e.entry.in.join(", ")].join("\t")),
+  ]);
+  if (lines.length === 0) errLine(io, `no explained entity defines '${report.word}'.`);
+  else outLine(io, lines.join("\n"));
+  noteWithoutWords(report.withoutWords, io);
+  return EXIT.OK;
+}
+
+function glossary(store: InsightsStore, id: string, path: string, options: InsightsOptions, io: IoSink): ExitCode {
+  const answer = answerInsight(store, id);
+  if (answer.status !== "explained") return one(store, id, path, options, io);
+  const record = answer.record;
+  if (record.level !== "module") {
+    throw new UsageError(`${id} is a ${record.level}: a glossary is a module's`, `'codegraph insights --id ${id}' shows the words its names spell.`);
+  }
+  const entries = record.block.glossary;
+  if (entries === undefined) {
+    // A module is never templated; one without a glossary was explained before glossaries were asked.
+    const absence = wordsAbsence(record) ?? "prompt-1";
+    if (options.json) outLine(io, JSON.stringify({ kind: "codegraph.insightsGlossary/1", id, glossary: null, absence }));
+    else errLine(io, `${id} was explained under prompt 1, which asked for no glossary: the next 'codegraph explain' re-explains it.`);
+    return EXIT.OK;
+  }
+  if (options.json) {
+    outLine(io, JSON.stringify({ kind: "codegraph.insightsGlossary/1", id, name: record.name, model: record.model, glossary: entries }));
+    return EXIT.OK;
+  }
+  if (entries.length === 0) errLine(io, `${id}'s glossary is empty: its types spell no word to reconcile.`);
+  else outLine(io, entries.map((e) => [e.word, e.concern, e.sense, e.meaning, polysemyCell(e)].join("\t")).join("\n"));
+  return EXIT.OK;
+}
+
+/** One line per module's entry, grouped by word: word, module, concern, sense, the flag. */
+function polysemy(store: InsightsStore, options: InsightsOptions, io: IoSink): ExitCode {
+  const report = polysemyReport(store);
+  if (options.json) {
+    outLine(io, JSON.stringify({ kind: "codegraph.insightsPolysemy/1", ...report }));
+    return EXIT.OK;
+  }
+  if (report.words.length === 0) errLine(io, "no word has two senses: no module flagged one, and no two modules' glossaries define one differently.");
+  else outLine(io, report.words.flatMap((w) => w.entries.map((g) => [w.word, g.id, g.entry.concern, g.entry.sense, polysemyCell(g.entry)].join("\t"))).join("\n"));
+  noteWithoutWords(report.withoutWords, io);
+  return EXIT.OK;
+}
+
+function concerns(store: InsightsStore, options: InsightsOptions, io: IoSink): ExitCode {
+  const report = concernsReport(store);
+  if (options.json) {
+    outLine(io, JSON.stringify({ kind: "codegraph.insightsConcerns/1", ...report }));
+    return EXIT.OK;
+  }
+  if (report.modules.length === 0) errLine(io, "no explained entity defines a word.");
+  else outLine(io, report.modules.map((m) => [moduleCell(m.module), plural(m.words, "word"), ...WORD_CONCERNS.map((c) => `${m.concerns[c]} ${c}`)].join("\t")).join("\n"));
+  noteWithoutWords(report.withoutWords, io);
+  return EXIT.OK;
 }
 
 function failures(store: InsightsStore, options: InsightsOptions, io: IoSink): ExitCode {
