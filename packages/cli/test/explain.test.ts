@@ -172,6 +172,25 @@ describe("explain --dry-run", () => {
     expect(codeB).toBe(EXIT.OK);
   });
 
+  it("migrates a store an older build wrote, as a reader's refusal says it does, and calls nothing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "explain-v1-"));
+    try {
+      const path = join(dir, "model.insights.db");
+      const v1 = loadSqlite().open(path);
+      v1.exec(readFileSync(fileURLToPath(new URL("../../insights/test/fixtures/store-v1.sql", import.meta.url)), "utf8"));
+      v1.close();
+      const seam: ExplainSeam = { ...realSeam(), env: {}, clientFor: () => { throw new Error("a dry run asks for no client"); } };
+      expect(await explainCommand(options(["--out", join(dir, "model.insights.jsonl"), "--dry-run"]), captureIo(), seam)).toBe(EXIT.OK);
+      const after = loadSqlite().open(path);
+      expect(after.prepare("PRAGMA user_version").get()).toEqual({ user_version: 2 });
+      expect(after.prepare("SELECT count(*) AS n FROM insight").get()).toEqual({ n: 6 });
+      after.close();
+      expect(readdirSync(dir)).toEqual(["model.insights.db"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("--json prints one machine-readable plan whose operations precede their type", async () => {
     const io = captureIo();
     await explainCommand(options(["--dry-run", "--json"]), io, seamWith({}).seam);
