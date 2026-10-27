@@ -39,6 +39,7 @@ import {
   type Unit,
 } from "@codegraph/insights";
 import { clientFromEnv, resolveProvider, type LlmClient, type Provider } from "@codegraph/llm";
+import { buildVocabulary, definitionSpeller, rankedWords, type VocabularyArtifact } from "@codegraph/vocabulary";
 import type { ExplainOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, errLines, outLine, type IoSink } from "../io.js";
@@ -218,7 +219,10 @@ export async function explainCommand(
 
     const srcRoot = resolveSourceRoot(options, graph.union.models[0]?.root, units, seam);
     const reader = createSourceReader((relative) => seam.fs.readFile(join(srcRoot, relative)));
-    const env: PlanEnv = { graph, facts, units, reader, unitOf: walk.unitOf };
+    // The words a prompt asks to define are the cloud's (PLAN.md §20.3); the module weights are counted on first ask.
+    let vocabulary: VocabularyArtifact | undefined;
+    const speller = { words: definitionSpeller(graph), ranked: (id: string) => rankedWords((vocabulary ??= buildVocabulary(graph, { view })), id) };
+    const env: PlanEnv = { graph, facts, units, reader, unitOf: walk.unitOf, speller };
 
     const journal = `${out}.journal`;
     const loaded = loadExisting(out, storePath, journal, seam, io);
@@ -246,6 +250,7 @@ export async function explainCommand(
       force: options.force,
       maxCalls: options.maxCalls,
       inScope: options.retryFailed ? retryScope(previousFailures, walk) : scopePredicate(options.scope, graph, units),
+      terms: options.terms,
     });
 
     if (!source.clean) {
@@ -300,7 +305,7 @@ export async function explainCommand(
     const book: StoreBook = loaded.storeBook ?? storeBook(writing);
     book.begin(run);
 
-    const result = await executeRun(plan, env, book, complete, { maxScc: options.maxScc, depth: options.depth, maxLines: options.maxLines, previousFailures, ...(keyOf === undefined ? {} : { keyOf }) }, {
+    const result = await executeRun(plan, env, book, complete, { maxScc: options.maxScc, depth: options.depth, maxLines: options.maxLines, terms: options.terms, previousFailures, ...(keyOf === undefined ? {} : { keyOf }) }, {
       concurrency: options.concurrency,
       onFailure: (failure) => writing.fail(run, failure),
       onStep: (event) => {

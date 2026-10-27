@@ -61,8 +61,9 @@ function moduleBlock(name: string): ModuleBlock {
 
 /** The words a prompt lists for one member, by identifier: the lines under its "Words to define". */
 function wordsAsked(user: string, id: string): Map<string, string[]> {
-  const start = user.indexOf(`(${id})`);
-  const section = start < 0 ? "" : user.slice(start).split(/\n#{2,3} /u)[0] ?? "";
+  // The member's own heading: its id also appears in other members' sections.
+  const start = user.split("\n").findIndex((line) => line.startsWith("### ") && line.includes(`(${id})`));
+  const section = start < 0 ? "" : user.split("\n").slice(start).join("\n").split(/\n#{2,3} /u)[0] ?? "";
   const asked = new Map<string, string[]>();
   const head = section.indexOf("Words to define");
   if (head < 0) return asked;

@@ -659,6 +659,14 @@ export const EXPLAIN_SPEC: CommandSpec = {
       defaultValue: "12",
     },
     {
+      name: "terms",
+      type: "string",
+      describe: "Words a module's glossary reconciles: the heaviest N its types define.",
+      placeholder: "N",
+      integer: true,
+      defaultValue: "60",
+    },
+    {
       name: "scope",
       type: "string",
       describe:
@@ -1282,6 +1290,8 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly concurrency: number;
   readonly maxLines: number;
   readonly maxScc: number;
+  /** `--terms N`: a module's glossary keeps its heaviest N words. */
+  readonly terms: number;
   /** `--scope a,b`; empty = everything. */
   readonly scope: readonly string[];
   readonly framework: string | undefined;
@@ -1983,6 +1993,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           concurrency: integerOf(values, "concurrency") ?? 4,
           maxLines: integerOf(values, "max-lines") ?? 200,
           maxScc: integerOf(values, "max-scc") ?? 12,
+          terms: integerOf(values, "terms") ?? 60,
           scope: metricList(stringOf(values, "scope")),
           framework: stringOf(values, "framework"),
           ...viewOf(values),
