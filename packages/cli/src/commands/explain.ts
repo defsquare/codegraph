@@ -4,6 +4,9 @@ import { createInterface } from "node:readline/promises";
 import { ModelBuilder, readModelRecordsSync } from "@codegraph/core";
 import { FRAMEWORK_PROFILES, buildDomainFacts, folderFor, loadSqlite } from "@codegraph/analyzer";
 import {
+  COMPLETION_TOKENS_PER_BLOCK,
+  COMPLETION_TOKENS_PER_GLOSSARY_ENTRY,
+  COMPLETION_TOKENS_PER_WORD,
   INSIGHTS_GENERATOR,
   INSIGHTS_KIND,
   INSIGHTS_METAMODEL,
@@ -765,7 +768,7 @@ function printEstimate(plan: RunPlan, options: ExplainOptions, io: IoSink): void
         ...(cost === undefined ? {} : { cost }),
         assumptions: {
           promptTokens: "characters of the rendered prompts / 4",
-          completionTokens: "measured block averages: operation 450, type 650, module 900 tokens, per block asked for",
+          completionTokens: `measured block averages: ${outputAssumption()}`,
           excluded: "repair re-asks, rate-limit retries",
         },
       }),
@@ -798,9 +801,15 @@ function estimateLines(plan: RunPlan, options: ExplainOptions): string[] {
   } else {
     lines.push("  cost: pass --price-in USD --price-out USD (per million tokens) for a figure");
   }
-  lines.push("  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages (operation 450, type 650, module 900) per block asked for.");
+  lines.push(`  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages: ${outputAssumption()}.`);
   lines.push("  not included: repair re-asks, rate-limit retries. Records already in the side-car are reused, not re-sent.");
   return lines;
+}
+
+/** What the output figure assumes, from the constants it is computed with. */
+function outputAssumption(): string {
+  const { operation, type, module } = COMPLETION_TOKENS_PER_BLOCK;
+  return `operation ${operation}, type ${type}, module ${module} tokens per block asked for, plus an estimated ${COMPLETION_TOKENS_PER_WORD} per word and ${COMPLETION_TOKENS_PER_GLOSSARY_ENTRY} per glossary entry asked to define`;
 }
 
 /**
