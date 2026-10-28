@@ -25,8 +25,8 @@ import { RECENT_KIND, readRecent } from "./store.js";
  * with relative URLs, so `navigator.json`, `city.json` and `vocabulary.json`
  * are fetched exactly as `codegraph serve` hands them out — no Tauri IPC, no
  * CORS. The lookups are not: the daemon holds no store open and no model
- * between jobs, so `insight.json` and `carriers.json` are 404s the page
- * reads as "not here".
+ * between jobs, so `insight.json`, `carriers.json` and `glossary.json` are
+ * 404s the page reads as "not here".
  */
 export const APP_KIND = "codegraph.app/1";
 

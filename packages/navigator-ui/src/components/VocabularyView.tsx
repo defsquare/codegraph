@@ -3,6 +3,7 @@ import type { TermClass } from "@codegraph/vocabulary";
 import { CLOUD_DEFAULTS, MONOSPACE_LINE, layoutCloud, monospaceMeasure, type Measure } from "@codegraph/vocabulary/cloud";
 import type { ModelIndexes } from "../model/indexes.js";
 import { carrierNode, cloudWords, indexVocabulary, scopeChain, scopeForNode, wordRows, type WordRow } from "../model/words.js";
+import { createGlossaryLoader, type Glossary } from "../glossary.js";
 import { TERM_CLASSES, createCarriersLoader, loadVocabulary, type Carriers, type VocabularyLoad } from "../vocabulary.js";
 
 /**
@@ -20,7 +21,9 @@ import { TERM_CLASSES, createCarriersLoader, loadVocabulary, type Carriers, type
  *
  * Every number is the artifact's; the carriers are the server's lookup, and a
  * page served without one (the app daemon, a static host) shows the counts
- * and says why there is no evidence.
+ * and says why there is no evidence. Under the carriers, what the explained
+ * entities of the scope said the word means — a model's reading, in the
+ * inference colour, and nothing at all where no store was explained.
  */
 
 /** The CLI's `--top` default. */
@@ -29,6 +32,7 @@ const TOP_MAX = 200;
 /** Table rows at once; the cloud's top N is what the slider moves. */
 const ROW_CAP = 500;
 const LOADER = createCarriersLoader();
+const GLOSSARY = createGlossaryLoader();
 
 export interface VocabularyViewProps {
   readonly ix: ModelIndexes;
@@ -65,6 +69,7 @@ export function VocabularyView({ ix, selection, onSelect, onReveal }: Vocabulary
   const [top, setTop] = useState(TOP);
   const [picked, setPicked] = useState<{ readonly scope: number; readonly row: WordRow } | undefined>(undefined);
   const [carriers, setCarriers] = useState<{ readonly key: string; readonly answer: Carriers } | undefined>(undefined);
+  const [glossary, setGlossary] = useState<{ readonly key: string; readonly answer: Glossary } | undefined>(undefined);
   const measure = useMemo(pageMeasure, []);
 
   // A new navigator (the app daemon's next job) comes with a new vocabulary.
@@ -95,6 +100,9 @@ export function VocabularyView({ ix, selection, onSelect, onReveal }: Vocabulary
     let current = true;
     void LOADER.load({ scope: scopeId, term: pick.text, class: pick.class }).then((answer) => {
       if (current) setCarriers({ key: pickKey, answer });
+    });
+    void GLOSSARY.load({ scope: scopeId, term: pick.text }).then((answer) => {
+      if (current) setGlossary({ key: pickKey, answer });
     });
     return () => {
       current = false;
@@ -133,6 +141,7 @@ export function VocabularyView({ ix, selection, onSelect, onReveal }: Vocabulary
   };
   const choose = (row: WordRow) => setPicked(pick?.term === row.term ? undefined : { scope, row });
   const answer = carriers !== undefined && carriers.key === pickKey ? carriers.answer : undefined;
+  const glossed = glossary !== undefined && glossary.key === pickKey ? glossary.answer : undefined;
 
   return (
     <main className="vocabulary-view">
@@ -272,6 +281,7 @@ export function VocabularyView({ ix, selection, onSelect, onReveal }: Vocabulary
                 </button>
               </header>
               <CarrierList ix={ix} answer={answer} onReveal={onReveal} />
+              <GlossaryList ix={ix} answer={glossed} onReveal={onReveal} />
             </section>
           )}
           <table className="coupling-table words-table">
@@ -374,5 +384,120 @@ function CarrierList({
         </p>
       )}
     </>
+  );
+}
+
+/**
+ * What the explanations under the scope said the word means: the modules'
+ * reconciliations, then each entity's entry. A language model's reading —
+ * the explanation panel's colour and badge — and nothing at all without a
+ * store (`none`) or for a scope the server does not know.
+ */
+function GlossaryList({
+  ix,
+  answer,
+  onReveal,
+}: {
+  readonly ix: ModelIndexes;
+  readonly answer: Glossary | undefined;
+  readonly onReveal: (node: number) => void;
+}) {
+  if (answer?.status !== "found") return null;
+  const { entries, glossary, total, withoutWords } = answer;
+  const models = [...new Set([...glossary, ...entries].flatMap((item) => (item.model === undefined ? [] : [item.model])))];
+  const older =
+    withoutWords > 0 ? (
+      <p className="report-summary">
+        The store also holds {plural(withoutWords, "explanation")} from before words were asked: {withoutWords === 1 ? "it says" : "they say"} nothing here.
+      </p>
+    ) : null;
+  if (total.entries + total.glossary === 0) {
+    return (
+      <section className="insight glossary" aria-label={`What the explanations say ${answer.term} means`}>
+        <p className="insight-byline">
+          <span className="insight-badge">LLM glossary</span>
+          <span>no explained entity of this scope defines it</span>
+        </p>
+        {older}
+      </section>
+    );
+  }
+  return (
+    <section className="insight glossary" aria-label={`What the explanations say ${answer.term} means`}>
+      <p className="insight-byline">
+        <span className="insight-badge">LLM glossary</span>
+        <span>
+          {plural(total.entries, "entity", "entities")}
+          {total.glossary > 0 ? ` · ${plural(total.glossary, "module")} reconciling` : ""}
+        </span>
+        {models.length > 0 && <span>{models.join(", ")}</span>}
+      </p>
+      <div className="glossary-scroll">
+        {glossary.map((gloss) => {
+          const node = ix.nodeById.get(gloss.id);
+          return (
+            <div key={gloss.id} className="gloss-module">
+              <button
+                type="button"
+                className="counterpart"
+                disabled={node === undefined}
+                title={node === undefined ? "Not a node of this navigator" : "Show in Navigate"}
+                onClick={() => node !== undefined && onReveal(node)}
+              >
+                <span className="counterpart-name" title={gloss.id}>
+                  {gloss.name ?? gloss.id}
+                </span>
+                <span className="counterpart-member">module · {gloss.entry.concern}</span>
+              </button>
+              <p className="gloss-sense">{gloss.entry.sense}</p>
+              {gloss.entry.meaning !== "" && <p className="gloss-meaning">{gloss.entry.meaning}</p>}
+              {gloss.entry.polysemous && gloss.entry.senses.length > 0 && (
+                <p className="gloss-meaning">
+                  its types disagree: {gloss.entry.senses.map((sense) => `${sense.in} — ${sense.sense}`).join("; ")}
+                </p>
+              )}
+            </div>
+          );
+        })}
+        <ul className="carrier-list glossary-list">
+          {entries.map((word, index) => {
+            const node = ix.nodeById.get(word.id) ?? (word.owner === undefined ? undefined : ix.nodeById.get(word.owner));
+            const member = node !== undefined && ix.model.nodes[node]?.id !== word.id;
+            return (
+              <li key={`${word.id}#${index}`}>
+                <button
+                  type="button"
+                  className="counterpart"
+                  disabled={node === undefined}
+                  title={node === undefined ? "Not a node of this navigator" : member ? "Show its type in Navigate" : "Show in Navigate"}
+                  onClick={() => node !== undefined && onReveal(node)}
+                >
+                  <span className="counterpart-name" title={word.id}>
+                    {word.name ?? word.id}
+                  </span>
+                  <span className="counterpart-member">
+                    {word.kind}
+                    {member ? ` in ${ix.model.nodes[node]?.name ?? ""}` : ""} · {word.entry.concern}
+                  </span>
+                </button>
+                <span className="carrier-weight" title="The model's own confidence in this entry, 0 to 1 — a hint, not a measurement.">
+                  {word.entry.confidence.toFixed(2)}
+                </span>
+                <p className="gloss-sense">
+                  {word.entry.sense} <span className="gloss-in">· in {word.entry.in.join(", ")}</span>
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      {(total.entries > entries.length || total.glossary > glossary.length) && (
+        <p className="report-summary">
+          the first {entries.length} of {plural(total.entries, "entry", "entries")}
+          {total.glossary > glossary.length ? `, ${glossary.length} of ${plural(total.glossary, "module")}` : ""}
+        </p>
+      )}
+      {older}
+    </section>
   );
 }

@@ -264,8 +264,8 @@ id: *explained* (the record), *failed* (the unit's failure — matched by member
 so every member of a failed cycle is answered), or *unknown*. "No explanation"
 is two different facts, and only one of them is silence.
 
-Two readers answer about records (a third, `vocabulary --drift-insights`,
-about words: below). `codegraph insights` (cli.md) opens the store and nothing
+Two readers answer about records (two more, `vocabulary --drift-insights` and
+`serve`'s `/glossary.json`, about words: below). `codegraph insights` (cli.md) opens the store and nothing
 else — not the model, not `explain.ts`, whose module graph is the provider SDK.
 And `codegraph serve` answers `/insight.json?id=…`, its one route that is not an
 artifact: tens of megabytes of prose do not belong in `navigator.json`, so a
@@ -308,6 +308,19 @@ comparison cannot live in `insights`, which never opens the model. It reads
 every entry through `wordHits()`, hands them to `@codegraph/vocabulary` in that
 package's own shape (neither package imports the other), and sets the model's
 concern beside the list's class, word by word, with the entities.
+
+The page asks the same question of one word: `codegraph serve` answers
+`/glossary.json?term=…&scope=…` with `answerGlossary(store, query, placement)`,
+the entries of the entities under a module or a type, and the modules'
+reconciliations. Which entities are under a scope is the model's (only the
+model knows an operation's type), so the CLI hands in a `Placement` — each
+kept entity's containing module and type, by the fold the vocabulary counts
+with — and this package still opens no model. The route reads the store
+`/insight.json` reads, through one reader. The kind (`codegraph.glossary/1`)
+is restated by the page and pinned, and the page shows the entries in the
+inference colour; the explanation panel reads a block's `words` and `glossary`
+by name (`order (domain) — sense. Meaning. In Order · 0.90`), the one exception
+to its generic rendering.
 
 `@codegraph/insights` stays pure: `store.ts` is a port, and `store-sqlite.ts`
 is handed an OPEN database, so the path, the file and `node:sqlite` itself

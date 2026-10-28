@@ -25,42 +25,51 @@ export interface LookupAnswer {
   readonly body: string;
 }
 
-export interface InsightLookup {
-  handle(query: URLSearchParams): LookupAnswer;
+/** The store the lookups read, opened at the first request that finds it; `/glossary.json` reads the same one. */
+export interface StoreReader {
+  /** Undefined while there is no store this build may read. */
+  get(): InsightsStore | undefined;
   close(): void;
 }
 
-export const INSIGHT_ROUTE = "/insight.json";
-
-export function insightLookup(storePath: string): InsightLookup {
+export function storeReader(storePath: string): StoreReader {
   let store: InsightsStore | undefined;
-
-  const reader = (): InsightsStore | undefined => {
-    if (store !== undefined) return store;
-    // Checked first: opening a missing path would CREATE it, and a page asking must not leave a file behind.
-    if (!existsSync(storePath)) return undefined;
-    const db = loadSqlite().open(storePath);
-    try {
-      store = sqliteInsightsStore(db, { readOnly: true });
-    } catch {
-      // Not ours, from a newer build, or from an older one no explain has migrated yet: nothing this page can show.
-      // `codegraph insights` says why.
-      db.close();
-    }
-    return store;
-  };
-
   return {
-    handle(query) {
-      const id = query.get("id");
-      if (id === null || id === "") return { status: 400, body: JSON.stringify({ error: "insight.json needs ?id=<entity id>" }) };
-      const open = reader();
-      const answer = open === undefined ? { kind: INSIGHT_ANSWER_KIND, id, status: "unknown" as const } : answerInsight(open, id);
-      return { status: answer.status === "unknown" ? 404 : 200, body: JSON.stringify(answer) };
+    get() {
+      if (store !== undefined) return store;
+      // Checked first: opening a missing path would CREATE it, and a page asking must not leave a file behind.
+      if (!existsSync(storePath)) return undefined;
+      const db = loadSqlite().open(storePath);
+      try {
+        store = sqliteInsightsStore(db, { readOnly: true });
+      } catch {
+        // Not ours, from a newer build, or from an older one no explain has migrated yet: nothing this page can show.
+        // `codegraph insights` says why.
+        db.close();
+      }
+      return store;
     },
     close() {
       store?.close();
       store = undefined;
+    },
+  };
+}
+
+export interface InsightLookup {
+  handle(query: URLSearchParams): LookupAnswer;
+}
+
+export const INSIGHT_ROUTE = "/insight.json";
+
+export function insightLookup(reader: StoreReader): InsightLookup {
+  return {
+    handle(query) {
+      const id = query.get("id");
+      if (id === null || id === "") return { status: 400, body: JSON.stringify({ error: "insight.json needs ?id=<entity id>" }) };
+      const open = reader.get();
+      const answer = open === undefined ? { kind: INSIGHT_ANSWER_KIND, id, status: "unknown" as const } : answerInsight(open, id);
+      return { status: answer.status === "unknown" ? 404 : 200, body: JSON.stringify(answer) };
     },
   };
 }

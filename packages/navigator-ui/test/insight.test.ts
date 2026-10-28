@@ -121,3 +121,39 @@ describe("blockFacts: the block as the panel lists it", () => {
     ]);
   });
 });
+
+describe("blockFacts: the words a block defines (M19c)", () => {
+  it("reads each word as word (concern) — sense, its meaning, where it is and how sure — never the identifiers in a definition's place", () => {
+    expect(blockFacts({
+      words: [
+        { word: "order", in: ["Order", "sortOrder"], concern: "domain", sense: "a customer's request", meaning: "What a customer asks the shop for.", confidence: 0.9 },
+        { word: "service", in: ["OrderService"], concern: "technical", sense: "a layer", meaning: "", confidence: 0.55 },
+      ],
+    })).toEqual([{
+      label: "words",
+      values: [
+        "order (domain) — a customer's request. What a customer asks the shop for. In Order, sortOrder · 0.90",
+        "service (technical) — a layer. In OrderService · 0.55",
+      ],
+    }]);
+  });
+
+  it("reads a module's glossary with the types that disagree, when they do", () => {
+    expect(blockFacts({
+      glossary: [
+        { word: "order", concern: "domain", sense: "a customer's request", meaning: "What a customer asks for.", polysemous: true, senses: [{ in: "Order", sense: "a request" }, { in: "SortSpec", sense: "a sequence" }] },
+        { word: "line", concern: "domain", sense: "an order line", meaning: "One article of an order.", polysemous: false, senses: [] },
+      ],
+    })).toEqual([{
+      label: "glossary",
+      values: [
+        "order (domain) — a customer's request. What a customer asks for. Its types disagree: Order — a request; SortSpec — a sequence",
+        "line (domain) — an order line. One article of an order.",
+      ],
+    }]);
+  });
+
+  it("falls back to the generic reading for an entry of another shape", () => {
+    expect(blockFacts({ words: [{ word: "order", note: "kept" }], glossary: [] })).toEqual([{ label: "words", values: ["order — kept"] }]);
+  });
+});
