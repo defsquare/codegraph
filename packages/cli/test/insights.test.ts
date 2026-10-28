@@ -13,9 +13,13 @@ import {
   encodeInsightsToString,
   sqliteInsightsStore,
   type FailureRecord,
+  type GlossaryEntry,
   type InsightRecord,
   type InsightsEof,
   type InsightsHeader,
+  type RecordKey,
+  type WordConcern,
+  type WordEntry,
 } from "@codegraph/insights";
 import { EXIT } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
@@ -88,6 +92,8 @@ describe("codegraph insights: what was bought, at a glance", () => {
     expect(out).toMatch(/1 failure owed/u);
     expect(out).toMatch(/these records cost 2400 prompt \+ 600 completion tokens, \$0\.0040/u);
     expect(out).toMatch(/ledger: 1 run, 4 calls, 2400 prompt \+ 600 completion tokens, \$0\.0041/u);
+    // Three were explained before words were asked; the template never is.
+    expect(out).toMatch(/3 explained under prompt 1, before words were asked: the next 'codegraph explain' re-explains them/u);
   });
 
   it("--json is one kind-tagged document with the same facts", () => {
@@ -235,5 +241,145 @@ describe("codegraph insights: no store, or not ours", () => {
     } finally {
       rmSync(older);
     }
+  });
+});
+
+describe("codegraph insights: the words of the names, as the model judged them (M19c)", () => {
+  const key = (module: string, symbol = "", disambiguator?: string): RecordKey => ({ lang: "java", module, symbol, ...(disambiguator === undefined ? {} : { disambiguator }) });
+  const word = (w: string, concern: WordConcern, sense: string, ins: string[], confidence: number): WordEntry => ({ word: w, in: ins, concern, sense, meaning: `${sense}, here.`, confidence });
+  const gloss = (w: string, concern: WordConcern, sense: string, senses: GlossaryEntry["senses"] = []): GlossaryEntry => ({ word: w, concern, sense, meaning: `What ${w} means here.`, polysemous: senses.length > 0, senses });
+  const ORDERING = "java:com.acme.order";
+  const BILLING = "java:com.acme.billing";
+  const MODULE_BLOCK = { name: "M", description: "A module.", apis: [], spis: [], dependsOn: [], concepts: [], boundedContextHint: null, sharedKernelHint: null, ubiquitousLanguage: [], confidence: 0.6 };
+  const worded = (record: InsightRecord, k: RecordKey, words: WordEntry[]): InsightRecord => ({ ...record, key: k, block: { ...record.block, words } }) as InsightRecord;
+  const module_ = (id: string, k: RecordKey, words: WordEntry[], glossary?: GlossaryEntry[]): InsightRecord =>
+    ({ t: "i", id, key: k, level: "module", kind: "package", name: k.module, origin: "llm", fingerprint: FP, model: "strong/model", block: { ...MODULE_BLOCK, words, ...(glossary === undefined ? {} : { glossary }) } }) as InsightRecord;
+  const WORDED = [
+    module_(ORDERING, key("com.acme.order"), [word("order", "domain", "the ordering business", ["com.acme.order"], 0.8)], [
+      gloss("order", "domain", "a customer's request", [{ in: "Order", sense: "a customer's request" }, { in: "SortSpec", sense: "a sequence" }]),
+      gloss("lines", "domain", "the items ordered"),
+    ]),
+    worded(type(ORDER, "aggregate", 0.9), key("com.acme.order", "Order"), [word("order", "domain", "a customer's request", ["Order"], 0.9), word("lines", "domain", "the items ordered", ["lines", "addLine"], 0.85)]),
+    worded(type("java:com.acme.order/SortSpec", "valueType", 0.7), key("com.acme.order", "SortSpec"), [word("order", "technical", "a sequence", ["sortOrder"], 0.6)]),
+    worded(operation(`${ORDER}.total()`), key("com.acme.order", "Order.total", "()"), [word("total", "domain", "the sum", ["total"], 0.7)]),
+    module_(BILLING, key("com.acme.billing"), [word("billing", "domain", "invoicing", ["com.acme.billing"], 0.8)], [gloss("order", "domain", "a purchase order")]),
+    worded(type("java:com.acme.billing/Invoice", "entity", 0.8), key("com.acme.billing", "Invoice"), [word("order", "domain", "a purchase order", ["orderRef"], 0.75)]),
+    // Explained before words were asked.
+    { ...module_("java:com.acme.legacy", key("com.acme.legacy"), []), block: MODULE_BLOCK } as InsightRecord,
+    { ...type("java:com.acme.legacy/Old", "entity", 0.5), key: key("com.acme.legacy", "Old") } as InsightRecord,
+  ];
+
+  let wdir: string;
+  let wmodel: string;
+  beforeAll(() => {
+    wdir = mkdtempSync(join(tmpdir(), "insights-words-"));
+    wmodel = join(wdir, "model.jsonl");
+    writeFileSync(wmodel, "not a model\n");
+    const store = sqliteInsightsStore(loadSqlite().open(join(wdir, "model.insights.db")));
+    store.importFile(decodeInsights(encodeInsightsToString(HEADER, WORDED, eof(WORDED.length))));
+    store.close();
+  });
+  afterAll(() => rmSync(wdir, { recursive: true, force: true }));
+  const words = (...argv: string[]) => {
+    const io = captureIo();
+    const code = runSync(["insights", wmodel, ...argv], io);
+    return { code, out: io.stdout(), err: io.stderr() };
+  };
+  // Only the final newline goes: a row may end in an empty cell.
+  const rows = (out: string): string[] => out.replace(/\n$/u, "").split("\n");
+  const PROMPT_1 = "note: 2 records a model wrote under prompt 1 define no words; the next 'codegraph explain' re-explains them.";
+
+  it("--word: every entity whose names spell it, by module — the module's glossary entry first, then the module, its types, its operations", () => {
+    const { code, out, err } = words("--word", "Order");
+    expect(code).toBe(EXIT.OK);
+    expect(rows(out)).toEqual([
+      `${BILLING}\tglossary\t${BILLING}\tdomain\t\ta purchase order\t`,
+      `${BILLING}\ttype\tjava:com.acme.billing/Invoice\tdomain\t0.75\ta purchase order\torderRef`,
+      `${ORDERING}\tglossary\t${ORDERING}\tdomain\t\ta customer's request\tpolysemous: Order "a customer's request" · SortSpec "a sequence"`,
+      `${ORDERING}\tmodule\t${ORDERING}\tdomain\t0.80\tthe ordering business\tcom.acme.order`,
+      `${ORDERING}\ttype\t${ORDER}\tdomain\t0.90\ta customer's request\tOrder`,
+      `${ORDERING}\ttype\tjava:com.acme.order/SortSpec\ttechnical\t0.60\ta sequence\tsortOrder`,
+    ]);
+    // What it cannot see, said once, where a pipe does not read it.
+    expect(err.trim()).toBe(PROMPT_1);
+  });
+
+  it("--word --json is the report: the word as looked up, by module, entries without their meaning", () => {
+    const doc = JSON.parse(words("--word", "lines", "--json").out) as { kind: string; word: string; withoutWords: number; modules: { module: string; glossary: { entry: GlossaryEntry }[]; entries: { id: string; entry: object }[] }[] };
+    expect(doc.kind).toBe("codegraph.insightsWord/1");
+    expect(doc.word).toBe("lines");
+    expect(doc.withoutWords).toBe(2);
+    expect(doc.modules.map((m) => m.module)).toEqual([ORDERING]);
+    expect(doc.modules[0]?.glossary[0]?.entry.meaning).toBe("What lines means here.");
+    expect(doc.modules[0]?.entries[0]).toMatchObject({ id: ORDER, entry: { word: "lines", in: ["lines", "addLine"], concern: "domain", sense: "the items ordered", confidence: 0.85 } });
+    expect(doc.modules[0]?.entries[0]?.entry).not.toHaveProperty("meaning");
+  });
+
+  it("--word that nothing defines says so on stderr, and prints nothing", () => {
+    const { code, out, err } = words("--word", "zebra");
+    expect(code).toBe(EXIT.OK);
+    expect(out).toBe("");
+    expect(err).toMatch(/no explained entity defines 'zebra'/u);
+    expect(err).toContain(PROMPT_1);
+  });
+
+  it("--glossary: a module's whole — word, concern, sense, meaning, and the types' senses when they disagree", () => {
+    const { code, out } = words("--glossary", ORDERING);
+    expect(code).toBe(EXIT.OK);
+    expect(rows(out)).toEqual([
+      `order\tdomain\ta customer's request\tWhat order means here.\tpolysemous: Order "a customer's request" · SortSpec "a sequence"`,
+      `lines\tdomain\tthe items ordered\tWhat lines means here.\t`,
+    ]);
+    const doc = JSON.parse(words("--glossary", ORDERING, "--json").out) as { kind: string; id: string; glossary: GlossaryEntry[] };
+    expect(doc).toMatchObject({ kind: "codegraph.insightsGlossary/1", id: ORDERING, name: "com.acme.order", model: "strong/model" });
+    expect(doc.glossary.map((g) => g.word)).toEqual(["order", "lines"]);
+  });
+
+  it("--glossary of a module explained under prompt 1 says why there is none; of a type, of an unknown id, it is a usage error", () => {
+    const old = words("--glossary", "java:com.acme.legacy");
+    expect(old.code).toBe(EXIT.OK);
+    expect(old.out).toBe("");
+    expect(old.err).toMatch(/java:com\.acme\.legacy was explained under prompt 1, which asked for no glossary: the next 'codegraph explain' re-explains it/u);
+    expect(JSON.parse(words("--glossary", "java:com.acme.legacy", "--json").out)).toEqual({ kind: "codegraph.insightsGlossary/1", id: "java:com.acme.legacy", glossary: null, absence: "prompt-1" });
+    const typed = words("--glossary", ORDER);
+    expect(typed.code).toBe(EXIT.USAGE);
+    expect(typed.err).toMatch(/is a type: a glossary is a module's.*--id/su);
+    expect(words("--glossary", "java:nope").code).toBe(EXIT.USAGE);
+  });
+
+  it("--polysemy: every module's entry for a word a module flagged, or that two modules' glossaries define differently, side by side", () => {
+    const { code, out } = words("--polysemy");
+    expect(code).toBe(EXIT.OK);
+    expect(rows(out)).toEqual([
+      `order\t${BILLING}\tdomain\ta purchase order\t`,
+      `order\t${ORDERING}\tdomain\ta customer's request\tpolysemous: Order "a customer's request" · SortSpec "a sequence"`,
+    ]);
+    const doc = JSON.parse(words("--polysemy", "--json").out) as { kind: string; words: { word: string; flagged: boolean; acrossModules: boolean; senses: number }[] };
+    expect(doc.kind).toBe("codegraph.insightsPolysemy/1");
+    expect(doc.words.map(({ word: w, flagged, acrossModules, senses }) => ({ w, flagged, acrossModules, senses }))).toEqual([{ w: "order", flagged: true, acrossModules: true, senses: 3 }]);
+  });
+
+  it("--concerns: per module, its distinct words and how many the model called domain, technical, ambiguous", () => {
+    const { code, out } = words("--concerns");
+    expect(code).toBe(EXIT.OK);
+    expect(rows(out)).toEqual([
+      `${ORDERING}\t3 words\t3 domain\t1 technical\t0 ambiguous`,
+      `${BILLING}\t2 words\t2 domain\t0 technical\t0 ambiguous`,
+    ]);
+    const doc = JSON.parse(words("--concerns", "--json").out) as { kind: string; modules: unknown[] };
+    expect(doc.kind).toBe("codegraph.insightsConcerns/1");
+    expect(doc.modules).toHaveLength(2);
+  });
+
+  it("one question per invocation, and a word to look up", () => {
+    expect(words("--word", "order", "--concerns").code).toBe(EXIT.USAGE);
+    expect(words("--polysemy", "--level", "type").code).toBe(EXIT.USAGE);
+    expect(words("--word", "").code).toBe(EXIT.USAGE);
+  });
+
+  it("--id says why a record has no words: prompt 1's, or a template's", () => {
+    expect(words("--id", "java:com.acme.legacy/Old").out).toMatch(/words: not defined — explained under prompt 1, before words were asked; the next 'codegraph explain' re-explains it/u);
+    expect(insights("--id", `${ORDER}.getId()`).out).toMatch(/words: none — templated, no model judged it/u);
+    expect(words("--id", ORDER).out).not.toMatch(/words: (not defined|none)/u);
   });
 });
