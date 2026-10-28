@@ -69,6 +69,7 @@ codegraph navigator [model.jsonl] [--out FILE]
 codegraph vocabulary [model.jsonl] [--level corpus|module|type] [--scope ID]
                    [--top N] [--class domain|technical|keyword|short|all]
                    [--weights KEY=N,…] [--technical FILE] [--drift FILE]
+                   [--drift-insights [--insights FILE]]
                    [--out FILE] [--svg FILE] [--json] [--internal-only]
                    [--declared-only]
 
@@ -254,7 +255,21 @@ one block per scope, ranked by distinct terms (the cognitive-load report);
 `--weights` and `--technical FILE` change the scheme, and the header says
 which one counted. `--drift FILE` compares with a glossary, one business term
 per line: the terms no scope of `--level` says (exit `3`), the ones it says
-and where, and the domain words no term contains. `--out FILE` writes the
+and where, and the domain words no term contains. `--drift-insights` sets the
+classes against what `explain` judged (M19c): it reads the insights store beside
+the first model (`--insights FILE` names another), classes each word a model
+defined as the list does in that entity's language, and lists the technical
+words a model called domain somewhere, then the domain words it called
+technical, the most judgements against first (`--top N` per list, 40 by
+default), each with the judgements against it, surest first: confidence,
+sense, and the identifiers in which entity (five per word, and how many more:
+`--json` lists every one). With `--drift FILE` it adds the business terms against both: each
+word's class and the model's concerns, and why the term drifts (`list`,
+`model`). The judgements are inferences and never set the exit code; `--drift`
+still exits `3` on a term the corpus never says. `--scope`, `--level`,
+`--class` and `--svg` do not apply to it; records of entities the model or the
+view does not have, and records explained under prompt 1, are counted on stderr.
+`--json` gives `report: "drift-insights"`. `--out FILE` writes the
 `vocabulary.json` artifact (`codegraph.vocabulary/1`) beside the report.
 `--svg FILE` draws the cloud of the one scope reported — the corpus, or
 `--scope`'s — from the words `--class` and `--top` pick: size on the square
