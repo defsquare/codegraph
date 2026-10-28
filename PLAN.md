@@ -5542,6 +5542,50 @@ and `confidence` are generated columns over it. The decisions:
   0.48 s, `--concerns` 0.54 s, Node's start included. The re-explained
   Broadleaf store is owed, as above.
 
+**As built — `vocabulary --drift-insights` (2026-10-28).** `concernDrift` and
+`businessJudged` in `@codegraph/vocabulary` (`concern-drift.ts`), fed by the
+store's `wordHits()`, which with no word now returns every entry. The decisions:
+
+- **Neither package imports the other.** The vocabulary package takes
+  `WordJudgement`s in its own shape and restates the three concerns
+  (`JUDGED_CONCERNS`), pinned equal to the insights block's by a CLI test; the
+  command maps the store's rows into them.
+- **The class is the list's, per entity.** Each judgement's word is classed as
+  `buildVocabulary` would class it in that entity's language (read from the
+  union) under the list in effect, `--technical` included. So a word judged in
+  two languages may be two rows (`select`: Java `domain`, Go `keyword`).
+- **Two lists.** The technical words a model judged domain somewhere, and the
+  domain words it judged technical, ranked by the judgements against, ties by
+  word; `--top N` cuts each (40). `ambiguous` is counted and contradicts
+  neither class; a `keyword` or `short` word (a lexicon corrected since) is
+  counted and contradicts nothing.
+- **Kept as the vocabulary keeps.** A record of an id the model does not hold
+  (explained against another version of it) or the view does not keep is left
+  out and counted on stderr, as are prompt-1 records.
+- **The surest five.** A word's judgements against are ordered by confidence,
+  then by id; the text shows five per word and says how many more, `--json`
+  every one. On Broadleaf every judgement in full was 6 868 lines, each padded
+  to the longest operation id (≈ 600 characters), so the entity now comes last,
+  unpadded: `getSectionKey in java:…AdminFieldController.getSectionKey(…)`.
+- **The business list against both** (`--drift FILE` beside it): each term's
+  words with the classes the corpus says them under and the model's concerns
+  over every entity; a term drifts on a word the list does not call domain
+  (`list`) or a model judged technical somewhere (`model`).
+- **A judgement never sets the exit code.** It is an inference; `--drift`
+  keeps its own exit 3 for a term the corpus never says (`said` is the
+  corpus-level drift's answer, pinned by a test).
+- **The store** is beside the first model, or `--insights FILE` (serve's flag
+  name); missing or unmigrated, a usage error before the model is read.
+  `--scope`, `--level`, `--class` and `--svg` with it, and `--insights`
+  without it, are usage errors. `--json` is `report: "drift-insights"` in
+  `codegraph.vocabularyReport/1`.
+- **Measured** on a store built over Broadleaf's own ids (29 098 records, the
+  words `definitionSpeller` asks plus parameters and attributes: 109 208
+  entries, 12 % judged against the list): 4.1 s end to end against 3.2 s for
+  the plain report on the same machine (an x86-64 Linux box, slower than the
+  M1 of §20.1), at the same peak memory (≈ 0.5 GB). A store a model wrote is
+  owed, as above.
+
 ### 20.4 Milestone split
 
 **M19a — the lexicon, the split, the artifact** (closes the profile half of #19)
@@ -5619,7 +5663,7 @@ and `confidence` are generated columns over it. The decisions:
 - [ ] Readers: `insights --word`, `--glossary`, `--polysemy`, `--concerns`;
       `vocabulary --drift-insights`; `/glossary.json`; the entries in the
       Vocabulary tab and in the Navigate panel as inferences. *(In: the four
-      `insights` readers. Owed: `--drift-insights`, `/glossary.json`, the tab
+      `insights` readers, `--drift-insights`. Owed: `/glossary.json`, the tab
       and the panel.)*
 - [ ] `docs/vocabulary.md` (the idioms per profile, the classes, the
       weights, the artifact, the three layers, the readers, the drift
