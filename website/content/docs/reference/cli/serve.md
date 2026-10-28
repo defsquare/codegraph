@@ -5,7 +5,7 @@ weight: 5
 
 Serve the navigator with the code city as a tab, over this model.
 
-One page, built from one graph under one view: the **Navigate** tab (tree and per-node incoming/outgoing dependencies), the **City** tab (the 3D city, full-width; a selected building offers *Open in navigator*, which reveals that type on Navigate), then **Graph**, **Cycles**, **Coupling** and **Vocabulary** (the selected scope's words as a cloud and a table; a word lists the names that carry it, each one click from Navigate). The server hands out `/navigator.json`, `/city.json` and `/vocabulary.json` — each exactly the file [`navigator`](/docs/reference/cli/navigator/), [`city --layout`](/docs/reference/cli/city/) and [`vocabulary --out`](/docs/reference/cli/vocabulary/) would have written — beside the built frontend, and answers two lookups: `/insight.json?id=ID`, a node's explanation from the insights store, and `/carriers.json?term=WORD[&scope=ID][&class=CLASS][&limit=N]`, the names of a scope that carry a word, from the model it holds (`404` for an unknown scope or term, `400` for a request it cannot ask). Stdout stays empty; the process runs until Ctrl-C.
+One page, built from one graph under one view: the **Navigate** tab (tree and per-node incoming/outgoing dependencies), the **City** tab (the 3D city, full-width; a selected building offers *Open in navigator*, which reveals that type on Navigate), then **Graph**, **Cycles**, **Coupling** and **Vocabulary** (the selected scope's words as a cloud and a table; a word lists the names that carry it, each one click from Navigate, and what the explanations under the scope said it means). The server hands out `/navigator.json`, `/city.json` and `/vocabulary.json` — each exactly the file [`navigator`](/docs/reference/cli/navigator/), [`city --layout`](/docs/reference/cli/city/) and [`vocabulary --out`](/docs/reference/cli/vocabulary/) would have written — beside the built frontend, and answers three lookups: `/insight.json?id=ID`, a node's explanation from the insights store; `/carriers.json?term=WORD[&scope=ID][&class=CLASS][&limit=N]`, the names of a scope that carry a word, from the model it holds (`404` for an unknown scope or term, `400` for a request it cannot ask); and `/glossary.json?term=WORD[&scope=ID][&limit=N]`, what the explained entities under a scope said the word means, from the insights store (`404` for an unknown scope or with no store, `400` for a request it cannot ask). Stdout stays empty; the process runs until Ctrl-C.
 
 ## Synopsis
 
@@ -37,7 +37,7 @@ codegraph serve --app [--data-dir DIR] [--extractors FILE] [--port N] [--host AD
 | `--internal-only` | Drop stub (external) entities and every edge touching one. | — |
 | `--declared-only` | Keep only `declared` facts; drop derived and dynamic-candidate edges. | — |
 | `--no-cache` | Read the model.jsonl directly; never build or reuse a sibling model.db. | — |
-| `--insights FILE` | The insights store behind the page's explanation panel (what 'codegraph explain' wrote). With none, or one an older codegraph wrote that no 'codegraph explain' has migrated yet, the page shows no explanations. | `<model>.insights.db` beside the first model |
+| `--insights FILE` | The insights store behind the page's explanation panel and the Vocabulary tab's glossary (what 'codegraph explain' wrote). With none, or one an older codegraph wrote that no 'codegraph explain' has migrated yet, the page shows no explanations. | `<model>.insights.db` beside the first model |
 | `--app` | The desktop app's daemon: no model on argv; bind 127.0.0.1:0 under a per-launch token, print one JSON line {port, token} on stdout, open folders through POST /jobs, exit when stdin closes. | — |
 | `--data-dir DIR` | With --app: where models, their model.db caches, the page's artifacts and the recents live. | the OS application-data directory, `codegraph/` under it |
 | `--extractors FILE` | With --app: the extractor registry, a JSON list of { name, path, extensions[], launch?, env? } — the daemon runs an entry, never a language. | — (only model.jsonl files open) |
@@ -56,7 +56,7 @@ loop for that app: run it from a checkout and open the URL in a browser.
 - **Routes.** The page and its assets; `app` (the registered extractors and
   the current project); `recent`; `navigator.json`, `city.json` and
   `vocabulary.json` (the current project's artifacts, `404` until one is
-  open; no `carriers.json`, since the daemon holds no model between jobs); `POST jobs` with
+  open; no `carriers.json` or `glossary.json`, since the daemon holds no model or store between jobs); `POST jobs` with
   `{"src": "<folder or model.jsonl>", "extractor"?: "<name>"}` → `202` with
   the job, `409` while another runs, `422` when several extractors claim the
   folder (`candidates`, most files first — the page asks, never guesses),

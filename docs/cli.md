@@ -181,14 +181,28 @@ artifact, `/insight.json?id=…`, looked up in `<model>.insights.db` beside the
 first model (or `--insights FILE`) when asked for. With no store the route
 answers 404 and the page looks exactly as it did.
 
+Over the same store, a clicked word on the Vocabulary tab also shows **what
+the explanations under that scope said it means**: each module's
+reconciliation (and the types that disagree on it), then each explained
+entity's entry — its concern, sense and confidence, and the identifiers the
+word is in — in the same inference colour and badge, each one click from its
+node (an operation reveals its type). That is the server's third lookup,
+`/glossary.json?term=WORD[&scope=ID][&limit=N]`: the entries of the entities
+the model folds under the scope, as the carriers are, from the store's word
+index; the first `limit` (200) of each list, and their totals. An unknown
+scope is `404`, and so is having no store (the tab then shows nothing); no
+term, or a limit that is no whole number, is `400`. Navigate's explanation
+panel shows the same words for a selected type or module, with their
+meaning, in its structured block.
+
 **`--app`** is the same page as the daemon behind the desktop app (and the
 development loop for it: run it from a checkout, open the URL in a browser).
 No model on argv. It binds `127.0.0.1:0` unless `--host`/`--port` say
 otherwise, prints exactly one JSON line on stdout — `{"port":N,"token":"…"}`
 — and serves every route under `/<token>/`: the page, `app` (the registry
 and the current project), `recent`, `navigator.json`, `city.json`,
-`vocabulary.json` (no `carriers.json`: the daemon holds no model between
-jobs, and the tab shows the counts without the names),
+`vocabulary.json` (no `carriers.json` or `glossary.json`: the daemon holds no
+model or store between jobs, and the tab shows the counts without the names),
 `POST jobs` with `{"src": DIR-or-model.jsonl, "extractor"?: NAME}` and the
 `jobs/current` event stream (`started`, `phase`, `progress` — the
 extractor's own stderr lines — `done`, `failed`; `idle` when nothing runs).

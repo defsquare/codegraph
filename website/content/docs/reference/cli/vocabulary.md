@@ -67,7 +67,7 @@ The judgements are inferences, so they never set the exit code; `--drift` still 
 
 `--svg FILE` draws the cloud of the one scope the report shows, the corpus or the one `--scope` names, from the words `--class` and `--top` pick. A word's size follows the square root of its weight, so its area reads as the weight, and its colour says its class and nothing else: `domain` in ink, `technical` muted, `keyword` and `short` faint, with a dark palette for a dark page. Words are placed heaviest first, each at the first free point of a spiral out from the centre. The legend states the scope, the counts, the weights, the view and the technical list. The font is monospace, so the bytes are the same on every run and any machine.
 
-[`serve`](/docs/reference/cli/serve/)'s **Vocabulary** tab runs the same layout in the browser, measured in the page's own monospace face, over the scope selected in Navigate, and lists the names that carry a clicked word.
+[`serve`](/docs/reference/cli/serve/)'s **Vocabulary** tab runs the same layout in the browser, measured in the page's own monospace face, over the scope selected in Navigate, and lists the names that carry a clicked word. Where `explain` has been run, it also lists what the explanations under that scope said the word means, each entry marked as a model's reading, never as a fact.
 
 ## In the city
 

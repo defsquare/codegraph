@@ -527,7 +527,7 @@ export const SERVE_SPEC: CommandSpec = {
       name: "insights",
       type: "string",
       describe:
-        "The insights store behind the page's explanation panel (what 'codegraph explain' wrote). " +
+        "The insights store behind the page's explanation panel and the Vocabulary tab's glossary (what 'codegraph explain' wrote). " +
         "Default: <model>.insights.db beside the first model; with none, or one an older codegraph wrote that no 'codegraph explain' has migrated yet, the page shows no explanations.",
       placeholder: "FILE",
     },
@@ -1309,7 +1309,7 @@ export interface ServeOptions extends ModelInputOptions, CityBuildOptions, Cache
   readonly host: string;
   /** `--app`: the daemon form; `models` is then empty. */
   readonly app: AppOptions | undefined;
-  /** `--insights FILE`: the insights store behind the explanation panel; undefined = beside the first model. */
+  /** `--insights FILE`: the insights store behind the explanation panel and the glossary; undefined = beside the first model. */
   readonly insights: string | undefined;
 }
 
