@@ -163,3 +163,98 @@ export function concernsReport(store: InsightsStore): ConcernsReport {
   modules.sort((a, b) => unplaced(a) - unplaced(b) || b.words - a.words || byModule(a.module, b.module));
   return { modules, withoutWords: store.withoutWords() };
 }
+
+/**
+ * WHAT A PAGE IS TOLD OF A WORD UNDER A SCOPE (M19c) — `codegraph serve`'s
+ * `/glossary.json?term=…&scope=…`, under the Vocabulary tab's clicked word.
+ * The kind is restated by the page and pinned, as `INSIGHT_ANSWER_KIND` is.
+ */
+export const GLOSSARY_ANSWER_KIND = "codegraph.glossary/1";
+
+/** How many of each list an answer carries unless asked for another number; `total` always counts them all. */
+export const GLOSSARY_LIMIT = 200;
+
+/** The module and the type the model folds an entity into: the scopes it counts under. */
+export interface Place {
+  readonly module?: string;
+  readonly type?: string;
+}
+
+/**
+ * Where an id sits in the model, or undefined for one it does not hold (or
+ * whose view drops it). Injected: this package never opens a model, and only
+ * the model knows an operation's type.
+ */
+export type Placement = (id: string) => Place | undefined;
+
+export interface GlossaryQuery {
+  readonly term: string;
+  /** A module's or a type's id; absent for the corpus. */
+  readonly scope?: string;
+  /** A whole number >= 0; `GLOSSARY_LIMIT` by default. */
+  readonly limit?: number;
+}
+
+/** One entity's entry; `owner` names the type (else the module) a member folds into — the node a page reveals for it. */
+export type ScopedWord = Omit<WordHit, "key"> & { readonly owner?: string };
+export type ScopedGlossary = Omit<GlossaryHit, "key">;
+
+export type GlossaryAnswer =
+  | {
+      readonly kind: typeof GLOSSARY_ANSWER_KIND;
+      readonly status: "found";
+      /** As the splitter spells it: lowercase. */
+      readonly term: string;
+      readonly scope?: string;
+      readonly total: { readonly entries: number; readonly glossary: number };
+      /** The module, then its types, then its operations; by id within a level. The first `limit`. */
+      readonly entries: readonly ScopedWord[];
+      /** The modules' reconciliations, by id. The first `limit`. */
+      readonly glossary: readonly ScopedGlossary[];
+      readonly withoutWords: number;
+    }
+  | { readonly kind: typeof GLOSSARY_ANSWER_KIND; readonly status: "unknown-scope"; readonly scope: string }
+  /** The server's answer when it has no store it may read — never this function's. */
+  | { readonly kind: typeof GLOSSARY_ANSWER_KIND; readonly status: "no-store" };
+
+/**
+ * The entries of the entities under a scope, by the fold the vocabulary counts
+ * with: under a module, what folds into it (its own record included); under a
+ * type, the type and its members. An id the model does not place is left out,
+ * as the vocabulary leaves it.
+ */
+export function answerGlossary(store: InsightsStore, query: GlossaryQuery, placement: Placement): GlossaryAnswer {
+  const limit = query.limit ?? GLOSSARY_LIMIT;
+  if (!Number.isInteger(limit) || limit < 0) throw new RangeError(`a glossary limit is a whole number >= 0, not ${limit}`);
+  const scope = query.scope;
+  if (scope !== undefined) {
+    const own = placement(scope);
+    if (own?.module !== scope && own?.type !== scope) return { kind: GLOSSARY_ANSWER_KIND, status: "unknown-scope", scope };
+  }
+  const under = (place: Place | undefined): place is Place =>
+    place !== undefined && (scope === undefined || place.module === scope || place.type === scope);
+
+  const term = query.term.toLowerCase();
+  const entries: ScopedWord[] = [];
+  for (const { key: _key, ...hit } of store.wordHits(term)) {
+    const place = placement(hit.id);
+    if (!under(place)) continue;
+    const owner = place.type === hit.id || place.module === hit.id ? undefined : (place.type ?? place.module);
+    entries.push(owner === undefined ? hit : { ...hit, owner });
+  }
+  entries.sort((a, b) => TOP_DOWN[a.level] - TOP_DOWN[b.level] || byCodeUnits(a.id, b.id));
+  const glossary: ScopedGlossary[] = [];
+  for (const { key: _key, ...hit } of store.glossaryEntries(term)) if (under(placement(hit.id))) glossary.push(hit);
+  glossary.sort((a, b) => byCodeUnits(a.id, b.id));
+
+  return {
+    kind: GLOSSARY_ANSWER_KIND,
+    status: "found",
+    term,
+    ...(scope === undefined ? {} : { scope }),
+    total: { entries: entries.length, glossary: glossary.length },
+    entries: entries.slice(0, limit),
+    glossary: glossary.slice(0, limit),
+    withoutWords: store.withoutWords(),
+  };
+}

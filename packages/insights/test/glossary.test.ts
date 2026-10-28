@@ -18,7 +18,19 @@ import {
 } from "../src/schema.js";
 import { decodeInsights, encodeInsightsToString } from "../src/sidecar.js";
 import { sqliteInsightsStore } from "../src/store-sqlite.js";
-import { concernsReport, moduleOf, polysemyReport, wordReport, wordsAbsence } from "../src/glossary.js";
+import {
+  GLOSSARY_ANSWER_KIND,
+  GLOSSARY_LIMIT,
+  answerGlossary,
+  concernsReport,
+  moduleOf,
+  polysemyReport,
+  wordReport,
+  wordsAbsence,
+  type GlossaryAnswer,
+  type Place,
+  type Placement,
+} from "../src/glossary.js";
 
 /**
  * LAYER 3 OF PLAN.md §20.3: the readers of the words, over a real store. Two
@@ -187,5 +199,98 @@ describe("moduleOf: where a record sits, rendered from its natural key — never
     expect(moduleOf(undefined)).toBeUndefined();
     // `/` is reserved in a key's components: a hand-edited side-car's key is placed nowhere rather than mis-rendered.
     expect(moduleOf({ lang: "java", module: "a/b", symbol: "C" })).toBeUndefined();
+  });
+});
+
+describe("answerGlossary: what a page is told of a word under a scope (serve's /glossary.json)", () => {
+  /** What the model folds each id into; `loose/Thing` it does not hold, `legacy/Old` it does. */
+  const PLACES: Readonly<Record<string, Place>> = {
+    [ORDERING]: { module: ORDERING },
+    [`${ORDERING}/Order`]: { module: ORDERING, type: `${ORDERING}/Order` },
+    [`${ORDERING}/SortSpec`]: { module: ORDERING, type: `${ORDERING}/SortSpec` },
+    [`${ORDERING}/Order.place(Order)`]: { module: ORDERING, type: `${ORDERING}/Order` },
+    [BILLING]: { module: BILLING },
+    [`${BILLING}/Invoice`]: { module: BILLING, type: `${BILLING}/Invoice` },
+    "java:com.acme.legacy/Old": { module: "java:com.acme.legacy", type: "java:com.acme.legacy/Old" },
+  };
+  const placement: Placement = (id) => PLACES[id];
+  const found = (answer: GlossaryAnswer) => {
+    if (answer.status !== "found") throw new Error(`expected found, got ${answer.status}`);
+    return answer;
+  };
+  const lines = (answer: GlossaryAnswer) => found(answer).entries.map((e) => `${e.level} ${e.id} ${e.entry.concern}${e.owner === undefined ? "" : ` in ${e.owner}`}`);
+
+  it("over the corpus: every placed entity's entry, modules then types then operations, and every module's reconciliation", () => {
+    const answer = found(answerGlossary(seeded(), { term: "order" }, placement));
+    expect(answer.kind).toBe(GLOSSARY_ANSWER_KIND);
+    expect(answer.scope).toBeUndefined();
+    expect(lines(answer)).toEqual([
+      `module ${ORDERING} domain`,
+      `type ${BILLING}/Invoice domain`,
+      `type ${ORDERING}/Order domain`,
+      `type ${ORDERING}/SortSpec technical`,
+      // An operation is no node of the navigator: it names the type a page reveals instead.
+      `operation ${ORDERING}/Order.place(Order) ambiguous in ${ORDERING}/Order`,
+    ]);
+    // `loose/Thing` says order too, and the model holds no such entity: left out, as the vocabulary leaves it.
+    expect(answer.glossary.map((g) => `${g.id}: ${g.entry.sense}`)).toEqual([`${BILLING}: a purchase order`, `${ORDERING}: a customer's request`]);
+    expect(answer.total).toEqual({ entries: 5, glossary: 2 });
+    expect(answer.withoutWords).toBe(1);
+  });
+
+  it("an entry is the projection's, without the natural key a page has no use for; a glossary entry is whole", () => {
+    const answer = found(answerGlossary(seeded(), { term: "order", scope: `${ORDERING}/SortSpec` }, placement));
+    expect(answer.entries).toEqual([
+      { id: `${ORDERING}/SortSpec`, level: "type", kind: "class", name: "SortSpec", model: "m", entry: { word: "order", in: ["sortOrder"], concern: "technical", sense: "a sequence", confidence: 0.6 } },
+    ]);
+    expect(found(answerGlossary(seeded(), { term: "order", scope: ORDERING }, placement)).glossary).toEqual([
+      { id: ORDERING, name: ORDERING, model: "m", entry: RECORDS[0]?.level === "module" ? RECORDS[0].block.glossary?.[0] : undefined },
+    ]);
+  });
+
+  it("under a module: what folds into it, its own glossary; under a type: the type and its members, no module's glossary", () => {
+    const ordering = found(answerGlossary(seeded(), { term: "order", scope: ORDERING }, placement));
+    expect(ordering.scope).toBe(ORDERING);
+    expect(lines(ordering)).toEqual([
+      `module ${ORDERING} domain`,
+      `type ${ORDERING}/Order domain`,
+      `type ${ORDERING}/SortSpec technical`,
+      `operation ${ORDERING}/Order.place(Order) ambiguous in ${ORDERING}/Order`,
+    ]);
+    expect(ordering.glossary.map((g) => g.id)).toEqual([ORDERING]);
+
+    const order = found(answerGlossary(seeded(), { term: "order", scope: `${ORDERING}/Order` }, placement));
+    expect(lines(order)).toEqual([`type ${ORDERING}/Order domain`, `operation ${ORDERING}/Order.place(Order) ambiguous in ${ORDERING}/Order`]);
+    expect(order.glossary).toEqual([]);
+    expect(order.total).toEqual({ entries: 2, glossary: 0 });
+  });
+
+  it("a scope is a module or a type the model holds; an operation, an unknown id, a stranger's are not", () => {
+    const store = seeded();
+    for (const scope of [`${ORDERING}/Order.place(Order)`, "java:nowhere", "loose/Thing"]) {
+      expect(answerGlossary(store, { term: "order", scope }, placement)).toEqual({ kind: GLOSSARY_ANSWER_KIND, status: "unknown-scope", scope });
+    }
+    // A scope nobody explained is a scope still: its answer is empty, not unknown.
+    expect(found(answerGlossary(store, { term: "order", scope: "java:com.acme.legacy/Old" }, placement)).entries).toEqual([]);
+  });
+
+  it("asks the word as the splitter spells it, lowercase; a word nobody defined is found and empty", () => {
+    const store = seeded();
+    expect(answerGlossary(store, { term: "ORDER" }, placement)).toEqual(answerGlossary(store, { term: "order" }, placement));
+    expect(answerGlossary(store, { term: "nothing" }, placement)).toEqual({
+      kind: GLOSSARY_ANSWER_KIND, status: "found", term: "nothing", total: { entries: 0, glossary: 0 }, entries: [], glossary: [], withoutWords: 1,
+    });
+  });
+
+  it("lists the first `limit` of each list and counts them all; a limit is a whole number", () => {
+    const store = seeded();
+    const cut = found(answerGlossary(store, { term: "order", limit: 2 }, placement));
+    expect(cut.entries.map((e) => e.id)).toEqual([ORDERING, `${BILLING}/Invoice`]);
+    expect(cut.glossary.map((g) => g.id)).toEqual([BILLING, ORDERING]);
+    expect(cut.total).toEqual({ entries: 5, glossary: 2 });
+    expect(found(answerGlossary(store, { term: "order", limit: 0 }, placement)).entries).toEqual([]);
+    expect(GLOSSARY_LIMIT).toBe(200);
+    expect(() => answerGlossary(store, { term: "order", limit: 1.5 }, placement)).toThrow(RangeError);
+    expect(() => answerGlossary(store, { term: "order", limit: -1 }, placement)).toThrow(RangeError);
   });
 });
