@@ -189,8 +189,8 @@ export interface InsightsStore {
   /** Rows matching a reader's filter, in side-car order. */
   query(query: InsightQuery): InsightRow[];
   stats(): InsightStats;
-  /** Every record's entry for one word, in side-car order then block order: an index lookup (M19c). */
-  wordHits(word: string): WordHit[];
+  /** Every record's words, in side-car order then block order; `word` keeps that word's, an index lookup (M19c). */
+  wordHits(word?: string): WordHit[];
   /** The module records' glossary entries, in side-car order then block order; `word` keeps that word's. */
   glossaryEntries(word?: string): GlossaryHit[];
   /** Each (module, word, concern) the records' words hold, once; in no promised order. */

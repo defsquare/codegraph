@@ -1,30 +1,42 @@
 import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
 import { type CodeGraph, type ViewDescriptor } from "@codegraph/analyzer";
+import type { InsightsStore } from "@codegraph/insights";
 import {
   DEFAULT_WEIGHTS,
+  JUDGED_CONCERNS,
   WEIGHT_KEYS,
   buildVocabulary,
+  businessJudged,
+  concernDrift,
   operationScope,
   parseBusinessTerms,
   parseTechnicalWords,
   vocabularyCloudSvg,
   vocabularyDrift,
   vocabularyToJsonString,
+  type BusinessTermJudged,
   type BusinessTerms,
+  type ConcernCounts,
+  type ConcernDrift,
   type DriftReport,
+  type JudgedWord,
   type OperationScope,
   type ScopeLevel,
+  type TermClass,
   type VocabularyArtifact,
   type VocabularyOptions as CountOptions,
   type VocabularyScope,
   type Weights,
+  type WordJudgement,
 } from "@codegraph/vocabulary";
 import type { VocabularyOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
+import { openInsightsReader, storePathForModel } from "../insights-paths.js";
 import { errLine, errLines, outLines, type IoSink } from "../io.js";
 import { openAnalysis } from "../source.js";
 import { resolveView, viewLabel } from "../view.js";
+import { noteWithoutWords } from "./insights.js";
 
 /**
  * `codegraph vocabulary <model.jsonl...>`: the words the model's names are
@@ -41,16 +53,20 @@ import { resolveView, viewLabel } from "../view.js";
  *
  * `--drift` exits 3 when a business term is said by no scope of the level,
  * as `analyze --report cycles` does when a cycle exists: the tool worked, and
- * the answer is bad news a CI job may gate on.
+ * the answer is bad news a CI job may gate on. `--drift-insights` sets what a
+ * model judged beside the list, and a judgement is an inference: it never
+ * makes a finding, so only `--drift`'s own facts set the exit code there.
  */
 export function vocabularyCommand(options: VocabularyOptions, io: IoSink): ExitCode {
-  // The flag files first: a bad one must fail before the model is read.
+  // The flag files first, the store with them: a bad one must fail before the model is read.
   const technical = options.technical === undefined ? undefined : technicalOf(options.technical);
   const glossary = options.drift === undefined ? undefined : glossaryOf(options.drift);
   const weights: Weights = { ...DEFAULT_WEIGHTS, ...options.weights };
+  const judges = options.driftInsights ? judgesOf(options.insights ?? storePathForModel(options.models[0] ?? "")) : undefined;
 
-  const source = openAnalysis(options.models, options, io);
+  let source: ReturnType<typeof openAnalysis> | undefined;
   try {
+    source = openAnalysis(options.models, options, io);
     const graph = source.graph();
     const view = resolveView(options);
     const counting: CountOptions = { view, weights, ...(technical === undefined ? {} : { technical: technical.words }) };
@@ -65,12 +81,21 @@ export function vocabularyCommand(options: VocabularyOptions, io: IoSink): ExitC
       technicalFile: options.technical,
     };
     let code: ExitCode = source.clean ? EXIT.OK : EXIT.FINDINGS;
-    if (glossary !== undefined) {
+    if (judges !== undefined) {
+      const report = concernDrift(graph, judgementsOf(judges.store), counting);
+      const business = glossary === undefined ? undefined : businessJudged(artifact, glossary.terms, report);
+      errLines(io, glossary === undefined ? [] : wordlessWarnings(glossary));
+      outLines(io, judgedReport(report, header, judges, options, glossary, business));
+      errLines(io, leftOutNotes(report));
+      noteWithoutWords(judges.store.withoutWords(), io);
+      const unsaid = business?.filter((term) => !term.said).length ?? 0;
+      if (unsaid > 0) {
+        errLine(io, `${plural(unsaid, "business term")} ${neverSays("corpus")} — exiting 3 (findings).`);
+        code = EXIT.FINDINGS;
+      }
+    } else if (glossary !== undefined) {
       const report = vocabularyDrift(artifact, glossary.terms, { level: options.level });
-      errLines(
-        io,
-        glossary.wordless.map(({ line, text }) => `warning: line ${line} of ${glossary.path} names no word, skipped: ${text}`),
-      );
+      errLines(io, wordlessWarnings(glossary));
       outLines(io, driftReport(artifact, report, header, options, glossary));
       const unsaid = report.business.filter((term) => term.scopes.length === 0).length;
       if (unsaid > 0) {
@@ -101,7 +126,8 @@ export function vocabularyCommand(options: VocabularyOptions, io: IoSink): ExitC
     }
     return code;
   } finally {
-    source.close();
+    source?.close();
+    judges?.store.close();
   }
 }
 
@@ -147,6 +173,10 @@ function glossaryOf(path: string): Glossary {
     );
   }
   return { path, ...parsed };
+}
+
+function wordlessWarnings(glossary: Glossary): readonly string[] {
+  return glossary.wordless.map(({ line, text }) => `warning: line ${line} of ${glossary.path} names no word, skipped: ${text}`);
 }
 
 /* ------------------------------------------------------------- the scopes */
@@ -218,7 +248,7 @@ interface Header {
   readonly technicalFile: string | undefined;
 }
 
-function headerLines(report: "words" | "drift", header: Header, where: string): readonly string[] {
+function headerLines(report: "words" | "drift" | "drift-insights", header: Header, where: string): readonly string[] {
   const list = header.technicalFile === undefined ? "" : ` from ${header.technicalFile}`;
   return [
     `codegraph vocabulary — ${report}`,
@@ -475,6 +505,155 @@ function driftReport(
     lines.push("", ...table(["TERM", "WEIGHT", "OCC", ...perLevel], cells, 1));
   }
   return lines;
+}
+
+/* --------------------------------------------------- drift-insights report */
+
+/** The insights store `--drift-insights` reads, and where it is: the report names it. */
+interface Judges {
+  readonly path: string;
+  readonly store: InsightsStore;
+}
+
+function judgesOf(path: string): Judges {
+  return { path, store: openInsightsReader(path, "--insights") };
+}
+
+/** Every word a model defined, as the vocabulary package takes it: the store's rows, never its blocks. */
+function* judgementsOf(store: InsightsStore): Iterable<WordJudgement> {
+  for (const hit of store.wordHits()) {
+    const { word, concern, sense, confidence, in: inside } = hit.entry;
+    yield { id: hit.id, word, concern, sense, confidence, in: inside };
+  }
+}
+
+/** `domain 3 · technical 1`: the concerns judged, in the block's order, the ones never judged left out. */
+function concernsCell(concerns: ConcernCounts): string {
+  const judged = JUDGED_CONCERNS.filter((concern) => concerns[concern] > 0);
+  return judged.length === 0 ? "not judged" : judged.map((concern) => `${concern} ${concerns[concern]}`).join(" · ");
+}
+
+function judgedReport(
+  report: ConcernDrift,
+  header: Header,
+  judges: Judges,
+  options: VocabularyOptions,
+  glossary: Glossary | undefined,
+  business: readonly BusinessTermJudged[] | undefined,
+): readonly string[] {
+  const top = options.top ?? 40;
+  const sections = [
+    { key: "technicalJudgedDomain", of: "technical", against: "domain", words: report.technicalJudgedDomain },
+    { key: "domainJudgedTechnical", of: "domain", against: "technical", words: report.domainJudgedTechnical },
+  ] as const;
+  const judgedOf = (termClass: TermClass): number => report.words.filter((w) => w.class === termClass).length;
+  const models = judges.store.header()?.models;
+
+  if (options.json) {
+    return [
+      JSON.stringify({
+        kind: REPORT_KIND,
+        report: "drift-insights",
+        models: header.models,
+        view: header.view,
+        weights: header.weights,
+        technical: header.technical,
+        insights: {
+          path: judges.path,
+          models: models ?? null,
+          withoutWords: judges.store.withoutWords(),
+          leftOut: report.leftOut,
+        },
+        compared: report.compared,
+        ...Object.fromEntries(
+          sections.map(({ key, of, words }) => [
+            key,
+            { judged: judgedOf(of), total: words.length, shown: Math.min(top, words.length), top, words: words.slice(0, top) },
+          ]),
+        ),
+        ...(glossary === undefined || business === undefined
+          ? {}
+          : { glossary: { path: glossary.path, terms: glossary.terms.length, wordless: glossary.wordless }, business }),
+      }),
+    ];
+  }
+
+  const judgedBy = models === undefined ? "" : `, judged by ${models.leaf} (operations), ${models.rollup} (types, modules)`;
+  const lines = [...headerLines("drift-insights", header, `insights:  ${judges.path}${judgedBy}`)];
+  if (glossary !== undefined) lines.push(`glossary:  ${glossary.path}, ${plural(glossary.terms.length, "business term")}`);
+  lines.push(
+    "",
+    report.compared.entries === 0
+      ? "compared: no word entry — no explained entity of this model defines a word"
+      : `compared: ${plural(report.compared.entries, "word entry", "word entries")} from ` +
+          plural(report.compared.entities, "explained entity", "explained entities"),
+  );
+
+  for (const { of, against, words } of sections) {
+    const judged = judgedOf(of);
+    const shown = words.slice(0, top);
+    const title = `${of} by the list, judged ${against}`;
+    lines.push("");
+    if (judged === 0) lines.push(`${title}: no ${of} word judged`);
+    else if (words.length === 0) lines.push(`${title}: none of ${plural(judged, `${of} word`)}`);
+    else {
+      const cut = shown.length === words.length ? "" : ` (${shown.length} shown, --top ${top})`;
+      lines.push(`${title}: ${words.length} of ${plural(judged, `${of} word`)}${cut}, the most judgements against first`);
+      lines.push(...judgedBlocks(shown));
+    }
+  }
+
+  if (business !== undefined) {
+    const drifting = business.filter((term) => term.drift).length;
+    lines.push(
+      "",
+      `business terms against both: ${drifting} of ${business.length} drift, a word the list or a model does not call domain`,
+      "",
+    );
+    const cells = business.flatMap((term) =>
+      term.words.map((w, i) => [
+        i === 0 ? term.text : "",
+        w.word,
+        w.classes.length === 0 ? "not said" : w.classes.join(", "),
+        concernsCell(w.concerns),
+        w.drift.join(", "),
+      ]),
+    );
+    lines.push(...table(["TERM", "WORD", "LIST", "MODEL", "DRIFT"], cells, 5));
+  }
+  return lines;
+}
+
+/** The judgements against a word a text report shows, its surest; `--json` carries every one. */
+const AGAINST_SHOWN = 5;
+
+/**
+ * A word and its judgements, then the surest ones its class contradicts:
+ * confidence, the sense quoted, then "identifiers in entity", unpadded — an
+ * operation's id carries its signature and a type's identifiers its fields,
+ * both too long to pad a column to.
+ */
+function judgedBlocks(words: readonly JudgedWord[]): readonly string[] {
+  const shown = words.flatMap((w) => w.against.slice(0, AGAINST_SHOWN));
+  const senseWidth = shown.reduce((width, a) => Math.max(width, JSON.stringify(a.sense).length), 0);
+  return words.flatMap((w) => [
+    `  ${w.word}  ${concernsCell(w.concerns)}`,
+    ...w.against
+      .slice(0, AGAINST_SHOWN)
+      .map((a) => `    ${a.confidence.toFixed(2)}  ${pad(JSON.stringify(a.sense), senseWidth)}  ${a.in.join(", ")} in ${a.id}`),
+    ...(w.against.length > AGAINST_SHOWN ? [`    … and ${w.against.length - AGAINST_SHOWN} more (--json lists every one)`] : []),
+  ]);
+}
+
+/** What the comparison could not see, on stderr: records the model cannot place, or the view drops. */
+function leftOutNotes(report: ConcernDrift): readonly string[] {
+  const { unknown, notKept } = report.leftOut;
+  return [
+    ...(unknown === 0
+      ? []
+      : [`note: ${plural(unknown, "explained record names", "explained records name")} no entity of this model (explained against another version of it): left out.`]),
+    ...(notKept === 0 ? [] : [`note: ${plural(notKept, "explained record is", "explained records are")} outside the view: left out.`]),
+  ];
 }
 
 /* ---------------------------------------------------------------- shared */

@@ -718,12 +718,13 @@ describe("the word readers' projections (M19c): what the blocks say, never more"
   const hit = (r: InsightRecord, entry: WordEntry) => ({ id: r.id, level: r.level, kind: r.kind, name: r.name, key: r.key, model: r.model, entry: listed(entry) });
   const asSet = <T>(rows: readonly T[]): string[] => rows.map((row) => JSON.stringify(row)).sort();
 
-  it("for any side-car, exact on any string: one word's entries, the glossaries, each concern once, the records without words", () => {
+  it("for any side-car, exact on any string: every entry or one word's, the glossaries, each concern once, the records without words", () => {
     fc.assert(
       fc.property(fileArb, (file) => {
         const store = memory();
         const { records } = decodeInsights(file);
         store.importFile(decodeInsights(file));
+        expect(store.wordHits()).toEqual(records.flatMap((r) => (r.block.words ?? []).map((w) => hit(r, w))));
         const spelled = new Set(records.flatMap((r) => (r.block.words ?? []).map((w) => w.word)));
         // Side-car order, then block order. The words are any strings, a lone surrogate (which the index cannot match) included.
         for (const word of [...spelled, "\u{1F4E6}never"]) {
@@ -752,6 +753,7 @@ describe("the word readers' projections (M19c): what the blocks say, never more"
     store.putUnit(run, "t/A", [{ ...type("t/A"), block: { ...TYPE, words: [ORDER] } } as InsightRecord]);
     store.putUnit(run, "o/z", [op("o/z", { block: { ...OPERATION, words: [ORDER] } })]);
     expect(store.wordHits("order").map((h) => h.id)).toEqual(["o/z", "t/A", "t/B", "m/a", "m/b"]);
+    expect(store.wordHits().map((h) => h.id)).toEqual(["o/z", "t/A", "t/B", "m/a", "m/b"]);
     expect(store.glossaryEntries().map((g) => g.id)).toEqual(["m/a", "m/b"]);
     store.close();
   });

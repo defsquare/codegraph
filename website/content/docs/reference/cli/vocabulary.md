@@ -12,8 +12,9 @@ Every `TNamed` entity's name is split into words (`OrderLineRepository` → `ord
 ```
 codegraph vocabulary [model.jsonl...] [--level <corpus|module|type>] [--scope ID] [--top N]
                      [--class <domain|technical|keyword|short|all>] [--weights KEY=N,…]
-                     [--technical FILE] [--drift FILE] [--out FILE] [--svg FILE]
-                     [--json] [--internal-only] [--declared-only] [--no-cache]
+                     [--technical FILE] [--drift FILE] [--drift-insights [--insights FILE]]
+                     [--out FILE] [--svg FILE] [--json] [--internal-only] [--declared-only]
+                     [--no-cache]
 ```
 
 ## Arguments
@@ -33,6 +34,8 @@ codegraph vocabulary [model.jsonl...] [--level <corpus|module|type>] [--scope ID
 | `--weights KEY=N,…` | Override weights, e.g. `type=6,qualifier=0`. Keys: `module`, `type`, `operation`, `attribute`, `parameter`, `local`, `other`, `qualifier`. | — |
 | `--technical FILE` | Replace the shared technical words with this file's, one word per line; each language's own still apply. | — |
 | `--drift FILE` | Compare with a glossary, one business term per line: the terms no scope of `--level` says (exit 3), and the domain words no term contains. | — |
+| `--drift-insights` | Compare the words' classes with what [`explain`](/docs/reference/cli/explain/) judged them: the technical words a model called domain somewhere, and the reverse, with the entities; with `--drift`, the business terms against both. | — |
+| `--insights FILE` | The insights store `--drift-insights` reads. | `<model>.insights.db` beside the first model |
 | `--out FILE` | Also write the [`vocabulary.json`](/docs/reference/artifacts/vocabulary-json/) artifact to this file. | — |
 | `--svg FILE` | Also draw one scope's cloud to this SVG file: the corpus, or the `--scope` one; `--class` and `--top` pick its words. | — |
 | `--json` | Print the same information as a machine-readable JSON object on stdout. | — |
@@ -49,6 +52,17 @@ A type's words are those of everything that folds into it, a module's likewise, 
 
 The glossary is a plain text file, one business term per line; blank lines and `#` comments are skipped. Each term is split by the same universal rules, so `Order Line` meets `order` and `line`. A term is *said* by a scope when every one of its words is, whatever class the code gives the word, so `--level module` asks for all of them in one module. Nothing is stemmed: `lines` is not `line`. The report lists the terms no scope says with their missing words, the terms it says and where, and the `domain` words the code says that no term contains.
 
+## Against the model
+
+The classes are rules: a word is `technical` because a list says so, whatever the name it sits in. [`explain`](/docs/reference/cli/explain/) asks a model, for each entity it explains, what each word of its names means *there*, and whether it is about the domain, about the machinery, or ambiguous. `--drift-insights` sets the two side by side. It reads the insights store beside the first model (`--insights FILE` names another) and classes each word a model defined as the list does in that entity's language, under the `--technical` list if one is given. Then it lists:
+
+- the **technical words a model called domain** somewhere: `service` in `CustomerServiceTicket`, a technical word in a domain position;
+- the **domain words a model called technical** somewhere: candidates for the technical list, or homonyms (`order` in `sortOrder`).
+
+Each word comes with how often each concern was judged, then the judgements the class contradicts, the model's surest first: its confidence, the sense it gave, and the identifiers the word is in, in which entity. The text shows five per word and says how many more there are; `--json` lists every one. The words with the most judgements against come first, and `--top N` cuts each list (40 by default). With `--drift FILE`, the business terms follow: each of their words with the classes the corpus says it under and the model's judgements, and what drifts: `list` when the list does not call it domain, `model` when a model judged it technical somewhere.
+
+The judgements are inferences, so they never set the exit code; `--drift` still exits `3` on a term the corpus never says. Records the comparison cannot use are counted on stderr: an entity the model no longer has (explained against another version of it) or the view drops, and records explained under prompt 1, before words were asked. `--scope`, `--level`, `--class` and `--svg` do not apply. `codegraph insights --word WORD` shows every judgement of one word.
+
 ## Cloud
 
 `--svg FILE` draws the cloud of the one scope the report shows, the corpus or the one `--scope` names, from the words `--class` and `--top` pick. A word's size follows the square root of its weight, so its area reads as the weight, and its colour says its class and nothing else: `domain` in ink, `technical` muted, `keyword` and `short` faint, with a dark palette for a dark page. Words are placed heaviest first, each at the first free point of a spiral out from the centre. The legend states the scope, the counts, the weights, the view and the technical list. The font is monospace, so the bytes are the same on every run and any machine.
@@ -63,7 +77,7 @@ One word across the whole city is the city metric `vocabulary:<word>`: `codegrap
 
 `0` ok · `1` internal error (a bug) · `2` usage error · `3` findings.
 
-`3` when the load was not clean, or with `--drift` when a business term is said by no scope of the level. An unknown `--scope` id, an unknown `--weights` key or a `--technical` line that is not one word is a usage error, and so is `--svg` with `--level module|type` or `--drift`: a cloud is one scope's.
+`3` when the load was not clean, or with `--drift` when a business term is said by no scope of the level. A model's judgement never makes a finding. An unknown `--scope` id, an unknown `--weights` key or a `--technical` line that is not one word is a usage error, and so is `--svg` with `--level module|type` or `--drift`: a cloud is one scope's. With `--drift-insights`, a missing store, or one an older codegraph wrote that no `explain` has migrated yet, is a usage error, and so is `--insights` without it.
 
 ## Example
 
@@ -115,6 +129,40 @@ code only: 4 of 71 domain words no business term contains (--top 4), by weight d
 1 business term no module says — exiting 3 (findings).
 ```
 
+Against a store whose records judged `service` domain in `OrderService`, and `trail` technical in `LedgerAdapter` and `Order`:
+
+```console
+$ printf 'Order Line\nService Level\nLedger\n' > glossary.txt
+$ codegraph vocabulary model.jsonl --drift-insights --drift glossary.txt
+…
+insights:  model.insights.db, judged by cheap/model (operations), strong/model (types, modules)
+…
+glossary:  glossary.txt, 3 business terms
+
+compared: 10 word entries from 4 explained entities
+
+technical by the list, judged domain: 1 of 2 technical words, the most judgements against first
+  service  domain 1
+    0.60  "after-sales care"  OrderService in java:com.acme.order/OrderService
+
+domain by the list, judged technical: 2 of 4 domain words, the most judgements against first
+  trail  technical 2
+    0.70  "an audit log"         trail in java:com.acme.order.adapter/LedgerAdapter
+    0.65  "a change log"         trail in java:com.acme.order/Order
+  order  domain 2 · technical 1
+    0.40  "the argument's type"  order in java:com.acme.order/OrderService.bill(com.acme.order.Order)
+
+business terms against both: 2 of 3 drift, a word the list or a model does not call domain
+
+  TERM           WORD     LIST       MODEL                   DRIFT
+  Order Line     order    domain     domain 2 · technical 1  model
+                 line     domain     not judged
+  Service Level  service  technical  domain 1                list
+                 level    not said   not judged
+  Ledger         ledger   domain     domain 2
+1 business term the corpus never says — exiting 3 (findings).
+```
+
 ## See also
 
-[vocabulary.json](/docs/reference/artifacts/vocabulary-json/) · [`profiles`](/docs/reference/cli/profiles/) · [CLI conventions](/docs/reference/cli/)
+[vocabulary.json](/docs/reference/artifacts/vocabulary-json/) · [`profiles`](/docs/reference/cli/profiles/) · [`explain`](/docs/reference/cli/explain/) · [CLI conventions](/docs/reference/cli/)

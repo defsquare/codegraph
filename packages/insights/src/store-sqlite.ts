@@ -465,12 +465,12 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
     "SELECT w.entry AS entry, i.id AS id, i.level AS level, i.kind AS kind, i.name AS name, i.model AS model, i.key_lang, i.key_module, i.key_symbol, i.key_disambiguator FROM insight_word w JOIN insight i ON i.id = w.id";
   const hitsOfWord = db.prepare(`${HIT_SQL} WHERE w.word = ? ORDER BY w.rowid`);
   const everyHit = db.prepare(`${HIT_SQL} ORDER BY w.rowid`);
-  const wordHits = (word: string): WordHit[] => {
-    const rows = /\p{Surrogate}/u.test(word) ? everyHit.iterate() : hitsOfWord.iterate(word);
+  const wordHits = (word?: string): WordHit[] => {
+    const rows = word === undefined || /\p{Surrogate}/u.test(word) ? everyHit.iterate() : hitsOfWord.iterate(word);
     const hits: WordHit[] = [];
     for (const row of rows) {
       const entry = JSON.parse(row["entry"] as string) as ListedWord;
-      if (entry.word !== word) continue;
+      if (word !== undefined && entry.word !== word) continue;
       const level = LEVELS[Number(row["level"])] as Level;
       hits.push({ id: row["id"] as string, level, kind: row["kind"] as string, name: text(row, "name"), key: keyOf(row), model: text(row, "model"), entry });
     }

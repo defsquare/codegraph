@@ -264,7 +264,8 @@ id: *explained* (the record), *failed* (the unit's failure — matched by member
 so every member of a failed cycle is answered), or *unknown*. "No explanation"
 is two different facts, and only one of them is silence.
 
-Two readers exist. `codegraph insights` (cli.md) opens the store and nothing
+Two readers answer about records (a third, `vocabulary --drift-insights`,
+about words: below). `codegraph insights` (cli.md) opens the store and nothing
 else — not the model, not `explain.ts`, whose module graph is the provider SDK.
 And `codegraph serve` answers `/insight.json?id=…`, its one route that is not an
 artifact: tens of megabytes of prose do not belong in `navigator.json`, so a
@@ -281,7 +282,8 @@ ids are never constructed.
 
 **The words' readers (M19c).** `glossary.ts` rolls the records' `words` and
 the modules' `glossary` up, over four more projections of the port:
-`wordHits(word)` (the `insight_word` index, joined to each record's envelope),
+`wordHits(word?)` (the `insight_word` index, joined to each record's envelope;
+every entry with no word),
 `glossaryEntries(word?)` (each module block's `glossary`, through `json_each`
 over the module records alone), `concernRows()` (each module, word and concern
 once) and `withoutWords()`. A record is placed in its module by its natural
@@ -298,6 +300,14 @@ them. `codegraph insights --word`, `--glossary`, `--polysemy` and `--concerns`
 print them (cli.md). On the synthetic store of Broadleaf's size,
 `--word order` prints its 549 entries and 19 glossary entries in under half a
 second, Node's start included.
+
+One reader opens the store BESIDE the model: `codegraph vocabulary
+--drift-insights` (cli.md). Only the model says which class the deterministic
+rules give a word in an entity (the entity's language is the model's), so that
+comparison cannot live in `insights`, which never opens the model. It reads
+every entry through `wordHits()`, hands them to `@codegraph/vocabulary` in that
+package's own shape (neither package imports the other), and sets the model's
+concern beside the list's class, word by word, with the entities.
 
 `@codegraph/insights` stays pure: `store.ts` is a port, and `store-sqlite.ts`
 is handed an OPEN database, so the path, the file and `node:sqlite` itself
