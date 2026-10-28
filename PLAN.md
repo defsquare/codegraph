@@ -5586,6 +5586,46 @@ store's `wordHits()`, which with no word now returns every entry. The decisions:
   M1 of §20.1), at the same peak memory (≈ 0.5 GB). A store a model wrote is
   owed, as above.
 
+**As built — the glossary in the page (2026-10-28).** `/glossary.json`, the
+Vocabulary tab's entries and the Navigate panel's, over `answerGlossary` in
+`@codegraph/insights` (`glossary.ts`). The decisions:
+
+- **The scope is the model's, injected.** `answerGlossary(store, query,
+  placement)` takes a `Placement` (an id → its containing module and type);
+  the CLI builds it from the analyzer's fold over the entities the view keeps,
+  so a word's carriers and its glossary are of the same entities, and the
+  package still opens no model. Under a module: what folds into it, its own
+  record included; under a type: the type and its members. A module's
+  reconciliation is under its module and the corpus, not under a type. A scope
+  is a kept module or type; anything else is `unknown-scope`, 404.
+- **One store reader.** `insightLookup` and `glossaryLookup` share
+  `storeReader(path)`, opened at the first request that finds the file. No
+  store is `{status: "no-store"}`, 404, and the tab shows nothing. The
+  placement is built at the first request a store can answer, then the graph
+  is let go, as for the carriers.
+- **The answer** is the projection's entries without the natural key (the
+  page has no use for it), an operation's `owner` (its type, else its module:
+  the node a page reveals), ordered module, types, operations, then by id; the
+  modules' glossary entries whole. Each list is cut at `limit` (200) with its
+  total. No `meaning` per entity: the projection does not hold it, and the
+  panel shows it from the block. `withoutWords` is the store's.
+- **The tab** lists them under the clicked word's carriers, inside the
+  explanation panel's border and badge (`LLM glossary`), with the models that
+  wrote them; an entry reveals its entity in Navigate (an operation, its type);
+  the prompt-1 records are counted in a footnote.
+- **The panel reads `words` and `glossary` by name** — the one exception to
+  its generic block rendering, since generically a word entry showed the
+  identifiers where a definition reads, and a glossary entry lost the types
+  that disagree: `order (domain) — sense. Meaning. In Order · 0.90`.
+- **One remembered lookup** (`lookup.ts`): the insight, carriers and glossary
+  loaders ask once per URL and stop asking a server with no such route.
+- **Measured** on the Broadleaf store of the previous note: the first request
+  takes 0.21 s with the placement built, later ones 0.11 s; `order` over the
+  corpus is 1 908 entries, 200 sent (53 KB). The server's RSS after a click
+  is the same within noise (605 MB, against 619 MB without the route).
+  Screenshots reviewed at 1600×1000 on the Java fixture (a hand-worded store
+  over its ids) and on Broadleaf.
+
 ### 20.4 Milestone split
 
 **M19a — the lexicon, the split, the artifact** (closes the profile half of #19)
@@ -5660,11 +5700,9 @@ store's `wordHits()`, which with no word now returns every entry. The decisions:
       Broadleaf measurement. *(In: `--terms`, the estimate's per-word
       figures, the fake-client run, the prompt-1 answer. Owed: the
       measurement, live runs.)*
-- [ ] Readers: `insights --word`, `--glossary`, `--polysemy`, `--concerns`;
+- [x] Readers: `insights --word`, `--glossary`, `--polysemy`, `--concerns`;
       `vocabulary --drift-insights`; `/glossary.json`; the entries in the
-      Vocabulary tab and in the Navigate panel as inferences. *(In: the four
-      `insights` readers, `--drift-insights`. Owed: `/glossary.json`, the tab
-      and the panel.)*
+      Vocabulary tab and in the Navigate panel as inferences.
 - [ ] `docs/vocabulary.md` (the idioms per profile, the classes, the
       weights, the artifact, the three layers, the readers, the drift
       reports); README names the feature; `docs/cli.md` the command and the
