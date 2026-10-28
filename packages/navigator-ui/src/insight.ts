@@ -148,15 +148,53 @@ function valuesOf(value: unknown): string[] {
   return text === undefined ? [] : [text];
 }
 
+/** `order (domain) — a customer's request. Its meaning.` — the head of a word entry and of a glossary entry alike. */
+function definitionText(item: Record<string, unknown>): string | undefined {
+  const [word, concern, sense, meaning] = ["word", "concern", "sense", "meaning"].map((key) => stringOf(item[key]));
+  if (word === undefined || concern === undefined || sense === undefined) return undefined;
+  return `${word} (${concern}) — ${sense}.${meaning === undefined || meaning === "" ? "" : ` ${meaning}`}`;
+}
+
+/**
+ * THE GLOSSARY'S TWO SHAPES (M19c), read by name: generically, a word entry
+ * put the identifiers it is in where a definition reads, and a glossary entry
+ * lost the types that disagree on it. An item of any other shape falls back.
+ */
+const DEFINED: Readonly<Record<string, (item: Record<string, unknown>) => string | undefined>> = {
+  words(item) {
+    const head = definitionText(item);
+    const inside = item["in"];
+    const confidence = numberOf(item["confidence"]);
+    if (head === undefined || !Array.isArray(inside) || confidence === undefined) return undefined;
+    const names = inside.filter((name): name is string => typeof name === "string");
+    return `${head} In ${names.join(", ")} · ${confidence.toFixed(2)}`;
+  },
+  glossary(item) {
+    const head = definitionText(item);
+    const senses = item["senses"];
+    if (head === undefined || !Array.isArray(senses)) return undefined;
+    const disagree = senses.flatMap((s) => (isObject(s) && typeof s["in"] === "string" && typeof s["sense"] === "string" ? [`${s["in"]} — ${s["sense"]}`] : []));
+    return item["polysemous"] === true && disagree.length > 0 ? `${head} Its types disagree: ${disagree.join("; ")}` : head;
+  },
+};
+
 /**
  * The block as a list of facts, GENERICALLY: its shape moves with the prompt
  * version and differs per level, and a panel that named fields would lag every
- * change. What says nothing — null, empty, false — is dropped.
+ * change. What says nothing — null, empty, false — is dropped. The glossary's
+ * two lists are the exception (`DEFINED`).
  */
 export function blockFacts(block: Readonly<Record<string, unknown>>): BlockFact[] {
   return Object.entries(block).flatMap(([key, value]) => {
     if (NOT_A_FACT.has(key)) return [];
-    const values = valuesOf(value);
+    const defined = Object.hasOwn(DEFINED, key) ? DEFINED[key] : undefined;
+    const values =
+      defined !== undefined && Array.isArray(value)
+        ? value.flatMap((item) => {
+            const text = isObject(item) ? (defined(item) ?? objectText(item)) : scalarText(item);
+            return text === undefined ? [] : [text];
+          })
+        : valuesOf(value);
     return values.length === 0 ? [] : [{ label: labelOf(key), values }];
   });
 }

@@ -1961,3 +1961,59 @@ button.twisty:hover {
   grid-column: 1 / -1;
   margin-top: 0;
 }
+
+/*
+ * The glossary under a word's carriers: what the explanations said the word
+ * means. A model's reading, so it wears the explanation panel's border and
+ * badge (`.insight`): an inference never looks like a fact.
+ */
+.glossary {
+  margin-top: 10px;
+}
+
+.glossary-scroll {
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.glossary .carrier-list {
+  max-height: none;
+  overflow: visible;
+}
+
+.gloss-module {
+  padding: 3px 0 5px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.gloss-sense {
+  grid-column: 1 / -1;
+  margin: 1px 0 0;
+  font-size: 12px;
+  color: var(--paper);
+}
+
+.gloss-meaning {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--paper-dim);
+}
+
+.gloss-in {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--paper-faint);
+}
+
+/* An operation's name can be a long signature: it shrinks, the confidence beside it stays in view. */
+.glossary .counterpart {
+  min-width: 0;
+}
+
+.glossary .counterpart-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
