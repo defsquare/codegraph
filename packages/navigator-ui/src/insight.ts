@@ -1,3 +1,7 @@
+import { noStore, rememberedLookup, type Fetcher } from "./lookup.js";
+
+export type { Fetcher } from "./lookup.js";
+
 /**
  * A SELECTED NODE'S EXPLANATION — what `codegraph explain` wrote about it,
  * asked of the server the page came from (`insight.json?id=…`, the one route
@@ -78,50 +82,14 @@ export function parseInsightAnswer(json: unknown): Insight {
   return NONE;
 }
 
-export type Fetcher = (url: string) => Promise<Response>;
-
 export interface InsightLoader {
   load(id: string): Promise<Insight>;
 }
 
-/**
- * One request per id, shared by concurrent askers and remembered. A server
- * that answers the route with something that is not JSON (index.html, from a
- * dev server or a static host) has no such route: it is asked once, not once
- * per click.
- */
-export function createInsightLoader(fetcher: Fetcher = (url) => fetch(url, { cache: "no-store" })): InsightLoader {
-  const asked = new Map<string, Promise<Insight>>();
-  let noRoute = false;
-
-  const ask = async (id: string): Promise<Insight> => {
-    try {
-      // RELATIVE: under the app daemon the page lives at /<token>/, and so must this.
-      const response = await fetcher(`insight.json?id=${encodeURIComponent(id)}`);
-      let json: unknown;
-      try {
-        json = await response.json();
-      } catch {
-        noRoute = true;
-        return NONE;
-      }
-      return parseInsightAnswer(json);
-    } catch {
-      return NONE;
-    }
-  };
-
-  return {
-    load(id) {
-      if (noRoute) return Promise.resolve(NONE);
-      let pending = asked.get(id);
-      if (pending === undefined) {
-        pending = ask(id);
-        asked.set(id, pending);
-      }
-      return pending;
-    },
-  };
+/** One request per id, shared by concurrent askers and remembered; quiet where the server has no such route. */
+export function createInsightLoader(fetcher: Fetcher = noStore): InsightLoader {
+  const ask = rememberedLookup(parseInsightAnswer, NONE, fetcher);
+  return { load: (id) => ask(`insight.json?id=${encodeURIComponent(id)}`) };
 }
 
 export interface BlockFact {
