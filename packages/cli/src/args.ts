@@ -436,6 +436,19 @@ export const VOCABULARY_SPEC: CommandSpec = {
       placeholder: "FILE",
     },
     {
+      name: "drift-insights",
+      type: "boolean",
+      describe:
+        "Compare the words' classes with what 'codegraph explain' judged them: the technical words a model called domain somewhere, " +
+        "and the reverse, with the entities; with --drift, the business terms against both.",
+    },
+    {
+      name: "insights",
+      type: "string",
+      describe: "The insights store --drift-insights reads. Default: <model>.insights.db beside the first model.",
+      placeholder: "FILE",
+    },
+    {
       name: "out",
       type: "string",
       describe: "Also write the vocabulary.json artifact to this file.",
@@ -1278,6 +1291,10 @@ export interface VocabularyOptions extends ModelInputOptions, ViewOptions, Cache
   readonly technical: string | undefined;
   /** `--drift FILE`: the glossary to compare with. */
   readonly drift: string | undefined;
+  /** `--drift-insights`: the classes against the concerns a model judged, from the insights store. */
+  readonly driftInsights: boolean;
+  /** `--insights FILE`: that store; undefined = beside the first model. */
+  readonly insights: string | undefined;
   /** `--out FILE`: the artifact, beside the report. */
   readonly out: string | undefined;
   /** `--svg FILE`: the cloud of the one scope reported, beside the report. */
@@ -2205,6 +2222,26 @@ function vocabularyOf(values: ParsedValues): Omit<VocabularyOptions, "models"> {
   }
   const svg = stringOf(values, "svg");
   const level = stringOf(values, "level");
+  const driftInsights = flagOf(values, "drift-insights");
+  const insights = stringOf(values, "insights");
+  if (insights !== undefined && !driftInsights) {
+    throw new UsageError("--insights does not apply without --drift-insights", "--insights names the store --drift-insights reads.");
+  }
+  if (driftInsights) {
+    const read = [
+      [scope !== undefined, "--scope"],
+      [level !== undefined, "--level"],
+      [stringOf(values, "class") !== undefined, "--class"],
+      [svg !== undefined, "--svg"],
+    ] as const;
+    for (const [given, flag] of read) {
+      if (!given) continue;
+      throw new UsageError(
+        `${flag} does not apply with --drift-insights`,
+        "--drift-insights compares every word a model judged, over the corpus, with the class the list gives it.",
+      );
+    }
+  }
   const many = drift !== undefined ? "--drift" : level !== undefined && level !== "corpus" ? `--level ${level}` : undefined;
   if (svg !== undefined && many !== undefined) {
     throw new UsageError(`--svg does not apply with ${many}`, "--svg draws one scope's cloud: the corpus, or the one --scope names.");
@@ -2217,6 +2254,8 @@ function vocabularyOf(values: ParsedValues): Omit<VocabularyOptions, "models"> {
     weights: weightsOf(stringOf(values, "weights")),
     technical: stringOf(values, "technical"),
     drift,
+    driftInsights,
+    insights,
     out: stringOf(values, "out"),
     svg,
     json: flagOf(values, "json"),

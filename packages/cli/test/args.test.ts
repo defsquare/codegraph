@@ -311,6 +311,8 @@ describe("vocabulary", () => {
         weights: {},
         technical: undefined,
         drift: undefined,
+        driftInsights: false,
+        insights: undefined,
         out: undefined,
         svg: undefined,
         json: false,
@@ -345,6 +347,9 @@ describe("vocabulary", () => {
     });
     expect(parse(["vocabulary", "a.json", "--svg", "cloud.svg", "--level", "corpus"])).toMatchObject({
       options: { svg: "cloud.svg", level: "corpus" },
+    });
+    expect(parse(["vocabulary", "a.json", "--drift-insights", "--insights", "s.db", "--drift", "g.txt", "--top", "3"])).toMatchObject({
+      options: { driftInsights: true, insights: "s.db", drift: "g.txt", top: 3 },
     });
   });
 
@@ -388,6 +393,19 @@ describe("vocabulary", () => {
     ] as const) {
       const error = usageErrorFor(["vocabulary", "a.json", ...argv]);
       expect(error.message, argv.join(" ")).toContain(flag);
+    }
+  });
+
+  // The list against the model is word by word over the corpus: no scope, level, class or cloud picks its words.
+  it("refuses the flags --drift-insights would leave unread, and a store with nothing to read it", () => {
+    for (const [argv, message] of [
+      [["--drift-insights", "--scope", "x"], "--scope does not apply with --drift-insights"],
+      [["--drift-insights", "--level", "corpus"], "--level does not apply with --drift-insights"],
+      [["--drift-insights", "--class", "all"], "--class does not apply with --drift-insights"],
+      [["--drift-insights", "--svg", "c.svg"], "--svg does not apply with --drift-insights"],
+      [["--insights", "s.db"], "--insights does not apply without --drift-insights"],
+    ] as const) {
+      expect(usageErrorFor(["vocabulary", "a.json", ...argv]).message, argv.join(" ")).toBe(message);
     }
   });
 

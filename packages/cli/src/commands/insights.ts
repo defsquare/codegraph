@@ -1,12 +1,8 @@
-import { existsSync } from "node:fs";
-import { loadSqlite } from "@codegraph/analyzer";
 import {
-  InsightsStoreError,
   WORD_CONCERNS,
   answerInsight,
   concernsReport,
   polysemyReport,
-  sqliteInsightsStore,
   wordReport,
   wordsAbsence,
   type FailureRecord,
@@ -19,7 +15,7 @@ import {
 import type { InsightsOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, outLine, type IoSink } from "../io.js";
-import { storePathForModel } from "../insights-paths.js";
+import { openInsightsReader, storePathForModel } from "../insights-paths.js";
 
 /**
  * `codegraph insights [model.jsonl] [--id ID | --level … --concept … | --failures | --runs] [--json]`
@@ -42,7 +38,7 @@ import { storePathForModel } from "../insights-paths.js";
  */
 export function insightsCommand(options: InsightsOptions, io: IoSink): ExitCode {
   const path = options.store ?? storePathForModel(options.model);
-  const store = openReader(path);
+  const store = openInsightsReader(path, "--store");
   try {
     switch (options.mode) {
       case "summary":
@@ -66,24 +62,6 @@ export function insightsCommand(options: InsightsOptions, io: IoSink): ExitCode 
     }
   } finally {
     store.close();
-  }
-}
-
-function openReader(path: string): InsightsStore {
-  // Checked first: opening a path that does not exist would CREATE it, and asking must not leave a file behind.
-  if (!existsSync(path)) {
-    throw new UsageError(
-      `no insights store at ${path}`,
-      "'codegraph explain <model.jsonl>' creates it (and imports a side-car it finds there). Pass --store FILE if it is elsewhere.",
-    );
-  }
-  const db = loadSqlite().open(path);
-  try {
-    return sqliteInsightsStore(db, { readOnly: true });
-  } catch (error) {
-    db.close();
-    if (!(error instanceof InsightsStoreError)) throw error;
-    throw new UsageError(`${path}: ${error.message}`, "Pass --store FILE to read another store.", { cause: error });
   }
 }
 
@@ -212,7 +190,7 @@ function failureReason(failure: FailureRecord): string {
 }
 
 /** What every word answer is blind to, on stderr, where a pipe does not read it. */
-function noteWithoutWords(count: number, io: IoSink): void {
+export function noteWithoutWords(count: number, io: IoSink): void {
   if (count === 0) return;
   errLine(io, `note: ${plural(count, "record")} a model wrote under prompt 1 define${count === 1 ? "s" : ""} no words; the next 'codegraph explain' re-explains ${count === 1 ? "it" : "them"}.`);
 }
