@@ -9,7 +9,8 @@ import { parseRegistry, type Registry } from "../app/registry.js";
 import { CARRIERS_ROUTE, carriersLookup } from "../carriers-route.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { loadHistoryJoin } from "../history-metrics.js";
-import { INSIGHT_ROUTE, insightLookup } from "../insight-route.js";
+import { GLOSSARY_ROUTE, glossaryLookup, modelPlacement } from "../glossary-route.js";
+import { INSIGHT_ROUTE, insightLookup, storeReader } from "../insight-route.js";
 import { storePathForModel } from "../insights-paths.js";
 import { errLine, errLines, type IoSink } from "../io.js";
 import { openAnalysis } from "../source.js";
@@ -37,11 +38,13 @@ import { vocabularyWarnings } from "./vocabulary.js";
  * `/vocabulary.json`, each exactly the file the respective command's `--out`
  * would have written (the vocabulary under its default weights and list).
  *
- * TWO ROUTES ARE NOT ARTIFACTS: `/insight.json?id=…`, a selected node's
+ * THREE ROUTES ARE NOT ARTIFACTS: `/insight.json?id=…`, a selected node's
  * explanation, looked up in `<model>.insights.db` when asked for (M16c) — no
  * store means a 404 the page ignores, so a model nobody explained looks
- * exactly as it did; and `/carriers.json?term=…`, the names that carry a word
- * of the vocabulary, answered from the model this command holds (M19b).
+ * exactly as it did; `/carriers.json?term=…`, the names that carry a word
+ * of the vocabulary, answered from the model this command holds (M19b); and
+ * `/glossary.json?term=…`, what the explained entities under a scope said
+ * that word means — the same store, placed by the same model (M19c).
  *
  * Stdout stays empty: the server is the destination. Warnings and the reach
  * announcement are stderr. The command returns at once; the live server is
@@ -109,17 +112,19 @@ export function serveCommand(options: ServeOptions, io: IoSink, deps: ServeDeps 
     ]);
 
     // Beside the FIRST model, like explain's default; --insights names it otherwise. Opened on first request.
-    const insights = insightLookup(options.insights ?? storePathForModel(options.models[0] ?? ""));
-    // Holds the graph until the first answerable request builds the index, then lets it go.
+    const store = storeReader(options.insights ?? storePathForModel(options.models[0] ?? ""));
+    const insights = insightLookup(store);
+    // Each holds the graph until its first answerable request builds what it needs, then lets it go.
     const carriers = carriersLookup(() => vocabularyCarriers(graph, vocabulary, counting));
+    const glossary = glossaryLookup(store, () => modelPlacement(graph, view));
     deps.startServer({
       routes: {
         [NAVIGATOR_ROUTE]: navigatorToJsonString(navigator),
         [CITY_ROUTE]: cityToJsonString(city),
         [VOCABULARY_ROUTE]: vocabularyToJsonString(vocabulary),
       },
-      lookups: { [INSIGHT_ROUTE]: insights.handle, [CARRIERS_ROUTE]: carriers.handle },
-      onClose: () => insights.close(),
+      lookups: { [INSIGHT_ROUTE]: insights.handle, [CARRIERS_ROUTE]: carriers.handle, [GLOSSARY_ROUTE]: glossary.handle },
+      onClose: () => store.close(),
       label: "codegraph",
       assets,
       port: options.port,

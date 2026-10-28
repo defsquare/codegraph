@@ -381,6 +381,11 @@ describe("serve hands the page a selected node's explanation (M16c)", () => {
     expect(lookup?.(new URLSearchParams({ id: "java:com.acme.order/Order" })).status).toBe(404);
     expect(existsSync(FIXTURE.replace(/\.jsonl$/u, ".insights.db"))).toBe(false);
     expect(Object.keys(started[0]?.routes ?? {}).sort()).toEqual(["/city.json", "/navigator.json", "/vocabulary.json"]);
+    // The glossary is as quiet over the same missing store.
+    const glossary = started[0]?.lookups?.["/glossary.json"]?.(new URLSearchParams({ term: "order" }));
+    expect(glossary?.status).toBe(404);
+    expect(JSON.parse(glossary?.body ?? "{}")).toEqual({ kind: "codegraph.glossary/1", status: "no-store" });
+    expect(existsSync(FIXTURE.replace(/\.jsonl$/u, ".insights.db"))).toBe(false);
     started[0]?.onClose?.();
   });
 
@@ -404,6 +409,10 @@ describe("serve hands the page a selected node's explanation (M16c)", () => {
       const answer = started[0]?.lookups?.["/insight.json"]?.(new URLSearchParams({ id: record.id }));
       expect(answer?.status).toBe(200);
       expect(JSON.parse(answer?.body ?? "{}")).toMatchObject({ status: "explained", record: { block: { description: "Ordering." } } });
+      // The glossary reads the same store: a record under prompt 2's absence of words is counted, not listed.
+      const glossary = started[0]?.lookups?.["/glossary.json"]?.(new URLSearchParams({ term: "order" }));
+      expect(glossary?.status).toBe(200);
+      expect(JSON.parse(glossary?.body ?? "{}")).toMatchObject({ kind: "codegraph.glossary/1", status: "found", entries: [], withoutWords: 1 });
       started[0]?.onClose?.();
     } finally {
       rmSync(dir, { recursive: true, force: true });

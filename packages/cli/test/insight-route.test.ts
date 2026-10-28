@@ -18,7 +18,7 @@ import {
   type InsightsHeader,
 } from "@codegraph/insights";
 import { directoryAssets } from "../src/assets.js";
-import { insightLookup } from "../src/insight-route.js";
+import { insightLookup, storeReader } from "../src/insight-route.js";
 import { captureIo } from "../src/io.js";
 import { startArtifactServer } from "../src/serve.js";
 
@@ -55,7 +55,8 @@ const query = (id?: string): URLSearchParams => new URLSearchParams(id === undef
 
 describe("insightLookup", () => {
   it("answers an explained id with its record, a failed one with why, an unknown one with 404", () => {
-    const lookup = insightLookup(db);
+    const reader = storeReader(db);
+    const lookup = insightLookup(reader);
     try {
       const found = lookup.handle(query(ORDER));
       expect(found.status).toBe(200);
@@ -68,27 +69,29 @@ describe("insightLookup", () => {
       expect(JSON.parse(unknown.body)).toEqual({ kind: INSIGHT_ANSWER_KIND, id: "java:nope/Nothing", status: "unknown" });
       expect(lookup.handle(query()).status).toBe(400);
     } finally {
-      lookup.close();
+      reader.close();
     }
   });
 
   it("with no store there is nothing to say — 404, quietly, and asking creates no file", () => {
     const absent = join(dir, "absent.insights.db");
-    const lookup = insightLookup(absent);
+    const reader = storeReader(absent);
+    const lookup = insightLookup(reader);
     expect(lookup.handle(query(ORDER)).status).toBe(404);
     expect(readdirSync(dir)).not.toContain("absent.insights.db");
-    lookup.close();
+    reader.close();
   });
 
   it("finds a store that comes to exist AFTER the server started: `explain` may be run while the page is open", () => {
     const late = join(dir, "late.insights.db");
-    const lookup = insightLookup(late);
+    const reader = storeReader(late);
+    const lookup = insightLookup(reader);
     expect(lookup.handle(query(ORDER)).status).toBe(404);
     const store = sqliteInsightsStore(loadSqlite().open(late));
     store.importFile(decodeInsights(encodeInsightsToString(HEADER, [RECORD], { t: "eof", counts: { records: 1, llm: 1, template: 0, reused: 0, failed: 0 }, usage: { promptTokens: 1, completionTokens: 1 }, generatedAt: "t" })));
     store.close();
     expect(lookup.handle(query(ORDER)).status).toBe(200);
-    lookup.close();
+    reader.close();
   });
 
   it("a file that is not an insights store is 404 for the page, not a crash for the server", () => {
@@ -96,9 +99,10 @@ describe("insightLookup", () => {
     const foreign = loadSqlite().open(other);
     foreign.exec("CREATE TABLE entity (id INTEGER PRIMARY KEY)");
     foreign.close();
-    const lookup = insightLookup(other);
+    const reader = storeReader(other);
+    const lookup = insightLookup(reader);
     expect(lookup.handle(query(ORDER)).status).toBe(404);
-    lookup.close();
+    reader.close();
   });
 });
 
@@ -111,13 +115,14 @@ describe("the artifact server answers lookup routes", () => {
   it("GET /insight.json?id=… is answered at request time, uncached; artifacts and the jail are as before", async () => {
     const assets = mkdtempSync(join(tmpdir(), "codegraph-serve-"));
     writeFileSync(join(assets, "index.html"), "<!doctype html><title>fake</title>");
-    const lookup = insightLookup(db);
+    const reader = storeReader(db);
+    const lookup = insightLookup(reader);
     let closed = false;
     const server = startArtifactServer({
       routes: { "/navigator.json": `{"kind":"codegraph.navigator/1"}` },
       lookups: { "/insight.json": lookup.handle },
       onClose: () => {
-        lookup.close();
+        reader.close();
         closed = true;
       },
       label: "codegraph", assets: directoryAssets(assets), port: 0, io: captureIo(),
