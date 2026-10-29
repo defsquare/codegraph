@@ -351,9 +351,11 @@ calls it will make, the estimated prompt tokens per level — and makes no call;
 it needs no key. `--estimate` prints only the volume: calls, input and output
 tokens per level, and a cost when `--price-in`/`--price-out` (USD per million
 tokens) are given. Input is the rendered prompts at four characters per token;
-output is one measured block average per block asked for (operation 450, type
-650, module 900 tokens — averages from gpt-5.6-luna on the fixture and gson),
-so a cycle call counts once per member. Repair re-asks and rate-limit retries
+output is a measured figure per block asked for (operation 470, type 530,
+module 530 tokens), plus 120 per word and 125 per glossary entry asked to
+define — fitted on a live prompt-2 run of gpt-5.6-luna over Spring PetClinic,
+reasoning tokens included (PLAN.md §20.3) — so a cycle call counts once per
+member. Repair re-asks and rate-limit retries
 are not counted, and records already in the side-car are not re-sent. A real
 run shows that same estimate on stderr and asks for confirmation before the
 first call; `--yes` skips the question, and with no terminal to ask on the run

@@ -122,13 +122,13 @@ explain estimate: order.jsonl
   models: openai/gpt-5.6-luna (operations), openai/gpt-5.6-luna (types, modules); depth 1
 
   level        calls   input tokens  output tokens
-  operation       48         78 148         23 550
-  type            17         31 001         13 730
-  module           3          5 334          4 390
-  total           68        114 483         41 670
+  operation       48         78 148         30 360
+  type            17         31 001         15 590
+  module           3          5 334          6 950
+  total           68        114 483         52 900
 
-  cost at $0.1/M in, $0.6/M out: $0.0365
-  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages: operation 450, type 650, module 900 tokens per block asked for, plus an estimated 30 per word and 40 per glossary entry asked to define.
+  cost at $0.1/M in, $0.6/M out: $0.0432
+  input ≈ rendered prompts at 4 characters per token; output ≈ measured on a live run: operation 470, type 530, module 530 tokens per block asked for, plus 120 per word and 125 per glossary entry asked to define (gpt-5.6-luna, reasoning included).
   not included: repair re-asks, rate-limit retries. Records already in the side-car are reused, not re-sent.
 ```
 
