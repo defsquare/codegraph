@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:f
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadSqlite } from "@codegraph/analyzer";
 import { decodeInsights, encodeInsightsToString, insightsStorePathFor, sqliteInsightsStore, type InsightRecord, type InsightsStore } from "@codegraph/insights";
 import { LlmError, fakeLlmClient, type LlmClient, type LlmRequest, type Provider } from "@codegraph/llm";
@@ -799,12 +799,18 @@ describe("explain picks its provider from the flag or the environment", () => {
 
 describe("explain usage errors exit 2 with nothing on stdout", () => {
   it("without an API key when calls are planned", async () => {
-    const io = captureIo();
-    const code = await run(["explain", FIXTURE, "--src", SRC, "--out", OUT], io);
-    expect(code).toBe(EXIT.USAGE);
-    expect(io.stdout()).toBe("");
-    expect(io.stderr()).toContain("OPENROUTER_API_KEY");
-    expect(io.stderr()).toContain("CLOUDFLARE_API_TOKEN");
+    // The real seam reads the process environment: a key in the developer's shell must not make it found.
+    for (const name of ["OPENROUTER_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_AI_GATEWAY_ID"]) vi.stubEnv(name, undefined);
+    try {
+      const io = captureIo();
+      const code = await run(["explain", FIXTURE, "--src", SRC, "--out", OUT], io);
+      expect(code).toBe(EXIT.USAGE);
+      expect(io.stdout()).toBe("");
+      expect(io.stderr()).toContain("OPENROUTER_API_KEY");
+      expect(io.stderr()).toContain("CLOUDFLARE_API_TOKEN");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   }, 20_000);
 
   it("with --src and two models", () => {
