@@ -2,9 +2,19 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:f
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadSqlite } from "@codegraph/analyzer";
-import { decodeInsights, encodeInsightsToString, insightsStorePathFor, sqliteInsightsStore, type InsightRecord, type InsightsStore } from "@codegraph/insights";
+import {
+  COMPLETION_TOKENS_PER_BLOCK,
+  COMPLETION_TOKENS_PER_GLOSSARY_ENTRY,
+  COMPLETION_TOKENS_PER_WORD,
+  decodeInsights,
+  encodeInsightsToString,
+  insightsStorePathFor,
+  sqliteInsightsStore,
+  type InsightRecord,
+  type InsightsStore,
+} from "@codegraph/insights";
 import { LlmError, fakeLlmClient, type LlmClient, type LlmRequest, type Provider } from "@codegraph/llm";
 import { EXIT } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
@@ -680,9 +690,9 @@ describe("explain --estimate", () => {
     const report = JSON.parse(json.stdout()) as { kind: string; calls: number; promptTokens: number; completionTokens: number; cost: number; byLevel: Record<string, { completionTokens: number }> };
     expect(report.kind).toBe("codegraph.explainEstimate/1");
     expect(report.calls).toBe(68);
-    // Output = one measured block average per block asked for (a cycle call asks for several), plus
-    // 30 tokens per word and 40 per glossary entry its prompt asks — counted here on the prompts a run sends.
-    const per = { operation: 450, type: 650, module: 900 } as const;
+    // Output = one measured block figure per block asked for (a cycle call asks for several), plus one
+    // per word and one per glossary entry its prompt asks — counted here on the prompts a run sends.
+    const per = COMPLETION_TOKENS_PER_BLOCK;
     const ran = seamWith({ OPENROUTER_API_KEY: KEY });
     await explainCommand(options(["--out", OUT]), captureIo(), ran.seam);
     const expected = { operation: 0, type: 0, module: 0 };
@@ -691,7 +701,7 @@ describe("explain --estimate", () => {
       const unit = /^# Unit: \w+ (\S+)/u.exec(call.user)?.[1] ?? "";
       const members = /Return one entry per id: (.+)\./u.exec(call.user)?.[1]?.split(", ") ?? [unit];
       const words = members.reduce((n, id) => n + wordsAsked(call.user, id).size, 0);
-      expected[level] += per[level] * members.length + 30 * words + 40 * glossaryAsked(call.user).length;
+      expected[level] += per[level] * members.length + COMPLETION_TOKENS_PER_WORD * words + COMPLETION_TOKENS_PER_GLOSSARY_ENTRY * glossaryAsked(call.user).length;
     }
     let sum = 0;
     for (const level of ["operation", "type", "module"] as const) {
@@ -799,12 +809,18 @@ describe("explain picks its provider from the flag or the environment", () => {
 
 describe("explain usage errors exit 2 with nothing on stdout", () => {
   it("without an API key when calls are planned", async () => {
-    const io = captureIo();
-    const code = await run(["explain", FIXTURE, "--src", SRC, "--out", OUT], io);
-    expect(code).toBe(EXIT.USAGE);
-    expect(io.stdout()).toBe("");
-    expect(io.stderr()).toContain("OPENROUTER_API_KEY");
-    expect(io.stderr()).toContain("CLOUDFLARE_API_TOKEN");
+    // The real seam reads the process environment: a key in the developer's shell must not make it found.
+    for (const name of ["OPENROUTER_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_AI_GATEWAY_ID"]) vi.stubEnv(name, undefined);
+    try {
+      const io = captureIo();
+      const code = await run(["explain", FIXTURE, "--src", SRC, "--out", OUT], io);
+      expect(code).toBe(EXIT.USAGE);
+      expect(io.stdout()).toBe("");
+      expect(io.stderr()).toContain("OPENROUTER_API_KEY");
+      expect(io.stderr()).toContain("CLOUDFLARE_API_TOKEN");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   }, 20_000);
 
   it("with --src and two models", () => {

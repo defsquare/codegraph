@@ -5420,6 +5420,27 @@ per million out; and the bump re-explains the existing side-car once
 (measured at $4.70 under `deepseek-v4.1-flash`), which `--estimate` prints
 before anyone pays.
 
+**Measured (2026-10-29) — the estimate above is replaced.** The test corpus is
+Spring PetClinic, not Broadleaf (the user's decision: small enough to read
+every answer). A live prompt-2 run, gpt-5.6-luna, `--max-tokens 6000`: 106
+calls, 228 177 prompt + 96 356 completion tokens, $0.1343, no failure;
+`--estimate` had said 66 570 out (−31%). Each call's prompt was rebuilt with
+the planner (`contextPackFor` + `renderPrompts` over the run's own records;
+their estimates sum to the run's, token for token) and its measured completion
+tokens fitted on what it asked, reasoning tokens included since they are
+billed: **466 / 534 / 527 per operation / type / module block, 121 per word,
+123 per glossary entry** (r² 0.81 per call; the old figures 0.13), rounded
+into `COMPLETION_TOKENS_PER_BLOCK` = 470 / 530 / 530 and 120 / 125. A word
+entry's own JSON is ~50 tokens; the rest is the reasoning that goes with it.
+Fitted on one half of the calls, the other half's total is predicted within
+−7% and +15% (±6% without the module calls), against −29% and −33% before.
+The glossary figure rests on five module calls (one half-sample fits 342): a
+corpus with more modules should refit it. Per word, at the run's fitted
+prices ($0.067/M in, $1.256/M out), ~$0.00015. Input, unchanged here: the
+planned prompts were 15% under the measured input — 7.9% because a cold
+estimate cannot quote explanations no run has written yet, 6.3% because this
+model's tokenizer packs 3.76 characters per token, not 4.
+
 **Layer 3 — readers, all over the store, none calling anything.**
 `codegraph insights --word order` — every entity whose names spell it,
 grouped module → type → operation, each with the identifiers it is in, its
@@ -5476,7 +5497,9 @@ never looks like a fact.
 - **The estimate** adds 30 completion tokens per word and 40 per glossary
   entry, this section's figures, until a run measures them. On the Java
   fixture the plan goes from 102 786 to 114 483 prompt tokens (+11%) and
-  from 36 650 to 41 670 completion tokens (+14%).
+  from 36 650 to 41 670 completion tokens (+14%). *Measured since (the
+  Cost paragraph): 120 per word, 125 per entry, blocks 470 / 530 / 530; the
+  fixture's plan now says 52 900 completion tokens.*
 
 **As built — the store (2026-10-27).** `INSIGHTS_DB_VERSION = 2`. Migration 1
 creates `insight_word (id, entry)`, indexed on `word` and on `id`. `entry` is
@@ -5698,8 +5721,9 @@ Vocabulary tab's entries and the Navigate panel's, over `answerGlossary` in
       answer for a record explained under prompt `"1"`; on the fake client
       and live on the Java fixture; the §20.3 estimate replaced by the
       Broadleaf measurement. *(In: `--terms`, the estimate's per-word
-      figures, the fake-client run, the prompt-1 answer. Owed: the
-      measurement, live runs.)*
+      figures, the fake-client run, the prompt-1 answer; the measurement,
+      from a live run on Spring PetClinic in Broadleaf's place, 2026-10-29,
+      §20.3 "Measured". Owed: the live run on the Java fixture.)*
 - [x] Readers: `insights --word`, `--glossary`, `--polysemy`, `--concerns`;
       `vocabulary --drift-insights`; `/glossary.json`; the entries in the
       Vocabulary tab and in the Navigate panel as inferences.

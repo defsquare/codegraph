@@ -50,7 +50,7 @@ explain plan: 77 units in 8 layers
   type          17 units     17 calls ~31001 prompt tokens
   module         3 units      3 calls ~5334 prompt tokens
   statuses: llm 68, template 9, reuse 0, skip-scope 0, skip-budget 0
-  total: 68 calls, ~114483 prompt tokens in, ~41670 completion tokens out
+  total: 68 calls, ~114483 prompt tokens in, ~52900 completion tokens out
 ```
 
 ```bash
@@ -59,11 +59,11 @@ codegraph explain app.jsonl --src ~/src/app/src/main/java \
 ```
 
 ```text
-  cost at $0.1/M in, $0.6/M out: $0.0365
+  cost at $0.1/M in, $0.6/M out: $0.0432
 ```
 
 Prices are dollars per million tokens for the model you intend to use; the
-figure is a floor (retries are not in it). Three cents for the reference
+figure is a floor (retries are not in it). Four cents for the reference
 fixture; a few dollars for a mid-sized service with a cheap model; tens of
 dollars for a very large codebase. Neither command makes a call or needs a
 key, so run them before every real run.

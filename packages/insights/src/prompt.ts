@@ -35,23 +35,24 @@ export function estimateTokens(text: string): number {
 }
 
 /**
- * Completion tokens one block costs, per level — averages measured on real
- * runs (gpt-5.6-luna, Java fixture and gson: ~450 per operation block, ~650
- * per type block, ~900 per module block). A cycle prompt returns one block
- * per member, so the estimate scales with the members asked for.
+ * Completion tokens one block costs, per level, before its words — fitted
+ * with the two figures below on a live prompt-2 run (PLAN.md §20.3:
+ * gpt-5.6-luna, Spring PetClinic, 106 calls, reasoning tokens included). A
+ * cycle prompt returns one block per member, so the estimate scales with the
+ * members asked for.
  */
 export const COMPLETION_TOKENS_PER_BLOCK: Readonly<Record<Level, number>> = {
-  operation: 450,
-  type: 650,
-  module: 900,
+  operation: 470,
+  type: 530,
+  module: 530,
 };
 
 /**
- * Completion tokens per word defined and per glossary entry (PLAN.md §20.3):
- * ESTIMATES, to be replaced by a measurement on a real run under prompt 2.
+ * Completion tokens per word asked to define and per glossary entry asked to
+ * reconcile, from the same fit. The glossary figure rests on five module calls.
  */
-export const COMPLETION_TOKENS_PER_WORD = 30;
-export const COMPLETION_TOKENS_PER_GLOSSARY_ENTRY = 40;
+export const COMPLETION_TOKENS_PER_WORD = 120;
+export const COMPLETION_TOKENS_PER_GLOSSARY_ENTRY = 125;
 
 export function estimateCompletionTokens(level: Level, blocks: number, asked: Prompt["asked"] = { words: 0, glossary: 0 }): number {
   return (

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Edge, Entity } from "@codegraph/core";
 import { buildWalk } from "../src/order.js";
 import { planRun, retryScope, type PlanEnv, type PlanOptions } from "../src/plan.js";
-import { COMPLETION_TOKENS_PER_GLOSSARY_ENTRY, COMPLETION_TOKENS_PER_WORD } from "../src/prompt.js";
+import { COMPLETION_TOKENS_PER_BLOCK, COMPLETION_TOKENS_PER_GLOSSARY_ENTRY, COMPLETION_TOKENS_PER_WORD } from "../src/prompt.js";
 import { memoryBook, type RecordBook } from "../src/records.js";
 import { executeRun, type Completer, type CompletionRequest } from "../src/run.js";
 import type { Block, FailureRecord, InsightRecord, ModuleBlock, OperationBlock, TypeBlock } from "../src/schema.js";
@@ -240,8 +240,9 @@ describe("planRun", () => {
     expect(plan.estimates.byStatus).toEqual({ llm: 5, template: 1, reuse: 0, "skip-scope": 0, "skip-budget": 0 });
     expect(plan.estimates.promptTokens).toBeGreaterThan(0);
     // The type defines `total` (its field), the module `java` (its name) and reconciles `total`.
-    expect(plan.estimates.completionTokens).toBe(3 * 450 + (650 + COMPLETION_TOKENS_PER_WORD) + (900 + COMPLETION_TOKENS_PER_WORD + COMPLETION_TOKENS_PER_GLOSSARY_ENTRY));
-    expect(plan.estimates.byLevel.operation.completionTokens).toBe(3 * 450);
+    const { operation, type, module } = COMPLETION_TOKENS_PER_BLOCK;
+    expect(plan.estimates.completionTokens).toBe(3 * operation + (type + COMPLETION_TOKENS_PER_WORD) + (module + COMPLETION_TOKENS_PER_WORD + COMPLETION_TOKENS_PER_GLOSSARY_ENTRY));
+    expect(plan.estimates.byLevel.operation.completionTokens).toBe(3 * operation);
     expect(plan.steps.find((s) => s.unit.id === m("getTotal"))?.completionTokens).toBe(0);
     expect(plan.steps.find((s) => s.unit.id === m("h"))?.model).toBe("leaf-model");
     expect(plan.steps.find((s) => s.unit.id === T)?.model).toBe("rollup-model");
@@ -392,7 +393,7 @@ describe("executeRun", () => {
     const cycle = plan.steps.find((s) => s.unit.members.length === 3);
     expect(cycle?.calls).toBe(1);
     // One call, three blocks asked for: the output estimate scales with the members.
-    expect(cycle?.completionTokens).toBe(3 * 450);
+    expect(cycle?.completionTokens).toBe(3 * COMPLETION_TOKENS_PER_BLOCK.operation);
     for (const id of [m("f"), m("g"), m("h")]) {
       const rec = result.records.find((r) => r.id === id);
       expect(rec?.scc).toEqual([m("f"), m("g"), m("h")]);

@@ -741,9 +741,10 @@ export function estimatedCost(promptTokens: number, completionTokens: number, pr
 
 /**
  * `--estimate`: the volume a run would move, before spending anything. Input
- * is the rendered prompts at ~4 chars/token; output is one measured block
- * average per block asked for. Repair re-asks and rate-limit retries are not
- * included, and a run that reuses records sends less than a cold one.
+ * is the rendered prompts at ~4 chars/token; output is a measured figure per
+ * block, per word and per glossary entry asked for. Repair re-asks and
+ * rate-limit retries are not included, and a run that reuses records sends
+ * less than a cold one.
  */
 function printEstimate(plan: RunPlan, options: ExplainOptions, io: IoSink): void {
   const { estimates } = plan;
@@ -768,7 +769,7 @@ function printEstimate(plan: RunPlan, options: ExplainOptions, io: IoSink): void
         ...(cost === undefined ? {} : { cost }),
         assumptions: {
           promptTokens: "characters of the rendered prompts / 4",
-          completionTokens: `measured block averages: ${outputAssumption()}`,
+          completionTokens: `measured on a live run: ${outputAssumption()}`,
           excluded: "repair re-asks, rate-limit retries",
         },
       }),
@@ -801,7 +802,7 @@ function estimateLines(plan: RunPlan, options: ExplainOptions): string[] {
   } else {
     lines.push("  cost: pass --price-in USD --price-out USD (per million tokens) for a figure");
   }
-  lines.push(`  input ≈ rendered prompts at 4 characters per token; output ≈ measured block averages: ${outputAssumption()}.`);
+  lines.push(`  input ≈ rendered prompts at 4 characters per token; output ≈ measured on a live run: ${outputAssumption()}.`);
   lines.push("  not included: repair re-asks, rate-limit retries. Records already in the side-car are reused, not re-sent.");
   return lines;
 }
@@ -809,7 +810,7 @@ function estimateLines(plan: RunPlan, options: ExplainOptions): string[] {
 /** What the output figure assumes, from the constants it is computed with. */
 function outputAssumption(): string {
   const { operation, type, module } = COMPLETION_TOKENS_PER_BLOCK;
-  return `operation ${operation}, type ${type}, module ${module} tokens per block asked for, plus an estimated ${COMPLETION_TOKENS_PER_WORD} per word and ${COMPLETION_TOKENS_PER_GLOSSARY_ENTRY} per glossary entry asked to define`;
+  return `operation ${operation}, type ${type}, module ${module} tokens per block asked for, plus ${COMPLETION_TOKENS_PER_WORD} per word and ${COMPLETION_TOKENS_PER_GLOSSARY_ENTRY} per glossary entry asked to define (gpt-5.6-luna, reasoning included)`;
 }
 
 /**
