@@ -130,6 +130,9 @@ const USAGE_CASES: readonly Case[] = [
   { why: "an unknown role to weigh", argv: ["vocabulary", FIXTURE, "--weights", "class=8"], expected: EXIT.USAGE },
   // Raised inside the command, once the model says the id is not there.
   { why: "an unknown scope", argv: ["vocabulary", FIXTURE, "--scope", "java:nowhere/Nothing"], expected: EXIT.USAGE },
+  // The fixture has no store beside it: refused before the model is read.
+  { why: "words to compare with no insights store", argv: ["vocabulary", FIXTURE, "--drift-insights"], expected: EXIT.USAGE },
+  { why: "a store and nothing to read it", argv: ["vocabulary", FIXTURE, "--insights", "model.insights.db"], expected: EXIT.USAGE },
 ];
 
 const FINDING_CASES: readonly Case[] = [

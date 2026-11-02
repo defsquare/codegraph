@@ -106,6 +106,7 @@ Every block carries a `name` — the ubiquitous-language name the model proposes
 | `invariantsEnforced` | string[] |
 | `usesSpi` | `{name, capability}[]` — external capabilities the operation needs, as SPIs |
 | `domainTerms` | string[] |
+| `words` | `WordEntry[]`, from prompt 2 — the words of its name and its parameters' |
 | `confidence` | number |
 
 ### `TypeBlock`
@@ -127,6 +128,7 @@ Every block carries a `name` — the ubiquitous-language name the model proposes
 | `exposes` | string[] — operations that form this type's public surface |
 | `dependsOn` | `{name, role}[]` — ports this type needs from others |
 | `domainTerms` | string[] |
+| `words` | `WordEntry[]`, from prompt 2 — the words of its name and its fields' |
 | `confidence` | number |
 
 ### `ModuleBlock`
@@ -140,8 +142,31 @@ Every block carries a `name` — the ubiquitous-language name the model proposes
 | `concepts` | `{name, concept}[]` |
 | `boundedContextHint` | `{name, rationale}` \| null |
 | `sharedKernelHint` | string \| null — for a module in a dependency cycle: why the group is inseparable, or how to split it |
-| `ubiquitousLanguage` | `{term, definition}[]` |
+| `ubiquitousLanguage` | `{term, definition}[]` — terms the model proposes, in its own words |
+| `words` | `WordEntry[]`, from prompt 2 — the words of its name |
+| `glossary` | `GlossaryEntry[]`, from prompt 2 — its types' senses of the words they spell, reconciled |
 | `confidence` | number |
+
+### `WordEntry` and `GlossaryEntry`
+
+`explain` asks each unit to define the words its names spell, split as [`codegraph vocabulary`](/docs/reference/cli/vocabulary/) splits them; short words and keywords are not asked. The words are given, never chosen: on receipt an entry for a word the prompt did not list is dropped, a word given twice keeps its first entry, and `in` is restated from the split. A record explained under prompt 1, and a templated one, has no `words`.
+
+| `WordEntry` field | Type |
+|---|---|
+| `word` | string — as the splitter spelled it, lowercase |
+| `in` | string[] — the identifiers of this unit it appears in |
+| `concern` | one of `WORD_CONCERNS` — `ambiguous` when this unit uses it in two senses |
+| `sense` | string — a short label: what the word signifies here |
+| `meaning` | string — one sentence in this unit's context |
+| `confidence` | number, clamped to [0,1] on receipt |
+
+A module is shown what its types said of the words they spell, heaviest first, cut at `--terms N` (default 60), and reconciles them:
+
+| `GlossaryEntry` field | Type |
+|---|---|
+| `word`, `concern`, `sense`, `meaning` | as in `WordEntry`, at the module's altitude |
+| `polysemous` | boolean — its types disagree on the word |
+| `senses` | `{in, sense}[]` — the disagreeing types and their senses, when they do |
 
 ## Vocabularies
 
@@ -156,17 +181,20 @@ Closed enums, restated as literals in `ddd.ts` with the source cited.
 | `ENFORCEMENTS` | `rejection`, `compensation`, `alert` |
 | `SYNC_PATTERNS` | `synchronous-query`, `asynchronous-projection` |
 | `FIELD_KINDS` | `primitive`, `valueType`, `entityReference`, `enum`, `collection`, `unknown` |
+| `WORD_CONCERNS` | `domain`, `technical`, `ambiguous` |
 
 ## Strict structured output
 
 Providers' strict structured-output mode requires every property to be required and no additional properties, so "optional" is expressed as `.nullable()`, never `.optional()`, and no numeric or string constraints are emitted. `confidence` is clamped on receipt rather than constrained in the schema.
 
+One exception, by version: `words` and `glossary` arrived with prompt 2, so a record may lack them — one explained under prompt 1 decodes and re-encodes to its own bytes — while an answer may not: the schema sent to the provider requires them, and an answer without them is asked again, then recorded as a failure.
+
 ## Fingerprints
 
-Every record carries a sha256 over what it was computed from: the prompt version, the model slug, the level, the source slices, the comments, the signatures, a digest of the facts shown, the **fingerprints of the units it depended on**, and the ids of dependencies that had no record. Merkle-style: change one leaf's source and exactly its transitive dependents and containers change.
+Every record carries a sha256 over what it was computed from: the prompt version, the model slug, the level, the source slices, the comments, the signatures, a digest of the facts shown, the words its prompt asked to define (and a module's glossary words), the **fingerprints of the units it depended on**, and the ids of dependencies that had no record. Merkle-style: change one leaf's source and exactly its transitive dependents and containers change.
 
 The explanation text is deliberately **not** hashed — a non-deterministic answer must never cascade re-runs. A re-run plans `reuse` for every unit whose members' records match; `--force` overrides. Because a missing dependency is part of the fingerprint, a dependent explained while its callee had failed or was out of scope is redone once the callee exists.
 
 ## Templated records
 
-A getter, setter, `equals`/`hashCode`/`toString`/`compareTo`, or a field-assigning constructor is described by a template with `origin: "template"`, `confidence` 1 and no model call — decided from facts only: no throw site, no corpus call, `cyclomatic ≤ 1`, and at most one field touched. Anything with a `throws` fact or a corpus call is never trivial, however short.
+A getter, setter, `equals`/`hashCode`/`toString`/`compareTo`, or a field-assigning constructor is described by a template with `origin: "template"`, `confidence` 1, no `words` and no model call — decided from facts only: no throw site, no corpus call, `cyclomatic ≤ 1`, and at most one field touched. Anything with a `throws` fact or a corpus call is never trivial, however short.

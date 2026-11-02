@@ -13,6 +13,7 @@ const BASE: FingerprintInputs = {
   dependencyFingerprints: [],
   missingDependencies: [],
   depth: 1,
+  words: [{ names: [{ identifier: "f", words: [] }], glossary: [] }],
 };
 
 describe("canonicalJson", () => {
@@ -43,6 +44,8 @@ describe("fingerprintOf", () => {
       { ...BASE, model: "other" },
       { ...BASE, depth: 2 },
       { ...BASE, level: "type" },
+      { ...BASE, words: [{ names: [{ identifier: "f", words: ["fee"] }], glossary: [] }] },
+      { ...BASE, words: [{ names: [{ identifier: "f", words: [] }], glossary: ["order"] }] },
     ];
     const seen = new Set([fingerprintOf(BASE)]);
     for (const v of variants) {

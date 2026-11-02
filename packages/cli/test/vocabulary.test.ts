@@ -1,10 +1,30 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readModelFileSync } from "@codegraph/core";
-import { buildGraph, loadModels } from "@codegraph/analyzer";
-import { buildVocabulary, operationScope, vocabularyCloudSvg, vocabularyToJsonString } from "@codegraph/vocabulary";
+import { buildGraph, loadSqlite, loadModels } from "@codegraph/analyzer";
+import {
+  INSIGHTS_GENERATOR,
+  INSIGHTS_KIND,
+  INSIGHTS_METAMODEL,
+  PROMPT_VERSION,
+  WORD_CONCERNS,
+  decodeInsights,
+  encodeInsightsToString,
+  sqliteInsightsStore,
+  type InsightRecord,
+  type InsightsHeader,
+  type WordConcern,
+  type WordEntry,
+} from "@codegraph/insights";
+import {
+  JUDGED_CONCERNS,
+  buildVocabulary,
+  operationScope,
+  vocabularyCloudSvg,
+  vocabularyToJsonString,
+} from "@codegraph/vocabulary";
 import { describe, expect, it } from "vitest";
 import type { VocabularyOptions } from "../src/args.js";
 import { vocabularyCommand } from "../src/commands/vocabulary.js";
@@ -31,6 +51,8 @@ function options(overrides: Partial<VocabularyOptions> = {}): VocabularyOptions 
     weights: {},
     technical: undefined,
     drift: undefined,
+    driftInsights: false,
+    insights: undefined,
     out: undefined,
     svg: undefined,
     json: false,
@@ -369,6 +391,211 @@ describe("vocabulary: --drift", () => {
 
   it("refuses a glossary that holds no business term", () => {
     expect(usageErrorOf({ drift: file("glossary.txt", "# nothing yet\n\n") }).message).toContain("holds no business term");
+  });
+});
+
+const said = (word: string, concern: WordConcern, sense: string, inside: string[], confidence = 0.8): WordEntry =>
+  ({ word, in: inside, concern, sense, meaning: `${sense}, here.`, confidence });
+
+/** A record as 'codegraph explain' writes one, carrying these words; none is a prompt-1 record. */
+function record(id: string, level: "module" | "type" | "operation", words: WordEntry[] | undefined): InsightRecord {
+  const block =
+    level === "module"
+      ? { name: "M", description: "A module.", apis: [], spis: [], dependsOn: [], concepts: [], boundedContextHint: null, sharedKernelHint: null, ubiquitousLanguage: [], confidence: 0.6, glossary: [] }
+      : level === "type"
+        ? { name: "T", description: "A type.", concept: "entity", eventKind: null, interfaceRole: null, aggregateRoot: false, containedIn: null, syncPattern: null, identity: null, fields: [], invariants: [], stateMachine: null, relatesTo: [], exposes: [], dependsOn: [], domainTerms: [], confidence: 0.7 }
+        : { name: "op", description: "Bills.", safe: false, idempotent: false, owner: "domainService", handlesCommand: null, emits: [], preconditions: [], postconditions: [], invariantsEnforced: [], usesSpi: [], domainTerms: [], confidence: 0.7 };
+  const kind = level === "module" ? "package" : level === "type" ? "class" : "method";
+  return { t: "i", id, level, kind, origin: "llm", model: "strong/model", fingerprint: "a".repeat(64), block: { ...block, ...(words === undefined ? {} : { words }) } } as InsightRecord;
+}
+
+/** An insights store in `dir`, holding these records. */
+function storeWith(dir: string, records: readonly InsightRecord[]): string {
+  const header: InsightsHeader = {
+    t: "header", kind: INSIGHTS_KIND, generatedBy: INSIGHTS_GENERATOR, promptVersion: PROMPT_VERSION, metamodel: INSIGHTS_METAMODEL,
+    models: { leaf: "cheap/model", rollup: "strong/model" }, provider: "openrouter", depth: 1,
+    source: { paths: ["model.jsonl"], langs: ["java"], view: { name: "all", filters: [] } },
+  };
+  const path = join(dir, "model.insights.db");
+  const store = sqliteInsightsStore(loadSqlite().open(path));
+  const eof = { t: "eof" as const, counts: { records: records.length, llm: records.length, template: 0, reused: 0, failed: 0 }, usage: { promptTokens: 0, completionTokens: 0 }, generatedAt: "2026-10-28T10:00:00.000Z" };
+  store.importFile(decodeInsights(encodeInsightsToString(header, records, eof)));
+  store.close();
+  return path;
+}
+
+/**
+ * A store over the fixture's own ids, as 'codegraph explain' would leave it:
+ * `service` judged domain in OrderService (the list calls it technical),
+ * `trail` judged technical in LedgerAdapter (the list calls it domain), a
+ * record of an entity the model does not have, and one explained under prompt 1.
+ */
+function storeOf(dir: string): string {
+  return storeWith(dir, [
+    record("java:com.acme.order/OrderService.bill(com.acme.order.Order)", "operation", [said("bill", "domain", "to invoice", ["bill"])]),
+    record("java:com.acme.order.adapter/LedgerAdapter", "type", [
+      said("ledger", "domain", "the books", ["LedgerAdapter"]),
+      said("adapter", "technical", "a port's implementation", ["LedgerAdapter"]),
+      said("trail", "technical", "an audit log", ["trail"], 0.7),
+    ]),
+    record("java:com.acme.order/Basket", "type", undefined),
+    record("java:com.acme.order/Order", "type", [said("order", "domain", "a customer's request", ["Order"]), said("channel", "domain", "a sales channel", ["channel"])]),
+    record("java:com.acme.order/OrderService", "type", [
+      said("order", "domain", "a customer's request", ["OrderService"]),
+      said("service", "domain", "after-sales care", ["OrderService"], 0.6),
+      said("ledger", "domain", "the books", ["ledger"]),
+    ]),
+    record("java:com.acme.order/Refund", "type", [said("refund", "domain", "money back", ["Refund"])]),
+    record("java:com.acme.order", "module", [said("order", "domain", "the ordering business", ["com.acme.order"])]),
+  ]);
+}
+
+describe("vocabulary: --drift-insights, the list against what a model judged", () => {
+  const store = storeOf(mkdtempSync(join(tmpdir(), "codegraph-cli-vocabulary-store-")));
+  const judged = (overrides: Partial<VocabularyOptions> = {}) => vocabularyTo({ driftInsights: true, insights: store, ...overrides });
+
+  it("lists the technical words a model called domain somewhere, then the reverse, each with the entities that did", () => {
+    const { io, code } = judged();
+    const lines = io.stdoutLines();
+    expect(lines[0]).toBe("codegraph vocabulary — drift-insights");
+    expect(lines[2]).toBe(`insights:  ${store}, judged by cheap/model (operations), strong/model (types, modules)`);
+    const report = lines.slice(lines.indexOf("") + 1);
+    expect(report).toEqual([
+      "compared: 10 word entries from 5 explained entities",
+      "",
+      "technical by the list, judged domain: 1 of 2 technical words, the most judgements against first",
+      "  service  domain 1",
+      `    0.60  "after-sales care"  OrderService in java:com.acme.order/OrderService`,
+      "",
+      "domain by the list, judged technical: 1 of 5 domain words, the most judgements against first",
+      "  trail  technical 1",
+      `    0.70  "an audit log"  trail in java:com.acme.order.adapter/LedgerAdapter`,
+    ]);
+    // The judgements are inferences: they never make a finding.
+    expect(code).toBe(EXIT.OK);
+    expect(io.stderr()).toContain("note: 1 record a model wrote under prompt 1 defines no words; the next 'codegraph explain' re-explains it.");
+    expect(io.stderr()).toContain("note: 1 explained record names no entity of this model (explained against another version of it): left out.");
+  });
+
+  it("shows a word's five surest judgements against it, and says how many more --json holds", () => {
+    const types = ["Basket", "Batch", "Channel", "Money", "Notifications", "Order", "OrderService"];
+    const crowded = storeWith(
+      mkdtempSync(join(tmpdir(), "codegraph-cli-vocabulary-crowded-")),
+      // The surest last by name: what is shown is decided by confidence, not by id.
+      types.map((name, i) => record(`java:com.acme.order/${name}`, "type", [said("adapter", "domain", "a go-between", [name], 0.3 + i / 10)])),
+    );
+    const lines = vocabularyTo({ driftInsights: true, insights: crowded }).io.stdoutLines();
+    const from = lines.indexOf("  adapter  domain 7");
+    expect(lines.slice(from + 1, from + 7).map((line) => line.split(/ {2,}/u).at(-1))).toEqual([
+      ...types.slice(2).reverse().map((name) => `${name} in java:com.acme.order/${name}`),
+      "… and 2 more (--json lists every one)",
+    ]);
+    const json = JSON.parse(vocabularyTo({ driftInsights: true, insights: crowded, json: true }).io.stdout()) as {
+      technicalJudgedDomain: { words: { against: unknown[] }[] };
+    };
+    expect(json.technicalJudgedDomain.words[0]?.against).toHaveLength(7);
+  });
+
+  it("--top cuts each list, and says so", () => {
+    const lines = judged({ technical: file("tech.txt", "order\nchannel\nledger\n"), top: 1 }).io.stdoutLines();
+    // The file replaces the shared list whole: `adapter` and `service` are domain words under it.
+    expect(lines).toContain("technical by the list, judged domain: 3 of 3 technical words (1 shown, --top 1), the most judgements against first");
+    expect(lines).toContain("domain by the list, judged technical: 2 of 4 domain words (1 shown, --top 1), the most judgements against first");
+    expect(lines.filter((line) => /^ {2}\S/u.test(line))).toEqual(["  order  domain 3", "  adapter  technical 1"]);
+  });
+
+  it("over a store whose records define no word, says there is nothing to compare", () => {
+    const dir = mkdtempSync(join(tmpdir(), "codegraph-cli-vocabulary-empty-"));
+    const empty = join(dir, "model.insights.db");
+    sqliteInsightsStore(loadSqlite().open(empty)).close();
+    const { io, code } = vocabularyTo({ driftInsights: true, insights: empty });
+    expect(code).toBe(EXIT.OK);
+    const lines = io.stdoutLines();
+    expect(lines).toContain("compared: no word entry — no explained entity of this model defines a word");
+    expect(lines).toContain("technical by the list, judged domain: no technical word judged");
+    expect(lines).toContain("domain by the list, judged technical: no domain word judged");
+  });
+
+  it("classifies under the list --technical gives", () => {
+    const lines = judged({ technical: file("tech.txt", "trail\nadapter\n") }).io.stdoutLines();
+    expect(lines).toContain("technical by the list, judged domain: none of 2 technical words");
+    expect(lines).toContain("domain by the list, judged technical: none of 5 domain words");
+  });
+
+  it("with --drift, sets the business terms against both, and still exits 3 on a term the corpus never says", () => {
+    const glossary = file("glossary.txt", "Order Service\nLedger\nCustomer\n");
+    const { io, code } = judged({ drift: glossary });
+    const lines = io.stdoutLines();
+    expect(lines).toContain(`glossary:  ${glossary}, 3 business terms`);
+    const from = lines.indexOf("business terms against both: 1 of 3 drift, a word the list or a model does not call domain");
+    expect(from).toBeGreaterThan(0);
+    expect(lines.slice(from + 1).map((line) => line.trimEnd().split(/ {2,}/u))).toEqual([
+      [""],
+      ["", "TERM", "WORD", "LIST", "MODEL", "DRIFT"],
+      ["", "Order Service", "order", "domain", "domain 3"],
+      ["", "service", "technical", "domain 1", "list"],
+      ["", "Ledger", "ledger", "domain", "domain 2"],
+      ["", "Customer", "customer", "not said", "not judged"],
+    ]);
+    expect(code).toBe(EXIT.FINDINGS);
+    expect(io.stderr()).toContain("1 business term the corpus never says — exiting 3 (findings).");
+  });
+
+  it("says the same thing as one JSON object", () => {
+    const glossary = file("glossary.txt", "Order Service\n");
+    const json = JSON.parse(judged({ drift: glossary, json: true, top: 1 }).io.stdout()) as Record<string, unknown>;
+    expect(json).toMatchObject({
+      kind: "codegraph.vocabularyReport/1",
+      report: "drift-insights",
+      insights: { path: store, models: { leaf: "cheap/model", rollup: "strong/model" }, withoutWords: 1, leftOut: { unknown: 1, notKept: 0 } },
+      compared: { entries: 10, entities: 5 },
+      technicalJudgedDomain: { judged: 2, total: 1, shown: 1, top: 1 },
+      domainJudgedTechnical: { judged: 5, total: 1, shown: 1, top: 1 },
+      glossary: { path: glossary, terms: 1, wordless: [] },
+      business: [
+        {
+          text: "Order Service",
+          said: true,
+          drift: true,
+          words: [
+            { word: "order", classes: ["domain"], concerns: { domain: 3, technical: 0, ambiguous: 0 }, drift: [] },
+            { word: "service", classes: ["technical"], concerns: { domain: 1, technical: 0, ambiguous: 0 }, drift: ["list"] },
+          ],
+        },
+      ],
+    });
+    expect((json["technicalJudgedDomain"] as { words: unknown[] }).words).toEqual([
+      {
+        word: "service",
+        class: "technical",
+        concerns: { domain: 1, technical: 0, ambiguous: 0 },
+        against: [{ id: "java:com.acme.order/OrderService", word: "service", concern: "domain", sense: "after-sales care", confidence: 0.6, in: ["OrderService"] }],
+      },
+    ]);
+  });
+
+  it("reads the store beside the first model by default, and writes nothing there", () => {
+    const dir = mkdtempSync(join(tmpdir(), "codegraph-cli-vocabulary-beside-"));
+    const model = join(dir, "model.jsonl");
+    copyFileSync(FIXTURE, model);
+    const bytes = readFileSync(storeOf(dir));
+    const before = readdirSync(dir).sort();
+    const { io, code } = vocabularyTo({ models: [model], driftInsights: true });
+    expect(code).toBe(EXIT.OK);
+    expect(io.stdoutLines()[2]).toMatch(new RegExp(`^insights: {2}${join(dir, "model.insights.db").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")},`, "u"));
+    expect(readdirSync(dir).sort()).toEqual(before);
+    expect(readFileSync(join(dir, "model.insights.db")).equals(bytes)).toBe(true);
+  });
+
+  it("refuses a store that is not there, naming the flag that points at another", () => {
+    const missing = join(mkdtempSync(join(tmpdir(), "codegraph-cli-vocabulary-none-")), "model.insights.db");
+    const error = usageErrorOf({ driftInsights: true, insights: missing });
+    expect(error.message).toBe(`no insights store at ${missing}`);
+    expect(error.hint).toContain("--insights FILE");
+  });
+
+  it("knows the concerns a model may judge: the insights block's, restated", () => {
+    expect(JUDGED_CONCERNS).toEqual(WORD_CONCERNS);
   });
 });
 

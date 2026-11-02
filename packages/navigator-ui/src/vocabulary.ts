@@ -1,4 +1,5 @@
 import type { Carrier, ScopeRef, TermClass, VocabularyArtifact } from "@codegraph/vocabulary";
+import { noStore, rememberedLookup, type Fetcher } from "./lookup.js";
 
 /**
  * THE VOCABULARY, AS THE PAGE RECEIVES IT (PLAN.md §20.2): the artifact
@@ -22,9 +23,7 @@ export const CARRIERS_ANSWER_KIND = "codegraph.carriers/1";
 /** In the package's order: what the chips and the key list, and how ties of one text sort. */
 export const TERM_CLASSES = ["domain", "technical", "keyword", "short"] as const;
 
-export type Fetcher = (url: string) => Promise<Response>;
-
-const noStore: Fetcher = (url) => fetch(url, { cache: "no-store" });
+export type { Fetcher } from "./lookup.js";
 
 export type VocabularyLoad =
   | { readonly status: "ready"; readonly artifact: VocabularyArtifact }
@@ -125,41 +124,8 @@ export function carriersUrl(query: CarriersQuery): string {
   return `carriers.json?${params.toString()}`;
 }
 
-/**
- * One request per (scope, term, class), shared and remembered. A server that
- * answers with something that is not JSON — the daemon's bare 404, index.html
- * — has no such route: asked once, not once per click.
- */
+/** One request per (scope, term, class), shared and remembered; quiet where the server has no such route. */
 export function createCarriersLoader(fetcher: Fetcher = noStore): CarriersLoader {
-  const asked = new Map<string, Promise<Carriers>>();
-  let noRoute = false;
-
-  const ask = async (query: CarriersQuery): Promise<Carriers> => {
-    try {
-      const response = await fetcher(carriersUrl(query));
-      let json: unknown;
-      try {
-        json = await response.json();
-      } catch {
-        noRoute = true;
-        return NONE;
-      }
-      return parseCarriersAnswer(json);
-    } catch {
-      return NONE;
-    }
-  };
-
-  return {
-    load(query) {
-      if (noRoute) return Promise.resolve(NONE);
-      const key = carriersUrl(query);
-      let pending = asked.get(key);
-      if (pending === undefined) {
-        pending = ask(query);
-        asked.set(key, pending);
-      }
-      return pending;
-    },
-  };
+  const ask = rememberedLookup(parseCarriersAnswer, NONE, fetcher);
+  return { load: (query) => ask(carriersUrl(query)) };
 }

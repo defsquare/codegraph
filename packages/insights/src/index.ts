@@ -21,6 +21,7 @@
  *   sidecar.ts      the `.insights.jsonl` file — the store's export
  *   store.ts        the insights store's port: `<model>.insights.db`, never a cache
  *   store-sqlite.ts its SQLite adapter, over a database the caller opened
+ *   glossary.ts     the readers of the words: by word, polysemy, concerns (M19c)
  */
 export * from "./ddd.js";
 export * from "./schema.js";
@@ -37,3 +38,4 @@ export * from "./run.js";
 export * from "./sidecar.js";
 export * from "./store.js";
 export * from "./store-sqlite.js";
+export * from "./glossary.js";

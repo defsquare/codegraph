@@ -86,7 +86,7 @@ export function technicalDigest(technical: readonly string[]): { readonly words:
 }
 
 /** Each id's language, from the model that declares it first — the graph's own rule. */
-function languagesOf(graph: CodeGraph): Map<EntityId, string> {
+export function languagesOf(graph: CodeGraph): Map<EntityId, string> {
   const langs = new Map<EntityId, string>();
   for (const model of graph.union.models) {
     for (const entity of model.entities) if (!langs.has(entity.id)) langs.set(entity.id, model.lang);

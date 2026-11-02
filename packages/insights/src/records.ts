@@ -1,4 +1,4 @@
-import type { InsightRecord, Level } from "./schema.js";
+import type { InsightRecord, Level, WordEntry } from "./schema.js";
 import { sortRecords } from "./sidecar.js";
 import type { InsightsStore, RunHandle } from "./store.js";
 
@@ -55,6 +55,8 @@ export interface RecordSource {
   fingerprint(id: string): string | undefined;
   /** What a prompt quotes of an explained dependency — never the whole record. */
   summary(id: string): RecordSummary | undefined;
+  /** What a module's prompt quotes of one of its types (PLAN.md §20.3); undefined with no record, or one explained under prompt 1. */
+  words(id: string): readonly WordEntry[] | undefined;
   size(): number;
 }
 
@@ -77,6 +79,7 @@ export function memoryBook(records: Iterable<InsightRecord> = []): MemoryBook {
       const record = byId.get(id);
       return record === undefined ? undefined : summaryOf(record);
     },
+    words: (id) => byId.get(id)?.block.words,
     size: () => byId.size,
     put: (_unitId, unit) => {
       for (const record of unit) byId.set(record.id, record);
@@ -122,6 +125,8 @@ export function storeBook(store: InsightsStore): StoreBook {
       }
       return summary;
     },
+    // Unkept: a type's words are quoted once, by its module.
+    words: (id) => (fingerprints.has(id) ? store.words(id) : undefined),
     size: () => fingerprints.size,
     begin: (handle) => {
       run = handle;

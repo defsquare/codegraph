@@ -69,6 +69,7 @@ codegraph navigator [model.jsonl] [--out FILE]
 codegraph vocabulary [model.jsonl] [--level corpus|module|type] [--scope ID]
                    [--top N] [--class domain|technical|keyword|short|all]
                    [--weights KEY=N,…] [--technical FILE] [--drift FILE]
+                   [--drift-insights [--insights FILE]]
                    [--out FILE] [--svg FILE] [--json] [--internal-only]
                    [--declared-only]
 
@@ -81,12 +82,13 @@ codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
                    [--model SLUG] [--rollup-model SLUG] [--depth N]
                    [--max-calls N] [--max-tokens N] [--scope IDS]
                    [--concurrency N]
-                   [--max-lines N] [--max-scc N] [--force] [--retry-failed]
+                   [--max-lines N] [--max-scc N] [--terms N] [--force] [--retry-failed]
                    [--export | --import FILE] [--yes] [--json]
                    [--framework spring] [--internal-only] [--declared-only]
 
 codegraph insights [model.jsonl] [--store FILE] [--json]
                    [--id ID | --failures | --runs |
+                    --word WORD | --glossary MODULE_ID | --polysemy | --concerns |
                     --level operation|type|module --concept NAME
                     --min-confidence X --max-confidence X --limit N]
 
@@ -179,14 +181,28 @@ artifact, `/insight.json?id=…`, looked up in `<model>.insights.db` beside the
 first model (or `--insights FILE`) when asked for. With no store the route
 answers 404 and the page looks exactly as it did.
 
+Over the same store, a clicked word on the Vocabulary tab also shows **what
+the explanations under that scope said it means**: each module's
+reconciliation (and the types that disagree on it), then each explained
+entity's entry — its concern, sense and confidence, and the identifiers the
+word is in — in the same inference colour and badge, each one click from its
+node (an operation reveals its type). That is the server's third lookup,
+`/glossary.json?term=WORD[&scope=ID][&limit=N]`: the entries of the entities
+the model folds under the scope, as the carriers are, from the store's word
+index; the first `limit` (200) of each list, and their totals. An unknown
+scope is `404`, and so is having no store (the tab then shows nothing); no
+term, or a limit that is no whole number, is `400`. Navigate's explanation
+panel shows the same words for a selected type or module, with their
+meaning, in its structured block.
+
 **`--app`** is the same page as the daemon behind the desktop app (and the
 development loop for it: run it from a checkout, open the URL in a browser).
 No model on argv. It binds `127.0.0.1:0` unless `--host`/`--port` say
 otherwise, prints exactly one JSON line on stdout — `{"port":N,"token":"…"}`
 — and serves every route under `/<token>/`: the page, `app` (the registry
 and the current project), `recent`, `navigator.json`, `city.json`,
-`vocabulary.json` (no `carriers.json`: the daemon holds no model between
-jobs, and the tab shows the counts without the names),
+`vocabulary.json` (no `carriers.json` or `glossary.json`: the daemon holds no
+model or store between jobs, and the tab shows the counts without the names),
 `POST jobs` with `{"src": DIR-or-model.jsonl, "extractor"?: NAME}` and the
 `jobs/current` event stream (`started`, `phase`, `progress` — the
 extractor's own stderr lines — `done`, `failed`; `idle` when nothing runs).
@@ -253,7 +269,21 @@ one block per scope, ranked by distinct terms (the cognitive-load report);
 `--weights` and `--technical FILE` change the scheme, and the header says
 which one counted. `--drift FILE` compares with a glossary, one business term
 per line: the terms no scope of `--level` says (exit `3`), the ones it says
-and where, and the domain words no term contains. `--out FILE` writes the
+and where, and the domain words no term contains. `--drift-insights` sets the
+classes against what `explain` judged (M19c): it reads the insights store beside
+the first model (`--insights FILE` names another), classes each word a model
+defined as the list does in that entity's language, and lists the technical
+words a model called domain somewhere, then the domain words it called
+technical, the most judgements against first (`--top N` per list, 40 by
+default), each with the judgements against it, surest first: confidence,
+sense, and the identifiers in which entity (five per word, and how many more:
+`--json` lists every one). With `--drift FILE` it adds the business terms against both: each
+word's class and the model's concerns, and why the term drifts (`list`,
+`model`). The judgements are inferences and never set the exit code; `--drift`
+still exits `3` on a term the corpus never says. `--scope`, `--level`,
+`--class` and `--svg` do not apply to it; records of entities the model or the
+view does not have, and records explained under prompt 1, are counted on stderr.
+`--json` gives `report: "drift-insights"`. `--out FILE` writes the
 `vocabulary.json` artifact (`codegraph.vocabulary/1`) beside the report.
 `--svg FILE` draws the cloud of the one scope reported — the corpus, or
 `--scope`'s — from the words `--class` and `--top` pick: size on the square
@@ -303,7 +333,11 @@ interactive terminal it is required. A unit that could not be explained exits
 side-car; `--retry-failed` redoes just those units and their direct
 dependents. A `401`/`402`/`403` aborts the run instead of failing every
 remaining unit the same way; `--max-tokens N` caps what one answer may cost,
-which on a prepaid account is what keeps a low balance from refusing every call. Design record: [insights.md](insights.md).
+which on a prepaid account is what keeps a low balance from refusing every call.
+Each unit is also asked for the meaning of the words its names spell (`words`:
+its own name, an operation's parameters, a type's fields, split as `vocabulary`
+splits them), and a module reconciles what its types said into a `glossary`
+of its heaviest `--terms N` words (default 60). Design record: [insights.md](insights.md).
 
 ### `insights`
 Asks the insights store what `explain` has written — and opens nothing else:
@@ -323,16 +357,41 @@ invocation:
 - `--id ID` — one explanation whole: envelope, description, block. An id that
   was asked for and **failed** is answered with the reason, exit `3`; an id the
   store has never heard of is a usage error;
+- `--word WORD` — every explained entity whose names spell the word (looked up
+  lowercase, as `vocabulary` splits names), grouped by module: one
+  tab-separated line per entry — the module, `glossary` or the entity's level,
+  the id, the concern, the confidence, the sense, and the identifiers the word
+  is in. Each module's own glossary entry comes first (its last cell lists the
+  types' senses when the module flagged the word polysemous), then the module,
+  its types, its operations. A record is placed by its natural key; one
+  without a key is under `-`. The meaning is not shown: `--glossary` and `--id`
+  show it;
+- `--glossary MODULE_ID` — a module's glossary whole, one line per word: the
+  word, the concern, sense and meaning the module reconciled from its types,
+  and the types' senses where they disagree;
+- `--polysemy` — the words a module flagged, and the words two modules'
+  glossaries define differently (in concern or sense, case and spacing aside):
+  every module's entry for each, side by side, the most senses first. No
+  model call judges them across the corpus: a human does;
+- `--concerns` — per module: how many distinct words its records define, and
+  how many the model called `domain`, `technical` and `ambiguous` (a word two
+  units judged differently counts under both), the most-worded module first;
 - `--failures` — the units still owed, with the reason each failed;
 - `--runs` — the ledger, oldest first: when, which models, what each run
   explained and spent.
 
 `--json` makes each answer one kind-tagged document (`codegraph.insightsSummary/1`,
-`…List/1`, `…Failures/1`, `…Runs/1`; `--id --json` is the record exactly as the
-side-car carries it). The command writes nothing: the store is opened as a
+`…List/1`, `…Word/1`, `…Glossary/1`, `…Polysemy/1`, `…Concerns/1`, `…Failures/1`,
+`…Runs/1`; `--id --json` is the record exactly as the side-car carries it).
+A record a model explained under prompt 1 defines no words, so the word
+answers cannot see it: they say on stderr how many such records there are,
+the summary counts them, `--id` says so on the record, and `--glossary` on
+such a module says why it has none. The next `explain` re-explains them. The command writes nothing: the store is opened as a
 reader, a missing one is a usage error rather than a file that appears, and one
 written by a newer codegraph — or a SQLite file that is not an insights store —
-is named and left alone.
+is named and left alone. One an older build wrote is refused and left alone too:
+any `codegraph explain` on it migrates it, `--dry-run` included, which calls no
+model.
 
 ### `scm`
 Mines a repository's git history into a deterministic `history.jsonl`:

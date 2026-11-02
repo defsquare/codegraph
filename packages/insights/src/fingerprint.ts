@@ -31,6 +31,12 @@ export interface FingerprintInputs {
   readonly missingDependencies: readonly string[];
   /** The context depth: a deeper prompt is a different prompt. */
   readonly depth: number;
+  /**
+   * Per member, the words its prompt asks to define and a module's glossary
+   * words: a function of the names and the lexicon, hashed so a lexicon
+   * correction re-explains exactly the units whose words it changed.
+   */
+  readonly words: readonly { readonly names: readonly { readonly identifier: string; readonly words: readonly string[] }[]; readonly glossary: readonly string[] }[];
 }
 
 /** JSON with object keys sorted at every level, so equal values hash equal. */

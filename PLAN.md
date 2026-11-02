@@ -5420,6 +5420,27 @@ per million out; and the bump re-explains the existing side-car once
 (measured at $4.70 under `deepseek-v4.1-flash`), which `--estimate` prints
 before anyone pays.
 
+**Measured (2026-10-29) — the estimate above is replaced.** The test corpus is
+Spring PetClinic, not Broadleaf (the user's decision: small enough to read
+every answer). A live prompt-2 run, gpt-5.6-luna, `--max-tokens 6000`: 106
+calls, 228 177 prompt + 96 356 completion tokens, $0.1343, no failure;
+`--estimate` had said 66 570 out (−31%). Each call's prompt was rebuilt with
+the planner (`contextPackFor` + `renderPrompts` over the run's own records;
+their estimates sum to the run's, token for token) and its measured completion
+tokens fitted on what it asked, reasoning tokens included since they are
+billed: **466 / 534 / 527 per operation / type / module block, 121 per word,
+123 per glossary entry** (r² 0.81 per call; the old figures 0.13), rounded
+into `COMPLETION_TOKENS_PER_BLOCK` = 470 / 530 / 530 and 120 / 125. A word
+entry's own JSON is ~50 tokens; the rest is the reasoning that goes with it.
+Fitted on one half of the calls, the other half's total is predicted within
+−7% and +15% (±6% without the module calls), against −29% and −33% before.
+The glossary figure rests on five module calls (one half-sample fits 342): a
+corpus with more modules should refit it. Per word, at the run's fitted
+prices ($0.067/M in, $1.256/M out), ~$0.00015. Input, unchanged here: the
+planned prompts were 15% under the measured input — 7.9% because a cold
+estimate cannot quote explanations no run has written yet, 6.3% because this
+model's tokenizer packs 3.76 characters per token, not 4.
+
 **Layer 3 — readers, all over the store, none calling anything.**
 `codegraph insights --word order` — every entity whose names spell it,
 grouped module → type → operation, each with the identifiers it is in, its
@@ -5442,6 +5463,191 @@ under a clicked word, each in the `--inference` colour with the model badge,
 and the Navigate explanation panel renders `words` and `glossary` through
 the same generic `blockFacts` it renders everything else with: an inference
 never looks like a fact.
+
+**As built — layer 2 (2026-10-27).** As designed, with these decisions:
+
+- **The own name's words only.** A qualifier's words are its container's,
+  asked where they are the own name: `com.acme.order` is asked for `order`,
+  `AcmeOrder::OrderLine` for `order, line`. `definitionSpeller` in
+  `@codegraph/vocabulary` (`define.ts`) splits and classifies exactly as the
+  cloud does and keeps `domain` and `technical`; it takes no technical list,
+  since that list only moves a word between two classes that are both asked.
+- **A port, not an import.** `@codegraph/insights` imports nothing from the
+  vocabulary, not even types: the context env takes a `Speller`
+  (`words(id)`, `ranked(moduleId)`) and the CLI hands in `definitionSpeller`
+  and `rankedWords` over the run's `buildVocabulary`, built on first ask.
+- **Kept on receipt.** The words are given: an entry for a word the prompt
+  did not list is dropped, a word given twice keeps its first entry, and
+  `in` is restated from the split, a fact the prompt stated. A module's
+  glossary is filtered the same way. An answer without `words` (or a
+  module's without `glossary`) gets the repair re-ask, then a failure.
+- **Templated records carry no `words`**: no model judged them. The
+  definition of done's "every record carries `words`" holds for every
+  record a model wrote.
+- **The glossary's candidates** are the words its types' prompts asked
+  (their names and fields), ordered by the module's vocabulary row order (an
+  unranked word after, by text) and cut at `--terms`. The module prompt
+  shows, per word, each type's `concern`, `sense` and `meaning`, or "no type
+  defined it", read through `RecordSource.words(id)` (a `block -> '$.words'`
+  projection in the store) only when the prompt renders.
+- **Fingerprints** take, per member, the identifiers and words asked and a
+  module's glossary words; never what a type said of them. The same
+  `--terms` reuses every module, and another redoes exactly the modules whose
+  cut moved.
+- **The estimate** adds 30 completion tokens per word and 40 per glossary
+  entry, this section's figures, until a run measures them. On the Java
+  fixture the plan goes from 102 786 to 114 483 prompt tokens (+11%) and
+  from 36 650 to 41 670 completion tokens (+14%). *Measured since (the
+  Cost paragraph): 120 per word, 125 per entry, blocks 470 / 530 / 530; the
+  fixture's plan now says 52 900 completion tokens.*
+
+**As built — the store (2026-10-27).** `INSIGHTS_DB_VERSION = 2`. Migration 1
+creates `insight_word (id, entry)`, indexed on `word` and on `id`. `entry` is
+the word entry as JSON text, without its `meaning`; `word`, `concern`, `sense`
+and `confidence` are generated columns over it. The decisions:
+
+- **JSON text with generated columns, as `insight` has.** These strings come
+  from a model or a side-car, and a plain column cannot hold U+0000 (the binding
+  reads it back cut short). The round-trip property's words are binary strings,
+  and they import whole. `in` rides in `entry`: it is a reserved word in SQL.
+- **No `meaning`.** A sentence per entry was a third of the table at Broadleaf's
+  scale. An answer that shows it reads the block, by the M16b rule this
+  section's table cites.
+- **Backfilled after all.** This section said there was nothing to backfill,
+  but a build that asked prompt 2 while its store was still at version 1 (#35)
+  writes words into version-1 blocks. The migration projects them.
+- **Written per record**, in the unit's transaction: first the replaced
+  record's rows are deleted, then the record is written, then its rows. An
+  import deletes the whole table and rebuilds it from the blocks. There is one
+  row per entry, a repeated word included: the projection says what the block
+  says.
+- **A reader still refuses an older store** (M16c). The refusal now names the
+  free way out: any `explain` on the store migrates it, `--dry-run` included. So
+  `serve`'s panel shows nothing on a version-1 store until then.
+- **Tested from a real file.** `packages/insights/test/fixtures/store-v1.sql`
+  is the `.dump` of a store the version-1 build wrote (6 records, 2 failures, a
+  run, 2 blocks with words), kept with the export that build wrote.
+- **Scale, on a synthetic side-car** with Broadleaf's counts and this section's
+  word estimates (28 206 records, 131 190 entries): the import takes 1.5 s and
+  the export is byte-identical. The projection is 22 MB of a 91 MB store,
+  `WHERE word = 'order'` takes 0.5 ms, and the migration's backfill 0.6 s. The
+  real Broadleaf side-car is owed.
+
+**As built — the store's readers (2026-10-27).** `codegraph insights --word`,
+`--glossary`, `--polysemy` and `--concerns`, over `glossary.ts` in
+`@codegraph/insights` and four projections of the port (`wordHits`,
+`glossaryEntries`, `concernRows`, `withoutWords`). The decisions:
+
+- **The module comes from the natural key.** `insights` opens the store alone,
+  so a record is placed by its key: core renders the module's id from `lang`
+  and `module`, groups compare through `naturalKeyIndex`, and the id is never
+  parsed. "Grouped module → type → operation" is by level within each module:
+  an operation is not nested under its type, which only the model knows.
+- **Tab-separated, like the command's other lists**, the module first so the
+  grouping survives `sort`. A module's glossary entry heads its group. The
+  entries show no `meaning`: the projection does not hold it, and `--glossary`
+  and `--id` read it from the block.
+- **Polysemy across modules** is two entries that differ in concern or in
+  sense, case and spacing aside: the wording varies from call to call, and an
+  exact comparison would list every word two modules define. The most senses
+  first.
+- **Concerns** count distinct words per concern, so a word two units of one
+  module judged differently counts under both.
+- **The prompt-1 answer** (`wordsAbsence`): a record a model wrote without
+  `words` is prompt 1's, one no model wrote is a template's. `--id` says which,
+  `--glossary` on such a module says why it has none, and the summary and every
+  word answer count what they cannot see.
+- **Lookup is exact for any string.** The `word` index holds what `->>` made of
+  the word; a lone surrogate's bytes are not the binding's, so such a word is
+  looked for by a scan, and JS equality decides either way.
+- **Measured** through the CLI on the synthetic store at Broadleaf's scale:
+  `--word order` (549 entries, 19 glossary entries) 0.46 s, `--polysemy`
+  0.48 s, `--concerns` 0.54 s, Node's start included. The re-explained
+  Broadleaf store is owed, as above.
+
+**As built — `vocabulary --drift-insights` (2026-10-28).** `concernDrift` and
+`businessJudged` in `@codegraph/vocabulary` (`concern-drift.ts`), fed by the
+store's `wordHits()`, which with no word now returns every entry. The decisions:
+
+- **Neither package imports the other.** The vocabulary package takes
+  `WordJudgement`s in its own shape and restates the three concerns
+  (`JUDGED_CONCERNS`), pinned equal to the insights block's by a CLI test; the
+  command maps the store's rows into them.
+- **The class is the list's, per entity.** Each judgement's word is classed as
+  `buildVocabulary` would class it in that entity's language (read from the
+  union) under the list in effect, `--technical` included. So a word judged in
+  two languages may be two rows (`select`: Java `domain`, Go `keyword`).
+- **Two lists.** The technical words a model judged domain somewhere, and the
+  domain words it judged technical, ranked by the judgements against, ties by
+  word; `--top N` cuts each (40). `ambiguous` is counted and contradicts
+  neither class; a `keyword` or `short` word (a lexicon corrected since) is
+  counted and contradicts nothing.
+- **Kept as the vocabulary keeps.** A record of an id the model does not hold
+  (explained against another version of it) or the view does not keep is left
+  out and counted on stderr, as are prompt-1 records.
+- **The surest five.** A word's judgements against are ordered by confidence,
+  then by id; the text shows five per word and says how many more, `--json`
+  every one. On Broadleaf every judgement in full was 6 868 lines, each padded
+  to the longest operation id (≈ 600 characters), so the entity now comes last,
+  unpadded: `getSectionKey in java:…AdminFieldController.getSectionKey(…)`.
+- **The business list against both** (`--drift FILE` beside it): each term's
+  words with the classes the corpus says them under and the model's concerns
+  over every entity; a term drifts on a word the list does not call domain
+  (`list`) or a model judged technical somewhere (`model`).
+- **A judgement never sets the exit code.** It is an inference; `--drift`
+  keeps its own exit 3 for a term the corpus never says (`said` is the
+  corpus-level drift's answer, pinned by a test).
+- **The store** is beside the first model, or `--insights FILE` (serve's flag
+  name); missing or unmigrated, a usage error before the model is read.
+  `--scope`, `--level`, `--class` and `--svg` with it, and `--insights`
+  without it, are usage errors. `--json` is `report: "drift-insights"` in
+  `codegraph.vocabularyReport/1`.
+- **Measured** on a store built over Broadleaf's own ids (29 098 records, the
+  words `definitionSpeller` asks plus parameters and attributes: 109 208
+  entries, 12 % judged against the list): 4.1 s end to end against 3.2 s for
+  the plain report on the same machine (an x86-64 Linux box, slower than the
+  M1 of §20.1), at the same peak memory (≈ 0.5 GB). A store a model wrote is
+  owed, as above.
+
+**As built — the glossary in the page (2026-10-28).** `/glossary.json`, the
+Vocabulary tab's entries and the Navigate panel's, over `answerGlossary` in
+`@codegraph/insights` (`glossary.ts`). The decisions:
+
+- **The scope is the model's, injected.** `answerGlossary(store, query,
+  placement)` takes a `Placement` (an id → its containing module and type);
+  the CLI builds it from the analyzer's fold over the entities the view keeps,
+  so a word's carriers and its glossary are of the same entities, and the
+  package still opens no model. Under a module: what folds into it, its own
+  record included; under a type: the type and its members. A module's
+  reconciliation is under its module and the corpus, not under a type. A scope
+  is a kept module or type; anything else is `unknown-scope`, 404.
+- **One store reader.** `insightLookup` and `glossaryLookup` share
+  `storeReader(path)`, opened at the first request that finds the file. No
+  store is `{status: "no-store"}`, 404, and the tab shows nothing. The
+  placement is built at the first request a store can answer, then the graph
+  is let go, as for the carriers.
+- **The answer** is the projection's entries without the natural key (the
+  page has no use for it), an operation's `owner` (its type, else its module:
+  the node a page reveals), ordered module, types, operations, then by id; the
+  modules' glossary entries whole. Each list is cut at `limit` (200) with its
+  total. No `meaning` per entity: the projection does not hold it, and the
+  panel shows it from the block. `withoutWords` is the store's.
+- **The tab** lists them under the clicked word's carriers, inside the
+  explanation panel's border and badge (`LLM glossary`), with the models that
+  wrote them; an entry reveals its entity in Navigate (an operation, its type);
+  the prompt-1 records are counted in a footnote.
+- **The panel reads `words` and `glossary` by name** — the one exception to
+  its generic block rendering, since generically a word entry showed the
+  identifiers where a definition reads, and a glossary entry lost the types
+  that disagree: `order (domain) — sense. Meaning. In Order · 0.90`.
+- **One remembered lookup** (`lookup.ts`): the insight, carriers and glossary
+  loaders ask once per URL and stop asking a server with no such route.
+- **Measured** on the Broadleaf store of the previous note: the first request
+  takes 0.21 s with the placement built, later ones 0.11 s; `order` over the
+  corpus is 1 908 entries, 200 sent (53 KB). The server's RSS after a click
+  is the same within noise (605 MB, against 619 MB without the route).
+  Screenshots reviewed at 1600×1000 on the Java fixture (a hand-worded store
+  over its ids) and on Broadleaf.
 
 ### 20.4 Milestone split
 
@@ -5499,22 +5705,26 @@ never looks like a fact.
 
 **M19c — the glossary: words in the explanation**
 
-- [ ] `words` on the three blocks and `glossary` on the module block,
+- [x] `words` on the three blocks and `glossary` on the module block,
       `.optional()` in the record schema and required on the wire;
       `PROMPT_VERSION = "2"`; the *Words to define* prompt section fed by
       `@codegraph/vocabulary` (types only, through the env); the module
       prompt quoting its types' entries through a `RecordSource.words(id)`
       projection; the word list in the fingerprint inputs.
-- [ ] The store at version 2: migration 1 creating `insight_word`, written
+- [x] The store at version 2: migration 1 creating `insight_word`, written
       per record in the unit's transaction and rebuilt on `--import`; the
       migration tests of §20.3; the round-trip property unchanged and green
-      on every existing side-car.
+      on every existing side-car. *(The real Broadleaf side-car is owed;
+      measured on a synthetic one at its scale.)*
 - [ ] `--terms N`; `--dry-run`/`--estimate` reflecting the longer
       completions (`COMPLETION_TOKENS_PER_BLOCK` re-measured); a reader's
       answer for a record explained under prompt `"1"`; on the fake client
       and live on the Java fixture; the §20.3 estimate replaced by the
-      Broadleaf measurement.
-- [ ] Readers: `insights --word`, `--glossary`, `--polysemy`, `--concerns`;
+      Broadleaf measurement. *(In: `--terms`, the estimate's per-word
+      figures, the fake-client run, the prompt-1 answer; the measurement,
+      from a live run on Spring PetClinic in Broadleaf's place, 2026-10-29,
+      §20.3 "Measured". Owed: the live run on the Java fixture.)*
+- [x] Readers: `insights --word`, `--glossary`, `--polysemy`, `--concerns`;
       `vocabulary --drift-insights`; `/glossary.json`; the entries in the
       Vocabulary tab and in the Navigate panel as inferences.
 - [ ] `docs/vocabulary.md` (the idioms per profile, the classes, the

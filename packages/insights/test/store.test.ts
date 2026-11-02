@@ -1,9 +1,10 @@
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import fc from "fast-check";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadSqlite } from "@codegraph/analyzer";
+import { loadSqlite, type SqliteDatabase } from "@codegraph/analyzer";
 import {
   INSIGHTS_GENERATOR,
   INSIGHTS_KIND,
@@ -16,10 +17,11 @@ import {
   type ModuleBlock,
   type OperationBlock,
   type TypeBlock,
+  type WordEntry,
 } from "../src/schema.js";
 import { decodeInsights, encodeInsightsToString } from "../src/sidecar.js";
 import { INSIGHTS_APPLICATION_ID, INSIGHTS_DB_VERSION, INSIGHT_ANSWER_KIND, InsightsStoreError, answerInsight, insightsStorePathFor } from "../src/store.js";
-import { storeBook, summaryOf } from "../src/records.js";
+import { memoryBook, storeBook, summaryOf } from "../src/records.js";
 import { sqliteInsightsStore } from "../src/store-sqlite.js";
 
 const memory = () => sqliteInsightsStore(loadSqlite().open(":memory:"));
@@ -83,12 +85,19 @@ const usageArb = fc.record(
 );
 const keyArb = fc.record({ lang: text, module: text, symbol: text, disambiguator: text }, { requiredKeys: ["lang", "module", "symbol"] });
 const confidence = fc.double({ noNaN: true, noDefaultInfinity: true });
-const blockArb = {
-  operation: fc.record({ name: wild, description: wild, confidence, domainTerms: fc.array(wild, { maxLength: 3 }), owner: fc.constantFrom("entity", "aggregate", "unknown") }).map((b) => ({ ...OPERATION, ...b })),
-  type: fc.record({ name: text, description: wild, confidence, identity: fc.option(text, { nil: null }), concept: fc.constantFrom("entity", "aggregate", "valueType") }).map((b) => ({ ...TYPE, ...b })),
-  module: fc.record({ name: text, description: wild, confidence, sharedKernelHint: fc.option(text, { nil: null }), boundedContextHint: fc.option(fc.record({ name: wild, rationale: wild }), { nil: null }) }).map((b) => ({ ...MODULE, ...b })),
-};
 const strip = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
+const wordArb = fc.record({ word: wild, in: fc.array(wild, { maxLength: 2 }), concern: fc.constantFrom("domain", "technical", "ambiguous"), sense: wild, meaning: wild, confidence });
+const glossaryArb = fc.record({
+  word: wild, concern: fc.constantFrom("domain", "technical", "ambiguous"), sense: wild, meaning: wild, polysemous: fc.boolean(),
+  senses: fc.array(fc.record({ in: wild, sense: wild }), { maxLength: 2 }),
+});
+// Prompt 2 adds them; a record explained under prompt 1 has neither.
+const wordsArb = maybe(fc.array(wordArb, { maxLength: 3 }));
+const blockArb = {
+  operation: fc.record({ name: wild, description: wild, confidence, domainTerms: fc.array(wild, { maxLength: 3 }), owner: fc.constantFrom("entity", "aggregate", "unknown"), words: wordsArb }).map((b) => strip({ ...OPERATION, ...b })),
+  type: fc.record({ name: text, description: wild, confidence, identity: fc.option(text, { nil: null }), concept: fc.constantFrom("entity", "aggregate", "valueType"), words: wordsArb }).map((b) => strip({ ...TYPE, ...b })),
+  module: fc.record({ name: text, description: wild, confidence, sharedKernelHint: fc.option(text, { nil: null }), boundedContextHint: fc.option(fc.record({ name: wild, rationale: wild }), { nil: null }), words: wordsArb, glossary: maybe(fc.array(glossaryArb, { maxLength: 2 })) }).map((b) => strip({ ...MODULE, ...b })),
+};
 
 // Built once, never per draw: a regex arbitrary costs a parse, and drawing a fresh one per record timed this suite out on CI.
 const fingerprintArb = fc.stringMatching(/^[0-9a-f]{64}$/u);
@@ -256,6 +265,40 @@ describe("storeBook (M16b): the walk reads the store, one record at a time", () 
     );
   });
 
+  it("the store's words ARE the record's, projected without the rest of the block; none under prompt 1", () => {
+    fc.assert(
+      fc.property(fc.uniqueArray(text.filter((s) => s !== ""), { minLength: 1, maxLength: 6 }).chain((ids) => fc.tuple(...ids.map(recordArb))), (records) => {
+        const store = memory();
+        try {
+          // Compared with what the side-car holds: JSON has no -0.
+          const file = decodeInsights(encodeInsightsToString(HEADER, records, eof(records.length)));
+          store.importFile(file);
+          const book = memoryBook(file.records);
+          for (const record of file.records) {
+            expect(store.words(record.id)).toEqual(record.block.words);
+            expect(book.words(record.id)).toEqual(record.block.words);
+          }
+          expect(store.words("\u0001 no such id")).toBeUndefined();
+        } finally {
+          store.close();
+        }
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("a book answers a type's words from the store, and keeps a put's words visible", () => {
+    const words = [{ word: "order", in: ["Order"], concern: "domain" as const, sense: "a purchase", meaning: "What a customer asks to buy.", confidence: 0.9 }];
+    const { store } = seeded();
+    const book = storeBook(store);
+    expect(book.words("t/A")).toBeUndefined();
+    expect(book.words("nope")).toBeUndefined();
+    const run = store.beginRun({ header: HEADER, startedAt: "t" });
+    book.begin(run);
+    void book.put("t/B", [{ ...type("t/B"), block: { ...TYPE, words } } as InsightRecord]);
+    expect(book.words("t/B")).toEqual(words);
+  });
+
   it("put() is the store's commit: refused before a run begins, visible to the very next read after", () => {
     const { store } = seeded();
     const book = storeBook(store);
@@ -352,6 +395,8 @@ describe("a reader's questions (M16c): projections, never blocks — and a store
       byOrigin: { llm: 5, template: 1 },
       byConcept: { aggregate: 1, entity: 1, valueType: 1 },
       usage: { promptTokens: 0, completionTokens: 0 },
+      // A model wrote five of them and none has words: prompt 1's. The template is no model's.
+      withoutWords: 5,
     });
     // What the records that exist cost, from their own usage — it survives an import, the ledger does not.
     const paid = memory();
@@ -534,6 +579,193 @@ describe("never disposable: a store is migrated or refused, never rebuilt", () =
     sqliteInsightsStore(db);
     expect(db.prepare("PRAGMA application_id").get()).toEqual({ application_id: INSIGHTS_APPLICATION_ID });
     expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: INSIGHTS_DB_VERSION });
+  });
+});
+
+/* ── version 2 (M19c): a record's words, projected into insight_word ── */
+
+/** What `insight_word` holds, per id, in row order: each entry as JSON decodes it. */
+function projected(db: SqliteDatabase): Map<string, unknown[]> {
+  const out = new Map<string, unknown[]>();
+  for (const row of db.prepare("SELECT id, entry FROM insight_word ORDER BY rowid").all()) {
+    const id = row["id"] as string;
+    out.set(id, [...(out.get(id) ?? []), JSON.parse(row["entry"] as string) as unknown]);
+  }
+  return out;
+}
+
+/** An entry as the projection lists it: its `meaning` stays in the block. */
+const listed = ({ meaning: _meaning, ...entry }: WordEntry): Omit<WordEntry, "meaning"> => entry;
+/** What it must hold: each record's `words`, in block order; a record without any has no row. */
+const wordsOf = (records: readonly InsightRecord[]): Map<string, unknown[]> =>
+  new Map(records.filter((r) => (r.block.words ?? []).length > 0).map((r) => [r.id, (r.block.words ?? []).map(listed)]));
+
+const ORDER: WordEntry = { word: "order", in: ["Order"], concern: "domain", sense: "a request", meaning: "What a customer asked for.", confidence: 0.9 };
+const LINES: WordEntry = { word: "lines", in: ["lines"], concern: "domain", sense: "its items", meaning: "What the order holds.", confidence: 0.7 };
+
+describe("version 2 (M19c): insight_word, a projection of every record's words", () => {
+  it("is every record's words in block order, for any side-car; an import rebuilds it whole", () => {
+    fc.assert(
+      fc.property(fileArb, fileArb, (first, second) => {
+        const db = loadSqlite().open(":memory:");
+        const store = sqliteInsightsStore(db);
+        // Compared with the DECODED file, as the round trip is: JSON has no -0.
+        store.importFile(decodeInsights(first));
+        expect(projected(db)).toEqual(wordsOf(decodeInsights(first).records));
+        store.importFile(decodeInsights(second));
+        expect(projected(db)).toEqual(wordsOf(decodeInsights(second).records));
+        store.close();
+      }),
+      { numRuns: 60 },
+    );
+  });
+
+  it("a put replaces a record's words with its new ones, in the unit's transaction", () => {
+    const db = loadSqlite().open(":memory:");
+    const store = sqliteInsightsStore(db);
+    const run = store.beginRun({ header: HEADER, startedAt: "t" });
+    const order = (words?: WordEntry[]): InsightRecord => ({ ...type("t/Order"), block: { ...TYPE, ...(words === undefined ? {} : { words }) } }) as InsightRecord;
+    store.putUnit(run, "t/Order", [order([ORDER, LINES])]);
+    expect(projected(db)).toEqual(new Map([["t/Order", [listed(ORDER), listed(LINES)]]]));
+    store.putUnit(run, "t/Order", [order([LINES])]);
+    expect(projected(db)).toEqual(new Map([["t/Order", [listed(LINES)]]]));
+    // Explained again without words (a template): no row is left to say otherwise.
+    store.putUnit(run, "t/Order", [order()]);
+    expect(projected(db)).toEqual(new Map());
+    // A unit refused whole writes none of its members' words.
+    store.putUnit(run, "t/Order", [order([ORDER])]);
+    const bad = { ...op("o/c"), fingerprint: "short" } as InsightRecord;
+    expect(() => store.putUnit(run, "t/Basket", [{ ...type("t/Basket"), block: { ...TYPE, words: [LINES] } } as InsightRecord, bad])).toThrow();
+    expect(projected(db)).toEqual(new Map([["t/Order", [listed(ORDER)]]]));
+    store.close();
+  });
+
+  /*
+   * THE FIRST RUNG OF THE LADDER TO RUN ON A REAL FILE. fixtures/store-v1.sql is a store the version-1 build
+   * wrote (write-store-v1.mjs says what it holds): a side-car imported under prompt 1, then a run of a build
+   * that already asked prompt 2's words while its store was still version 1 — so two blocks hold words.
+   */
+  describe("from version 1", () => {
+    const V1_SQL = fileURLToPath(new URL("./fixtures/store-v1.sql", import.meta.url));
+    const V1_EXPORT = readFileSync(fileURLToPath(new URL("./fixtures/store-v1.insights.jsonl", import.meta.url)), "utf8");
+    let dir: string | undefined;
+    afterEach(() => {
+      if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+      dir = undefined;
+    });
+    const v1Store = (): string => {
+      dir = mkdtempSync(join(tmpdir(), "insights-v1-"));
+      const path = join(dir, "model.insights.db");
+      const db = loadSqlite().open(path);
+      db.exec(readFileSync(V1_SQL, "utf8"));
+      db.close();
+      return path;
+    };
+    /** Opens as the CLI does: a refused open closes its connection. */
+    const open = (path: string, readOnly = false) => {
+      const db = loadSqlite().open(path);
+      try {
+        return { db, store: sqliteInsightsStore(db, { readOnly }) };
+      } catch (error) {
+        db.close();
+        throw error;
+      }
+    };
+
+    it("migrates with its records, failures, ledger and stamps intact, and exports the bytes the version-1 build did", () => {
+      const path = v1Store();
+      const { db, store } = open(path);
+      expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 2 });
+      expect(store.stats()).toMatchObject({ records: 6, failures: 2, byLevel: { operation: 3, type: 2, module: 1 }, byOrigin: { llm: 5, template: 1 } });
+      expect(store.runs()).toMatchObject([{ id: 1, startedAt: "2026-10-27T10:00:00.000Z", finishedAt: "2026-10-27T10:05:00.000Z", counts: { llm: 2, calls: 2 } }]);
+      expect(store.exported()).toEqual({ path: "model.insights.jsonl", size: 4321, mtimeMs: 1760950800000 });
+      expect(exportOf(store)).toBe(V1_EXPORT);
+      // The words already in its blocks are projected: a version-1 block CAN hold them.
+      expect(projected(db)).toEqual(wordsOf(decodeInsights(V1_EXPORT).records));
+      expect(projected(db).size).toBe(2);
+      store.close();
+      // Migrated once: reopened, it is version 2 and the same store.
+      const again = open(path);
+      expect(exportOf(again.store)).toBe(V1_EXPORT);
+      expect(projected(again.db).size).toBe(2);
+      again.store.close();
+      expect(readdirSync(dir!)).toEqual(["model.insights.db"]);
+    });
+
+    it("a reader refuses it, names the way to migrate without a call, and leaves its bytes alone", () => {
+      const path = v1Store();
+      const before = readFileSync(path);
+      expect(() => open(path, true)).toThrow(/at version 1 and this build reads 2.*--dry-run/u);
+      expect(readFileSync(path).equals(before)).toBe(true);
+    });
+
+    it("a migration that fails leaves it at version 1 with every record", () => {
+      const path = v1Store();
+      // Any failure mid-migration will do: here, the table migration 1 creates is already there.
+      const db = loadSqlite().open(path);
+      db.exec("CREATE TABLE insight_word (stray INTEGER)");
+      db.close();
+      expect(() => open(path)).toThrow(/from version 1 failed; it was left at version 1/u);
+      const after = loadSqlite().open(path);
+      expect(after.prepare("PRAGMA user_version").get()).toEqual({ user_version: 1 });
+      expect(after.prepare("SELECT count(*) AS n FROM insight").get()).toEqual({ n: 6 });
+      after.close();
+    });
+  });
+});
+
+describe("the word readers' projections (M19c): what the blocks say, never more", () => {
+  const hit = (r: InsightRecord, entry: WordEntry) => ({ id: r.id, level: r.level, kind: r.kind, name: r.name, key: r.key, model: r.model, entry: listed(entry) });
+  const asSet = <T>(rows: readonly T[]): string[] => rows.map((row) => JSON.stringify(row)).sort();
+
+  it("for any side-car, exact on any string: every entry or one word's, the glossaries, each concern once, the records without words", () => {
+    fc.assert(
+      fc.property(fileArb, (file) => {
+        const store = memory();
+        const { records } = decodeInsights(file);
+        store.importFile(decodeInsights(file));
+        expect(store.wordHits()).toEqual(records.flatMap((r) => (r.block.words ?? []).map((w) => hit(r, w))));
+        const spelled = new Set(records.flatMap((r) => (r.block.words ?? []).map((w) => w.word)));
+        // Side-car order, then block order. The words are any strings, a lone surrogate (which the index cannot match) included.
+        for (const word of [...spelled, "\u{1F4E6}never"]) {
+          expect(store.wordHits(word)).toEqual(records.flatMap((r) => (r.block.words ?? []).filter((w) => w.word === word).map((w) => hit(r, w))));
+        }
+        const glossed = records.flatMap((r) => (r.level === "module" ? (r.block.glossary ?? []).map((entry) => ({ id: r.id, key: r.key, name: r.name, model: r.model, entry })) : []));
+        expect(store.glossaryEntries()).toEqual(glossed);
+        for (const word of new Set(glossed.map((g) => g.entry.word))) expect(store.glossaryEntries(word)).toEqual(glossed.filter((g) => g.entry.word === word));
+        const concerns = records.flatMap((r) => (r.block.words ?? []).map((w) => ({ lang: r.key?.lang, module: r.key?.module, word: w.word, concern: w.concern })));
+        expect(asSet(store.concernRows())).toEqual([...new Set(asSet(concerns))]);
+        expect(store.withoutWords()).toBe(records.filter((r) => r.origin === "llm" && r.block.words === undefined).length);
+        store.close();
+      }),
+      { numRuns: 60 },
+    );
+  });
+
+  it("answers in side-car order whatever order a run wrote the records in", () => {
+    const store = memory();
+    const run = store.beginRun({ header: HEADER, startedAt: "t" });
+    const glossary = [{ word: "order", concern: "domain" as const, sense: "a request", meaning: "m", polysemous: false, senses: [] }];
+    // A walk writes bottom-up and in its own order: rowids say nothing about the export's.
+    store.putUnit(run, "m/b", [{ t: "i", id: "m/b", level: "module", kind: "package", origin: "llm", fingerprint: FP, block: { ...MODULE, words: [ORDER], glossary } }]);
+    store.putUnit(run, "t/B", [{ ...type("t/B"), block: { ...TYPE, words: [ORDER] } } as InsightRecord]);
+    store.putUnit(run, "m/a", [{ t: "i", id: "m/a", level: "module", kind: "package", origin: "llm", fingerprint: FP, block: { ...MODULE, words: [ORDER], glossary } }]);
+    store.putUnit(run, "t/A", [{ ...type("t/A"), block: { ...TYPE, words: [ORDER] } } as InsightRecord]);
+    store.putUnit(run, "o/z", [op("o/z", { block: { ...OPERATION, words: [ORDER] } })]);
+    expect(store.wordHits("order").map((h) => h.id)).toEqual(["o/z", "t/A", "t/B", "m/a", "m/b"]);
+    expect(store.wordHits().map((h) => h.id)).toEqual(["o/z", "t/A", "t/B", "m/a", "m/b"]);
+    expect(store.glossaryEntries().map((g) => g.id)).toEqual(["m/a", "m/b"]);
+    store.close();
+  });
+
+  it("a word no identifier can spell (a lone surrogate) is found exactly, and only it", () => {
+    const store = memory();
+    const odd = { ...ORDER, word: "\ud800" };
+    store.importFile(decodeInsights(encodeInsightsToString(HEADER, [{ ...type("t/Order"), block: { ...TYPE, words: [ORDER, LINES, odd] } } as InsightRecord], eof(1))));
+    expect(store.wordHits("order").map((h) => h.entry.word)).toEqual(["order"]);
+    expect(store.wordHits("\ud800").map((h) => h.entry.word)).toEqual(["\ud800"]);
+    expect(store.wordHits("\udc00")).toEqual([]);
+    store.close();
   });
 });
 
