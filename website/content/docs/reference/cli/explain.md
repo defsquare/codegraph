@@ -31,7 +31,7 @@ codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|op
 | `--concurrency N` | Model calls in flight at once. | `4` |
 | `--max-lines N` | Source lines shown per unit before the middle is elided. | `200` |
 | `--max-scc N` | Members of a dependency cycle explained in one call; larger cycles are chunked. | `12` |
-| `--terms N` | Words a module's glossary reconciles: the heaviest N its types define. | `60` |
+| `--terms N` | Words a module's glossary reconciles: of the heaviest N its types spell, those a type defined. | `60` |
 | `--scope IDS` | Comma-separated module or type ids: explain only units inside them (dependencies outside are reused when already explained, never called). | — |
 | `--framework <spring>` | Add a framework's stereotypes and entry points to the facts shown. | — |
 | `--internal-only` | Drop stub (external) entities and every edge touching one. | — |

@@ -337,7 +337,7 @@ which on a prepaid account is what keeps a low balance from refusing every call.
 Each unit is also asked for the meaning of the words its names spell (`words`:
 its own name, an operation's parameters, a type's fields, split as `vocabulary`
 splits them), and a module reconciles what its types said into a `glossary`
-of its heaviest `--terms N` words (default 60). Design record: [insights.md](insights.md).
+of its heaviest `--terms N` words (default 60) that a type defined. Design record: [insights.md](insights.md).
 
 ### `insights`
 Asks the insights store what `explain` has written — and opens nothing else:
