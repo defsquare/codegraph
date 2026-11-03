@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { GLOSSARY_ANSWER_KIND as CANONICAL_KIND } from "@codegraph/insights";
-import { GLOSSARY_ANSWER_KIND, createGlossaryLoader, glossaryUrl, parseGlossaryAnswer, type Fetcher } from "../src/glossary.js";
+import { GLOSSARY_ANSWER_KIND as CANONICAL_KIND, typesDisagree as canonicalTypesDisagree, type GlossaryEntry } from "@codegraph/insights";
+import { GLOSSARY_ANSWER_KIND, createGlossaryLoader, glossaryUrl, parseGlossaryAnswer, typesDisagree, type Fetcher } from "../src/glossary.js";
 
 const MODULE = "java:com.acme.order";
 const SERVICE = "java:com.acme.order/OrderService";
@@ -22,6 +22,21 @@ describe("the glossary's literal", () => {
   /** THE DRIFT ALARM: the page cannot import @codegraph/insights, even for types. */
   it("restates the answer's kind exactly", () => {
     expect(GLOSSARY_ANSWER_KIND).toBe(CANONICAL_KIND);
+  });
+
+  it("restates when a module's types disagree exactly as the package judges it", () => {
+    const flag = (polysemous: boolean, ...senses: string[]): GlossaryEntry => ({
+      word: "order", concern: "domain", sense: "a request", meaning: "", polysemous, senses: senses.map((sense, i) => ({ in: `T${i}`, sense })),
+    });
+    const cases = [
+      flag(true, "a request", "a sequence"),
+      flag(true, "an owner repository", "An owner  repository "),
+      flag(true, "a request"),
+      flag(true),
+      flag(false, "a request", "a sequence"),
+    ];
+    expect(cases.map(typesDisagree)).toEqual(cases.map(canonicalTypesDisagree));
+    expect(cases.map(typesDisagree)).toEqual([true, false, false, false, false]);
   });
 });
 

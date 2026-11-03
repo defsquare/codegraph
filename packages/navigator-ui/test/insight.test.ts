@@ -143,12 +143,15 @@ describe("blockFacts: the words a block defines (M19c)", () => {
       glossary: [
         { word: "order", concern: "domain", sense: "a customer's request", meaning: "What a customer asks for.", polysemous: true, senses: [{ in: "Order", sense: "a request" }, { in: "SortSpec", sense: "a sequence" }] },
         { word: "line", concern: "domain", sense: "an order line", meaning: "One article of an order.", polysemous: false, senses: [] },
+        // Flagged, its types giving one sense: nothing they disagree on.
+        { word: "owners", concern: "technical", sense: "an owner repository", meaning: "Where owners are kept.", polysemous: true, senses: [{ in: "OwnerController", sense: "an owner repository" }, { in: "PetController", sense: "An owner  repository" }] },
       ],
     })).toEqual([{
       label: "glossary",
       values: [
         "order (domain) — a customer's request. What a customer asks for. Its types disagree: Order — a request; SortSpec — a sequence",
         "line (domain) — an order line. One article of an order.",
+        "owners (technical) — an owner repository. Where owners are kept.",
       ],
     }]);
   });

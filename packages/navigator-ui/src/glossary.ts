@@ -76,6 +76,16 @@ function isWord(value: unknown): value is GlossaryWord {
   return isString(entry["word"]) && Array.isArray(entry["in"]) && isString(entry["concern"]) && isString(entry["sense"]) && isNumber(entry["confidence"]);
 }
 
+/**
+ * A module's flag, as far as the senses it lists bear it out: two at least,
+ * case and spacing aside. Restated from `@codegraph/insights`' `typesDisagree`
+ * and pinned to it by `glossary.test.ts`; a sense of another shape is none.
+ */
+export function typesDisagree(entry: { readonly polysemous?: unknown; readonly senses: readonly unknown[] }): boolean {
+  const senses = entry.senses.flatMap((s) => (isObject(s) && isString(s["sense"]) ? [s["sense"].trim().replace(/\s+/gu, " ").toLowerCase()] : []));
+  return entry.polysemous === true && new Set(senses).size > 1;
+}
+
 function isGloss(value: unknown): value is ModuleGloss {
   if (!isObject(value) || !isString(value["id"]) || !isObject(value["entry"])) return false;
   const entry = value["entry"];
