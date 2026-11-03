@@ -63,10 +63,10 @@ cache: fixtures/java/expected/model.db
 explain plan: 77 units in 8 layers
   operation     57 units     48 calls ~78146 prompt tokens
   type          17 units     17 calls ~31000 prompt tokens
-  module         3 units      3 calls ~5328 prompt tokens
+  module         3 units      3 calls ~4990 prompt tokens
   statuses: llm 68, template 9, reuse 0, skip-scope 0, skip-budget 0
   models: openai/gpt-5.6-luna (operations), openai/gpt-5.6-luna (types, modules); depth 1
-  total: 68 calls, ~114474 prompt tokens in, ~52415 completion tokens out
+  total: 68 calls, ~114136 prompt tokens in, ~52415 completion tokens out
 ```
 
 Trimmed after the plan summary; one line per unit follows. `--dry-run` needs no API key.
