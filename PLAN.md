@@ -5347,8 +5347,10 @@ not spell, and the deterministic class is deliberately withheld so the
 judgement is the model's — the gap between the two is layer 3's first
 report. Words of class `short` and `keyword` are not asked (`i`, `x`,
 `type`); `technical` ones are, since a technical word in a domain position
-is the whole point (`service`, `manager`, `handler`). Locals and lambda
-parameters are counted (weight 1) and not defined (§20.5). The block gains:
+is the whole point (`service`, `manager`, `handler`). *Nor, since, are
+function words (`or`, `of`, `all`): "As built — function words".* Locals and
+lambda parameters are counted (weight 1) and not defined (§20.5). The block
+gains:
 
 ```ts
 words: [{
@@ -5648,6 +5650,38 @@ Vocabulary tab's entries and the Navigate panel's, over `answerGlossary` in
   is the same within noise (605 MB, against 619 MB without the route).
   Screenshots reviewed at 1600×1000 on the Java fixture (a hand-worded store
   over its ids) and on Broadleaf.
+
+**As built — function words (2026-11-03).** The PetClinic run defined `by`,
+`with`, `is`, `of`, `all` and `or` (10 of its 301 word entries), and the
+`owner` module reconciled `or` into a glossary entry flagged `ambiguous`.
+Their senses were grammar ("lookup criterion", "boolean predicate",
+"identifier connector"), and `--polysemy` listed `or`. The decisions:
+
+- **A list in `define.ts`, not a fifth class.** `definitionSpeller` and
+  `rankedWords` leave out `FUNCTION_WORDS` (60 words: articles and
+  determiners, pronouns, conjunctions, prepositions, auxiliaries and modals,
+  `not`) whatever class the word has: `or` is on the technical list, `all`
+  is domain. The cloud, the classes and drift are unchanged, every word still
+  counted and tagged (§20.1). A class would have moved the artifact, the
+  tab's toggles and `--class` for a question only layer 2 asks.
+- **Not on the list:** a word that names a thing as often as it joins two —
+  `no` (a number), `may`, `will`, the particles of phrasal verbs (`out` of
+  `checkOut`, `up` of `signUp`), the prepositions of time and order
+  (`before`, `after`, `between`). And only English: `du` of `getNomDuClient`
+  is still asked.
+- **No option.** `explain` takes no technical list either (layer 2's as-built
+  note); a correction to the list is a code change, and the fingerprint
+  shows what it touches.
+- **What it costs a store already paid for.** The asked words are in the
+  fingerprint, so a unit whose names spell a function word goes stale, and
+  through the Merkle chain so does every unit that depends on it. On
+  PetClinic, `--dry-run` goes from 106 reused calls to 53 to redo (~121 k
+  prompt, ~56 k completion tokens, about $0.08 at the run's prices): 9 units
+  directly (7 operations, 2 controllers with an `…_OR_…` view field), 44
+  through their dependencies. Nothing is lost before a run: the old records
+  stay, and the readers show their entries until they are replaced.
+- **The Java fixture's plan** is now 114 474 prompt and 52 415 completion
+  tokens (was 114 483 and 52 900).
 
 ### 20.4 Milestone split
 
