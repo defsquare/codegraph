@@ -10,12 +10,31 @@ import { splitIdentifier } from "./split.js";
  * per unit, for the words of its names; these are the words, so that the
  * prompt asks for exactly what the cloud counts. A qualifier's words are its
  * container's, asked where they are the own name. `short` and `keyword` words
- * are not asked (`i`, `type`); `technical` ones are, since a technical word in
- * a domain position is the point. The class itself is withheld from the
- * caller: the judgement is the model's.
+ * are not asked (`i`, `type`), nor function words (`or`, `of`); `technical`
+ * ones are, since a technical word in a domain position is the point. The
+ * class itself is withheld from the caller: the judgement is the model's.
  */
 
 const ASKED: ReadonlySet<TermClass> = new Set(["domain", "technical"]);
+
+/**
+ * Grammar, not vocabulary: words no glossary defines, whatever class they get
+ * (`or` is on the technical list, `all` is domain). Counted in the cloud,
+ * never asked. Contestable like the technical list; a word that names a thing
+ * as often as it joins two is left out (`no`, `may`, `will`, `out`, `before`).
+ */
+export const FUNCTION_WORDS: readonly string[] = Object.freeze([
+  "all", "an", "and", "any", "are", "as", "at", "be", "been", "but",
+  "by", "can", "could", "did", "do", "does", "each", "else", "every", "for",
+  "from", "had", "has", "have", "if", "in", "into", "is", "it", "its",
+  "must", "my", "nor", "not", "of", "on", "onto", "or", "our", "per",
+  "shall", "should", "some", "than", "that", "the", "their", "then", "these", "this",
+  "those", "to", "upon", "via", "was", "were", "with", "without", "would", "your",
+]);
+
+const GRAMMAR: ReadonlySet<string> = new Set(FUNCTION_WORDS);
+
+const isAsked = (word: string, termClass: TermClass): boolean => ASKED.has(termClass) && !GRAMMAR.has(word);
 
 /**
  * An entity's own-name words to define, each once, in the order the name
@@ -37,7 +56,7 @@ export function definitionSpeller(graph: CodeGraph): (id: EntityId) => readonly 
       classifiers.set(lang, classify);
     }
     const split = splitIdentifier(name, entity.kind, lexicon);
-    const asked = split.tokens.slice(split.qualifier).filter((token) => ASKED.has(classify(token)));
+    const asked = split.tokens.slice(split.qualifier).filter((token) => isAsked(token, classify(token)));
     return [...new Set(asked)];
   };
 }
@@ -48,7 +67,7 @@ export function rankedWords(artifact: VocabularyArtifact, scopeId: EntityId | un
   const words = new Set<string>();
   for (const [index] of scope?.terms ?? []) {
     const term = artifact.terms[index];
-    if (term !== undefined && ASKED.has(term.class)) words.add(term.text);
+    if (term !== undefined && isAsked(term.text, term.class)) words.add(term.text);
   }
   return [...words];
 }
