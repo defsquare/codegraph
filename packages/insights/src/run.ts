@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { contextPackFor, type ContextEnv, type MemberPack } from "./context.js";
+import { contextPackFor, glossaryAsked, type ContextEnv, type MemberPack } from "./context.js";
 import type { Unit } from "./order.js";
 import { unitFingerprint, type PlanEnv, type PlanStep, type RunPlan } from "./plan.js";
 import { renderPrompts, type Prompt } from "./prompt.js";
@@ -230,7 +230,7 @@ function restateWords(block: Block, member: MemberPack | undefined): Block {
   };
   const words = once(block.words, (word) => asked.has(word)).map((entry) => clampConfidence({ ...entry, in: asked.get(entry.word) ?? [] }));
   if (!("glossary" in block)) return { ...block, words };
-  const listed = new Set(member.glossary.map((g) => g.word));
+  const listed = new Set(glossaryAsked(member).map((g) => g.word));
   return { ...block, words, glossary: once(block.glossary, (word) => listed.has(word)) };
 }
 

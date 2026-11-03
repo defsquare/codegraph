@@ -84,7 +84,7 @@ function glossaryAsked(user: string): string[] {
     .split("\n")
     .slice(1)
     .flatMap((line) => {
-      const match = /^- ([^:]+)(?:: no type defined it)?$/u.exec(line);
+      const match = /^- (\S+)$/u.exec(line);
       return match === null ? [] : [match[1] ?? ""];
     });
 }
@@ -377,6 +377,24 @@ describe("executeRun", () => {
     const { result } = await run(new Map(), {}, Object.assign(doubled, { requests: completer.requests }));
     const module = result.records.find((r) => r.id === P);
     expect(module?.level === "module" && module.block.glossary?.map((g) => g.word)).toEqual(["total"]);
+  });
+
+  it("asks a module about no word its types left undefined, and drops an entry for one", async () => {
+    const completer = fakeCompleter({ words: (id) => (id === T ? [] : undefined) });
+    const inner = completer as Completer;
+    const insisting: Completer = async (request) => {
+      const completion = await inner(request);
+      if (!request.schemaName.startsWith("codegraph_module")) return completion;
+      const block = completion.json as ModuleBlock;
+      const total = { word: "total", concern: "ambiguous", sense: "undefined term", meaning: "No type defines it.", polysemous: false, senses: [] };
+      return { ...completion, json: { ...block, glossary: [...(block.glossary ?? []), total] } };
+    };
+    const { result } = await run(new Map(), {}, Object.assign(insisting, { requests: completer.requests }));
+    expect(result.records.find((r) => r.id === T)?.block.words).toEqual([]);
+    const prompt = completer.requests.find((r) => r.user.startsWith(`# Unit: module ${P}`));
+    expect(prompt?.user).not.toContain("Words its types define");
+    const module = result.records.find((r) => r.id === P);
+    expect(module?.level === "module" && module.block.glossary).toEqual([]);
   });
 
   it("concurrency does not change the record set", async () => {

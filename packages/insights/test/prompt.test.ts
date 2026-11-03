@@ -202,9 +202,10 @@ describe("words to define (PLAN.md §20.3)", () => {
   }
 
   const entry = (word: string, sense: string, meaning: string): WordEntry => ({ word, in: [], concern: "domain", sense, meaning, confidence: 0.8 });
-  const typeRecord = (id: string, words: WordEntry[]): InsightRecord => ({
+  /** Without `words`, a record explained under prompt 1. */
+  const typeRecord = (id: string, words: WordEntry[] | undefined): InsightRecord => ({
     t: "i", id, level: "type", kind: "class", origin: "llm", fingerprint: "1".repeat(64),
-    block: { name: id, description: "A type.", concept: "entity", eventKind: null, interfaceRole: null, aggregateRoot: null, containedIn: null, syncPattern: null, identity: null, fields: [], invariants: [], stateMachine: null, relatesTo: [], exposes: [], dependsOn: [], domainTerms: [], words, confidence: 0.7 } satisfies TypeBlock,
+    block: { name: id, description: "A type.", concept: "entity", eventKind: null, interfaceRole: null, aggregateRoot: null, containedIn: null, syncPattern: null, identity: null, fields: [], invariants: [], stateMachine: null, relatesTo: [], exposes: [], dependsOn: [], domainTerms: [], ...(words === undefined ? {} : { words }), confidence: 0.7 } satisfies TypeBlock,
   });
 
   it("asks an operation for the words of its name and of its parameters, one line per identifier, never their class", () => {
@@ -240,15 +241,35 @@ describe("words to define (PLAN.md §20.3)", () => {
         '  - SortOrder: domain, "a sequence": The order rows are listed in.',
         "- line",
         '  - OrderLine: domain, "an item": One product of an order.',
-        "- price: no type defined it",
       ].join("\n"),
     );
-    expect(glossary.indexOf("- sort:")).toBeGreaterThan(glossary.indexOf("- price:"));
     expect(glossary).not.toContain("- shop");
 
-    const cut = renderPrompts(shop(records, 2).pack(SHOP), 12)[0]!.user;
-    expect(cut).toContain("- line\n");
-    expect(cut).not.toContain("- price");
+    const cut = renderPrompts(shop(records, 1).pack(SHOP), 12)[0]!.user;
+    expect(cut).toContain("- order\n");
+    expect(cut).not.toContain("- line");
+  });
+
+  it("asks a module to reconcile no word its types left undefined, and estimates the words a type still to explain may define", () => {
+    const listed = (records: InsightRecord[]) => {
+      const user = renderPrompts(shop(records).pack(SHOP), 12)[0]!.user;
+      const head = user.indexOf("Words its types define");
+      return head < 0 ? [] : user.slice(head).split("\n").flatMap((line) => /^- ([^\s:]+)/u.exec(line)?.slice(1) ?? []);
+    };
+    const asked = (records: InsightRecord[]) => renderPrompts(shop(records).pack(SHOP), 12)[0]!.asked.glossary;
+    const line = typeRecord(LINE, [entry("order", "a purchase", "Bought."), entry("line", "an item", "One product.")]);
+    const sort = typeRecord(SORT, [entry("order", "a sequence", "How rows are listed.")]);
+
+    // Both explained: `price` and `unit` (OrderLine's), `sort` and `key` (SortOrder's) were left undefined.
+    expect(listed([line, sort])).toEqual(["order", "line"]);
+    expect(asked([line, sort])).toBe(2);
+    // SortOrder not explained yet, or under prompt 1: what it spells may still be defined.
+    expect(listed([line])).toEqual(["order", "line"]);
+    expect(asked([line])).toBe(4);
+    expect(asked([line, typeRecord(SORT, undefined)])).toBe(4);
+    // A cold plan counts every candidate; it lists none, since no type has said anything.
+    expect(listed([])).toEqual([]);
+    expect(asked([])).toBe(6);
   });
 
   it("asks a module whose types spell no word for no glossary", () => {

@@ -65,6 +65,17 @@ export interface GlossaryWord {
   readonly word: string;
   /** Read from the record source on first use: a type's `words` entry for this word, by type name. */
   readonly entries: readonly { readonly type: string; readonly entry: WordEntry }[];
+  /** A type that spells it has no `words` yet (not explained, or under prompt 1): it may still define it. */
+  readonly pending: boolean;
+}
+
+/**
+ * The glossary words a module is asked to reconcile: those a type defined. A
+ * word its types all left undefined has nothing to reconcile, and asking
+ * paid for an "undefined term" (PetClinic's `birth`). Read when it renders.
+ */
+export function glossaryAsked(member: MemberPack): readonly GlossaryWord[] {
+  return member.glossary.filter((g) => g.entries.length > 0);
 }
 
 export interface DependencySummary {
@@ -275,31 +286,40 @@ function typeNames(env: ContextEnv, dossier: TypeDossier): NameWords[] {
 
 /**
  * The words a module's types spell, heaviest first by the speller's ranking
- * (an unranked word after, by text), cut at `terms`. What the types said of
- * them is read once, when a prompt first asks.
+ * (an unranked word after, by text), cut at `terms` — the candidates, which
+ * are hashed. What the types said of them is read once, when a prompt first
+ * asks, and decides which are asked (`glossaryAsked`).
  */
 function glossaryOf(env: ContextEnv, types: readonly TypeDossier[], moduleId: EntityId): GlossaryWord[] {
-  const spelled = new Set(types.flatMap((t) => typeNames(env, t).flatMap((n) => n.words)));
+  const spelledBy = new Map<string, EntityId[]>();
+  for (const t of types) {
+    for (const word of new Set(typeNames(env, t).flatMap((n) => n.words))) spelledBy.set(word, [...(spelledBy.get(word) ?? []), t.id]);
+  }
   const rank = new Map(env.speller.ranked(moduleId).map((word, i) => [word, i]));
-  const ordered = [...spelled].sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity) || (a < b ? -1 : a > b ? 1 : 0));
-  let said: Map<string, { type: string; entry: WordEntry }[]> | undefined;
-  const read = (): Map<string, { type: string; entry: WordEntry }[]> => {
-    if (said === undefined) {
-      said = new Map();
+  const ordered = [...spelledBy.keys()].sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity) || (a < b ? -1 : a > b ? 1 : 0));
+  let read: { said: Map<string, { type: string; entry: WordEntry }[]>; wordless: Set<EntityId> } | undefined;
+  const records = (): NonNullable<typeof read> => {
+    if (read === undefined) {
+      read = { said: new Map(), wordless: new Set() };
       for (const t of types) {
-        for (const entry of env.records.words(t.id) ?? []) {
-          const list = said.get(entry.word) ?? [];
+        const words = env.records.words(t.id);
+        if (words === undefined) read.wordless.add(t.id);
+        for (const entry of words ?? []) {
+          const list = read.said.get(entry.word) ?? [];
           list.push({ type: t.name ?? t.id, entry });
-          said.set(entry.word, list);
+          read.said.set(entry.word, list);
         }
       }
     }
-    return said;
+    return read;
   };
   return ordered.slice(0, Math.max(0, env.terms)).map((word) => ({
     word,
     get entries() {
-      return read().get(word) ?? [];
+      return records().said.get(word) ?? [];
+    },
+    get pending() {
+      return (spelledBy.get(word) ?? []).some((id) => records().wordless.has(id));
     },
   }));
 }
