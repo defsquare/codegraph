@@ -107,9 +107,10 @@ than `--max-scc` is chunked: each chunk sees the others' signatures only.
 what the words of its names mean in it: a section *Words to define* lists, per
 identifier, the words of its own name and of an operation's parameters or a
 type's fields, split by `@codegraph/vocabulary` (injected as a `Speller`: the
-insights package runs no splitter). Short words and keywords are not asked; the
-deterministic class is withheld, so the judgement — `domain`, `technical` or
-`ambiguous` — is the model's. The answer is one `words` entry per word, with
+insights package runs no splitter). Short words, keywords and function words
+(`or`, `of`, `all`: `FUNCTION_WORDS`) are not asked; the deterministic class
+is withheld, so the judgement — `domain`, `technical` or `ambiguous` — is the
+model's. The answer is one `words` entry per word, with
 its `sense` and its `meaning` in this unit. The words are given, not chosen: on
 receipt an entry for a word not listed is dropped, a repeat keeps the first,
 and `in` is restated from the split. A module is also shown what its types
