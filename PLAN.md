@@ -5451,7 +5451,8 @@ with their `polysemous` flag: the signifier/signified glossary of the issue,
 at every scope, from one index lookup. `--glossary MODULE_ID` — a module's
 reconciled glossary whole. `--polysemy` — the words a module flagged, and
 the words whose module-level senses differ across the corpus, side by side
-for a human to judge (the corpus has no call to judge for it). `--concerns`
+for a human to judge (the corpus has no call to judge for it). *A flag
+counts when its senses are two: "As built — two senses to a polysemy".* `--concerns`
 — per module, how many of its words the model called domain, technical,
 ambiguous: the cognitive-load proxy split by kind. `codegraph vocabulary
 --drift-insights` — the deterministic classes against the model's concerns
@@ -5709,6 +5710,36 @@ words the PetClinic modules were asked to reconcile, 2 no type had defined:
   PetClinic's warm plan, 250 completion tokens fewer (`birth`, `base`). A cold
   module prompt now prints no glossary lines at all, so the plan's input is a
   little lower (the Java fixture: 114 136 prompt tokens, was 114 474).
+
+**As built — two senses to a polysemy (2026-11-03).** PetClinic's `owner`
+module flagged `owners` polysemous and listed its three types, each giving
+the one sense "owner repository dependency", and `or`, two types and one
+sense: 2 of the run's 16 flags, over 52 glossary entries. `--polysemy` listed
+both, and the page said "its types disagree" with nothing to disagree on.
+The decisions:
+
+- **A flag counts when its senses bear it out.** `typesDisagree(entry)` in
+  `glossary.ts`: `polysemous`, and two distinct `senses` at least, case and
+  spacing aside — the comparison `--polysemy` already made across modules.
+  The flag is the model's judgement of meaning, the senses its evidence; both
+  are needed, so two wordings the model did not flag stay one sense.
+- **Read, not rewritten.** The record keeps what the model wrote: the store
+  is not a cache, and the side-car's decode → import → export stays the
+  identity. `--polysemy`,
+  `--word`, `--glossary`, the Vocabulary tab and the Navigate panel ask the
+  rule; the page restates it (it imports nothing of `@codegraph/insights`),
+  pinned to the package's by a test over the same cases.
+- **A flag that does not hold adds no sense** to a word's count in
+  `--polysemy`: its one sense rewords the entry's own.
+- **Lexical, not semantic.** `pet`'s four wordings of "animal under care" in
+  the same module stay four senses: judging meaning is a model call, and the
+  readers make none.
+- **The prompt is unchanged.** It already asks for a flag only where the
+  types disagree; rewording it is a new `PROMPT_VERSION`, which every
+  fingerprint includes — 106 calls again on PetClinic — for what a reader
+  can check. No fingerprint input moved: no record goes stale.
+- **On PetClinic** `--polysemy` lists 14 words, was 16 (`owners` and `or`
+  gone; `or` is no longer asked at all since the function words).
 
 ### 20.4 Milestone split
 
