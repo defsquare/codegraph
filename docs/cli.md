@@ -362,14 +362,15 @@ invocation:
   tab-separated line per entry — the module, `glossary` or the entity's level,
   the id, the concern, the confidence, the sense, and the identifiers the word
   is in. Each module's own glossary entry comes first (its last cell lists the
-  types' senses when the module flagged the word polysemous), then the module,
-  its types, its operations. A record is placed by its natural key; one
-  without a key is under `-`. The meaning is not shown: `--glossary` and `--id`
-  show it;
+  types' senses when the module flagged the word polysemous and they are two
+  senses at least, case and spacing aside), then the module, its types, its
+  operations. A record is placed by its natural key; one without a key is
+  under `-`. The meaning is not shown: `--glossary` and `--id` show it;
 - `--glossary MODULE_ID` — a module's glossary whole, one line per word: the
   word, the concern, sense and meaning the module reconciled from its types,
   and the types' senses where they disagree;
-- `--polysemy` — the words a module flagged, and the words two modules'
+- `--polysemy` — the words a module flagged, its types giving two senses at
+  least (a flag over one sense is not counted), and the words two modules'
   glossaries define differently (in concern or sense, case and spacing aside):
   every module's entry for each, side by side, the most senses first. No
   model call judges them across the corpus: a human does;

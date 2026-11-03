@@ -165,7 +165,7 @@ A module is shown what its types said of the words they spell, heaviest first, c
 | `GlossaryEntry` field | Type |
 |---|---|
 | `word`, `concern`, `sense`, `meaning` | as in `WordEntry`, at the module's altitude |
-| `polysemous` | boolean — its types disagree on the word |
+| `polysemous` | boolean — its types disagree on the word; a reader counts it only when `senses` holds two senses, case and spacing aside |
 | `senses` | `{in, sense}[]` — the disagreeing types and their senses, when they do |
 
 ## Vocabularies

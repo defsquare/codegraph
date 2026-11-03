@@ -119,7 +119,9 @@ projection, as summaries are, and only when its prompt renders — heaviest
 first by the vocabulary's module weights, cut at `--terms N`, and answers a
 `glossary` that reconciles those a type defined (a word its types all left
 undefined is not asked), flagging a word its types disagree on as
-`polysemous`. Templated records carry no `words`.
+`polysemous` with each type's sense. A reader counts the flag only when those
+senses are two at least, case and spacing aside (`typesDisagree`): the record
+keeps what the model wrote. Templated records carry no `words`.
 
 `PROMPT_VERSION` is `"2"`. A record explained under prompt 1 keeps decoding and
 re-encoding to its own bytes (`words` and `glossary` are optional in the record
