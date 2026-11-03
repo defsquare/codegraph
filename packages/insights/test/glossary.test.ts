@@ -25,6 +25,7 @@ import {
   concernsReport,
   moduleOf,
   polysemyReport,
+  typesDisagree,
   wordReport,
   wordsAbsence,
   type GlossaryAnswer,
@@ -74,8 +75,10 @@ const RECORDS: InsightRecord[] = [
     glossary: [
       gloss("order", "domain", "a customer's request", [{ in: "Order", sense: "a customer's request" }, { in: "SortSpec", sense: "a sequence" }]),
       gloss("line", "domain", "an order line", [{ in: "Order", sense: "an order line" }, { in: "Text", sense: "a line of text" }]),
-      gloss("total", "domain", "the sum"),
-      gloss("price", "domain", "a unit price"),
+      // Flagged, but its one type gives it one sense.
+      gloss("total", "domain", "the sum", [{ in: "Order", sense: "the sum" }]),
+      // Flagged, but its two types give it one sense, case and spacing aside (PetClinic's `owners`).
+      gloss("price", "domain", "a unit price", [{ in: "Order", sense: "the price of one unit" }, { in: "LineItem", sense: "The price of  one unit" }]),
       gloss("service", "technical", "a layer of the code"),
     ],
   }),
@@ -159,12 +162,32 @@ describe("polysemyReport: the words a module flagged, and the words its modules'
       { word: "order", flagged: true, acrossModules: true, senses: 3, entries: [`${BILLING}: a purchase order`, `${ORDERING}: a customer's request`] },
       // Flagged by its one module, whose types disagree.
       { word: "line", flagged: true, acrossModules: false, senses: 2, entries: [`${ORDERING}: an order line`] },
+      // Its flag lists one sense: not flagged, and that sense is not a third.
       { word: "price", flagged: false, acrossModules: true, senses: 2, entries: [`${BILLING}: an amount due`, `${ORDERING}: a unit price`] },
       // One sense, judged domain here and technical there: a disagreement all the same.
       { word: "service", flagged: false, acrossModules: true, senses: 1, entries: [`${BILLING}: a layer of the code`, `${ORDERING}: a layer of the code`] },
     ]);
-    // "the sum" and "The  Sum " are one sense: case and spacing aside. A word one module defines once is not listed.
+    // "the sum" and "The  Sum " are one sense: case and spacing aside. A word one module defines once is not listed, flagged or not.
     expect(withoutWords).toBe(1);
+  });
+});
+
+describe("typesDisagree: a module's flag, as far as the senses it lists bear it out", () => {
+  const flag = (polysemous: boolean, ...senses: string[]): GlossaryEntry => ({
+    word: "order", concern: "domain", sense: "a request", meaning: "What a customer asks for.", polysemous, senses: senses.map((sense, i) => ({ in: `T${i}`, sense })),
+  });
+
+  it("holds for a flag that lists two senses, from two types or from one", () => {
+    expect(typesDisagree(flag(true, "a request", "a sequence"))).toBe(true);
+    expect(typesDisagree({ ...flag(true, "a request", "a sequence"), senses: [{ in: "Order", sense: "a request" }, { in: "Order", sense: "a sequence" }] })).toBe(true);
+  });
+
+  it("holds for no flag of one sense, case and spacing aside, nor for senses the module did not flag", () => {
+    expect(typesDisagree(flag(true, "an owner repository", "An owner  repository ", "an owner repository"))).toBe(false);
+    expect(typesDisagree(flag(true, "a request"))).toBe(false);
+    expect(typesDisagree(flag(true))).toBe(false);
+    // The flag is the model's judgement of meaning: two wordings it calls one sense are one.
+    expect(typesDisagree(flag(false, "a request", "a customer's request"))).toBe(false);
   });
 });
 

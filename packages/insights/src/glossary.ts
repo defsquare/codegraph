@@ -1,5 +1,5 @@
 import { naturalKeyIndex, naturalKeyIssues, renderId, type NaturalKey } from "@codegraph/core";
-import { WORD_CONCERNS, type InsightRecord, type Level, type RecordKey, type WordConcern } from "./schema.js";
+import { WORD_CONCERNS, type GlossaryEntry, type InsightRecord, type Level, type RecordKey, type WordConcern } from "./schema.js";
 import type { GlossaryHit, InsightsStore, WordHit } from "./store.js";
 
 /**
@@ -97,11 +97,11 @@ export function wordReport(store: InsightsStore, word: string): WordReport {
 
 export interface PolysemousWord {
   readonly word: string;
-  /** A module's glossary flags it: that module's types disagree on it. */
+  /** A module's types disagree on it (`typesDisagree`). */
   readonly flagged: boolean;
   /** The modules' entries give it more than one sense. */
   readonly acrossModules: boolean;
-  /** Distinct senses over the entries and the senses a flag lists. */
+  /** Distinct senses over the entries and the senses of each flag that holds. */
   readonly senses: number;
   /** Every module's entry for the word, by module id: side by side, for a human to judge. */
   readonly entries: readonly GlossaryHit[];
@@ -116,6 +116,16 @@ export interface PolysemyReport {
 /** Two senses are one when they differ only in case and spacing: the model's wording varies, its meaning is what is compared. */
 const sense = (text: string): string => text.trim().replace(/\s+/gu, " ").toLowerCase();
 
+/**
+ * A module's `polysemous` flag, as far as the senses it lists bear it out: two
+ * at least. The flag is the model's judgement of meaning, the senses its
+ * evidence (PetClinic's `owner` module flagged `owners`, its three types giving
+ * one sense). The record keeps what the model wrote; every reader asks this.
+ */
+export function typesDisagree(entry: GlossaryEntry): boolean {
+  return entry.polysemous && new Set(entry.senses.map((s) => sense(s.sense))).size > 1;
+}
+
 /** `insights --polysemy`: the corpus has no call to judge a word across modules, so this lays the modules' senses side by side. */
 export function polysemyReport(store: InsightsStore): PolysemyReport {
   const byWord = new Map<string, GlossaryHit[]>();
@@ -124,11 +134,13 @@ export function polysemyReport(store: InsightsStore): PolysemyReport {
     hits.push(hit);
     byWord.set(hit.entry.word, hits);
   }
+  // A flag its senses do not bear out lists one sense: a rewording of the entry's own, not another.
+  const listed = (entry: GlossaryEntry): readonly string[] => (typesDisagree(entry) ? entry.senses.map((s) => s.sense) : []);
   const words: PolysemousWord[] = [];
   for (const [word, entries] of byWord) {
-    const flagged = entries.some((hit) => hit.entry.polysemous);
+    const flagged = entries.some((hit) => typesDisagree(hit.entry));
     const judged = new Set(entries.map((hit) => `${hit.entry.concern}\u0000${sense(hit.entry.sense)}`));
-    const senses = new Set(entries.flatMap((hit) => [hit.entry.sense, ...hit.entry.senses.map((s) => s.sense)].map(sense)));
+    const senses = new Set(entries.flatMap((hit) => [hit.entry.sense, ...listed(hit.entry)].map(sense)));
     if (flagged || judged.size > 1) words.push({ word, flagged, acrossModules: judged.size > 1, senses: senses.size, entries });
   }
   words.sort((a, b) => b.senses - a.senses || byCodeUnits(a.word, b.word));

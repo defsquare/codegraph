@@ -3,6 +3,7 @@ import {
   answerInsight,
   concernsReport,
   polysemyReport,
+  typesDisagree,
   wordReport,
   wordsAbsence,
   type FailureRecord,
@@ -198,9 +199,9 @@ export function noteWithoutWords(count: number, io: IoSink): void {
 /** A cell for a placed-nowhere module: a record without a natural key. */
 const moduleCell = (module: string | undefined): string => module ?? "-";
 
-/** The types' senses of a word their module flagged; an empty cell when they agree. */
+/** The types' senses of a word their module flagged, when two differ (`typesDisagree`); an empty cell when they agree. */
 function polysemyCell(entry: GlossaryEntry): string {
-  return entry.polysemous ? `polysemous: ${entry.senses.map((s) => `${s.in} "${s.sense}"`).join(" · ")}` : "";
+  return typesDisagree(entry) ? `polysemous: ${entry.senses.map((s) => `${s.in} "${s.sense}"`).join(" · ")}` : "";
 }
 
 /** One tab-separated line per entry, the module first so the grouping survives `sort`: module, what, id, concern, confidence, sense, and the identifiers (or the flag). */
@@ -251,7 +252,7 @@ function polysemy(store: InsightsStore, options: InsightsOptions, io: IoSink): E
     outLine(io, JSON.stringify({ kind: "codegraph.insightsPolysemy/1", ...report }));
     return EXIT.OK;
   }
-  if (report.words.length === 0) errLine(io, "no word has two senses: no module flagged one, and no two modules' glossaries define one differently.");
+  if (report.words.length === 0) errLine(io, "no word has two senses: no module's types give one two, and no two modules' glossaries define one differently.");
   else outLine(io, report.words.flatMap((w) => w.entries.map((g) => [w.word, g.id, g.entry.concern, g.entry.sense, polysemyCell(g.entry)].join("\t"))).join("\n"));
   noteWithoutWords(report.withoutWords, io);
   return EXIT.OK;

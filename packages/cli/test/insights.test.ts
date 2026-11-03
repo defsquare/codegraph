@@ -257,7 +257,8 @@ describe("codegraph insights: the words of the names, as the model judged them (
   const WORDED = [
     module_(ORDERING, key("com.acme.order"), [word("order", "domain", "the ordering business", ["com.acme.order"], 0.8)], [
       gloss("order", "domain", "a customer's request", [{ in: "Order", sense: "a customer's request" }, { in: "SortSpec", sense: "a sequence" }]),
-      gloss("lines", "domain", "the items ordered"),
+      // Flagged, its two types giving one sense: no disagreement to show.
+      gloss("lines", "domain", "the items ordered", [{ in: "Order", sense: "the items ordered" }, { in: "OrderLine", sense: "The items  ordered" }]),
     ]),
     worded(type(ORDER, "aggregate", 0.9), key("com.acme.order", "Order"), [word("order", "domain", "a customer's request", ["Order"], 0.9), word("lines", "domain", "the items ordered", ["lines", "addLine"], 0.85)]),
     worded(type("java:com.acme.order/SortSpec", "valueType", 0.7), key("com.acme.order", "SortSpec"), [word("order", "technical", "a sequence", ["sortOrder"], 0.6)]),
