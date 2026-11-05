@@ -152,16 +152,17 @@ for Elixir, Rust 1.94+ and libclang for Ruby, Rust 1.94+ for the metrics pass.
    ```bash
    export JAVA_HOME="$HOME/.sdkman/candidates/java/25.0.4-tem"
    export PATH="$JAVA_HOME/bin:$PATH"
-   (cd extractors/java && ./mvnw -B package)    # → extractors/java/target/codegraph-java.jar; `mvn` is not needed
-   ./build.sh --csharp                          # → extractors/csharp/dist/<rid>/codegraph-csharp
+   (cd extractors/java && ./mvnw -B package)    # → bin/codegraph-java (the jar); `mvn` is not needed
+   ./build.sh --csharp                          # → bin/codegraph-csharp
    ./build.sh --elixir                          # → bin/codegraph-elixir
    ./build.sh --ruby                            # → bin/codegraph-ruby (Rust 1.94+ and libclang to build)
    ./build.sh --metrics                         # → bin/codegraph-metrics (Rust 1.94+ to build)
    ```
 
-   `bin/codegraph-typescript` is already built by step 1. The jar runs as
-   `java -jar extractors/java/target/codegraph-java.jar`; every page of this
-   documentation writes `codegraph-java`, and the two take the same flags.
+   `bin/codegraph-typescript` is already built by step 1. `bin/codegraph-java`
+   runs the jar on the first Java 17+ in `JAVA_HOME`, on `PATH` or under
+   `~/.sdkman`; every page of this documentation writes `codegraph-java`, and
+   the two take the same flags.
 
 ## Using it at work
 

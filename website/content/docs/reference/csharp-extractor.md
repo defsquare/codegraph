@@ -14,6 +14,7 @@ codegraph-csharp --src <dir> --out model.jsonl
 ./build.sh --csharp                                   # publish the host's binary → extractors/csharp/dist/<rid>/codegraph-csharp
 ./build.sh --csharp --publish-all                     # linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64 — all from one host
 extractors/csharp/dist/osx-arm64/codegraph-csharp --src <dir> --out model.jsonl
+./bin/codegraph-csharp --src <dir> --out model.jsonl  # the same, for the host's platform
 ```
 
 The binary needs nothing installed; building it needs the .NET 10 SDK (see `extractors/csharp/README.md`).

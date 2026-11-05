@@ -440,6 +440,9 @@ java -jar target/codegraph-java.jar    # defaults: the current directory,
                                        # into <current-dir>-codegraph.jsonl
 ```
 
+From the repo root, `./bin/codegraph-java` runs the same jar with the same
+flags, on the first Java 17+ in `JAVA_HOME`, on `PATH` or under `~/.sdkman`.
+
 Spoon runs in noClasspath mode, so the sources need not compile and no
 dependency jars are needed. What cannot be resolved becomes a stub with its
 edges kept, so the picture is honest about its gaps. `--src` is repeatable:
