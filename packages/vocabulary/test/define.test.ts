@@ -1,7 +1,7 @@
 import type { Entity } from "@codegraph/core";
 import { describe, expect, it } from "vitest";
 import { buildVocabulary } from "../src/aggregate.js";
-import { definitionSpeller, rankedWords } from "../src/define.js";
+import { FUNCTION_WORDS, definitionSpeller, rankedWords } from "../src/define.js";
 import { cls, graphOf, method, orderCorpus, pkg, structural } from "./toy.js";
 
 /**
@@ -24,6 +24,11 @@ describe("definitionSpeller", () => {
         method("java:com.acme.order/OrderService.toString()", "toString", "java:com.acme.order/OrderService"),
         method("java:com.acme.order/OrderService.<init>()", undefined, "java:com.acme.order/OrderService"),
         structural("java:com.acme.order/OrderService.MAX_LINES", "attribute", "MAX_LINES", "java:com.acme.order/OrderService"),
+        method("java:com.acme.order/OrderService.findByLastNameOrFirstName()", "findByLastNameOrFirstName", "java:com.acme.order/OrderService"),
+        method("java:com.acme.order/OrderService.findAll()", "findAll", "java:com.acme.order/OrderService"),
+        method("java:com.acme.order/OrderService.isDuplicateOf()", "isDuplicateOf", "java:com.acme.order/OrderService"),
+        method("java:com.acme.order/OrderService.andThen()", "andThen", "java:com.acme.order/OrderService"),
+        structural("java:com.acme.order/OrderService.VIEWS_CREATE_OR_UPDATE_FORM", "attribute", "VIEWS_CREATE_OR_UPDATE_FORM", "java:com.acme.order/OrderService"),
       ],
     },
     {
@@ -51,6 +56,20 @@ describe("definitionSpeller", () => {
     expect(words("java:p#0")).toEqual([]);
     expect(words("java:p#1")).toEqual(["line"]);
     expect(words("go:shop/Type")).toEqual(["order"]);
+  });
+
+  it("leaves out function words, whatever class the lists give them", () => {
+    // `by` and `or` are on the technical list, `all` is domain: grammar either way.
+    expect(words("java:com.acme.order/OrderService.findByLastNameOrFirstName()")).toEqual(["find", "last", "name", "first"]);
+    expect(words("java:com.acme.order/OrderService.findAll()")).toEqual(["find"]);
+    expect(words("java:com.acme.order/OrderService.isDuplicateOf()")).toEqual(["duplicate"]);
+    expect(words("java:com.acme.order/OrderService.VIEWS_CREATE_OR_UPDATE_FORM")).toEqual(["views", "create", "update", "form"]);
+    expect(words("java:com.acme.order/OrderService.andThen()")).toEqual([]);
+  });
+
+  it("keeps every function word lowercase and one word, as the splitter spells a token", () => {
+    for (const word of FUNCTION_WORDS) expect(word).toMatch(/^[a-z]+$/);
+    expect(new Set(FUNCTION_WORDS).size).toBe(FUNCTION_WORDS.length);
   });
 
   it("asks for the own name only: a qualifier's words are its container's", () => {
@@ -90,6 +109,11 @@ describe("rankedWords", () => {
     );
     expect(rankedWords(mixed, "go:q")).toEqual(["shop"]);
     expect(rankedWords(mixed, undefined)).toEqual(["shop", "type"]);
+  });
+
+  it("lists no function word, so a glossary is not cut on one", () => {
+    const shop = buildVocabulary(graphOf([{ lang: "java", entities: [pkg("java:p", "shop"), cls("java:p/ShopOfTheDay", "ShopOfTheDay", "java:p")] }]));
+    expect(rankedWords(shop, "java:p")).toEqual(["shop", "day"]);
   });
 
   it("knows no word of a scope the artifact does not hold", () => {

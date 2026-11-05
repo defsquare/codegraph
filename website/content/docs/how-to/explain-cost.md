@@ -19,12 +19,12 @@ codegraph explain model.jsonl --src fixtures/java/src --dry-run
 
 ```text
 explain plan: 77 units in 8 layers
-  operation     57 units     48 calls ~78148 prompt tokens
-  type          17 units     17 calls ~31001 prompt tokens
-  module         3 units      3 calls ~5334 prompt tokens
+  operation     57 units     48 calls ~78146 prompt tokens
+  type          17 units     17 calls ~31000 prompt tokens
+  module         3 units      3 calls ~5328 prompt tokens
   statuses: llm 68, template 9, reuse 0, skip-scope 0, skip-budget 0
   models: openai/gpt-5.6-luna (operations), openai/gpt-5.6-luna (types, modules); depth 1
-  total: 68 calls, ~114483 prompt tokens in, ~41670 completion tokens out
+  total: 68 calls, ~114474 prompt tokens in, ~52415 completion tokens out
 
 llm         L0 operation java:com.acme.order.adapter/LedgerAdapter.<init>() calls=1 ~1461tok
 template    L0 operation java:com.acme.order.legacy/List.head()
@@ -43,12 +43,12 @@ codegraph explain model.jsonl --src fixtures/java/src \
 
 ```text
   level        calls   input tokens  output tokens
-  operation       48         78 148         30 360
-  type            17         31 001         15 590
-  module           3          5 334          6 950
-  total           68        114 483         52 900
+  operation       48         78 146         30 120
+  type            17         31 000         15 470
+  module           3          5 328          6 825
+  total           68        114 474         52 415
 
-  cost at $0.1/M in, $0.6/M out: $0.0432
+  cost at $0.1/M in, $0.6/M out: $0.0429
   input ≈ rendered prompts at 4 characters per token; output ≈ measured on a live run: operation 470, type 530, module 530 tokens per block asked for, plus 120 per word and 125 per glossary entry asked to define (gpt-5.6-luna, reasoning included).
   not included: repair re-asks, rate-limit retries. Records already in the side-car are reused, not re-sent.
 ```

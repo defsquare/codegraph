@@ -34,7 +34,8 @@ export interface FingerprintInputs {
   /**
    * Per member, the words its prompt asks to define and a module's glossary
    * words: a function of the names and the lexicon, hashed so a lexicon
-   * correction re-explains exactly the units whose words it changed.
+   * correction re-explains the units whose words it changed — and, through
+   * `dependencyFingerprints`, everything that depends on them.
    */
   readonly words: readonly { readonly names: readonly { readonly identifier: string; readonly words: readonly string[] }[]; readonly glossary: readonly string[] }[];
 }

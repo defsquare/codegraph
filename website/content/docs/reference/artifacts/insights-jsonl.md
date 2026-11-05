@@ -149,7 +149,7 @@ Every block carries a `name` — the ubiquitous-language name the model proposes
 
 ### `WordEntry` and `GlossaryEntry`
 
-`explain` asks each unit to define the words its names spell, split as [`codegraph vocabulary`](/docs/reference/cli/vocabulary/) splits them; short words and keywords are not asked. The words are given, never chosen: on receipt an entry for a word the prompt did not list is dropped, a word given twice keeps its first entry, and `in` is restated from the split. A record explained under prompt 1, and a templated one, has no `words`.
+`explain` asks each unit to define the words its names spell, split as [`codegraph vocabulary`](/docs/reference/cli/vocabulary/) splits them; short words, keywords and function words (`or`, `of`, `all`) are not asked. The words are given, never chosen: on receipt an entry for a word the prompt did not list is dropped, a word given twice keeps its first entry, and `in` is restated from the split. A record explained under prompt 1, and a templated one, has no `words`.
 
 | `WordEntry` field | Type |
 |---|---|
