@@ -22,6 +22,8 @@ cd extractors/java && ./mvnw -B package     # `mvn` is not installed; use the wr
 java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 ```
 
+From the repo root, `./bin/codegraph-java` runs the same jar without the exports: it takes the first Java 17+ in `JAVA_HOME`, on `PATH` or under `~/.sdkman`.
+
 ## Synopsis
 
 ```

@@ -334,16 +334,19 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: codegraph-csharp-${{ matrix.rid }}
-          path: bin
+          # Where build.sh publishes it — never bin/, whose bin/codegraph-csharp
+          # is the committed wrapper the download would overwrite.
+          path: extractors/csharp/dist/${{ matrix.rid }}
       # Nothing is installed on this runner for the extractor: the binary
       # carries the runtime, Roslyn and the BCL. Run from the repo root with
       # the RELATIVE --src the snapshot was made with (the typed path is the
       # header's `root`).
       - shell: bash
         run: |
-          chmod +x "bin/${{ matrix.exe }}"
-          "bin/${{ matrix.exe }}" --version
-          "bin/${{ matrix.exe }}" --src fixtures/csharp/src --out out.jsonl --progress plain
+          bin="extractors/csharp/dist/${{ matrix.rid }}/${{ matrix.exe }}"
+          chmod +x "$bin"
+          "$bin" --version
+          "$bin" --src fixtures/csharp/src --out out.jsonl --progress plain
           cmp out.jsonl fixtures/csharp/expected/model.jsonl
           echo "byte-identical on ${{ matrix.os }}"
 

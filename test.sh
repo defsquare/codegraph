@@ -7,11 +7,12 @@
 #   unit       pnpm -r test            (vitest + fast-check property suites)
 #   schemas    pnpm run gen:schemas must be a NO-OP — schemas/ is a committed
 #              artifact and the cross-language contract; drift there is a bug
-#   java       ./mvnw test, then the NATIVE binary (if build.sh made one)
-#              re-extracts fixtures/java/src and must reproduce the committed
-#              snapshot — the only test that sees the image's own code path: no
-#              java.home, no VM class library, the embedded ct.sym reference
-#   csharp     dotnet test, then the PUBLISHED binary (if build.sh made one)
+#   java       ./mvnw test, then the built JAR (bin/codegraph-java) and the
+#              NATIVE binary (each if build.sh made one) re-extract
+#              fixtures/java/src and must reproduce the committed snapshot — the
+#              native one is the only test that sees the image's own code path:
+#              no java.home, no VM class library, the embedded ct.sym reference
+#   csharp     dotnet test, then the PUBLISHED binary (bin/codegraph-csharp, if build.sh made one)
 #              re-extracts fixtures/csharp/src and must reproduce the committed
 #              snapshot byte for byte — the only test that sees the single-file
 #              code path (embedded BCL, no Assembly.Location)
@@ -225,6 +226,15 @@ if wants_java && [ "$SKIP_JAVA" = "no" ]; then
   phase "java extractor tests (./mvnw test)" \
     sh -c "cd '$JAVA_DIR' && ./mvnw -B test"
 
+  # The shaded jar, not the test classpath, must reproduce the snapshot: it is
+  # what `./bin/codegraph-java` runs from a clone. Same `root` rewrite as below.
+  if [ -f "$JAVA_DIR/target/codegraph-java.jar" ]; then
+    phase "built java jar reproduces the snapshot" \
+      sh -c "cd '$ROOT' && out=\$(mktemp) && ./bin/codegraph-java --src fixtures/java/src --out \"\$out\" --progress none >/dev/null 2>&1 && head -1 \"\$out\" | grep -qE '\"root\":\"[^\"]*fixtures[^\"]*java[^\"]*src\"' && sed '1s|\"root\":\"[^\"]*\"|\"root\":\"fixtures/java/src\"|' \"\$out\" | cmp - fixtures/java/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
+  else
+    warn "no jar at $JAVA_DIR/target/codegraph-java.jar — run ./build.sh --java for the smoke test"
+  fi
+
   # The same acceptance check the C# binary gets, and for the same reason: a
   # native image is a different runtime, not a repackaging. It has no java.home,
   # so ECJ finds no platform library and falls back to the ct.sym reference the
@@ -263,7 +273,7 @@ if wants_csharp && [ "$SKIP_CSHARP" = "no" ]; then
   [ -x "$bin" ] || bin="$bin.exe"
   if [ -x "$bin" ]; then
     phase "published csharp binary reproduces the snapshot" \
-      sh -c "cd '$ROOT' && out=\$(mktemp) && '$bin' --src fixtures/csharp/src --out \"\$out\" --progress none >/dev/null 2>&1 && cmp \"\$out\" fixtures/csharp/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
+      sh -c "cd '$ROOT' && out=\$(mktemp) && ./bin/codegraph-csharp --src fixtures/csharp/src --out \"\$out\" --progress none >/dev/null 2>&1 && cmp \"\$out\" fixtures/csharp/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
   else
     warn "no published binary at $CSHARP_DIR/dist/$(host_rid) — run ./build.sh --csharp for the smoke test"
   fi

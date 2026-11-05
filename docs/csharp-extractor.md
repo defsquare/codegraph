@@ -47,6 +47,9 @@ xattr -d com.apple.quarantine codegraph-csharp
 codegraph-csharp.exe --src path\to\src --out model.jsonl
 ```
 
+From a clone, `./bin/codegraph-csharp` runs the binary published for the
+host's platform, with the same flags.
+
 No `libicu` is needed on Linux: the extractor is built with invariant
 globalization, so it runs on a minimal container image.
 

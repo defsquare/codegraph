@@ -5,7 +5,7 @@
 #   TypeScript : pnpm -r build   -> packages/*/dist (incl. the viz bundle
 #                                   `codegraph city --serve` looks for) and
 #                                   extractors/typescript/dist/cli.js (bin/codegraph-typescript)
-#   Java       : ./mvnw package  -> extractors/java/target/codegraph-java.jar
+#   Java       : ./mvnw package  -> extractors/java/target/codegraph-java.jar (bin/codegraph-java)
 #                --native        -> extractors/java/dist/<rid>/codegraph-java
 #                                   (GraalVM native image; HOST platform only —
 #                                   native-image drives the host linker and
@@ -13,7 +13,8 @@
 #                                   is one CI job per runner, not one job)
 #   C#         : dotnet publish  -> extractors/csharp/dist/<rid>/codegraph-csharp
 #                                   (self-contained single file; --publish-all
-#                                   builds the five-RID matrix from this host)
+#                                   builds the five-RID matrix from this host;
+#                                   bin/codegraph-csharp runs the host's)
 #   Elixir     mix escript.build -> extractors/elixir/dist/codegraph-elixir
 #                                   (an escript: Elixir embedded, needs Erlang/OTP
 #                                   on the machine that runs it — bin/codegraph-elixir)

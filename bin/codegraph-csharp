@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# The C# extractor as a program: `./bin/codegraph-csharp --src DIR --out model.jsonl`.
+#
+# Extensionless on purpose — the name IS the command. It runs the
+# self-contained binary `build.sh --csharp` publishes for THIS host beside
+# ITSELF (a git worktree or a moved checkout runs its own dist/); the binary
+# carries its runtime, Roslyn and the BCL reference pack — no .NET installed.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# The RID build.sh publishes by default (scripts/lib.sh host_rid).
+case "$(uname -s)" in
+  Darwin) os="osx" ;;
+  MINGW*|MSYS*|CYGWIN*) os="win" ;;
+  *) os="linux" ;;
+esac
+case "$(uname -m)" in
+  arm64|aarch64) arch="arm64" ;;
+  *) arch="x64" ;;
+esac
+rid="$os-$arch"
+
+bin="$here/../extractors/csharp/dist/$rid/codegraph-csharp"
+[ -x "$bin" ] || bin="$bin.exe"
+
+if [ ! -x "$bin" ]; then
+  printf 'codegraph-csharp: extractors/csharp/dist/%s/codegraph-csharp is missing\n' "$rid" >&2
+  printf 'Run `./build.sh --csharp` in %s and try again.\n' "$(cd "$here/.." && pwd)" >&2
+  exit 1
+fi
+
+exec "$bin" "$@"
