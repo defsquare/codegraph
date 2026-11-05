@@ -293,7 +293,7 @@ scope, weights, view and technical list, the same bytes on every run.
 drawn with `--top 80`. One word across the city is the `city` metric
 `vocabulary:<word>` (above):
 [`vocabulary-city-broadleaf.png`](vocabulary-city-broadleaf.png) is
-BroadleafCommerce's city with `--height vocabulary:order`.
+BroadleafCommerce's city with `--height vocabulary:order`. Design record: [vocabulary.md](vocabulary.md).
 
 ### `domain-facts`
 One JSON artifact (`codegraph.domainFacts/1`) with one dossier per corpus
