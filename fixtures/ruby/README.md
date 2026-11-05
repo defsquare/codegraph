@@ -140,3 +140,24 @@ writes the one a program that loaded it would produce and merges it with
 | `Ledger#open?` is defined at `ledger.rb:6` | nothing, counted: a method no `def` writes has no entity, and gets none |
 
 The files and the entities are the same lines with and without it.
+
+## The vocabulary: `pricing`, counted by hand
+
+`expected/vocabulary.json` is the words of this model's names
+(`@codegraph/vocabulary`, PLAN.md §20), rebuilt byte for byte by
+`pnpm --filter @codegraph/vocabulary test` (`CODEGRAPH_UPDATE_SNAPSHOTS=1`
+rewrites it). A word weighs the role of the entity whose name carries it —
+module and type 8, attribute 4, operation 3, parameter and local 1 — except a
+word of the name's qualifier, before the last separator of a qualified kind,
+which weighs 1. One word, counted by hand from the model and pinned by the
+vocabulary's tests:
+
+| name | kind | role | weight |
+|---|---|---|---|
+| `@pricing` | field | attribute | 4 |
+| `lib/acme_order/pricing/premium.rb`, `…/standard.rb` | file | qualifier | 2 × 1 |
+| `AcmeOrder::Pricing::Premium`, `AcmeOrder::Pricing::Standard` | class | qualifier | 2 × 1 |
+
+**`pricing`: weight 8, 5 occurrences, 5 carriers** — no entity is named
+`Pricing` itself, so the word is only ever a qualifier or a field. A constant
+path's `::` and a file's `/` qualify alike.

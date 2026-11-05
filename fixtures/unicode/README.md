@@ -43,3 +43,8 @@ than the model's.
 to the storage engine.** A query that needs canonical order must sort in
 TypeScript with `compareIds`, or `ORDER BY` a column the importer wrote in
 canonical order — never rely on SQLite's own collation to reproduce it.
+
+`expected/vocabulary.json` pins the same order on WORDS: the terms are sorted by
+code unit, so `𠀀` (the short word of `𠀀Supplementary`) comes before `ａ` (of
+`ＡFullwidth`), and the type scopes run `Ascii`, `𠀀Supplementary`,
+`ＡFullwidth` — the vocabulary sorts in TypeScript, like everything else.

@@ -17,6 +17,7 @@ export default defineConfig({
       "@codegraph/llm": fileURLToPath(new URL("../llm/src/index.ts", import.meta.url)),
       "@codegraph/navigator": fileURLToPath(new URL("../navigator/src/index.ts", import.meta.url)),
       "@codegraph/scm": fileURLToPath(new URL("../scm/src/index.ts", import.meta.url)),
+      "@codegraph/vocabulary": fileURLToPath(new URL("../vocabulary/src/index.ts", import.meta.url)),
     },
   },
 });

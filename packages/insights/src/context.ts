@@ -13,7 +13,7 @@ import {
 import { digestOf } from "./fingerprint.js";
 import type { Unit } from "./order.js";
 import type { RecordSource, RecordSummary } from "./records.js";
-import type { Level } from "./schema.js";
+import type { Level, WordEntry } from "./schema.js";
 import type { SourceReader, SourceSlice } from "./source.js";
 import type { UnitSet } from "./units.js";
 
@@ -36,7 +36,36 @@ import type { UnitSet } from "./units.js";
  * memoized getters over the record source: building a pack reads no block,
  * and a re-run that reuses everything never touches one. The fingerprint
  * reads neither (it hashes part IDS), which is what makes that sound.
+ *
+ * WORDS (PLAN.md §20.3). A member asks the model to define the words of its
+ * names: its own, an operation's parameters', a type's fields'. They are
+ * GIVEN, split by the injected `Speller` (the CLI hands `@codegraph/vocabulary`'s
+ * in), so this package runs no splitter. A module is also shown what its types
+ * said of the words they spell, heaviest first, cut at `terms`: read like a
+ * summary, when the prompt renders, and never hashed.
  */
+
+/** What a unit's names spell, injected: `@codegraph/vocabulary` through the CLI, a toy in tests. */
+export interface Speller {
+  /** The words of an entity's own name a definition is asked for, each once, in name order; none for an unnamed name. */
+  words(id: EntityId): readonly string[];
+  /** A module's askable words, heaviest first: the order its glossary is cut in. */
+  ranked(moduleId: EntityId): readonly string[];
+}
+
+/** One identifier of a member and the words of it the model defines. */
+export interface NameWords {
+  /** As the code writes it. */
+  readonly identifier: string;
+  readonly words: readonly string[];
+}
+
+/** A word a module's types spell, with what each of them said of it. */
+export interface GlossaryWord {
+  readonly word: string;
+  /** Read from the record source on first use: a type's `words` entry for this word, by type name. */
+  readonly entries: readonly { readonly type: string; readonly entry: WordEntry }[];
+}
 
 export interface DependencySummary {
   readonly id: EntityId;
@@ -98,6 +127,10 @@ export interface MemberPack {
   /** Explained parts of this member: a type's operations, a module's types. */
   readonly parts: readonly DependencySummary[];
   readonly imports: readonly { readonly name: string; readonly count: number; readonly external: boolean }[];
+  /** The identifiers whose words this member's block defines: its own name first. Only those with a word. */
+  readonly names: readonly NameWords[];
+  /** A module's: the words its types spell, heaviest first, cut at `terms`. Empty below a module. */
+  readonly glossary: readonly GlossaryWord[];
 }
 
 export interface ContextPack {
@@ -112,6 +145,8 @@ export interface ContextPack {
   readonly comments: readonly string[];
   readonly signatures: readonly string[];
   readonly factsDigest: string;
+  /** Per member: the words asked and a module's glossary words — never what was said of them. */
+  readonly words: readonly { readonly names: readonly NameWords[]; readonly glossary: readonly string[] }[];
 }
 
 export interface ContextEnv {
@@ -123,6 +158,9 @@ export interface ContextEnv {
   readonly unitOf: ReadonlyMap<EntityId, Unit>;
   readonly depth: number;
   readonly maxLines: number;
+  readonly speller: Speller;
+  /** A module's glossary keeps its heaviest `terms` words. */
+  readonly terms: number;
 }
 
 function displayName(graph: CodeGraph, id: EntityId): string {
@@ -210,6 +248,62 @@ function commentsOf(graph: CodeGraph, id: EntityId): readonly string[] {
   return Array.isArray(value) ? value.filter((c): c is string => typeof c === "string") : [];
 }
 
+/** The identifiers among `ids` that spell a word to define, in order, each identifier once. */
+function namesOf(env: ContextEnv, ids: readonly EntityId[]): NameWords[] {
+  const names: NameWords[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const entity = env.graph.entity(id);
+    const identifier = entity === undefined ? undefined : entityName(entity);
+    if (identifier === undefined || seen.has(identifier)) continue;
+    const words = env.speller.words(id);
+    if (words.length === 0) continue;
+    seen.add(identifier);
+    names.push({ identifier, words });
+  }
+  return names;
+}
+
+function parametersOf(env: ContextEnv, id: EntityId): EntityId[] {
+  const value = (env.graph.entity(id) as Record<string, unknown> | undefined)?.["parameters"];
+  return Array.isArray(value) ? value.filter((p): p is EntityId => typeof p === "string") : [];
+}
+
+function typeNames(env: ContextEnv, dossier: TypeDossier): NameWords[] {
+  return namesOf(env, [dossier.id, ...dossier.fields.map((f) => f.id)]);
+}
+
+/**
+ * The words a module's types spell, heaviest first by the speller's ranking
+ * (an unranked word after, by text), cut at `terms`. What the types said of
+ * them is read once, when a prompt first asks.
+ */
+function glossaryOf(env: ContextEnv, types: readonly TypeDossier[], moduleId: EntityId): GlossaryWord[] {
+  const spelled = new Set(types.flatMap((t) => typeNames(env, t).flatMap((n) => n.words)));
+  const rank = new Map(env.speller.ranked(moduleId).map((word, i) => [word, i]));
+  const ordered = [...spelled].sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity) || (a < b ? -1 : a > b ? 1 : 0));
+  let said: Map<string, { type: string; entry: WordEntry }[]> | undefined;
+  const read = (): Map<string, { type: string; entry: WordEntry }[]> => {
+    if (said === undefined) {
+      said = new Map();
+      for (const t of types) {
+        for (const entry of env.records.words(t.id) ?? []) {
+          const list = said.get(entry.word) ?? [];
+          list.push({ type: t.name ?? t.id, entry });
+          said.set(entry.word, list);
+        }
+      }
+    }
+    return said;
+  };
+  return ordered.slice(0, Math.max(0, env.terms)).map((word) => ({
+    word,
+    get entries() {
+      return read().get(word) ?? [];
+    },
+  }));
+}
+
 function operationPack(env: ContextEnv, id: EntityId, fact: OperationFact, dossier: TypeDossier): MemberPack {
   const folder = folderFor(env.graph);
   const module = folder.containingModule(id);
@@ -246,6 +340,8 @@ function operationPack(env: ContextEnv, id: EntityId, fact: OperationFact, dossi
     injectionPoints: [],
     parts: [],
     imports: [],
+    names: namesOf(env, [id, ...parametersOf(env, id)]),
+    glossary: [],
   };
 }
 
@@ -296,6 +392,8 @@ function typePack(env: ContextEnv, dossier: TypeDossier): MemberPack {
     })),
     parts: [...parts, ...nested],
     imports: [],
+    names: typeNames(env, dossier),
+    glossary: [],
   };
 }
 
@@ -328,6 +426,15 @@ function modulePack(env: ContextEnv, module: ModuleFact): MemberPack {
     injectionPoints: [],
     parts,
     imports: module.imports.map((i) => ({ name: i.name ?? i.to, count: i.count, external: i.external })),
+    names: namesOf(env, [module.id]),
+    glossary: glossaryOf(
+      env,
+      module.types.flatMap((t) => {
+        const dossier = env.units.types.get(t);
+        return dossier === undefined ? [] : [dossier];
+      }),
+      module.id,
+    ),
   };
 }
 
@@ -382,5 +489,6 @@ export function contextPackFor(unit: Unit, env: ContextEnv): ContextPack {
     comments: members.flatMap((m) => m.comments),
     signatures: members.map((m) => m.signature ?? ""),
     factsDigest: digestOf(factsProjection(members)),
+    words: members.map((m) => ({ names: m.names, glossary: m.glossary.map((g) => g.word) })),
   };
 }

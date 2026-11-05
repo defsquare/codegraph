@@ -25,8 +25,9 @@ share. Task-oriented walkthroughs live in the [README](../README.md).
   worked; the input did not). A CI job gating on model quality checks for `3`.
 - **`--json`** prints the same information as a machine-readable object.
 - **A sibling `model.db`** (the SQLite analysis store) is built on first use and
-  reused afterwards by `analyze`, `export`, `navigator`, `domain-facts` and
-  `explain`; on those, `--no-cache` reads the JSONL directly.
+  reused afterwards by `analyze`, `export`, `navigator`, `vocabulary`,
+  `domain-facts` and `explain`; on those, `--no-cache` reads the JSONL
+  directly.
 
 ## Synopsis
 
@@ -65,6 +66,13 @@ codegraph city     [model.jsonl] [--layout] [--out FILE]
 codegraph navigator [model.jsonl] [--out FILE]
                    [--name STR] [--internal-only] [--declared-only]
 
+codegraph vocabulary [model.jsonl] [--level corpus|module|type] [--scope ID]
+                   [--top N] [--class domain|technical|keyword|short|all]
+                   [--weights KEY=N,…] [--technical FILE] [--drift FILE]
+                   [--drift-insights [--insights FILE]]
+                   [--out FILE] [--svg FILE] [--json] [--internal-only]
+                   [--declared-only]
+
 codegraph domain-facts [model.jsonl] [--framework spring] [--out FILE]
                    [--internal-only] [--declared-only]
 
@@ -74,12 +82,13 @@ codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
                    [--model SLUG] [--rollup-model SLUG] [--depth N]
                    [--max-calls N] [--max-tokens N] [--scope IDS]
                    [--concurrency N]
-                   [--max-lines N] [--max-scc N] [--force] [--retry-failed]
+                   [--max-lines N] [--max-scc N] [--terms N] [--force] [--retry-failed]
                    [--export | --import FILE] [--yes] [--json]
                    [--framework spring] [--internal-only] [--declared-only]
 
 codegraph insights [model.jsonl] [--store FILE] [--json]
                    [--id ID | --failures | --runs |
+                    --word WORD | --glossary MODULE_ID | --polysemy | --concerns |
                     --level operation|type|module --concept NAME
                     --min-confidence X --max-confidence X --limit N]
 
@@ -144,10 +153,24 @@ for the selection, incoming and outgoing dependencies classified by role, with
 the member that carries each, its provenance and its source anchor; **City** —
 the 3D code city, full-width, where a selected building's panel offers *Open
 in navigator* and lands on that type's Navigate entry with its dependencies;
-**Graph** (Cytoscape), **Cycles** (the precomputed tangle report) and
-**Coupling** (ranked metrics). The city's channels are the `city` flags
-below, so the page's city is exactly the artifact `city` would write. The
-server hands out `/navigator.json` and `/city.json`; stdout stays empty.
+**Graph** (Cytoscape), **Cycles** (the precomputed tangle report),
+**Coupling** (ranked metrics) and **Vocabulary** — the words of the selected
+scope's names (the corpus until a module or a type is selected; a member
+shows its type) as the cloud `vocabulary --svg` draws, measured in the page's
+font, and as a table of weight, occurrences, carriers and spread, with class
+chips and a top-N slider. The city's channels are the `city` flags below, so
+the page's city is exactly the artifact `city` would write. The server hands
+out `/navigator.json`, `/city.json` and `/vocabulary.json` (the vocabulary
+under its default weights and technical list); stdout stays empty.
+
+Clicking a word on the Vocabulary tab lists **the names that carry it** in
+that scope, heaviest first, each one click from its node in Navigate (a
+member reveals its type). The artifact counts and never lists, so this is the
+server's second lookup, `/carriers.json?term=WORD[&scope=ID][&class=CLASS][&limit=N]`,
+answered from the model it holds: the row's weight, occurrences and carriers,
+and the first `limit` (200) of them, whose weights add up to the row. An
+unknown scope or term is `404`; a request with no term, a class that is none
+or a text the scope speaks as two terms (`class` then chooses) is `400`.
 
 When `explain` has been run, a selected type or module also shows **what the
 model wrote about it** — the description, the domain concept, the model and
@@ -158,12 +181,28 @@ artifact, `/insight.json?id=…`, looked up in `<model>.insights.db` beside the
 first model (or `--insights FILE`) when asked for. With no store the route
 answers 404 and the page looks exactly as it did.
 
+Over the same store, a clicked word on the Vocabulary tab also shows **what
+the explanations under that scope said it means**: each module's
+reconciliation (and the types that disagree on it), then each explained
+entity's entry — its concern, sense and confidence, and the identifiers the
+word is in — in the same inference colour and badge, each one click from its
+node (an operation reveals its type). That is the server's third lookup,
+`/glossary.json?term=WORD[&scope=ID][&limit=N]`: the entries of the entities
+the model folds under the scope, as the carriers are, from the store's word
+index; the first `limit` (200) of each list, and their totals. An unknown
+scope is `404`, and so is having no store (the tab then shows nothing); no
+term, or a limit that is no whole number, is `400`. Navigate's explanation
+panel shows the same words for a selected type or module, with their
+meaning, in its structured block.
+
 **`--app`** is the same page as the daemon behind the desktop app (and the
 development loop for it: run it from a checkout, open the URL in a browser).
 No model on argv. It binds `127.0.0.1:0` unless `--host`/`--port` say
 otherwise, prints exactly one JSON line on stdout — `{"port":N,"token":"…"}`
 — and serves every route under `/<token>/`: the page, `app` (the registry
 and the current project), `recent`, `navigator.json`, `city.json`,
+`vocabulary.json` (no `carriers.json` or `glossary.json`: the daemon holds no
+model or store between jobs, and the tab shows the counts without the names),
 `POST jobs` with `{"src": DIR-or-model.jsonl, "extractor"?: NAME}` and the
 `jobs/current` event stream (`started`, `phase`, `progress` — the
 extractor's own stderr lines — `done`, `failed`; `idle` when nothing runs).
@@ -206,12 +245,55 @@ With the change-history side-car `codegraph-metrics --history` writes beside
 the model (or `--history-metrics FILE`), `history:<measure>` reads the type's
 own blame and `history-file:<measure>` its file's history
 (`--height history-file:churn_recent`; docs/metrics.md §4).
+`vocabulary:<word>` is the word's weight in the names of the type and its
+members — the Vocabulary tab's type scope, under the default weights — so
+`--height vocabulary:order` shows where `order` lives. A type whose names
+never say the word weighs 0; a stub, whose names the vocabulary never reads,
+is unmeasured; a word no name in the view says is a usage error.
 Unmeasured metrics are drawn at the channel minimum and labelled unmeasured.
 
 ### `navigator`
 Writes the navigator artifact (`navigator.json`): the tree, one classified
 dependency row per base edge, and the cycle/coupling reports. Type and module
 nodes carry their entity id, which is how the city's buildings address them.
+
+### `vocabulary`
+The words the model's names are made of (never source): each `TNamed`
+entity's name split into words, classed `domain`, `technical`, `keyword` or
+`short`, and weighted by the role of what carries it. A type's or module's
+name weighs 8, an attribute's 4, an operation's 3, a parameter's or local's
+1, and the qualifier of a qualified name (`com.acme` of `com.acme.order`) 1.
+No flag prints the corpus's 40 heaviest domain words; `--level module|type`
+one block per scope, ranked by distinct terms (the cognitive-load report);
+`--scope ID` one module or type, or an operation counted on demand.
+`--weights` and `--technical FILE` change the scheme, and the header says
+which one counted. `--drift FILE` compares with a glossary, one business term
+per line: the terms no scope of `--level` says (exit `3`), the ones it says
+and where, and the domain words no term contains. `--drift-insights` sets the
+classes against what `explain` judged (M19c): it reads the insights store beside
+the first model (`--insights FILE` names another), classes each word a model
+defined as the list does in that entity's language, and lists the technical
+words a model called domain somewhere, then the domain words it called
+technical, the most judgements against first (`--top N` per list, 40 by
+default), each with the judgements against it, surest first: confidence,
+sense, and the identifiers in which entity (five per word, and how many more:
+`--json` lists every one). With `--drift FILE` it adds the business terms against both: each
+word's class and the model's concerns, and why the term drifts (`list`,
+`model`). The judgements are inferences and never set the exit code; `--drift`
+still exits `3` on a term the corpus never says. `--scope`, `--level`,
+`--class` and `--svg` do not apply to it; records of entities the model or the
+view does not have, and records explained under prompt 1, are counted on stderr.
+`--json` gives `report: "drift-insights"`. `--out FILE` writes the
+`vocabulary.json` artifact (`codegraph.vocabulary/1`) beside the report.
+`--svg FILE` draws the cloud of the one scope reported — the corpus, or
+`--scope`'s — from the words `--class` and `--top` pick: size on the square
+root of the weight, colour by class and nothing else, a legend stating the
+scope, weights, view and technical list, the same bytes on every run.
+[`vocabulary-broadleaf.svg`](vocabulary-broadleaf.svg) is BroadleafCommerce's,
+drawn with `--top 80`. One word across the city is the `city` metric
+`vocabulary:<word>` (above):
+[`vocabulary-city-broadleaf.png`](vocabulary-city-broadleaf.png) is
+BroadleafCommerce's city with `--height vocabulary:order`.
 
 ### `domain-facts`
 One JSON artifact (`codegraph.domainFacts/1`) with one dossier per corpus
@@ -251,7 +333,11 @@ interactive terminal it is required. A unit that could not be explained exits
 side-car; `--retry-failed` redoes just those units and their direct
 dependents. A `401`/`402`/`403` aborts the run instead of failing every
 remaining unit the same way; `--max-tokens N` caps what one answer may cost,
-which on a prepaid account is what keeps a low balance from refusing every call. Design record: [insights.md](insights.md).
+which on a prepaid account is what keeps a low balance from refusing every call.
+Each unit is also asked for the meaning of the words its names spell (`words`:
+its own name, an operation's parameters, a type's fields, split as `vocabulary`
+splits them), and a module reconciles what its types said into a `glossary`
+of its heaviest `--terms N` words (default 60). Design record: [insights.md](insights.md).
 
 ### `insights`
 Asks the insights store what `explain` has written — and opens nothing else:
@@ -271,16 +357,41 @@ invocation:
 - `--id ID` — one explanation whole: envelope, description, block. An id that
   was asked for and **failed** is answered with the reason, exit `3`; an id the
   store has never heard of is a usage error;
+- `--word WORD` — every explained entity whose names spell the word (looked up
+  lowercase, as `vocabulary` splits names), grouped by module: one
+  tab-separated line per entry — the module, `glossary` or the entity's level,
+  the id, the concern, the confidence, the sense, and the identifiers the word
+  is in. Each module's own glossary entry comes first (its last cell lists the
+  types' senses when the module flagged the word polysemous), then the module,
+  its types, its operations. A record is placed by its natural key; one
+  without a key is under `-`. The meaning is not shown: `--glossary` and `--id`
+  show it;
+- `--glossary MODULE_ID` — a module's glossary whole, one line per word: the
+  word, the concern, sense and meaning the module reconciled from its types,
+  and the types' senses where they disagree;
+- `--polysemy` — the words a module flagged, and the words two modules'
+  glossaries define differently (in concern or sense, case and spacing aside):
+  every module's entry for each, side by side, the most senses first. No
+  model call judges them across the corpus: a human does;
+- `--concerns` — per module: how many distinct words its records define, and
+  how many the model called `domain`, `technical` and `ambiguous` (a word two
+  units judged differently counts under both), the most-worded module first;
 - `--failures` — the units still owed, with the reason each failed;
 - `--runs` — the ledger, oldest first: when, which models, what each run
   explained and spent.
 
 `--json` makes each answer one kind-tagged document (`codegraph.insightsSummary/1`,
-`…List/1`, `…Failures/1`, `…Runs/1`; `--id --json` is the record exactly as the
-side-car carries it). The command writes nothing: the store is opened as a
+`…List/1`, `…Word/1`, `…Glossary/1`, `…Polysemy/1`, `…Concerns/1`, `…Failures/1`,
+`…Runs/1`; `--id --json` is the record exactly as the side-car carries it).
+A record a model explained under prompt 1 defines no words, so the word
+answers cannot see it: they say on stderr how many such records there are,
+the summary counts them, `--id` says so on the record, and `--glossary` on
+such a module says why it has none. The next `explain` re-explains them. The command writes nothing: the store is opened as a
 reader, a missing one is a usage error rather than a file that appears, and one
 written by a newer codegraph — or a SQLite file that is not an insights store —
-is named and left alone.
+is named and left alone. One an older build wrote is refused and left alone too:
+any `codegraph explain` on it migrates it, `--dry-run` included, which calls no
+model.
 
 ### `scm`
 Mines a repository's git history into a deterministic `history.jsonl`:
@@ -316,7 +427,7 @@ facts.
 Prints the language profiles core ships — the per-kind required and optional
 trait sets an extractor must respect, the edge kinds, the lexicon the
 vocabulary reads (reserved words, conventional names, technical words, file
-kinds), and the notes. `--lang L` prints one profile in full; `--json` prints
+kinds, qualified kinds and their separators), and the notes. `--lang L` prints one profile in full; `--json` prints
 the data as `{kind: "codegraph.profiles/1", profiles[]}`.
 
 ## The Java extractor

@@ -47,6 +47,18 @@ With a change-history side-car beside the model — what [`codegraph-metrics --h
 
 `codegraph serve model.jsonl --height history-file:churn_recent --carry history:risk_score` raises a building by how much its file changed in the last 90 days and carries its type's risk rank. The side-car is read from `<model>.history-metrics.jsonl` beside each model, or from `--history-metrics FILE`. Asking for a form with no side-car, or for a measure at a level it lacks (`churn_long` exists per file only), is a usage error that says what to run or type instead — never a silent zero.
 
+## Vocabulary form
+
+`vocabulary:<word>` reads the words of the model's names, as [`codegraph vocabulary`](/docs/reference/cli/vocabulary/) counts them under its default weights, wherever a metric name is accepted:
+
+| Form | Reads | Unit |
+|---|---|---|
+| `vocabulary:<word>` | the word's weight in the names of the type and of everything folded into it: the Vocabulary tab's type scope | weighted occurrences |
+
+`codegraph serve model.jsonl --height vocabulary:order` raises each building by how much its names say `order`, so the City tab and the Vocabulary tab read one number. The word is read as the splitter reads a name: `Order` is `order`, and `OrderLine` is two words, which is a usage error. When two languages class one text differently, the two weights add up.
+
+A type whose names never say the word weighs **0**: its names were read, and that is a measurement. A stub is **unmeasured**, since the vocabulary never reads a name another codebase chose. A word no name in the view says is a usage error rather than a flat city, which would look like an answer.
+
 ## "I do not know" is an answer
 
 A source returns `undefined`, never a substitute zero: a stub type has no anchor, so it has no line count, and a zero there would be a measurement nobody took. `sum:` likewise returns `undefined` — not `0` — when *no* member carries the key.

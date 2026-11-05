@@ -1,4 +1,5 @@
 import type { DepRow, NavigatorModel, NavNode } from "@codegraph/navigator";
+import type { VocabularyArtifact, VocabularyScope } from "@codegraph/vocabulary";
 
 /**
  * A hand-built artifact — the UI's own unit tests must not depend on the
@@ -50,5 +51,59 @@ export function artifact(): NavigatorModel {
     roots: [0],
     deps,
     diagnostics: { selfDeps: 0, droppedDeps: 0 },
+  };
+}
+
+const ROLES = { module: 0, type: 0, operation: 0, attribute: 0, parameter: 0, local: 0, other: 0 };
+
+function scope(
+  level: VocabularyScope["level"],
+  name: string,
+  terms: VocabularyScope["terms"],
+  extra: { id?: string; kind?: string; parent?: number } = {},
+): VocabularyScope {
+  return {
+    level,
+    ...extra,
+    name,
+    entities: terms.length,
+    roles: ROLES,
+    skipped: { unnamed: 0, conventional: 0, numeric: 0 },
+    distinct: terms.length,
+    distinctDomain: 0,
+    weight: terms.reduce((sum, row) => sum + row[1], 0),
+    occurrences: terms.reduce((sum, row) => sum + row[2], 0),
+    terms,
+  };
+}
+
+/**
+ * The words of the toy above, by hand — the CONTRACT again, not the builder:
+ * the corpus, module p, types A and C, with the navigator's ids.
+ */
+export function vocabularyArtifact(): VocabularyArtifact {
+  return {
+    kind: "codegraph.vocabulary/1",
+    generatedBy: "@codegraph/vocabulary",
+    view: { name: "all", filters: [] },
+    corpus: { name: "toy", roots: ["toy"] },
+    langs: ["java"],
+    weights: { module: 8, type: 8, operation: 3, attribute: 4, parameter: 1, local: 1, other: 1, qualifier: 1 },
+    classes: ["domain", "technical", "keyword", "short"],
+    technical: { words: 138, sha256: "4f34e69f52f5".padEnd(64, "0") },
+    terms: [
+      { text: "account", class: "domain", modules: 1, types: 1, exclusive: 1 },
+      { text: "get", class: "technical", modules: 1, types: 1, exclusive: 1 },
+      { text: "new", class: "keyword", modules: 1, types: 1, exclusive: 1 },
+      { text: "order", class: "domain", modules: 1, types: 2, exclusive: 1 },
+      { text: "x", class: "short", modules: 1, types: 1, exclusive: 1 },
+    ],
+    scopes: [
+      scope("corpus", "toy", [[3, 19, 3, 3], [0, 8, 1, 1], [1, 3, 1, 1], [2, 1, 1, 1], [4, 1, 1, 1]]),
+      scope("module", "p", [[3, 19, 3, 3], [0, 8, 1, 1], [1, 3, 1, 1], [2, 1, 1, 1], [4, 1, 1, 1]], { id: "java:p/p", kind: "package", parent: 0 }),
+      scope("type", "A", [[3, 11, 2, 2], [1, 3, 1, 1], [4, 1, 1, 1]], { id: "java:p/A", kind: "class", parent: 1 }),
+      scope("type", "C", [[0, 8, 1, 1], [3, 8, 1, 1], [2, 1, 1, 1]], { id: "java:p/C", kind: "class", parent: 1 }),
+    ],
+    diagnostics: { unplaced: [], withoutLexicon: [] },
   };
 }

@@ -9,11 +9,13 @@ import {
   type CityModel,
   type MetricSource,
 } from "@codegraph/city";
+import { buildVocabulary, type VocabularyArtifact } from "@codegraph/vocabulary";
 import type { CityBuildOptions, CityOptions } from "../args.js";
 import { UsageError, type ExitCode } from "../exit.js";
 import { historyMetric, loadHistoryJoin, type HistoryJoin } from "../history-metrics.js";
 import { errLine, errLines, type IoSink } from "../io.js";
 import { loadExitCode, loadModelFiles } from "../load.js";
+import { vocabularyMetric } from "../vocabulary-metric.js";
 import { resolveView } from "../view.js";
 
 /**
@@ -69,18 +71,26 @@ export function cityCommand(options: CityOptions, io: IoSink): ExitCode {
  * The city of a graph under the CLI's flags — shared with `serve`. `history`
  * is the model's change-history side-car, joined (history-metrics.ts): it
  * gives the `history:`/`history-file:` metric names their sources.
+ * `vocabulary` gives `vocabulary:<word>` its counts (vocabulary-metric.ts):
+ * the one a caller already built under the same view, else counted here
+ * when such a metric is named.
  */
 export function cityOf(
   graph: ReturnType<typeof buildGraph>,
   options: CityBuildOptions,
   history?: HistoryJoin,
+  vocabulary?: VocabularyArtifact,
 ): CityModel {
-  const metric = (name: string): string | MetricSource => historyMetric(name, history) ?? name;
+  const view = resolveView(options);
+  let counted = vocabulary;
+  const words = (): VocabularyArtifact => (counted ??= buildVocabulary(graph, { view }));
+  const metric = (name: string): string | MetricSource =>
+    historyMetric(name, history) ?? vocabularyMetric(name, words) ?? name;
   try {
     const framework =
       options.framework === undefined ? undefined : FRAMEWORK_PROFILES[options.framework];
     return buildCity(graph, {
-      view: resolveView(options),
+      view,
       ...(options.name === undefined ? {} : { name: options.name }),
       ...(framework === undefined ? {} : { framework }),
       height: { metric: metric(options.height), scale: options.heightScale },

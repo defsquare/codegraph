@@ -4,6 +4,7 @@ import {
   identityView,
   internalOnly,
   type View,
+  type ViewDescriptor,
 } from "@codegraph/analyzer";
 import type { ViewOptions } from "./args.js";
 
@@ -23,4 +24,11 @@ export function resolveView(options: ViewOptions): View {
   if (views.length === 0) return identityView;
   if (views.length === 1) return views[0] as View;
   return composeViews(...views);
+}
+
+/** A view as a report's header states it: a number without its view is not a fact. */
+export function viewLabel(view: ViewDescriptor): string {
+  return view.filters.length === 0
+    ? `${view.name} (nothing filtered — stubs and inferred edges included)`
+    : `${view.name} (${view.filters.join(", ")})`;
 }

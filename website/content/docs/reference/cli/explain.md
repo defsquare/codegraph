@@ -8,7 +8,7 @@ Explain every operation, type and module with an LLM, bottom-up, into a side-car
 ## Synopsis
 
 ```
-codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|openrouter|cloudflare>] [--model SLUG] [--rollup-model SLUG] [--depth N] [--max-calls N] [--max-tokens N] [--concurrency N] [--max-lines N] [--max-scc N] [--scope IDS] [--framework <spring>] [--internal-only] [--declared-only] [--no-cache] [--dry-run] [--estimate] [--price-in USD] [--price-out USD] [--force] [--retry-failed] [--json]
+codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|openrouter|cloudflare>] [--model SLUG] [--rollup-model SLUG] [--depth N] [--max-calls N] [--max-tokens N] [--concurrency N] [--max-lines N] [--max-scc N] [--terms N] [--scope IDS] [--framework <spring>] [--internal-only] [--declared-only] [--no-cache] [--dry-run] [--estimate] [--price-in USD] [--price-out USD] [--force] [--retry-failed] [--json]
 ```
 
 ## Arguments
@@ -31,6 +31,7 @@ codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|op
 | `--concurrency N` | Model calls in flight at once. | `4` |
 | `--max-lines N` | Source lines shown per unit before the middle is elided. | `200` |
 | `--max-scc N` | Members of a dependency cycle explained in one call; larger cycles are chunked. | `12` |
+| `--terms N` | Words a module's glossary reconciles: the heaviest N its types define. | `60` |
 | `--scope IDS` | Comma-separated module or type ids: explain only units inside them (dependencies outside are reused when already explained, never called). | — |
 | `--framework <spring>` | Add a framework's stereotypes and entry points to the facts shown. | — |
 | `--internal-only` | Drop stub (external) entities and every edge touching one. | — |
@@ -60,12 +61,12 @@ A `401`, `402` or `403` is about the account, not the unit: the run **aborts** �
 $ codegraph explain fixtures/java/expected/model.jsonl --src fixtures/java/src --dry-run
 cache: fixtures/java/expected/model.db
 explain plan: 77 units in 8 layers
-  operation     57 units     48 calls ~70459 prompt tokens
-  type          17 units     17 calls ~28078 prompt tokens
-  module         3 units      3 calls ~4249 prompt tokens
+  operation     57 units     48 calls ~78148 prompt tokens
+  type          17 units     17 calls ~31001 prompt tokens
+  module         3 units      3 calls ~5334 prompt tokens
   statuses: llm 68, template 9, reuse 0, skip-scope 0, skip-budget 0
   models: openai/gpt-5.6-luna (operations), openai/gpt-5.6-luna (types, modules); depth 1
-  total: 68 calls, ~102786 prompt tokens in, ~36650 completion tokens out
+  total: 68 calls, ~114483 prompt tokens in, ~41670 completion tokens out
 ```
 
 Trimmed after the plan summary; one line per unit follows. `--dry-run` needs no API key.

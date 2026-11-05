@@ -43,7 +43,7 @@ it any time. You will query it yourself in
 
 The header shows what was loaded: **1,855 nodes · 6,236 dependencies**.
 
-<!-- screenshot: the navigator on the Navigate tab — virtualized tree on the left with com.google.gson expanded, the dependency panel on the right, header stats and the five tabs across the top -->
+<!-- screenshot: the navigator on the Navigate tab — virtualized tree on the left with com.google.gson expanded, the dependency panel on the right, header stats and the six tabs across the top -->
 
 ## 2. Find the class
 
@@ -143,11 +143,13 @@ Four meanings carry a hue in the navigator and nothing else does:
 A stub — an external type — is drawn muted and italic rather than in a colour of
 its own. It is a degraded fact, not a fifth category.
 
-## 6. Use the other three tabs
+## 6. Use the other tabs
 
-The tabs across the top are **Navigate**, **Graph**, **Cycles** and
-**Coupling**. Every row in the three report tabs leads back to Navigate, so a
-finding is always one click from its evidence.
+The tabs across the top are **Navigate**, **City**, **Graph**, **Cycles**,
+**Coupling** and **Vocabulary**. City is the one you toured in
+[Your first code city](/docs/tutorials/first-city/). Every row in the report
+tabs leads back to Navigate, so a finding is always one click from its
+evidence.
 
 **Graph.** A force-directed dependency graph (Cytoscape with fcose). Two modes,
 **Modules** and **Types**; node size follows fan-in, and labels appear by zoom
@@ -177,6 +179,19 @@ different questions. A number without its definition is not a fact.
 
 <!-- screenshot: the Coupling tab sorted by fan-in at type level, TypeAdapter first with 33 / 14 / 0.30 -->
 
+**Vocabulary.** The words of the selection's names, split the way Java
+writes names. With `TypeAdapter` still selected, the tab counts the class and
+everything written in it, **26 entities**, and shows **7 domain terms of
+17**. The heaviest is `tree`, at weight **7**. `json`, `type` and `adapter`
+weigh more but are classed *technical*; the **technical** chip shows them.
+Click `tree` and the panel lists the three names that carry it: the methods
+`fromJsonTree` and `toJsonTree` (3 each, an operation's weight) and the
+parameter `jsonTree` (1). The breadcrumb reads **gson › com.google.gson ›
+TypeAdapter**; click **gson** for the whole corpus, whose heaviest words are
+`number`, `write`, `date` and `constructor`.
+
+<!-- screenshot: the Vocabulary tab on TypeAdapter, tree picked, its three carriers listed -->
+
 ## 7. Stop the server
 
 `Ctrl-C`. As with the city, you can write the artifact to a file instead:
@@ -197,8 +212,8 @@ That file is the frontend's only input.
 - A way to go from "something depends on this" to the file and line that proves
   it, in three clicks.
 - The habit of reading the provenance badge before believing a dependency.
-- Four views over one model that cannot disagree with each other, because all
-  four were computed once by the analyzer and only rendered in the browser.
+- Six views over one model that cannot disagree with each other, because all
+  six were computed once on the server and only rendered in the browser.
 
 ## Where to go next
 

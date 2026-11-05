@@ -148,8 +148,9 @@ export const phpProfile: Profile = {
       "__set_state", "__clone", "__debugInfo",
     ],
     technical: [
-      "arr", "closure", "facade", "middleware", "php", "str",
+      "arr", "closure", "facade", "middleware", "php",
     ],
     fileKinds: ["codeFile"],
+    qualified: { codeFile: "/", namespace: "\\" },
   },
 };

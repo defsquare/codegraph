@@ -249,5 +249,5 @@ export const typescriptProfile: Profile = {
   ],
 
   // The module is the file: its name is a path whose extension is not a word.
-  lexicon: { ...ECMASCRIPT_LEXICON, fileKinds: ["module"] },
+  lexicon: { ...ECMASCRIPT_LEXICON, fileKinds: ["module"], qualified: { module: "/" } },
 };

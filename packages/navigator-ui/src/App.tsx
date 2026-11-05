@@ -8,6 +8,7 @@ import { GraphView } from "./components/GraphView.js";
 import { CyclesView } from "./components/CyclesView.js";
 import { CouplingView } from "./components/CouplingView.js";
 import { CityTab } from "./components/CityTab.js";
+import { VocabularyView } from "./components/VocabularyView.js";
 import { ProgressOverlay } from "./components/ProgressOverlay.js";
 import { Loader } from "./components/Loader.js";
 import { AppHome } from "./components/AppHome.js";
@@ -42,11 +43,12 @@ export const SLOW_LOAD_MS = 2000;
  * The tabs: NAVIGATE is the working surface (tree + evidence); CITY is the 3D
  * code city over the same model, full-width — no tree panel there, the city
  * is the navigation surface; the others are the reports, each on its own tab
- * so a report never crowds the navigation. Every report row — and a building
- * selected in the city — leads BACK to Navigate through `reveal`: one
- * selection, five ways of looking at it.
+ * so a report never crowds the navigation; VOCABULARY is the words of the
+ * selected scope's names. Every report row — a building selected in the city,
+ * a name carrying a word — leads BACK to Navigate through `reveal`: one
+ * selection, six ways of looking at it.
  */
-const TABS = ["navigate", "city", "graph", "cycles", "coupling"] as const;
+const TABS = ["navigate", "city", "graph", "cycles", "coupling", "vocabulary"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Readonly<Record<Tab, string>> = {
   navigate: "Navigate",
@@ -54,6 +56,7 @@ const TAB_LABEL: Readonly<Record<Tab, string>> = {
   graph: "Graph",
   cycles: "Cycles",
   coupling: "Coupling",
+  vocabulary: "Vocabulary",
 };
 
 export function App() {
@@ -62,6 +65,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>("navigate");
   const [graphVisited, setGraphVisited] = useState(false);
   const [cityVisited, setCityVisited] = useState(false);
+  const [vocabularyVisited, setVocabularyVisited] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
   const [selection, setSelection] = useState<number | undefined>(undefined);
   const [query, setQuery] = useState("");
@@ -92,6 +96,7 @@ export function App() {
         setTab("navigate");
         setGraphVisited(false);
         setCityVisited(false);
+        setVocabularyVisited(false);
         setPhase({ kind: "ready", ix });
       } catch (error) {
         if (!alive()) return;
@@ -257,6 +262,7 @@ export function App() {
     setTab(next);
     if (next === "graph") setGraphVisited(true);
     if (next === "city") setCityVisited(true);
+    if (next === "vocabulary") setVocabularyVisited(true);
   }, []);
 
   if (phase.kind === "loading" && !slow) {
@@ -370,6 +376,13 @@ export function App() {
       {tab === "coupling" && (
         <div className="app-body">
           <CouplingView ix={ix} hideExternals={hideExternals} onReveal={reveal} />
+        </div>
+      )}
+      {(vocabularyVisited || tab === "vocabulary") && (
+        // Mounted on first visit, then kept alive hidden: the artifact is
+        // fetched once per model, and the scope follows the selection meanwhile.
+        <div className="app-body" hidden={tab !== "vocabulary"}>
+          <VocabularyView ix={ix} selection={selection} onSelect={setSelection} onReveal={reveal} />
         </div>
       )}
     </div>

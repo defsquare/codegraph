@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="759.2" height="425.4" viewBox="0 0 759.2 425.4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" role="img">
+<title>codegraph vocabulary — corpus src</title>
+<style>.bg{fill:#ffffff}.domain{fill:#1f2328}.technical{fill:#59636e}.keyword,.short{fill:#9198a1}.legend{fill:#59636e}.cloud text{text-anchor:middle;dominant-baseline:central}@media (prefers-color-scheme:dark){.bg{fill:#0d1117}.domain{fill:#f0f6fc}.technical{fill:#9198a1}.keyword,.short{fill:#59636e}.legend{fill:#9198a1}}</style>
+<rect class="bg" width="759.2" height="425.4"/>
+<g class="cloud">
+<text class="domain" x="390.2" y="180.6" font-size="56">order</text>
+<text class="domain" x="403.2" y="244.6" font-size="36">price</text>
+<text class="domain" x="345.2" y="117.6" font-size="34">basket</text>
+<text class="domain" x="493.2" y="118.6" font-size="34">channel</text>
+<text class="domain" x="222.2" y="190.6" font-size="31">discount</text>
+<text class="domain" x="537.2" y="165.6" font-size="30">ledger</text>
+<text class="domain" x="286.2" y="238.6" font-size="27">cursor</text>
+<text class="domain" x="530.2" y="210.6" font-size="27">lines</text>
+<text class="domain" x="221.2" y="145.6" font-size="27">total</text>
+<text class="domain" x="536.2" y="250.6" font-size="26">reference</text>
+<text class="domain" x="408.2" y="288.6" font-size="24">amount</text>
+<text class="domain" x="302.2" y="280.6" font-size="24">line</text>
+<text class="domain" x="227.2" y="105.6" font-size="23">audited</text>
+<text class="domain" x="340.2" y="72.6" font-size="23">batch</text>
+<text class="domain" x="429.2" y="70.6" font-size="23">cents</text>
+<text class="domain" x="544.2" y="288.6" font-size="23">discountable</text>
+<text class="domain" x="191.2" y="239.6" font-size="23">empty</text>
+<text class="domain" x="623.2" y="206.6" font-size="23">guard</text>
+<text class="domain" x="601.2" y="125.6" font-size="23">head</text>
+<text class="domain" x="521.2" y="67.6" font-size="23">legacy</text>
+<text class="domain" x="628.2" y="170.6" font-size="23">list</text>
+<text class="domain" x="221.2" y="284.6" font-size="23">money</text>
+<text class="domain" x="415.2" y="325.6" font-size="23">notifications</text>
+<text class="domain" x="219.2" y="66.6" font-size="23">priceable</text>
+<text class="domain" x="103.2" y="144.6" font-size="23">reporting</text>
+<text class="domain" x="607.2" y="86.6" font-size="23">stock</text>
+<text class="domain" x="114.2" y="231.6" font-size="23">trail</text>
+<text class="domain" x="637.2" y="243.6" font-size="21">max</text>
+<text class="domain" x="95.2" y="188.6" font-size="21">running</text>
+<text class="domain" x="353.2" y="32.6" font-size="21">shipped</text>
+<text class="domain" x="678.2" y="136.6" font-size="19">archive</text>
+<text class="domain" x="137.2" y="103.6" font-size="17">counts</text>
+<text class="domain" x="442.2" y="33.6" font-size="17">prices</text>
+<text class="domain" x="692.2" y="181.6" font-size="17">tail</text>
+<text class="domain" x="290.2" y="324.6" font-size="15">first</text>
+<text class="domain" x="144.2" y="271.6" font-size="15">phone</text>
+<text class="domain" x="509.2" y="36.6" font-size="15">store</text>
+<text class="domain" x="686.2" y="211.6" font-size="15">web</text>
+<text class="domain" x="668.2" y="108.6" font-size="12">acme</text>
+<text class="domain" x="224.2" y="316.6" font-size="12">allocator</text>
+</g>
+<g class="legend" font-size="12">
+<text x="16" y="367.4">corpus src · domain: 40 of 73 terms by weight, size on √weight</text>
+<text x="16" y="385.4">weights module 8 · type 8 · operation 3 · attribute 4 · parameter 1 · local 1 · other 1 · qualifier 1</text>
+<text x="16" y="403.4">view all · technical: 138 shared words (sha256 4f34e69f52f5) + each language's own</text>
+</g>
+</svg>

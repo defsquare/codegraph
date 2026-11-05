@@ -24,7 +24,8 @@
     "@codegraph/navigator": "workspace:*",
     "@codegraph/navigator-ui": "workspace:*",
     "@codegraph/scm": "workspace:*",
-    "@codegraph/viz": "workspace:*"
+    "@codegraph/viz": "workspace:*",
+    "@codegraph/vocabulary": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

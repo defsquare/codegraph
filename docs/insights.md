@@ -103,6 +103,27 @@ The system message carries the Specy definitions, one line per concept, and
 the task per level. A cycle asks for one entry per member id. A cycle larger
 than `--max-scc` is chunked: each chunk sees the others' signatures only.
 
+**The words of the names (prompt 2, PLAN.md §20.3).** Every unit is also asked
+what the words of its names mean in it: a section *Words to define* lists, per
+identifier, the words of its own name and of an operation's parameters or a
+type's fields, split by `@codegraph/vocabulary` (injected as a `Speller`: the
+insights package runs no splitter). Short words and keywords are not asked; the
+deterministic class is withheld, so the judgement — `domain`, `technical` or
+`ambiguous` — is the model's. The answer is one `words` entry per word, with
+its `sense` and its `meaning` in this unit. The words are given, not chosen: on
+receipt an entry for a word not listed is dropped, a repeat keeps the first,
+and `in` is restated from the split. A module is also shown what its types
+said of the words they spell — read from the store through a `words(id)`
+projection, as summaries are, and only when its prompt renders — heaviest
+first by the vocabulary's module weights, cut at `--terms N`, and answers a
+`glossary` that reconciles them, flagging a word its types disagree on as
+`polysemous`. Templated records carry no `words`.
+
+`PROMPT_VERSION` is `"2"`. A record explained under prompt 1 keeps decoding and
+re-encoding to its own bytes (`words` and `glossary` are optional in the record
+schema) and stays in the store until a run replaces it; the answer schema
+requires both, and an answer without them gets the repair re-ask.
+
 ## IN-4 · The side-car and its determinism
 
     {"t":"header","kind":"codegraph.insights/1",…,"metamodel":"specy.domain/3",…}
@@ -167,6 +188,23 @@ id would come back shorter); and the tables are **rowid tables** (`WITHOUT
 ROWID` keeps kilobyte-wide rows in interior pages: 96 MB against 57 MB on
 Broadleaf, for no faster read).
 
+**Version 2: the words, projected (M19c).** `insight_word` holds one row per
+entry of a block's `words`: the entry as JSON text, without its `meaning` (a
+sentence, read from the block when an answer shows it), with `word`, `concern`,
+`sense` and `confidence` as generated columns over it, indexed on `word` and
+on `id`. "Every entity that defines `order`" is then an index lookup, where it
+would otherwise scan every block. A record's rows are written with it, in the
+same transaction, after the rows of the record it replaces are deleted, and
+`--import` rebuilds the table from the blocks. Nothing is exported from it: the
+block stays the one copy that counts, so `decode → import → export` is
+untouched. Migration 1 creates the table and projects the words a version-1
+block already holds. A build that asked prompt 2 while its store was still at
+version 1 wrote some. It is the first rung of the ladder to run on a real file,
+and its tests start from one the version-1 build wrote
+(`packages/insights/test/fixtures/store-v1.sql`): the records, failures, ledger
+and export stamp come through intact, the export is the same bytes, a reader
+refuses the file untouched, and a migration that fails leaves it at version 1.
+
 A `run` table is the one thing the store holds that the side-car does not: one
 row per run — when, which models and provider, counts, usage, why it aborted.
 The trailer only ever knew the last run. It is declared losable: delete the
@@ -212,7 +250,9 @@ Broadleaf, the graph the rest.
 
 **The store's readers (M16c).** A reader gets the store with `{ readOnly:
 true }`: no migration, and SQLite itself refuses every write (`PRAGMA
-query_only`). It is handed an ordinary connection rather than a read-only file
+query_only`). So a store an older build wrote is refused rather than read; the
+refusal says that any `codegraph explain` on it migrates it, `--dry-run`
+included, which calls no model. It is handed an ordinary connection rather than a read-only file
 handle, because the latter — the first attempt — may not clean up after itself
 and stranded `-wal`/`-shm` beside the model. What a reader asks never reads a
 block: `query()` returns ROWS (envelope, description, and the same
@@ -224,7 +264,8 @@ id: *explained* (the record), *failed* (the unit's failure — matched by member
 so every member of a failed cycle is answered), or *unknown*. "No explanation"
 is two different facts, and only one of them is silence.
 
-Two readers exist. `codegraph insights` (cli.md) opens the store and nothing
+Two readers answer about records (two more, `vocabulary --drift-insights` and
+`serve`'s `/glossary.json`, about words: below). `codegraph insights` (cli.md) opens the store and nothing
 else — not the model, not `explain.ts`, whose module graph is the provider SDK.
 And `codegraph serve` answers `/insight.json?id=…`, its one route that is not an
 artifact: tens of megabytes of prose do not belong in `navigator.json`, so a
@@ -239,6 +280,48 @@ everything else on that page is extracted from source, and this is not.
 Operations are not shown: a navigator member node carries no entity id, and
 ids are never constructed.
 
+**The words' readers (M19c).** `glossary.ts` rolls the records' `words` and
+the modules' `glossary` up, over four more projections of the port:
+`wordHits(word?)` (the `insight_word` index, joined to each record's envelope;
+every entry with no word),
+`glossaryEntries(word?)` (each module block's `glossary`, through `json_each`
+over the module records alone), `concernRows()` (each module, word and concern
+once) and `withoutWords()`. A record is placed in its module by its natural
+key: core renders the module's id from the key's `lang` and `module`, and the
+groups are compared through `naturalKeyIndex`. The id is never parsed; a record
+without a key is placed nowhere, and still answered. The index holds what
+`->>` made of a word, which for a lone surrogate (no identifier spells one; a
+hand-edited side-car might) is not what the binding sends, so such a word is
+looked for by a scan. Either way, what is returned is what equals the word
+once parsed back from JSON. A record a model wrote under prompt 1 has no
+`words`: `wordsAbsence(record)` says so (`prompt-1`, or `templated` for a record
+no model wrote), and every report counts those records, since it cannot see
+them. `codegraph insights --word`, `--glossary`, `--polysemy` and `--concerns`
+print them (cli.md). On the synthetic store of Broadleaf's size,
+`--word order` prints its 549 entries and 19 glossary entries in under half a
+second, Node's start included.
+
+One reader opens the store BESIDE the model: `codegraph vocabulary
+--drift-insights` (cli.md). Only the model says which class the deterministic
+rules give a word in an entity (the entity's language is the model's), so that
+comparison cannot live in `insights`, which never opens the model. It reads
+every entry through `wordHits()`, hands them to `@codegraph/vocabulary` in that
+package's own shape (neither package imports the other), and sets the model's
+concern beside the list's class, word by word, with the entities.
+
+The page asks the same question of one word: `codegraph serve` answers
+`/glossary.json?term=…&scope=…` with `answerGlossary(store, query, placement)`,
+the entries of the entities under a module or a type, and the modules'
+reconciliations. Which entities are under a scope is the model's (only the
+model knows an operation's type), so the CLI hands in a `Placement` — each
+kept entity's containing module and type, by the fold the vocabulary counts
+with — and this package still opens no model. The route reads the store
+`/insight.json` reads, through one reader. The kind (`codegraph.glossary/1`)
+is restated by the page and pinned, and the page shows the entries in the
+inference colour; the explanation panel reads a block's `words` and `glossary`
+by name (`order (domain) — sense. Meaning. In Order · 0.90`), the one exception
+to its generic rendering.
+
 `@codegraph/insights` stays pure: `store.ts` is a port, and `store-sqlite.ts`
 is handed an OPEN database, so the path, the file and `node:sqlite` itself
 (one import site, in the analyzer's `store/sqlite.ts`) stay with the CLI.
@@ -247,8 +330,11 @@ is handed an OPEN database, so the path, the file and `node:sqlite` itself
 
 Every record carries a sha256 over what it was computed from: the prompt
 version, the model slug, the level, the source slices, the comments, the
-signatures, a digest of the facts shown, the **fingerprints of the units it
-depended on**, and the ids of dependencies that had no record. Merkle-style:
+signatures, a digest of the facts shown, the words its prompt asks to define
+and a module's glossary words (so a lexicon correction re-explains exactly the
+units whose words it changed, and another `--terms` exactly the modules whose
+cut moved), the **fingerprints of the units it depended on**, and the ids of
+dependencies that had no record. Merkle-style:
 change one leaf's source and exactly its transitive dependents and containers
 change; nothing else does. The explanation text is deliberately **not**
 hashed — a non-deterministic answer must never cascade re-runs.
@@ -265,9 +351,11 @@ calls it will make, the estimated prompt tokens per level — and makes no call;
 it needs no key. `--estimate` prints only the volume: calls, input and output
 tokens per level, and a cost when `--price-in`/`--price-out` (USD per million
 tokens) are given. Input is the rendered prompts at four characters per token;
-output is one measured block average per block asked for (operation 450, type
-650, module 900 tokens — averages from gpt-5.6-luna on the fixture and gson),
-so a cycle call counts once per member. Repair re-asks and rate-limit retries
+output is a measured figure per block asked for (operation 470, type 530,
+module 530 tokens), plus 120 per word and 125 per glossary entry asked to
+define — fitted on a live prompt-2 run of gpt-5.6-luna over Spring PetClinic,
+reasoning tokens included (PLAN.md §20.3) — so a cycle call counts once per
+member. Repair re-asks and rate-limit retries
 are not counted, and records already in the side-car are not re-sent. A real
 run shows that same estimate on stderr and asks for confirmation before the
 first call; `--yes` skips the question, and with no terminal to ask on the run

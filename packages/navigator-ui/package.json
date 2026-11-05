@@ -19,6 +19,7 @@
   "dependencies": {
     "@codegraph/navigator": "workspace:*",
     "@codegraph/viz": "workspace:*",
+    "@codegraph/vocabulary": "workspace:*",
     "cytoscape": "^3.34.2",
     "cytoscape-fcose": "^2.2.0",
     "react": "^19.1.0",

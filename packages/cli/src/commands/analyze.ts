@@ -28,7 +28,7 @@ import { EXIT, type ExitCode } from "../exit.js";
 import { errLine, errLines, outLines, type IoSink } from "../io.js";
 import { benignDuplicateIds } from "../load.js";
 import { openAnalysis, type AnalysisSource } from "../source.js";
-import { resolveView } from "../view.js";
+import { resolveView, viewLabel } from "../view.js";
 
 /**
  * `codegraph analyze <model.jsonl...> --report deps|cycles|coupling`.
@@ -349,12 +349,6 @@ function rankingLine(ranking: Ranking, noun: string): string {
 }
 
 /* ------------------------------------------------------------- shared text */
-
-function viewLabel(view: ViewDescriptor): string {
-  return view.filters.length === 0
-    ? `${view.name} (nothing filtered — stubs and inferred edges included)`
-    : `${view.name} (${view.filters.join(", ")})`;
-}
 
 /** The header IS part of the artifact: a number without its view is not a fact. */
 function headerLines(context: ReportContext): readonly string[] {

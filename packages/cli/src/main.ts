@@ -14,6 +14,7 @@ import { timelineCommand } from "./commands/timeline.js";
 import { replayCommand } from "./commands/replay.js";
 import { profilesCommand } from "./commands/profiles.js";
 import { validateCommand } from "./commands/validate.js";
+import { vocabularyCommand } from "./commands/vocabulary.js";
 import { EXIT, isUsageError, type ExitCode } from "./exit.js";
 import { errLine, outLine, type IoSink } from "./io.js";
 import { cliVersion } from "./version.js";
@@ -101,6 +102,8 @@ function dispatch(invocation: Invocation, io: IoSink): ExitCode | Promise<ExitCo
           return cityCommand(invocation.options, io);
         case "navigator":
           return navigatorCommand(invocation.options, io);
+        case "vocabulary":
+          return vocabularyCommand(invocation.options, io);
         case "serve":
           return serveCommand(invocation.options, io);
         case "domain-facts":

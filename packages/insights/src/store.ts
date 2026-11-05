@@ -1,4 +1,4 @@
-import type { FailureRecord, InsightRecord, InsightsEof, InsightsHeader, Level, Origin, RecordUsage } from "./schema.js";
+import type { FailureRecord, GlossaryEntry, InsightRecord, InsightsEof, InsightsHeader, Level, Origin, RecordKey, RecordUsage, WordConcern, WordEntry } from "./schema.js";
 import type { RecordSummary } from "./records.js";
 import type { InsightsFile } from "./sidecar.js";
 
@@ -18,8 +18,8 @@ import type { InsightsFile } from "./sidecar.js";
  * does not carry, and it is declared losable.
  */
 
-/** Bumped with every migration appended to the adapter's ladder — never regenerated. */
-export const INSIGHTS_DB_VERSION = 1;
+/** Bumped with every migration appended to the adapter's ladder — never regenerated. 2: `insight_word` (M19c). */
+export const INSIGHTS_DB_VERSION = 2;
 
 /** `PRAGMA application_id`: "CGI1". A SQLite file that is not ours is refused, not migrated. */
 export const INSIGHTS_APPLICATION_ID = 0x43474931;
@@ -108,6 +108,40 @@ export interface InsightStats {
    * a replaced record's and a failed call's tokens are in the ledger only.
    */
   readonly usage: RecordUsage;
+  /** Records a model wrote with no `words`: explained under prompt 1, before words were asked (M19c). */
+  readonly withoutWords: number;
+}
+
+/** A word entry as `insight_word` holds it: all but `meaning`, which a reader that shows it reads from the block. */
+export type ListedWord = Omit<WordEntry, "meaning">;
+
+/** One record's entry for a word, with what a reader shows of the record (M19c). */
+export interface WordHit {
+  readonly id: string;
+  readonly level: Level;
+  readonly kind: string;
+  readonly name: string | undefined;
+  /** Where the record sits; a reader groups by it, never by parsing the id. */
+  readonly key: RecordKey | undefined;
+  readonly model: string | undefined;
+  readonly entry: ListedWord;
+}
+
+/** One entry of a module record's `glossary`. */
+export interface GlossaryHit {
+  readonly id: string;
+  readonly key: RecordKey | undefined;
+  readonly name: string | undefined;
+  readonly model: string | undefined;
+  readonly entry: GlossaryEntry;
+}
+
+/** A word and a concern some record gave it, with that record's module (its natural key's). */
+export interface ConcernRow {
+  readonly lang: string | undefined;
+  readonly module: string | undefined;
+  readonly word: string;
+  readonly concern: WordConcern;
 }
 
 /** One line of the ledger: what the side-car's single trailer could never say. */
@@ -147,12 +181,22 @@ export interface InsightsStore {
   fingerprints(): Map<string, string>;
   /** What a prompt quotes of one record, projected WITHOUT reading the rest of its block. */
   summary(id: string): RecordSummary | undefined;
+  /** One record's `words`, projected likewise; undefined with no record, or one explained under prompt 1. */
+  words(id: string): readonly WordEntry[] | undefined;
   /** The records that exist among `ids`, in side-car order. */
   get(ids: readonly string[]): InsightRecord[];
   failures(): FailureRecord[];
   /** Rows matching a reader's filter, in side-car order. */
   query(query: InsightQuery): InsightRow[];
   stats(): InsightStats;
+  /** Every record's words, in side-car order then block order; `word` keeps that word's, an index lookup (M19c). */
+  wordHits(word?: string): WordHit[];
+  /** The module records' glossary entries, in side-car order then block order; `word` keeps that word's. */
+  glossaryEntries(word?: string): GlossaryHit[];
+  /** Each (module, word, concern) the records' words hold, once; in no promised order. */
+  concernRows(): ConcernRow[];
+  /** `stats().withoutWords` alone. */
+  withoutWords(): number;
   /** The ledger, oldest first. */
   runs(): RunRow[];
   exported(): ExportStamp | undefined;

@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { basename, join, resolve } from "node:path";
 import { buildNavigator, navigatorToJsonString } from "@codegraph/navigator";
 import { cityToJsonString, layoutCity } from "@codegraph/city";
+import { buildVocabulary, vocabularyToJsonString } from "@codegraph/vocabulary";
 import type { CityBuildOptions } from "../args.js";
 import { cityOf } from "../commands/city.js";
 import { errLine, type IoSink } from "../io.js";
@@ -31,14 +32,16 @@ import {
 } from "./store.js";
 
 /**
- * THE JOB: a folder in, the page's two artifacts out (PLAN §15.2).
+ * THE JOB: a folder in, the page's three artifacts out (PLAN §15.2).
  *
  *   detect   census the tree against the registry (registry.ts)
  *   extract  run the entry under the §13.5 contract into <data-dir>/models/…,
  *            or skip it when the tree fingerprint has not moved
- *   build    navigator.json + laid-out city.json from ONE graph under ONE view —
- *            exactly what `serveCommand` does for a model on argv — through
- *            `openAnalysis`, so the model.db beside the model is the M7 cache
+ *   build    navigator.json + laid-out city.json + vocabulary.json from ONE
+ *            graph under ONE view — exactly what `serveCommand` does for a
+ *            model on argv — through `openAnalysis`, so the model.db beside
+ *            the model is the M7 cache. The graph is not kept: the daemon
+ *            answers no `/carriers.json`, and the page shows counts alone
  *
  * ONE AT A TIME. The build is synchronous CPU work on the event loop (the CLI's
  * whole pipeline is), and two extractors racing on one machine help nobody; a
@@ -92,6 +95,7 @@ export type StartOutcome =
 export interface Artifacts {
   readonly navigator: string;
   readonly city: string;
+  readonly vocabulary: string;
   readonly project: ProjectSummary;
 }
 
@@ -334,6 +338,7 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
     const buildKey = buildKeyOf(options.build, cliVersion());
     const navigatorPath = join(projectDir, "navigator.json");
     const cityPath = join(projectDir, "city.json");
+    const vocabularyPath = join(projectDir, "vocabulary.json");
     const reusable =
       previous !== undefined &&
       previous.model === modelPath &&
@@ -341,29 +346,32 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
       previous.buildKey === buildKey &&
       sameList(previous.measuredBy ?? [], measuredBy) &&
       existsSync(navigatorPath) &&
-      existsSync(cityPath);
+      existsSync(cityPath) &&
+      existsSync(vocabularyPath);
 
     let record: ProjectRecord;
     let navigator: string;
     let city: string;
+    let vocabulary: string;
     if (reusable) {
       phase("build", `unchanged; reusing the page built ${previous.builtAt}`);
       navigator = readFileSync(navigatorPath, "utf8");
       city = readFileSync(cityPath, "utf8");
+      vocabulary = readFileSync(vocabularyPath, "utf8");
       record = { ...previous, extractedAt };
     } else {
-      phase("build", `building the navigator and the city from ${modelPath}`);
+      phase("build", `building the navigator, the city and the vocabulary from ${modelPath}`);
       const source = openAnalysis([modelPath], options.build, io);
       try {
         const graph = source.graph();
         const view = resolveView(options.build);
-        const navigatorModel = buildNavigator(graph, {
-          view,
-          ...(options.build.name === undefined ? {} : { name: options.build.name }),
-        });
-        const cityModel = layoutCity(cityOf(graph, options.build));
+        const named = options.build.name === undefined ? {} : { name: options.build.name };
+        const navigatorModel = buildNavigator(graph, { view, ...named });
+        const vocabularyModel = buildVocabulary(graph, { view, ...named });
+        const cityModel = layoutCity(cityOf(graph, options.build, undefined, vocabularyModel));
         navigator = navigatorToJsonString(navigatorModel);
         city = cityToJsonString(cityModel);
+        vocabulary = vocabularyToJsonString(vocabularyModel);
         if (!source.clean) errLine(io, `job: warning — the model is not clean; the page was built anyway.`);
         record = {
           kind: PROJECT_KIND,
@@ -385,6 +393,7 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
       }
       writeFileSync(navigatorPath, navigator, "utf8");
       writeFileSync(cityPath, city, "utf8");
+      writeFileSync(vocabularyPath, vocabulary, "utf8");
     }
     writeProject(projectDir, record);
 
@@ -402,7 +411,7 @@ export function createJobRunner(options: JobRunnerOptions): JobRunner {
       nodes: record.nodes,
       deps: record.deps,
     });
-    artifacts = { navigator, city, project };
+    artifacts = { navigator, city, vocabulary, project };
     if (current !== undefined) current.state = "done";
     errLine(io, `job: done — ${project.name}: ${project.nodes} nodes, ${project.deps} dependency rows`);
     emit({ event: "done", data: project });

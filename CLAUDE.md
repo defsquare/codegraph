@@ -66,6 +66,13 @@ packages/navigator/  @codegraph/navigator — the navigator MODEL: the browsable
                      tree (modules → types → operations/attributes) plus one
                      classified dependency row per base edge, carrying member,
                      provenance and anchor included. Pure computation.
+packages/vocabulary/ @codegraph/vocabulary — the words of the model's NAMES
+                     (never source): the universal splitter driven by each
+                     profile's lexicon, the word classes (domain, technical,
+                     keyword, short) and the role weights; the cloud's layout
+                     and SVG; the carriers lookup (which names carry a word).
+                     Pure computation. Its `./cloud` entry is the layout alone
+                     and imports nothing: the one value a frontend may take.
 packages/insights/   @codegraph/insights — the bottom-up EXPLANATION walk: units
                      (operations → types → modules), SCC-condensed walk order,
                      context packs, prompts, Merkle fingerprints, plan/run, the
@@ -82,16 +89,20 @@ packages/viz/        @codegraph/viz — Three.js code city: renders a laid-out
                      ONLY package that may import three. Exports ONE thing,
                      `mountCityView(host)`, which navigator-ui embeds; its own
                      Vite app is the standalone page (replay/history).
-packages/navigator-ui/ @codegraph/navigator-ui — React model navigator, five
+packages/navigator-ui/ @codegraph/navigator-ui — React model navigator, six
                      tabs: Navigate (virtualized tree + fan-in/fan-out
                      evidence), City (the viz view, full-width, a building's
                      panel opens it in Navigate), Graph (Cytoscape+fcose
                      dependency graph, module/type modes), Cycles (the
                      artifact's precomputed tangle report), Coupling (ranked
-                     metrics). Reads navigator.json + city.json (guard-enforced),
-                     plus ONE lookup, `insight.json?id=…`: the selected type's or
-                     module's LLM explanation, shown as an inference, never a fact.
-                     It imports @codegraph/insights not even for types.
+                     metrics), Vocabulary (the selected scope's words as a
+                     cloud and a table). Reads navigator.json + city.json +
+                     vocabulary.json (guard-enforced), plus TWO lookups:
+                     `insight.json?id=…`, the selected type's or module's LLM
+                     explanation, shown as an inference, never a fact; and
+                     `carriers.json?term=…`, the names that carry a word.
+                     It imports @codegraph/insights not even for types, and
+                     @codegraph/vocabulary for types plus its `./cloud` layout.
                      The ONLY package that may import react and cytoscape; the
                      city comes through @codegraph/viz, never through three.
                      Vite app, no library.
@@ -107,7 +118,7 @@ fixtures/            Reference corpora + expected model.jsonl snapshots.
 
 ### Hard boundaries (convenience does not override architecture)
 
-- **`core`, `analyzer`, `city` and `navigator` never import Three.js or React**
+- **`core`, `analyzer`, `city`, `navigator` and `vocabulary` never import Three.js or React**
   — they must run in Node with no DOM. `viz` reads the city model and
   `navigator-ui` the navigator model; neither mutates its model and neither
   re-derives graph facts the analyzer already computes.
@@ -230,6 +241,8 @@ node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256
 #   role "pass" (codegraph-metrics): claims no files, runs `<pass> <model> --src <dir>` after the extractor
 ./bin/codegraph city model.jsonl --layout --out city.json        # the artifacts alone
 ./bin/codegraph navigator model.jsonl --out navigator.json
+./bin/codegraph vocabulary model.jsonl [--level module|type] [--scope ID] [--drift FILE] [--svg FILE]   # the names' words
+./bin/codegraph serve model.jsonl --height vocabulary:order --height-scale sqrt   # where one word lives, in the city
 ./bin/codegraph explain model.jsonl --src DIR --dry-run   # the walk plan, no call
 ./bin/codegraph explain model.jsonl --src DIR --estimate --price-in 0.10 --price-out 0.60   # tokens in/out + cost, no call
 OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-calls N] [--yes]

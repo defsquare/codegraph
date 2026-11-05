@@ -11,7 +11,8 @@ import { basename, join } from "node:path";
  *   <data-dir>/models/<name>-<hash>/          one directory per opened folder
  *       model.jsonl                           what the extractor wrote
  *       model.db                              the M7 cache, built beside it by openCache
- *       navigator.json, city.json             the page's artifacts, as served
+ *       navigator.json, city.json,            the page's artifacts, as served
+ *       vocabulary.json
  *       project.json                          what was extracted from, and when
  *
  * A folder is keyed by a hash of its absolute path with the basename in front

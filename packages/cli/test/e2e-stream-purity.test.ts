@@ -131,6 +131,7 @@ describe("no ANSI colour anywhere (decision 4)", () => {
     ["export", FIXTURE, "--format", "dot"],
     ["export", FIXTURE, "--format", "plantuml"],
     ["explain", FIXTURE, "--dry-run"],
+    ["vocabulary", FIXTURE],
     ["frobnicate"],
   ];
 
@@ -159,6 +160,12 @@ describe("reporting commands keep their framing off stdout", () => {
   it("validate --json puts exactly one JSON object on stdout", () => {
     const result = runCli(["validate", FIXTURE, "--json"]);
     expect(() => parseJsonArtifact(result.stdout, "validate --json stdout")).not.toThrow();
+  });
+
+  it("vocabulary --json puts exactly one JSON object on stdout", () => {
+    const result = runCli(["vocabulary", FIXTURE, "--level", "module", "--json"]);
+    expect(result.code, describeResult(result)).toBe(EXIT.OK);
+    expect(() => parseJsonArtifact(result.stdout, "vocabulary --json stdout")).not.toThrow();
   });
 
   it("profiles --json puts exactly one JSON object on stdout", () => {

@@ -23,9 +23,9 @@ codegraph city [model.jsonl...] [--height METRIC] [--height-scale <linear|sqrt|l
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--height METRIC` | Metric driving building height. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). | `loc` |
+| `--height METRIC` | Metric driving building height. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). From the names: vocabulary:<word> (the word's weight in the type's names). | `loc` |
 | `--height-scale <linear\|sqrt\|log>` | How height follows its metric. | `linear` |
-| `--footprint METRIC` | Metric driving building footprint. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). | `members` |
+| `--footprint METRIC` | Metric driving building footprint. Built in: degree, fanIn, fanOut, fields, loc, members, methods, one. Open forms: attribute:<key>, sum:<key>. With a change-history side-car: history:<measure> (the type's own), history-file:<measure> (its file). From the names: vocabulary:<word> (the word's weight in the type's names). | `members` |
 | `--footprint-scale <linear\|sqrt\|log>` | How the footprint SIDE follows its metric; sqrt makes the AREA proportional. | `sqrt` |
 | `--carry M1,M2` | Extra metrics to measure onto every building, comma-separated, bound to nothing. | — |
 | `--history-metrics FILE` | The change-history side-car the history:/history-file: metrics read (what 'codegraph-metrics --history' wrote). | `<model>.history-metrics.jsonl` beside each model |

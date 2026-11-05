@@ -208,3 +208,28 @@ describe("profiles says the same thing in both forms", () => {
     expect(text.stdout).toContain("package");
   });
 });
+
+describe("vocabulary says the same thing in both forms", () => {
+  /** `[term, weight, occurrences]` per table row of the text form, in order. */
+  const textRows = (stdout: string): readonly string[] =>
+    stdout
+      .split("\n")
+      .filter((line) => /^ {2}\S+ +(domain|technical|keyword|short) /u.test(line))
+      .map((line) => line.trim().split(/ +/u).slice(0, 4).filter((_cell, i) => i !== 1).join(" "));
+
+  it.each([
+    [["--top", "8"]],
+    [["--level", "module", "--class", "all"]],
+    [["--scope", "java:com.acme.order/AbstractOrder.price()"]],
+  ])("lists the same words with the same counts: %s", (flags) => {
+    const { text, json } = bothForms(["vocabulary", FIXTURE, ...flags]);
+    expect(text.code, describeResult(text)).toBe(EXIT.OK);
+    expect(json.code).toBe(text.code);
+    const parsed = parseJsonArtifact(json.stdout, "vocabulary --json") as {
+      scopes: { terms: { text: string; weight: number; occurrences: number }[] }[];
+    };
+    const rows = parsed.scopes.flatMap((scope) => scope.terms.map((term) => `${term.text} ${term.weight} ${term.occurrences}`));
+    expect(rows.length).toBeGreaterThan(0);
+    expect(textRows(text.stdout)).toEqual(rows);
+  });
+});

@@ -181,9 +181,10 @@ needs no API key at all, which means the plan is inspectable by someone who has
 not decided to spend anything yet. An **estimate** prints the volume: calls,
 input and output tokens per level, and a cost when prices per million tokens are
 supplied. Input is the rendered prompts at four characters per token; output is
-one measured average per block asked for — 450 tokens for an operation, 650 for a
-type, 900 for a module, averaged from real runs on the fixture and on gson — so a
-cycle call counts once per member. Repair re-asks and rate-limit retries are not
+one measured figure per block asked for — 470 tokens for an operation, 530 for a
+type or a module — plus 120 per word the prompt asks to define and 125 per
+glossary entry, fitted on a live run over Spring PetClinic with the model's
+reasoning counted — so a cycle call counts once per member. Repair re-asks and rate-limit retries are not
 counted, and records already in the side-car are not re-sent.
 
 Then the caps. A **maximum call count** stops planning calls after N, and what

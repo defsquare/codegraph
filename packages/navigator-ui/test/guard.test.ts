@@ -28,15 +28,26 @@ function sourceFiles(directory: string): readonly string[] {
  * of `DEP_ROLES`. This states the rule instead of relying on remembering it.
  */
 describe("the browser bundle stays browser-only", () => {
-  it("imports the navigator package for TYPES only", () => {
-    const offenders = sourceFiles(SRC).filter((path) => {
-      const source = readFileSync(path, "utf8");
-      for (const match of source.matchAll(/^import\s+([^;]*?)\s+from\s+"@codegraph\/navigator"/gm)) {
+  /** Files importing `specifier` by value — anything but `import type`. */
+  function valueImporters(specifier: string): readonly string[] {
+    const pattern = new RegExp(`^import\\s+([^;]*?)\\s+from\\s+"${specifier.replace(/[/.]/gu, "\\$&")}"`, "gmu");
+    return sourceFiles(SRC).filter((path) => {
+      for (const match of readFileSync(path, "utf8").matchAll(pattern)) {
         if (!(match[1] as string).startsWith("type ")) return true;
       }
       return false;
     });
-    expect(offenders).toEqual([]);
+  }
+
+  it("imports the navigator package for TYPES only", () => {
+    expect(valueImporters("@codegraph/navigator")).toEqual([]);
+  });
+
+  // The vocabulary's index is the same pipeline. Its `./cloud` entry is the
+  // layout alone, imports nothing, and is the one value the tab may take.
+  it("imports the vocabulary package for TYPES only, and its layout from ./cloud", () => {
+    expect(valueImporters("@codegraph/vocabulary")).toEqual([]);
+    expect(valueImporters("@codegraph/vocabulary/cloud").length).toBeGreaterThan(0);
   });
 });
 

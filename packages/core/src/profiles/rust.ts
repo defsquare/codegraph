@@ -124,8 +124,8 @@ export const rustProfile: Profile = {
       "borrow_mut", "index_mut", "default", "poll",
     ],
     technical: [
-      "arc", "buf", "cell", "ctx", "err", "ffi", "iter", "mutex", "ok", "opt", "rc", "refcell",
-      "rs", "rx", "sys", "tx", "vec",
+      "arc", "buf", "cell", "ffi", "iter", "ok", "opt", "rc", "refcell", "rs", "rx", "sys",
+      "tx", "vec",
     ],
   },
 };
