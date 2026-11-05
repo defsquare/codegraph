@@ -252,6 +252,14 @@ On `serve`'s Vocabulary tab, the cloud and its table follow the package or
 class selected in Navigate, and clicking a word lists the names that carry it,
 each one click from its node.
 
+Once `explain` has run, each explained entity's record also carries the
+words of its names with the sense and the concern the model gave each one in
+that entity, and every module reconciles its types' senses into a glossary:
+`codegraph insights --word order` lists every entity that defines the word,
+`--polysemy` the words whose senses disagree, and `codegraph vocabulary
+--drift-insights` sets the rules' classes against the model's judgements.
+The tab shows these under a clicked word as inferences, never as facts.
+
 ### Mine the history
 
 ```bash
@@ -430,6 +438,7 @@ so a model file has one direction of truth. The full reference is
 - [`docs/distribution.md`](docs/distribution.md) — the Homebrew tap, what a tagged release produces, what is signed and how
 - [`docs/navigator.md`](docs/navigator.md) — the navigator's design
 - [`docs/insights.md`](docs/insights.md) — the explanation walk's design
+- [`docs/vocabulary.md`](docs/vocabulary.md) — the vocabulary's design: the lexicons, the split, the classes and weights, `vocabulary.json`, the cloud, the words a model defines and the glossary readers
 - [`PLAN.md`](PLAN.md) — milestones, decisions and their rationale
 - [`CLAUDE.md`](CLAUDE.md) — architecture boundaries and the metamodel invariants
 
