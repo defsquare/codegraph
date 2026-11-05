@@ -3,7 +3,7 @@ import type { TermClass } from "@codegraph/vocabulary";
 import { CLOUD_DEFAULTS, MONOSPACE_LINE, layoutCloud, monospaceMeasure, type Measure } from "@codegraph/vocabulary/cloud";
 import type { ModelIndexes } from "../model/indexes.js";
 import { carrierNode, cloudWords, indexVocabulary, scopeChain, scopeForNode, wordRows, type WordRow } from "../model/words.js";
-import { createGlossaryLoader, type Glossary } from "../glossary.js";
+import { createGlossaryLoader, typesDisagree, type Glossary } from "../glossary.js";
 import { TERM_CLASSES, createCarriersLoader, loadVocabulary, type Carriers, type VocabularyLoad } from "../vocabulary.js";
 
 /**
@@ -451,7 +451,7 @@ function GlossaryList({
               </button>
               <p className="gloss-sense">{gloss.entry.sense}</p>
               {gloss.entry.meaning !== "" && <p className="gloss-meaning">{gloss.entry.meaning}</p>}
-              {gloss.entry.polysemous && gloss.entry.senses.length > 0 && (
+              {typesDisagree(gloss.entry) && (
                 <p className="gloss-meaning">
                   its types disagree: {gloss.entry.senses.map((sense) => `${sense.in} — ${sense.sense}`).join("; ")}
                 </p>

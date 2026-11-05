@@ -1,3 +1,4 @@
+import { typesDisagree } from "./glossary.js";
 import { noStore, rememberedLookup, type Fetcher } from "./lookup.js";
 
 export type { Fetcher } from "./lookup.js";
@@ -174,7 +175,7 @@ const DEFINED: Readonly<Record<string, (item: Record<string, unknown>) => string
     const senses = item["senses"];
     if (head === undefined || !Array.isArray(senses)) return undefined;
     const disagree = senses.flatMap((s) => (isObject(s) && typeof s["in"] === "string" && typeof s["sense"] === "string" ? [`${s["in"]} — ${s["sense"]}`] : []));
-    return item["polysemous"] === true && disagree.length > 0 ? `${head} Its types disagree: ${disagree.join("; ")}` : head;
+    return typesDisagree({ polysemous: item["polysemous"], senses }) ? `${head} Its types disagree: ${disagree.join("; ")}` : head;
   },
 };
 
