@@ -160,7 +160,7 @@ Every block carries a `name` — the ubiquitous-language name the model proposes
 | `meaning` | string — one sentence in this unit's context |
 | `confidence` | number, clamped to [0,1] on receipt |
 
-A module is shown what its types said of the words they spell, heaviest first, cut at `--terms N` (default 60), and reconciles them:
+A module is shown what its types said of the words they spell, heaviest first, cut at `--terms N` (default 60), and reconciles those a type defined (a word they all left undefined is not asked):
 
 | `GlossaryEntry` field | Type |
 |---|---|

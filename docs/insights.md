@@ -117,7 +117,8 @@ and `in` is restated from the split. A module is also shown what its types
 said of the words they spell — read from the store through a `words(id)`
 projection, as summaries are, and only when its prompt renders — heaviest
 first by the vocabulary's module weights, cut at `--terms N`, and answers a
-`glossary` that reconciles them, flagging a word its types disagree on as
+`glossary` that reconciles those a type defined (a word its types all left
+undefined is not asked), flagging a word its types disagree on as
 `polysemous`. Templated records carry no `words`.
 
 `PROMPT_VERSION` is `"2"`. A record explained under prompt 1 keeps decoding and
@@ -332,10 +333,11 @@ is handed an OPEN database, so the path, the file and `node:sqlite` itself
 Every record carries a sha256 over what it was computed from: the prompt
 version, the model slug, the level, the source slices, the comments, the
 signatures, a digest of the facts shown, the words its prompt asks to define
-and a module's glossary words (so a lexicon correction re-explains exactly the
-units whose words it changed, and another `--terms` exactly the modules whose
-cut moved), the **fingerprints of the units it depended on**, and the ids of
-dependencies that had no record. Merkle-style:
+and a module's glossary candidates (so a lexicon correction re-explains the
+units whose words it changed, and through the next input what depends on them,
+and another `--terms` exactly the modules whose cut moved; which candidates a
+type defined is not hashed), the **fingerprints of the units it depended on**,
+and the ids of dependencies that had no record. Merkle-style:
 change one leaf's source and exactly its transitive dependents and containers
 change; nothing else does. The explanation text is deliberately **not**
 hashed — a non-deterministic answer must never cascade re-runs.

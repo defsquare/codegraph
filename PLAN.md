@@ -5491,7 +5491,8 @@ never looks like a fact.
   unranked word after, by text) and cut at `--terms`. The module prompt
   shows, per word, each type's `concern`, `sense` and `meaning`, or "no type
   defined it", read through `RecordSource.words(id)` (a `block -> '$.words'`
-  projection in the store) only when the prompt renders.
+  projection in the store) only when the prompt renders. *Since, a word no
+  type defined is not shown: "As built — only defined words reconciled".*
 - **Fingerprints** take, per member, the identifiers and words asked and a
   module's glossary words; never what a type said of them. The same
   `--terms` reuses every module, and another redoes exactly the modules whose
@@ -5682,6 +5683,32 @@ Their senses were grammar ("lookup criterion", "boolean predicate",
   stay, and the readers show their entries until they are replaced.
 - **The Java fixture's plan** is now 114 474 prompt and 52 415 completion
   tokens (was 114 483 and 52 900).
+
+**As built — only defined words reconciled (2026-11-03).** Of the ~50
+words the PetClinic modules were asked to reconcile, 2 no type had defined:
+`Pet` skipped `birth` (of `birthDate`), and the `owner` module paid for
+`birth`, "ambiguous: undefined term"; `BaseEntity` skipped `base`, and the
+`model` module wrote it a meaning anyway. The decisions:
+
+- **Asked = a type defined it.** `glossaryAsked(member)` in `context.ts` keeps
+  the candidates with at least one type entry; the prompt lists those, and on
+  receipt the module's glossary keeps only those. The "no type defined it"
+  line is gone. A module whose candidates all went undefined shows no
+  glossary section and keeps an empty `glossary`.
+- **The candidates stay hashed, not the asked.** The fingerprint takes the
+  cut list as before; which of it a type defined is read when the prompt
+  renders, like the summaries it quotes. No record goes stale: PetClinic's
+  `--dry-run` statuses are the same, unit by unit. A type that is
+  re-explained changes the module's fingerprint already, as its container.
+- **Cut, then filter.** `--terms N` still cuts the candidates; a module asks
+  at most N, fewer when some went undefined. Filtering first would make the
+  hashed cut a function of what the types said.
+- **The estimate** counts a candidate unless every type that spells it has
+  `words` and none defined it: a type not explained yet, or under prompt 1,
+  may still define it, so a cold plan counts every candidate as before. On
+  PetClinic's warm plan, 250 completion tokens fewer (`birth`, `base`). A cold
+  module prompt now prints no glossary lines at all, so the plan's input is a
+  little lower (the Java fixture: 114 136 prompt tokens, was 114 474).
 
 ### 20.4 Milestone split
 

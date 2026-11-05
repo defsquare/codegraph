@@ -62,7 +62,7 @@ function glossaryAsked(user: string): string[] {
   const head = user.indexOf("Words its types define");
   if (head < 0) return [];
   return user.slice(head).split("\n").slice(1).flatMap((line) => {
-    const match = /^- ([^:\s]+)(?:: no type defined it)?$/u.exec(line);
+    const match = /^- (\S+)$/u.exec(line);
     return match === null ? [] : [match[1] ?? ""];
   });
 }

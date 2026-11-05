@@ -1,4 +1,4 @@
-import type { ContextPack, DependencySummary, MemberPack } from "./context.js";
+import { glossaryAsked, type ContextPack, type DependencySummary, type MemberPack } from "./context.js";
 import { CONCEPT_DEFINITIONS, DOMAIN_CONCEPTS, ENFORCEMENTS, EVENT_KINDS, FIELD_KINDS, INTERFACE_ROLES, OPERATION_OWNERS } from "./ddd.js";
 import { responseSchemaName, type Level } from "./schema.js";
 
@@ -170,11 +170,11 @@ function memberSection(member: MemberPack, full: boolean): string[] {
   if (member.names.length > 0) {
     lines.push("Words to define in `words` (each once, with every identifier it appears in):", ...member.names.map((n) => `- \`${n.identifier}\`: ${n.words.join(", ")}`));
   }
-  if (member.glossary.length > 0) {
+  const glossary = glossaryAsked(member);
+  if (glossary.length > 0) {
     lines.push("Words its types define, heaviest first (reconcile each in `glossary`):");
-    for (const { word, entries } of member.glossary) {
-      if (entries.length === 0) lines.push(`- ${word}: no type defined it`);
-      else lines.push(`- ${word}`, ...entries.map(({ type, entry }) => `  - ${type}: ${entry.concern}, "${oneLine(entry.sense)}": ${oneLine(entry.meaning)}`));
+    for (const { word, entries } of glossary) {
+      lines.push(`- ${word}`, ...entries.map(({ type, entry }) => `  - ${type}: ${entry.concern}, "${oneLine(entry.sense)}": ${oneLine(entry.meaning)}`));
     }
   }
   return lines;
@@ -184,11 +184,15 @@ function oneLine(text: string): string {
   return text.replace(/\s+/gu, " ").trim();
 }
 
-/** Distinct words over the members a prompt fully shows, and the glossary entries it asks for. */
+/**
+ * Distinct words over the members a prompt fully shows, and the glossary
+ * entries it asks for — counting, in a plan, a word a type still to explain
+ * may define, since the prompt sent after it may list it.
+ */
 function askedOf(members: readonly MemberPack[]): Prompt["asked"] {
   return {
     words: members.reduce((sum, m) => sum + new Set(m.names.flatMap((n) => n.words)).size, 0),
-    glossary: members.reduce((sum, m) => sum + m.glossary.length, 0),
+    glossary: members.reduce((sum, m) => sum + m.glossary.filter((g) => g.entries.length > 0 || g.pending).length, 0),
   };
 }
 
