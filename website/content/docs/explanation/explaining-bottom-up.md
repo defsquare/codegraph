@@ -46,13 +46,20 @@ logic in it — is tested without a network at all. The provider SDK is itself h
 behind a one-function transport, so every request, response and error path is
 driven by a fake in tests and an SDK change is repaired in one file.
 
-**Two providers, one contract.** Both speak the same chat-completion shape,
-parsed once. What differs is the route: one goes through its own SDK with its own
-key; the other goes through a gateway's REST API with a single token that both
-authenticates and bills. Model names are the same `author/model` form on both, so
-switching providers leaves every fingerprint — and therefore every reusable
-record — intact. The resolution of which provider to use lives in one place, and
-the side-car header records which one served the run.
+**One port, three adapters.** The port is `LlmClient`: one structured completion
+in, parsed JSON out, one error type. Behind it, three adapters. OpenRouter goes
+through its own SDK with its own key; Cloudflare AI Gateway goes through a
+gateway's REST API with a single token that both authenticates and bills — the
+two speak the same chat-completion shape, parsed once, and name models in the
+same `author/model` form, so switching between them leaves every fingerprint —
+and therefore every reusable record — intact. The third, Claude Code headless,
+is a subprocess: the `claude` CLI already installed and logged in on the
+machine, one `claude -p` process per call, no key, Sonnet by default. It is found
+on `PATH` or in the known install locations, or named with `--claude-path`;
+`auto` prefers a key over it, because an exported key is a deliberate act and an
+installed CLI is ambient. A fourth adapter — the Anthropic API with an API key —
+is a named slot for later. The resolution of which adapter to use lives in one
+place, and the side-car header records which one served the run.
 
 ## IN-2 · Units, and the walk order
 
@@ -180,7 +187,9 @@ calls it will make, the estimated prompt tokens per level — and makes no call.
 needs no API key at all, which means the plan is inspectable by someone who has
 not decided to spend anything yet. An **estimate** prints the volume: calls,
 input and output tokens per level, and a cost when prices per million tokens are
-supplied. Input is the rendered prompts at four characters per token; output is
+supplied. Input is the rendered prompts at four characters per token — plus,
+on Claude Code, the scaffolding and the response schema it adds to every prompt,
+about 1 850 tokens a call before the schema; output is
 one measured figure per block asked for — 470 tokens for an operation, 530 for a
 type or a module — plus 120 per word the prompt asks to define and 125 per
 glossary entry, fitted on a live run over Spring PetClinic with the model's

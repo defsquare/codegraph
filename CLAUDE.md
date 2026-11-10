@@ -80,9 +80,11 @@ packages/insights/   @codegraph/insights — the bottom-up EXPLANATION walk: uni
                      database) and its export, the `.insights.jsonl` side-car
                      (Specy domain vocabulary). Pure computation: source, model
                      calls and the database are injected.
-packages/llm/        @codegraph/llm — LlmClient + OpenRouter (SDK) + Cloudflare
-                     AI Gateway (REST) implementations + a deterministic fake.
-                     The ONLY package that may import @openrouter/sdk.
+packages/llm/        @codegraph/llm — LlmClient (the PORT) + its adapters: OpenRouter
+                     (SDK), Cloudflare AI Gateway (REST), Claude Code headless
+                     (subprocess: `claude -p`, found by discovery, no key) + a
+                     deterministic fake. The Anthropic API (key) is a named empty
+                     slot (PLAN §21.6). The ONLY package that may import @openrouter/sdk.
 packages/cli/        @codegraph/cli — `codegraph` command.
 packages/viz/        @codegraph/viz — Three.js code city: renders a laid-out
                      city.json artifact (its ONLY input; guard-enforced). The
@@ -246,9 +248,15 @@ node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256
 ./bin/codegraph explain model.jsonl --src DIR --dry-run   # the walk plan, no call
 ./bin/codegraph explain model.jsonl --src DIR --estimate --price-in 0.10 --price-out 0.60   # tokens in/out + cost, no call
 OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-calls N] [--yes]
-#   [--model SLUG] (default openai/gpt-5.6-luna) [--rollup-model SLUG] (types+modules; defaults to --model)
+#   [--model SLUG] (default per provider: openai/gpt-5.6-luna on openrouter/cloudflare, sonnet on claude-code)
+#   [--rollup-model SLUG] (types+modules; defaults to --model)
 #   prints the estimate on stderr and asks [y/N] first; --yes (required without a TTY) skips it
 #   or CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… [--provider cloudflare]
+#   or ./bin/codegraph explain model.jsonl --src DIR --provider claude-code [--claude-path FILE]
+#     the installed, logged-in Claude Code in headless mode (`claude -p`, one process per call, Sonnet, no key);
+#     the binary: --claude-path, else CLAUDE_CODE_PATH, else `claude` on PATH, else the known install locations.
+#     --provider auto (default) takes the one configured; with several: OpenRouter, Cloudflare, then Claude Code.
+#     --max-tokens does not apply to claude-code (noted, ignored); --concurrency N is N processes
 #   → model.insights.db (the working copy: one commit per finished unit) and its export
 #     model.insights.jsonl, both beside the model; re-runs redo only what changed
 ./bin/codegraph explain model.jsonl --export               # the side-car from the store (after a killed run); no model read

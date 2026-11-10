@@ -288,6 +288,7 @@ codegraph replay --store gson.db --history gson-history.jsonl --serve
 codegraph explain gson.jsonl --src ~/src/gson/gson/src/main/java --dry-run   # the plan, no call
 codegraph explain gson.jsonl --src ... --estimate --price-in 0.10 --price-out 0.60   # tokens and cost, no call
 OPENROUTER_API_KEY=… codegraph explain gson.jsonl --src ... --max-calls 50   # shows the estimate, asks [y/N]
+codegraph explain gson.jsonl --src ... --provider claude-code   # the installed, logged-in Claude Code instead (Sonnet, no key)
 codegraph explain gson.jsonl --src ... --model openai/gpt-5.6-luna --rollup-model anthropic/claude-sonnet-5   # pick the models
 codegraph insights gson.jsonl                          # what was bought: records, concepts, what is owed, the spend
 codegraph insights gson.jsonl --concept aggregate      # the types the model read as aggregates
@@ -301,9 +302,14 @@ its export, `gson.insights.jsonl`; never into the model. `codegraph serve`
 shows them on the selected type or module, marked as a model's inference.
 Re-running redoes only the units whose inputs changed. On the reference
 fixture a full run was 68 calls and about six cents. `--model` sets the model
-for every unit (default `openai/gpt-5.6-luna`); `--rollup-model` overrides it
-for types and modules only. Switching models re-explains the affected units. Cloudflare AI Gateway is
-the other supported provider.
+for every unit (default `openai/gpt-5.6-luna` on a key provider, `sonnet` on
+Claude Code); `--rollup-model` overrides it for types and modules only.
+Switching models re-explains the affected units. The calls go through one
+port (`LlmClient`) and three adapters: OpenRouter (an API key), Cloudflare AI
+Gateway (a token pair) and Claude Code headless (the `claude` CLI already
+installed and logged in — found on `PATH` or named with `--claude-path`; no
+key). `auto` prefers a key over the installed CLI; a direct Anthropic API
+adapter is a named slot for later.
 
 ### Feed it to something else
 
@@ -367,7 +373,8 @@ Read these before you commit an afternoon.
   repeatable, but the same package declared under several roots at once (main
   and test sources, or one package split across modules) confuses noClasspath
   resolution; pass such roots in separate runs.
-- **`explain` costs money and needs a network.** It is the only command that
+- **`explain` costs money and needs a network** (or an installed Claude Code,
+  which spends the subscription). It is the only command that
   does. `--dry-run` and `--estimate` tell you what it would do first, a real
   run asks for confirmation after showing the estimate (`--yes` in scripts),
   and `--max-calls` caps it.

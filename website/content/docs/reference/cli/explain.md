@@ -8,7 +8,7 @@ Explain every operation, type and module with an LLM, bottom-up, into a side-car
 ## Synopsis
 
 ```
-codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|openrouter|cloudflare>] [--model SLUG] [--rollup-model SLUG] [--depth N] [--max-calls N] [--max-tokens N] [--concurrency N] [--max-lines N] [--max-scc N] [--terms N] [--scope IDS] [--framework <spring>] [--internal-only] [--declared-only] [--no-cache] [--dry-run] [--estimate] [--price-in USD] [--price-out USD] [--force] [--retry-failed] [--json]
+codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|openrouter|cloudflare|claude-code>] [--claude-path FILE] [--model SLUG] [--rollup-model SLUG] [--depth N] [--max-calls N] [--max-tokens N] [--concurrency N] [--max-lines N] [--max-scc N] [--terms N] [--scope IDS] [--framework <spring>] [--internal-only] [--declared-only] [--no-cache] [--dry-run] [--estimate] [--price-in USD] [--price-out USD] [--force] [--retry-failed] [--json]
 ```
 
 ## Arguments
@@ -23,8 +23,9 @@ codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|op
 |---|---|---|
 | `--src DIR` | The source root the model's anchors are relative to. Defaults to the model's own `root`, resolved against the current directory. | — |
 | `--out FILE` | The side-car to write (and to resume from). Defaults to <model>.insights.jsonl. | — |
-| `--provider <auto\|openrouter\|cloudflare>` | Where the model calls go: openrouter (OPENROUTER_API_KEY) or cloudflare — Cloudflare AI Gateway's REST API (CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID, optional CLOUDFLARE_AI_GATEWAY_ID). auto picks whichever is configured, OpenRouter when both are. | `auto` |
-| `--model SLUG` | Model slug for operations (the leaves), in author/model form on either provider. | `openai/gpt-5.6-luna` |
+| `--provider <auto\|openrouter\|cloudflare\|claude-code>` | Where the model calls go: openrouter (OPENROUTER_API_KEY), cloudflare — Cloudflare AI Gateway's REST API (CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID, optional CLOUDFLARE_AI_GATEWAY_ID) — or claude-code, the local Claude Code CLI in headless mode (`claude -p`, Sonnet by default, no key). auto picks whichever is configured; with several, OpenRouter, then Cloudflare, then Claude Code. | `auto` |
+| `--claude-path FILE` | The Claude Code binary. Under `--provider auto` it implies claude-code; with openrouter or cloudflare it is an error. Otherwise CLAUDE_CODE_PATH, then `claude` on PATH, then the known install locations; a path that does not exist is an error, never a fall-through. | — |
+| `--model SLUG` | Model slug for operations (the leaves). Defaults per provider: `openai/gpt-5.6-luna` (author/model form) on openrouter and cloudflare, `sonnet` on claude-code — an alias Claude Code resolves to the latest Sonnet, so a full id such as `claude-sonnet-5-5` pins the fingerprint. | per provider |
 | `--rollup-model SLUG` | Model slug for types and modules; defaults to --model. | — |
 | `--depth N` | How many levels of dependency explanations a prompt carries. | `1` |
 | `--max-calls N` | Stop planning model calls after this many; what runs is a dependency-consistent prefix. | — |
@@ -41,7 +42,7 @@ codegraph explain [model.jsonl...] [--src DIR] [--out FILE] [--provider <auto|op
 | `--estimate` | Print the token volume this run would send and receive (input and output, per level) and make no call. Add --price-in/--price-out for a cost. | — |
 | `--price-in USD` | Input price in USD per million tokens, for --estimate's cost line. | — |
 | `--price-out USD` | Output price in USD per million tokens, for --estimate's cost line. | — |
-| `--max-tokens N` | Cap on the tokens one answer may use (reasoning included). Omitted, the provider assumes the model's full output window and a prepaid account must afford THAT for every call; a block is ~1k tokens, a full cycle call ~12k. An answer cut at the cap fails its unit. | — |
+| `--max-tokens N` | Cap on the tokens one answer may use (reasoning included). Omitted, the provider assumes the model's full output window and a prepaid account must afford THAT for every call; a block is ~1k tokens, a full cycle call ~12k. An answer cut at the cap fails its unit. Does not apply to claude-code (the CLI has no output cap): noted on stderr, ignored. | — |
 | `--force` | Re-explain every unit, ignoring records whose fingerprint still matches. | — |
 | `--retry-failed` | Redo only the units the side-car records as failed (its `t:"f"` lines, each with the reason), plus their direct dependents, which were explained without them. Everything else is reused or left alone. Pass the same --model/--depth as the run that failed. Not with --scope. | — |
 | `--json` | Print the same information as a machine-readable JSON object on stdout. | — |
@@ -69,7 +70,7 @@ explain plan: 77 units in 8 layers
   total: 68 calls, ~114136 prompt tokens in, ~52415 completion tokens out
 ```
 
-Trimmed after the plan summary; one line per unit follows. `--dry-run` needs no API key.
+Trimmed after the plan summary; one line per unit follows. `--dry-run` needs no API key and no binary; its `models:` line shows the default the resolved provider would run (`sonnet` when `auto` lands on an installed Claude Code).
 
 ## See also
 

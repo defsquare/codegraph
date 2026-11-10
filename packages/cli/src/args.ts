@@ -574,9 +574,16 @@ export const DOMAIN_FACTS_SPEC: CommandSpec = {
   ],
 };
 
+/** `--model` on the key providers (OpenRouter, Cloudflare), in their `author/model` form. */
 export const DEFAULT_EXPLAIN_MODEL = "openai/gpt-5.6-luna";
-/** `--provider` values: the two clients of @codegraph/llm, or pick from the environment. */
-export const EXPLAIN_PROVIDERS = ["auto", "openrouter", "cloudflare"] as const;
+/**
+ * `--model` on claude-code: Claude Code's alias for the latest Sonnet. Restated from
+ * @codegraph/llm's CLAUDE_CODE_DEFAULT_MODEL and pinned equal by a test: parsing must
+ * not load the provider package (and with it the SDK) for every command.
+ */
+export const DEFAULT_CLAUDE_CODE_MODEL = "sonnet";
+/** `--provider` values: the three adapters of @codegraph/llm, or pick from the environment. */
+export const EXPLAIN_PROVIDERS = ["auto", "openrouter", "cloudflare", "claude-code"] as const;
 export type ExplainProvider = (typeof EXPLAIN_PROVIDERS)[number];
 
 export const EXPLAIN_SPEC: CommandSpec = {
@@ -602,19 +609,33 @@ export const EXPLAIN_SPEC: CommandSpec = {
       name: "provider",
       type: "string",
       describe:
-        "Where the model calls go: openrouter (OPENROUTER_API_KEY) or cloudflare — Cloudflare AI " +
+        "Where the model calls go: openrouter (OPENROUTER_API_KEY), cloudflare — Cloudflare AI " +
         "Gateway's REST API (CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID, optional " +
-        "CLOUDFLARE_AI_GATEWAY_ID). auto picks whichever is configured, OpenRouter when both are.",
+        "CLOUDFLARE_AI_GATEWAY_ID) — or claude-code, the local Claude Code CLI in headless mode " +
+        "(`claude -p`, Sonnet by default, no key). auto picks whichever is configured; with " +
+        "several, OpenRouter, then Cloudflare, then Claude Code.",
       choices: [...EXPLAIN_PROVIDERS],
       placeholder: "NAME",
       defaultValue: "auto",
     },
     {
+      name: "claude-path",
+      type: "string",
+      describe:
+        "The Claude Code binary. Under --provider auto it implies claude-code; with openrouter or " +
+        "cloudflare it is an error. Otherwise CLAUDE_CODE_PATH, then `claude` on PATH, then the known " +
+        "install locations; a path that does not exist is an error, never a fall-through.",
+      placeholder: "FILE",
+    },
+    {
       name: "model",
       type: "string",
-      describe: "Model slug for operations (the leaves), in author/model form on either provider.",
+      describe:
+        `Model slug for operations (the leaves). Defaults per provider: ${DEFAULT_EXPLAIN_MODEL} ` +
+        `(author/model form) on openrouter and cloudflare, ${DEFAULT_CLAUDE_CODE_MODEL} on claude-code ` +
+        "— an alias Claude Code resolves to the latest Sonnet; a full id such as claude-sonnet-5-5 " +
+        "pins the fingerprint.",
       placeholder: "SLUG",
-      defaultValue: DEFAULT_EXPLAIN_MODEL,
     },
     {
       name: "rollup-model",
@@ -643,7 +664,8 @@ export const EXPLAIN_SPEC: CommandSpec = {
       describe:
         "Cap on the tokens one answer may use (reasoning included). Omitted, the provider assumes " +
         "the model's full output window and a prepaid account must afford THAT for every call; a " +
-        "block is ~1k tokens, a full cycle call ~12k. An answer cut at the cap fails its unit.",
+        "block is ~1k tokens, a full cycle call ~12k. An answer cut at the cap fails its unit. " +
+        "Does not apply to claude-code (the CLI has no output cap): noted on stderr, ignored.",
       placeholder: "N",
       integer: true,
     },
@@ -1325,10 +1347,14 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly src: string | undefined;
   /** `--out FILE`; undefined = `<model>.insights.jsonl` beside the first model. */
   readonly out: string | undefined;
-  /** `--provider`; `auto` resolves from the environment at run time. */
+  /** `--provider`; `auto` resolves from the environment (and the Claude Code discovery) at run time. */
   readonly provider: ExplainProvider;
-  readonly model: string;
-  readonly rollupModel: string;
+  /** `--claude-path FILE`; undefined = CLAUDE_CODE_PATH, then PATH, then the known install locations. */
+  readonly claudePath: string | undefined;
+  /** `--model`; undefined = the resolved provider's default (DEFAULT_EXPLAIN_MODEL or DEFAULT_CLAUDE_CODE_MODEL). */
+  readonly model: string | undefined;
+  /** `--rollup-model`; undefined = the resolved `--model`. */
+  readonly rollupModel: string | undefined;
   readonly depth: number;
   readonly maxCalls: number | undefined;
   /** `--max-tokens`; undefined = the provider's default (the model's whole output window). */
@@ -2014,7 +2040,6 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           "Run explain once per model, or drop --src to read each model's own root.",
         );
       }
-      const model = stringOf(values, "model") ?? DEFAULT_EXPLAIN_MODEL;
       if (flagOf(values, "retry-failed") && stringOf(values, "scope") !== undefined) {
         throw new UsageError(
           "--retry-failed and --scope both choose what to explain",
@@ -2027,6 +2052,15 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           "Run them one after the other: --import FILE replaces the store, --export writes the side-car from it.",
         );
       }
+      const provider = (stringOf(values, "provider") ?? "auto") as ExplainProvider;
+      const claudePath = stringOf(values, "claude-path");
+      // A named binary is meant to run (auto implies claude-code); a key provider could only ignore it.
+      if (claudePath !== undefined && provider !== "auto" && provider !== "claude-code") {
+        throw new UsageError(
+          `--claude-path names a binary that --provider ${provider} would never run`,
+          "Drop --claude-path, or pass --provider claude-code (or auto, which it implies).",
+        );
+      }
       return {
         kind: "run",
         command: "explain",
@@ -2034,9 +2068,10 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           models,
           src,
           out: stringOf(values, "out"),
-          provider: (stringOf(values, "provider") ?? "auto") as ExplainProvider,
-          model,
-          rollupModel: stringOf(values, "rollup-model") ?? model,
+          provider,
+          claudePath,
+          model: stringOf(values, "model"),
+          rollupModel: stringOf(values, "rollup-model"),
           depth: integerOf(values, "depth") ?? 1,
           maxCalls: integerOf(values, "max-calls"),
           maxTokens: integerOf(values, "max-tokens"),

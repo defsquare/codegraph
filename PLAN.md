@@ -2729,7 +2729,7 @@ under one command-line contract (§13.5, schemas/README.md §8) exactly so
 this could be true: the app needs to know nothing about them but that
 contract and the file extensions they claim.
 
-Locked decisions, each with its reason (the delta table in §22 repeats them):
+Locked decisions, each with its reason (the delta table in §23 repeats them):
 
 - **Tauri is the shell, not a runtime.** Window, native menu, folder dialog,
   drag-and-drop, sidecar lifecycle, bundling, signing and notarization. No
@@ -3634,7 +3634,7 @@ file without one of them lying, so they do not share one:
 | will not open | degrade to the `.jsonl`, silently | a usage error naming the file; never overwritten |
 | committed / shared | never | never — the JSONL export is what is committed, diffed and handed to Specy |
 
-Locked decisions, each with its reason (the delta table in §22 repeats them):
+Locked decisions, each with its reason (the delta table in §23 repeats them):
 
 - **The db is the working copy; the JSONL becomes its deterministic export.**
   `<model>.insights.jsonl` keeps its format, its byte-determinism and its
@@ -5872,7 +5872,206 @@ green; the coverage table and the cost filled in this section.
 
 ---
 
-## 21. Milestones
+## 21. Phase 18 — Model providers as adapters: Claude Code headless (M20)
+
+Motivation: `explain` buys its explanations call by call from a provider, and
+until now a provider meant an API key — `OPENROUTER_API_KEY`, or a Cloudflare
+token in front of one. A developer who already pays for Claude Code has a
+model on the machine: the CLI's headless mode (`claude -p`) answers one
+prompt per process, takes a system prompt and a JSON Schema, and prints one
+JSON object with the document, the tokens and the cost. The request: let
+`explain` use that installation — Sonnet by default — instead of OpenRouter,
+detect the binary or take its path as a parameter, and name the architecture
+so a direct Anthropic API client can follow without touching the walk.
+
+**Decision: the port is what `@codegraph/llm` already has — `LlmClient`
+(`client.ts`: one structured completion in, parsed JSON out, one error type
+with `retryable` decided once). The adapters are the provider modules behind
+it: OpenRouter (SDK), Cloudflare AI Gateway (REST) and now Claude Code (a
+subprocess). The fourth — the Anthropic API with an API key — is a named,
+empty slot, not a stub.** Nothing above the port changes shape: the run's
+`Completer`, the CLI's `completerFor`, the store and the side-car are
+untouched; `provider` in the side-car header was already a free string.
+Rejected, each with its reason:
+
+- **The Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) as the adapter.**
+  It bundles its own copy of Claude Code: the user's install, login and
+  version would be bypassed, a second provider SDK would enter the workspace
+  (the boundary test guards ONE), and `query()` is an agent loop where one
+  completion is wanted. The CLI on the machine IS the installation the
+  request names.
+- **The Anthropic SDK now.** "Maybe in the future" is not a milestone; a
+  stub is an unwired subsystem (CLAUDE.md). §21.6 says exactly where it goes.
+- **`--bare` for a clean process.** `--bare` restricts authentication to
+  `ANTHROPIC_API_KEY`: a subscription login stops working, which is the
+  case this phase exists for. `--safe-mode` keeps authentication and model
+  selection and disables every customization (CLAUDE.md, hooks, plugins,
+  MCP servers, output styles) — the Claude Code persona is replaced by
+  `--system-prompt` anyway.
+- **A hand-rolled JSON mode** (`--output-format text` + fence stripping).
+  `--json-schema` is the CLI's own structured output; the answer arrives
+  parsed in `structured_output`. The fenced-text fallback stays for a
+  version that lacks it.
+- **Probing `claude --version` during resolution.** Discovery is a pure
+  function of (option, environment, `exists`), like the key providers are of
+  the environment; a process per resolution would make `--dry-run` spawn.
+
+### 21.1 The adapter (`packages/llm/src/claude-code.ts`)
+
+One call = one process. Measured on 2.1.318 (2026-11-05, Sonnet 5.5): a
+2-token prompt costs 1 140 cache-creation tokens of scaffolding plus the
+prompt, $0.0053, 2.8 s wall; `--concurrency N` is N processes.
+
+| argument | why |
+|---|---|
+| `-p --output-format json` | one JSON object on stdout, the prompt from stdin |
+| `--model <slug>` | `sonnet` by default (Claude Code's alias for the latest Sonnet); a full id (`claude-sonnet-5-5`) pins the fingerprint |
+| `--json-schema <schema>` | the strict response schema, as the other adapters send it |
+| `--system-prompt <text>` | REPLACES the default system prompt: no persona, no tool talk |
+| `--tools ""` | no tool may run: the model can only answer |
+| `--safe-mode` | no CLAUDE.md, hooks, plugins, MCP, output styles; auth untouched |
+| `--no-session-persistence` | nothing written under `~/.claude/projects` |
+| `--effort <level>` | from `reasoningEffort` when set (`none` → `low`) |
+
+The **user prompt goes through stdin**: a context pack with source can
+exceed Linux's 128 KB per-argument limit (`MAX_ARG_STRLEN`); the system
+prompt (~6 KB) and the schema ride as arguments. The working directory is
+the OS temp directory — no CLAUDE.md of the caller's tree, `--safe-mode` or
+not. The environment is the parent's: the `CLAUDECODE` nesting markers of a
+`codegraph` run started from inside Claude Code do not stop a `-p` child
+(tested on 2.1.318).
+
+Reading the result (`type: "result"`):
+
+| field | → |
+|---|---|
+| `structured_output` | `json`; absent → `result` through the shared `extractJson` (fenced text tolerated) |
+| `result` | `text` |
+| `usage.input_tokens + cache_creation_input_tokens + cache_read_input_tokens` | `promptTokens` — what was sent, cached or not, as the chat adapters count it |
+| `usage.output_tokens` | `completionTokens` |
+| `total_cost_usd` | `cost` |
+| the key of `modelUsage` (its `canonicalModel`) | `model` — what served, not the alias asked for |
+
+Errors, every one an `LlmError` (the port's one type):
+
+| what happened | status | retryable |
+|---|---|---|
+| the binary cannot be spawned (`ENOENT`, `EACCES`) | — | no: the message names the path |
+| the call exceeded `timeoutMs` (default 10 min): the child is killed | — | no (`--retry-failed` redoes the unit) |
+| non-zero exit, or `is_error`/`subtype ≠ success`: `api_error_status` is a number | that status | the HTTP rule (`isRetryableStatus`) |
+| … no status: the message says not logged in / invalid key / unauthorized | 401 | no — and `FATAL_STATUSES` aborts the run |
+| … rate limit / 429 | 429 | yes |
+| … overloaded / 529 | 529 | yes |
+| … budget / credit / billing / 402 | 402 | no, aborts the run |
+| … anything else | — | no |
+| exit 0 but stdout is not the result JSON | — | no |
+
+The CLI retries its own API errors before answering, so the adapter's
+`withRetry` only covers what leaks. What the port carries and the CLI cannot
+take — `temperature`, `maxTokens` — is ignored; `explain` says so once when
+`--max-tokens` is combined with this provider.
+
+The subprocess is held behind a one-function seam (`ClaudeCodeProcess.run`),
+like OpenRouter's transport and Cloudflare's `fetch`: every test drives the
+adapter with a fake process and recorded stdout/stderr/exit, and no test in
+the workspace spawns anything.
+
+### 21.2 Discovery (`packages/llm/src/claude-code-discovery.ts`)
+
+`findClaudeCode({ explicit, env, exists, platform })` — pure — looks, in
+order: `--claude-path` (explicit); `CLAUDE_CODE_PATH`; `claude` in each
+directory of `PATH` (`claude.exe`/`claude.cmd` also on Windows); then the
+install locations the docs name:
+
+| method | path |
+|---|---|
+| native installer (macOS, Linux, WSL) | `~/.local/bin/claude` |
+| native installer (Windows) | `%USERPROFILE%\.local\bin\claude.exe` |
+| legacy local install | `~/.claude/local/claude` |
+| Homebrew | `/opt/homebrew/bin/claude`, `/usr/local/bin/claude` |
+| npm global (Windows) | `%APPDATA%\npm\claude.cmd` |
+
+An explicit path (option or variable) that does not exist is an error with
+that path in it — never a fall-through to a different binary. On Windows an
+npm-global `claude.cmd` is found but cannot be spawned: the adapter passes
+argv without a shell and Node refuses `.cmd`/`.bat` there (`EINVAL`, the
+CVE-2024-27980 mitigation) — the native installer's `claude.exe` is the
+supported binary, `--claude-path` points at it. The result
+carries `source` (`option`, `env`, `PATH`, `known`), which the provider line
+prints.
+
+### 21.3 Resolution (`providers.ts`)
+
+`PROVIDERS` gains `claude-code`; it is *configured* when discovery found a
+binary (`PROVIDER_VARIABLES["claude-code"]` requires nothing, lists
+`CLAUDE_CODE_PATH` as optional). `resolveProvider(choice, env, { claudeCode })`
+keeps its rule — the single configured provider wins — and, with several, a
+fixed precedence: OpenRouter, then Cloudflare, then Claude Code; the reason
+names the flag for each alternative. An exported key is a deliberate act; an
+installed CLI is ambient, so it never overrides one. For `claude-code` the
+`missing` list is `["CLAUDE_CODE_PATH"]` — the way to fix it — and the
+reason says what was searched. `clientFromEnv` takes the found location and
+builds `claudeCodeClient`; the seam's `clientFor` takes the whole resolution.
+
+### 21.4 The CLI
+
+- `--provider claude-code`; `--claude-path FILE`. Under `--provider auto`,
+  `--claude-path` alone IMPLIES `claude-code` — a user who named a binary
+  meant to run it, key or no key; otherwise a path that does not exist would
+  vanish behind "no provider configured".
+- `--model` defaults **per provider**: `openai/gpt-5.6-luna` on the key
+  providers (unchanged), `sonnet` on `claude-code`; `--rollup-model` still
+  defaults to `--model`. The provider is therefore resolved BEFORE the plan,
+  so `--dry-run` and `--estimate` print the model that would run — and still
+  need no binary, no key.
+- A run that needs calls with nothing found is a usage error that leads with
+  what discovery said — `no claude on PATH or in a known install location,
+  and this run needs N model calls`, or `--claude-path FILE does not exist,
+  …`, or `CLAUDE_CODE_PATH=FILE does not exist, …` — never "a variable is
+  not set" for a path the user named on the command line; the hint: install
+  Claude Code and log in, `--claude-path FILE`, or the variable.
+  `--claude-path` with `--provider openrouter|cloudflare` is a usage error:
+  the flag names a binary that provider would never run.
+- The provider line: `provider: claude-code (found on PATH:
+  /home/me/.local/bin/claude)` — or `--claude-path: …`, `CLAUDE_CODE_PATH:
+  …`, `found in a known install location: …`; the header's `provider` is
+  `claude-code`; the trailer's cost is the CLI's `total_cost_usd` (list
+  price — a subscription is billed by its plan), summed as before.
+- The fingerprint carries the slug as REQUESTED (`sonnet`), each record's
+  `model` the id that served (`claude-sonnet-5-5`): a new Sonnet behind the
+  alias does not re-explain what was explained; a full id in `--model` does.
+- The estimate counts what the transport adds to every prompt
+  (`promptOverhead(provider)` in `providers.ts`, handed to `planRun` as a
+  number — the walk never learns a provider): nothing on the key providers;
+  on Claude Code `CLAUDE_CODE_SCAFFOLD_TOKENS` (1 850) a call plus the
+  response schema, which `claude -p` sends as prompt. The live run measured
+  why: 48 operation calls billed +2 292…+2 617 over the bare estimate. With
+  it, operations land within 1 % (190 850 estimated, 191 862 billed); types
+  (×1.28) and modules (×1.38) stay under, as on OpenRouter (PetClinic types
+  ×1.20…1.38) — the dependency explanations a prompt inlines do not exist
+  at plan time, a gap every provider shares.
+
+### 21.5 Milestone split
+
+| | scope | definition of done |
+|---|---|---|
+| **M20a** | the adapter, discovery and resolution in `@codegraph/llm` | `claudeCodeClient` passes the same request/response/error paths the other two adapters are tested on, against a fake process; discovery and resolution tested as pure functions on both platforms' path shapes; the boundary test unchanged (no SDK); `pnpm --filter @codegraph/llm test` and typecheck green |
+| **M20b** | the CLI, docs, a live run | `codegraph explain --provider claude-code` on the Java fixture against the real CLI yields a validate-clean side-car with `provider: "claude-code"` and a Sonnet cost in the trailer; `auto` picks it only when no key is set; `--dry-run`/`--estimate` show `sonnet`; docs (`docs/cli.md`, `docs/insights.md`, README, CLAUDE.md, the website's explain pages) name three adapters and the empty slot; the workspace gate green |
+
+### 21.6 Deferred, explicitly
+
+- **The Anthropic API adapter** — `packages/llm/src/anthropic.ts`,
+  `ANTHROPIC_API_KEY`, `--provider anthropic`: the Messages API with
+  `output_config.format` for the schema, through the official SDK (a second
+  line in the boundary test) or raw `fetch` (none). Model slugs would be
+  Anthropic's own ids, so a run that moves from `claude-code` to `anthropic`
+  keeps its fingerprints only when `--model` names the same full id.
+- The desktop app's job using `claude-code` (the daemon knows extractors,
+  not providers).
+- `--output-format stream-json` for per-call progress; `claude --version`
+  in the header.
+
+## 22. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -5919,8 +6118,10 @@ green; the coverage table and the cost filled in this section.
 | M19a | Vocabulary — lexicon, split, artifact | ✅ (2026-10-26, five stacked PRs from #26, not yet merged; Broadleaf 76 310 entities → 3 381 terms in 0.29 s, 2.9 MB, its top ten a commerce vocabulary after 13 words joined the shared list) `Profile.lexicon` on the eleven profiles (keywords, conventional names, affixes, separators — the profile half of #19), METAMODEL §5 row, printed by `profiles --lang`; `@codegraph/vocabulary`: one idiom-parametrized splitter with the acronym rule on Unicode categories, four term classes as tags (never filters), role weights recorded in the artifact, scopes = the fold's containers; `codegraph vocabulary` report, `--level`/`--scope`/`--class`/`--drift FILE`; five `vocabulary.json` snapshots byte-identical, closure and determinism properties; the coverage table of §20.1 filled on fixtures, Broadleaf, codegraph, Mastodon, Plausible |
 | M19b | Vocabulary — cloud, tab, city channel | ✅ (2026-10-26, three stacked PRs from #31, not yet merged; Broadleaf's cloud and its city raised by `order` are the demo images) deterministic spiral layout with an injected measurer and the no-overlap property; `--svg` with the fixture snapshot; `serve` builds `/vocabulary.json` and answers `/carriers.json?scope=&term=`; the sixth navigator tab (scope follows the selection, chips, table, carriers → reveal), literals pinned, types-only import; `vocabulary:<term>` metric source through the CLI hook, city unchanged; the two demo images under `docs/` and the README section — the issue's fourth criterion |
 | M19c | Vocabulary — glossary in the explanation | `words` on every insight block — the words of the unit's name, its parameters' and (for a type) its fields', each with `in`, `concern` (domain / technical / ambiguous), `sense`, `meaning`, in that entity's context, asked in the SAME call that explains it; `glossary` on the module block reconciling its types' entries with `polysemous`; `PROMPT_VERSION` 2, the words `.optional()` in the record schema so every existing side-car round-trips byte-identical — no new record type, no format change; the store at version 2 with the `insight_word` projection (rebuilt on `--import`); readers `insights --word/--glossary/--polysemy/--concerns`, `vocabulary --drift-insights`, `/glossary.json`, the entries shown as inferences in both panels; the Broadleaf re-explanation priced by `--estimate` and measured; `docs/vocabulary.md` |
+| M20a | Model providers — the Claude Code adapter | ✅ (2026-11-10, 94 `@codegraph/llm` tests) `claudeCodeClient` in `@codegraph/llm` (§21.1): `claude -p --output-format json --json-schema --system-prompt --tools "" --safe-mode --no-session-persistence`, the user prompt on stdin, `structured_output` / `usage` / `total_cost_usd` / `modelUsage` read into the port's response, every failure classified into the port's one error type; `findClaudeCode` (option → `CLAUDE_CODE_PATH` → PATH → known install locations, pure) and `resolveProvider` with the fixed precedence; fake-process tests, the boundary test unchanged |
+| M20b | Model providers — wired and documented | ✅ (2026-11-10, live on Claude Code 2.1.322, Java fixture: 68 calls, 0 failed, 79 records — 70 explained, stamped `claude-sonnet-5-5`, 9 templated — decode-clean, eof `$1.03` for 307 896 + 54 688 tokens; the prompt side came in ≈ 2.7× the bare estimate — Claude Code's per-call scaffolding and schema, which the estimate now counts (§21.4): 280 481 estimated for the 307 896 billed) `--provider claude-code`, `--claude-path`, `--model` default per provider resolved before the plan (`sonnet`), the usage error naming the fix and the `--max-tokens` note; a live run on the Java fixture; `docs/cli.md`, `docs/insights.md`, README, CLAUDE.md and the website's explain pages name the port, the three adapters and the Anthropic API slot (§21.6) |
 
-## 22. Decisions made in this plan (deltas vs. the design doc)
+## 23. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -6039,3 +6240,6 @@ green; the coverage table and the cost filled in this section.
 | Glossary tied to the entity (M19c) | each explained unit's block carries `words`: the words its name (and its parameters' or fields' names) is made of, with sense and concern in that entity's context, asked in the explanation call itself; the module block reconciles its types' words into `glossary`; scopes and the corpus roll up from the records | a meaning belongs to the entity that uses the word, and the context pack of that entity is the one place the pipeline has its source, facts and dependencies' explanations together; a scope has a vocabulary, not a meaning — the two earlier drafts (a standalone command over a term table; a second request per scope) asked at the wrong altitude |
 | Glossary storage (M19c) | the insights store, version 2: an `insight_word (id, word, in, concern, sense, confidence)` projection written with the record and rebuilt on `--import`, indexed on `word`; the side-car stays the one source of truth | bought, so it shares the insights' lifecycle (migrated, never regenerated); a projection makes `--word` an index lookup without a second authoritative copy — the M16b rule (what is queried is a column over the JSON, what is fetched is the block) |
 | Glossary wire format (M19c) | no new record type: `words`/`glossary` live inside `block`, `.optional()` in the record schema and required on the wire by `strictify`; `PROMPT_VERSION` 2 | M11 put the prompt version in every fingerprint so a better prompt re-explains what it improves — the designed case; a version-1 record decodes and re-encodes to its own bytes, so every existing side-car round-trips, and nothing is deleted by the bump |
+| Port and adapters (M20) | `LlmClient` is the port; OpenRouter, Cloudflare AI Gateway and Claude Code are adapters behind it, each holding its transport behind one function; the Anthropic API is a named empty slot (§21.6), not a stub | the walk, the store and the CLI never learn a provider; a fourth adapter is one file and one entry in `providers.ts` |
+| Claude Code as a subprocess (M20) | the user's own `claude` binary in headless mode — `--safe-mode` (not `--bare`, which drops OAuth), tools off, no session, the system prompt replaced, the user prompt on stdin | the installation, login and version are the user's; no second SDK enters the workspace; argv has a 128 KB per-argument limit |
+| Provider precedence (M20) | `auto` takes the single configured provider; with several, OpenRouter, then Cloudflare, then Claude Code, the reason naming the flag for the others; `--model` defaults per provider (`sonnet` on Claude Code) | an exported key is a deliberate act, an installed CLI is ambient; `openai/gpt-5.6-luna` means nothing to Claude Code |

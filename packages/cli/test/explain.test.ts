@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,17 +10,19 @@ import {
   COMPLETION_TOKENS_PER_WORD,
   decodeInsights,
   encodeInsightsToString,
+  estimateTokens,
   insightsStorePathFor,
+  responseJsonSchema,
   sqliteInsightsStore,
   type InsightRecord,
   type InsightsStore,
 } from "@codegraph/insights";
-import { LlmError, fakeLlmClient, type LlmClient, type LlmRequest, type Provider } from "@codegraph/llm";
-import { EXIT } from "../src/exit.js";
+import { CLAUDE_CODE_DEFAULT_MODEL, CLAUDE_CODE_SCAFFOLD_TOKENS, LlmError, PROVIDERS, fakeLlmClient, type LlmClient, type LlmRequest, type Provider } from "@codegraph/llm";
+import { EXIT, UsageError } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
 import { run } from "../src/main.js";
 import { explainCommand, realSeam, sidecarPathFor, type ExplainSeam } from "../src/commands/explain.js";
-import { parseInvocation } from "../src/args.js";
+import { DEFAULT_CLAUDE_CODE_MODEL, DEFAULT_EXPLAIN_MODEL, EXPLAIN_PROVIDERS, parseInvocation } from "../src/args.js";
 
 const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url));
 const SRC = fileURLToPath(new URL("../../../fixtures/java/src", import.meta.url));
@@ -134,8 +136,8 @@ function seamWith(
     },
     pid: 1000,
     isAlive: (pid) => alive.has(pid),
-    clientFor: (provider) => {
-      providers.push(provider);
+    clientFor: (resolution) => {
+      providers.push(resolution.provider);
       return client;
     },
     now: () => new Date("2026-09-02T10:00:00.000Z"),
@@ -388,7 +390,7 @@ describe("explain records what failed, and --retry-failed redoes exactly that", 
         key: { lang: "java", module: "com.acme.order", symbol: "" },
         level: "module",
         members: [MODULE],
-        model: options([]).rollupModel,
+        model: DEFAULT_EXPLAIN_MODEL,
         reason: { kind: "provider", message: TOO_LONG, status: 400, retryable: false },
         attempts: 1,
         calls: 0,
@@ -807,17 +809,173 @@ describe("explain picks its provider from the flag or the environment", () => {
   });
 });
 
+describe("explain runs the installed Claude Code as a provider (PLAN.md §21, M20b)", () => {
+  const HOME = "/home/test";
+  const KNOWN = `${HOME}/.local/bin/claude`;
+  const ON_PATH = "/usr/bin/claude";
+  const NOTE = "note: --max-tokens does not apply to claude-code (the CLI has no output cap); ignored.";
+  /** A binary planted on the fake disk: discovery only asks whether it exists. */
+  const binary = (...paths: string[]) => new Map(paths.map((path) => [resolve(path), ""]));
+
+  it("auto with no key and a binary in a known install location runs through claude-code, on sonnet, and records it", async () => {
+    const machine = seamWith({ HOME }, binary(KNOWN));
+    const io = captureIo();
+    expect(await explainCommand(options(["--out", OUT]), io, machine.seam)).toBe(EXIT.OK);
+    expect(new Set(machine.providers)).toEqual(new Set(["claude-code"]));
+    expect(io.stderr()).toContain(`provider: fake (found in a known install location: ${KNOWN})`);
+    expect(machine.client.calls.length).toBeGreaterThan(0);
+    expect(machine.client.calls.every((c) => c.model === "sonnet")).toBe(true);
+    const file = decodeInsights(machine.disk.get(OUT)!);
+    expect(file.header.provider).toBe("claude-code");
+    expect(file.header.models).toEqual({ leaf: "sonnet", rollup: "sonnet" });
+  });
+
+  it("--dry-run and --estimate print the model the resolved provider would run, and need neither key nor binary", async () => {
+    for (const flag of ["--dry-run", "--estimate"]) {
+      const found = captureIo();
+      expect(await explainCommand(options([flag]), found, seamWith({ HOME }, binary(KNOWN)).seam)).toBe(EXIT.OK);
+      expect(found.stdout()).toContain("models: sonnet (operations), sonnet (types, modules)");
+      // Asked for and not installed: still the plan, still its default — the error waits for a run that calls.
+      const asked = captureIo();
+      expect(await explainCommand(options([flag, "--provider", "claude-code"]), asked, seamWith({}).seam)).toBe(EXIT.OK);
+      expect(asked.stdout()).toContain("models: sonnet (operations), sonnet (types, modules)");
+      const keyed = captureIo();
+      expect(await explainCommand(options([flag]), keyed, seamWith({ OPENROUTER_API_KEY: KEY, HOME }, binary(KNOWN)).seam)).toBe(EXIT.OK);
+      expect(keyed.stdout()).toContain(`models: ${DEFAULT_EXPLAIN_MODEL} (operations), ${DEFAULT_EXPLAIN_MODEL} (types, modules)`);
+      const pinned = captureIo();
+      expect(await explainCommand(options([flag, "--provider", "claude-code", "--model", "claude-sonnet-5-5", "--rollup-model", "opus"]), pinned, seamWith({}).seam)).toBe(EXIT.OK);
+      expect(pinned.stdout()).toContain("models: claude-sonnet-5-5 (operations), opus (types, modules)");
+    }
+    const json = captureIo();
+    await explainCommand(options(["--dry-run", "--json"]), json, seamWith({ HOME }, binary(KNOWN)).seam);
+    expect(JSON.parse(json.stdout())).toMatchObject({ models: { leaf: "sonnet", rollup: "sonnet" } });
+  });
+
+  it("auto with a key AND a binary keeps OpenRouter — a key is deliberate, an installed CLI is ambient — and says how to switch", async () => {
+    const machine = seamWith({ OPENROUTER_API_KEY: KEY, HOME }, binary(KNOWN));
+    const io = captureIo();
+    expect(await explainCommand(options(["--out", OUT]), io, machine.seam)).toBe(EXIT.OK);
+    expect(new Set(machine.providers)).toEqual(new Set(["openrouter"]));
+    expect(io.stderr()).toContain("provider: fake (OpenRouter and Claude Code are configured; using OpenRouter (pass --provider claude-code to run the local Claude Code))");
+    expect(decodeInsights(machine.disk.get(OUT)!).header.provider).toBe("openrouter");
+  });
+
+  it("--provider claude-code with nothing found is a usage error that leads with what was searched, then how to point at the binary", async () => {
+    const machine = seamWith({});
+    const io = captureIo();
+    const failure = await explainCommand(options(["--out", OUT, "--provider", "claude-code"]), io, machine.seam).then(() => undefined, (error: unknown) => error);
+    expect(failure).toBeInstanceOf(UsageError);
+    expect((failure as UsageError).message).toBe("no claude on PATH or in a known install location, and this run needs 68 model calls");
+    expect((failure as UsageError).hint).toContain("Install Claude Code (https://code.claude.com/docs/en/setup) and log in, or point at the binary with --claude-path FILE or CLAUDE_CODE_PATH.");
+    expect((failure as UsageError).hint).toContain("Models: sonnet.");
+    expect(io.stdout()).toBe("");
+    expect(machine.providers).toEqual([]);
+  });
+
+  it("a named binary that does not exist is a usage error leading with that path — never 'not set', never a fall-through to the binary on PATH", async () => {
+    const flagged = seamWith({ PATH: "/usr/bin" }, binary(ON_PATH));
+    const byFlag = await explainCommand(options(["--out", OUT, "--claude-path", "/nowhere/claude"]), captureIo(), flagged.seam).then(() => undefined, (error: unknown) => error);
+    expect(byFlag).toBeInstanceOf(UsageError);
+    expect((byFlag as UsageError).message).toBe("--claude-path /nowhere/claude does not exist, and this run needs 68 model calls");
+    expect(flagged.providers).toEqual([]);
+    expect(flagged.client.calls).toHaveLength(0);
+    const exported = seamWith({ PATH: "/usr/bin", CLAUDE_CODE_PATH: "/x/claude" }, binary(ON_PATH));
+    const byEnv = await explainCommand(options(["--out", OUT, "--provider", "claude-code"]), captureIo(), exported.seam).then(() => undefined, (error: unknown) => error);
+    expect((byEnv as UsageError).message).toBe("CLAUDE_CODE_PATH=/x/claude does not exist, and this run needs 68 model calls");
+    expect(exported.providers).toEqual([]);
+  });
+
+  it("--claude-path with a key provider is refused at parse time: that provider would never run the binary", () => {
+    for (const provider of ["openrouter", "cloudflare"]) {
+      expect(() => options(["--provider", provider, "--claude-path", "/opt/tools/claude"])).toThrow(`--claude-path names a binary that --provider ${provider} would never run`);
+    }
+    expect(options(["--provider", "claude-code", "--claude-path", "/opt/tools/claude"]).claudePath).toBe("/opt/tools/claude");
+    expect(options(["--provider", "auto", "--claude-path", "/opt/tools/claude"]).claudePath).toBe("/opt/tools/claude");
+  });
+
+  it("--claude-path FILE on the disk wins — over the binary on PATH and over a key — and the reason says so", async () => {
+    const machine = seamWith({ OPENROUTER_API_KEY: KEY, PATH: "/usr/bin" }, binary(ON_PATH, "/opt/tools/claude"));
+    const io = captureIo();
+    expect(await explainCommand(options(["--out", OUT, "--claude-path", "/opt/tools/claude"]), io, machine.seam)).toBe(EXIT.OK);
+    expect(new Set(machine.providers)).toEqual(new Set(["claude-code"]));
+    expect(io.stderr()).toContain("provider: fake (--provider claude-code, --claude-path: /opt/tools/claude)");
+    expect(decodeInsights(machine.disk.get(OUT)!).header.provider).toBe("claude-code");
+  });
+
+  it("--max-tokens does not apply to claude-code: said once on stderr, and nothing said on a key provider", async () => {
+    const machine = seamWith({ HOME }, binary(KNOWN));
+    const io = captureIo();
+    expect(await explainCommand(options(["--out", OUT, "--max-tokens", "100", "--provider", "claude-code"]), io, machine.seam)).toBe(EXIT.OK);
+    expect(io.stderr().split(NOTE)).toHaveLength(2);
+    const keyed = seamWith({ OPENROUTER_API_KEY: KEY });
+    const quiet = captureIo();
+    expect(await explainCommand(options(["--out", OUT, "--max-tokens", "100"]), quiet, keyed.seam)).toBe(EXIT.OK);
+    expect(quiet.stderr()).not.toContain("--max-tokens does not apply");
+  });
+
+  it("--estimate on claude-code counts the scaffolding and schema Claude Code adds to every prompt, and says so; a key provider adds nothing", async () => {
+    const estimate = async (args: string[], machine: ReturnType<typeof seamWith>) => {
+      const io = captureIo();
+      expect(await explainCommand(options(["--out", OUT, "--estimate", ...args]), io, machine.seam)).toBe(EXIT.OK);
+      return io.stdout();
+    };
+    const keyed = JSON.parse(await estimate(["--json"], seamWith({ OPENROUTER_API_KEY: KEY })));
+    const local = JSON.parse(await estimate(["--json", "--provider", "claude-code"], seamWith({ HOME }, binary(KNOWN))));
+    expect(local.calls).toBe(keyed.calls);
+    expect(local.completionTokens).toBe(keyed.completionTokens);
+    const levels = ["operation", "type", "module"] as const;
+    const schemas = levels.flatMap((level) => (["block", "scc"] as const).map((shape) => estimateTokens(JSON.stringify(responseJsonSchema(level, shape)))));
+    const added = local.promptTokens - keyed.promptTokens;
+    expect(added).toBeGreaterThan(keyed.calls * CLAUDE_CODE_SCAFFOLD_TOKENS);
+    expect(added).toBeLessThanOrEqual(keyed.calls * (CLAUDE_CODE_SCAFFOLD_TOKENS + Math.max(...schemas)));
+    expect(local.assumptions.promptTokens).toContain(`${CLAUDE_CODE_SCAFFOLD_TOKENS} per call + the response schema (claude-code)`);
+    expect(keyed.assumptions.promptTokens).toBe("characters of the rendered prompts / 4");
+
+    const said = `plus ${String(CLAUDE_CODE_SCAFFOLD_TOKENS).replace(/\B(?=(\d{3})+(?!\d))/gu, " ")} per call and the response schema that claude-code adds to every prompt`;
+    expect(await estimate(["--provider", "claude-code"], seamWith({ HOME }, binary(KNOWN)))).toContain(said);
+    expect(await estimate([], seamWith({ OPENROUTER_API_KEY: KEY }))).not.toContain("per call");
+  });
+
+  it("a 402 from claude-code aborts the run without the --max-tokens hint, which is a key provider's", async () => {
+    const machine = seamWith({ HOME }, binary(KNOWN));
+    const broke: LlmClient = { name: "fake", complete: () => Promise.reject(new LlmError("billing: out of credit", 402, false)) };
+    const io = captureIo();
+    expect(await explainCommand(options(["--out", OUT, "--concurrency", "1"]), io, { ...machine.seam, clientFor: () => broke })).toBe(EXIT.FINDINGS);
+    expect(io.stderr()).toMatch(/aborted: .* answered 402/u);
+    expect(io.stderr()).not.toContain("--max-tokens");
+  });
+
+  it("the flags: --provider claude-code and --claude-path parse, azure is still refused, --model has no static default", () => {
+    expect(EXPLAIN_PROVIDERS).toEqual(["auto", ...PROVIDERS]);
+    // Restated in args.ts (which must not load @codegraph/llm, and with it the SDK, for every command) and pinned here.
+    expect(DEFAULT_CLAUDE_CODE_MODEL).toBe(CLAUDE_CODE_DEFAULT_MODEL);
+    const parsed = options(["--provider", "claude-code", "--claude-path", "/opt/tools/claude"]);
+    expect(parsed.provider).toBe("claude-code");
+    expect(parsed.claudePath).toBe("/opt/tools/claude");
+    expect(options([]).model).toBeUndefined();
+    expect(options([]).rollupModel).toBeUndefined();
+    expect(options([]).claudePath).toBeUndefined();
+    expect(() => parseInvocation(["explain", FIXTURE, "--provider", "azure"])).toThrow(/invalid value 'azure' for --provider/u);
+  });
+});
+
 describe("explain usage errors exit 2 with nothing on stdout", () => {
   it("without an API key when calls are planned", async () => {
-    // The real seam reads the process environment: a key in the developer's shell must not make it found.
-    for (const name of ["OPENROUTER_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_AI_GATEWAY_ID"]) vi.stubEnv(name, undefined);
+    // The real seam reads the process environment: a key in the developer's shell must not make it found,
+    // and neither must the Claude Code installed on this machine — PATH, HOME and the variables point nowhere.
+    for (const name of ["OPENROUTER_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_AI_GATEWAY_ID", "CLAUDE_CODE_PATH", "USERPROFILE", "APPDATA"]) vi.stubEnv(name, undefined);
+    vi.stubEnv("PATH", "");
+    vi.stubEnv("HOME", "/nonexistent/home");
+    // The Homebrew locations are probed by absolute path: on a machine that has one, ask for OpenRouter by name.
+    const homebrew = ["/opt/homebrew/bin/claude", "/usr/local/bin/claude"].some((path) => existsSync(path));
     try {
       const io = captureIo();
-      const code = await run(["explain", FIXTURE, "--src", SRC, "--out", OUT], io);
+      const code = await run(["explain", FIXTURE, "--src", SRC, "--out", OUT, ...(homebrew ? ["--provider", "openrouter"] : [])], io);
       expect(code).toBe(EXIT.USAGE);
       expect(io.stdout()).toBe("");
       expect(io.stderr()).toContain("OPENROUTER_API_KEY");
       expect(io.stderr()).toContain("CLOUDFLARE_API_TOKEN");
+      expect(io.stderr()).toContain("--provider claude-code");
     } finally {
       vi.unstubAllEnvs();
     }
