@@ -187,7 +187,9 @@ calls it will make, the estimated prompt tokens per level — and makes no call.
 needs no API key at all, which means the plan is inspectable by someone who has
 not decided to spend anything yet. An **estimate** prints the volume: calls,
 input and output tokens per level, and a cost when prices per million tokens are
-supplied. Input is the rendered prompts at four characters per token; output is
+supplied. Input is the rendered prompts at four characters per token — plus,
+on Claude Code, the scaffolding and the response schema it adds to every prompt,
+about 1 850 tokens a call before the schema; output is
 one measured figure per block asked for — 470 tokens for an operation, 530 for a
 type or a module — plus 120 per word the prompt asks to define and 125 per
 glossary entry, fitted on a live run over Spring PetClinic with the model's

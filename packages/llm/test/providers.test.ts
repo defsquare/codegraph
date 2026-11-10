@@ -1,12 +1,28 @@
 import { describe, expect, it } from "vitest";
 import type { ClaudeCodeDiscovery } from "../src/claude-code-discovery.js";
-import { clientFromEnv, clientFromResolution, isConfigured, missingVariables, resolveProvider } from "../src/providers.js";
+import { CLAUDE_CODE_SCAFFOLD_TOKENS } from "../src/claude-code.js";
+import { clientFromEnv, clientFromResolution, isConfigured, missingVariables, promptOverhead, resolveProvider } from "../src/providers.js";
 
 const OR = { OPENROUTER_API_KEY: "sk-or" };
 const CF = { CLOUDFLARE_API_TOKEN: "cf", CLOUDFLARE_ACCOUNT_ID: "acc" };
 const CLAUDE = "/home/me/.local/bin/claude";
 const FOUND: ClaudeCodeDiscovery = { location: { path: CLAUDE, source: "PATH" }, reason: "found on PATH" };
 const NOT_FOUND: ClaudeCodeDiscovery = { location: undefined, reason: "no claude on PATH or in a known install location" };
+
+describe("promptOverhead", () => {
+  it("is nothing on the key adapters; on Claude Code, its scaffolding per call with the response schema in the prompt", () => {
+    expect(promptOverhead("openrouter")).toEqual({ perCall: 0, schema: false });
+    expect(promptOverhead("cloudflare")).toEqual({ perCall: 0, schema: false });
+    expect(promptOverhead("claude-code")).toEqual({ perCall: CLAUDE_CODE_SCAFFOLD_TOKENS, schema: true });
+  });
+
+  it("keeps Claude Code's scaffolding inside what the live run measured", () => {
+    // Java fixture, 2.1.322, 48 operation calls: billed − estimated prompt = +2 292…+2 617,
+    // less the ~498-token operation schema → 1 794…2 119 of scaffolding.
+    expect(CLAUDE_CODE_SCAFFOLD_TOKENS).toBeGreaterThanOrEqual(1794);
+    expect(CLAUDE_CODE_SCAFFOLD_TOKENS).toBeLessThanOrEqual(2119);
+  });
+});
 
 describe("resolveProvider", () => {
   it("auto picks the one provider that is configured", () => {

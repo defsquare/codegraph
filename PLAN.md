@@ -6040,6 +6040,16 @@ builds `claudeCodeClient`; the seam's `clientFor` takes the whole resolution.
 - The fingerprint carries the slug as REQUESTED (`sonnet`), each record's
   `model` the id that served (`claude-sonnet-5-5`): a new Sonnet behind the
   alias does not re-explain what was explained; a full id in `--model` does.
+- The estimate counts what the transport adds to every prompt
+  (`promptOverhead(provider)` in `providers.ts`, handed to `planRun` as a
+  number — the walk never learns a provider): nothing on the key providers;
+  on Claude Code `CLAUDE_CODE_SCAFFOLD_TOKENS` (1 850) a call plus the
+  response schema, which `claude -p` sends as prompt. The live run measured
+  why: 48 operation calls billed +2 292…+2 617 over the bare estimate. With
+  it, operations land within 1 % (190 850 estimated, 191 862 billed); types
+  (×1.28) and modules (×1.38) stay under, as on OpenRouter (PetClinic types
+  ×1.20…1.38) — the dependency explanations a prompt inlines do not exist
+  at plan time, a gap every provider shares.
 
 ### 21.5 Milestone split
 
@@ -6109,7 +6119,7 @@ builds `claudeCodeClient`; the seam's `clientFor` takes the whole resolution.
 | M19b | Vocabulary — cloud, tab, city channel | ✅ (2026-10-26, three stacked PRs from #31, not yet merged; Broadleaf's cloud and its city raised by `order` are the demo images) deterministic spiral layout with an injected measurer and the no-overlap property; `--svg` with the fixture snapshot; `serve` builds `/vocabulary.json` and answers `/carriers.json?scope=&term=`; the sixth navigator tab (scope follows the selection, chips, table, carriers → reveal), literals pinned, types-only import; `vocabulary:<term>` metric source through the CLI hook, city unchanged; the two demo images under `docs/` and the README section — the issue's fourth criterion |
 | M19c | Vocabulary — glossary in the explanation | `words` on every insight block — the words of the unit's name, its parameters' and (for a type) its fields', each with `in`, `concern` (domain / technical / ambiguous), `sense`, `meaning`, in that entity's context, asked in the SAME call that explains it; `glossary` on the module block reconciling its types' entries with `polysemous`; `PROMPT_VERSION` 2, the words `.optional()` in the record schema so every existing side-car round-trips byte-identical — no new record type, no format change; the store at version 2 with the `insight_word` projection (rebuilt on `--import`); readers `insights --word/--glossary/--polysemy/--concerns`, `vocabulary --drift-insights`, `/glossary.json`, the entries shown as inferences in both panels; the Broadleaf re-explanation priced by `--estimate` and measured; `docs/vocabulary.md` |
 | M20a | Model providers — the Claude Code adapter | ✅ (2026-11-10, 94 `@codegraph/llm` tests) `claudeCodeClient` in `@codegraph/llm` (§21.1): `claude -p --output-format json --json-schema --system-prompt --tools "" --safe-mode --no-session-persistence`, the user prompt on stdin, `structured_output` / `usage` / `total_cost_usd` / `modelUsage` read into the port's response, every failure classified into the port's one error type; `findClaudeCode` (option → `CLAUDE_CODE_PATH` → PATH → known install locations, pure) and `resolveProvider` with the fixed precedence; fake-process tests, the boundary test unchanged |
-| M20b | Model providers — wired and documented | ✅ (2026-11-10, live on Claude Code 2.1.322, Java fixture: 68 calls, 0 failed, 79 records — 70 explained, stamped `claude-sonnet-5-5`, 9 templated — decode-clean, eof `$1.03` for 307 896 + 54 688 tokens; the prompt side is ≈ 2.7× the estimate, the ≈ 2 500 tokens of Claude Code scaffolding per call the estimate does not count) `--provider claude-code`, `--claude-path`, `--model` default per provider resolved before the plan (`sonnet`), the usage error naming the fix and the `--max-tokens` note; a live run on the Java fixture; `docs/cli.md`, `docs/insights.md`, README, CLAUDE.md and the website's explain pages name the port, the three adapters and the Anthropic API slot (§21.6) |
+| M20b | Model providers — wired and documented | ✅ (2026-11-10, live on Claude Code 2.1.322, Java fixture: 68 calls, 0 failed, 79 records — 70 explained, stamped `claude-sonnet-5-5`, 9 templated — decode-clean, eof `$1.03` for 307 896 + 54 688 tokens; the prompt side came in ≈ 2.7× the bare estimate — Claude Code's per-call scaffolding and schema, which the estimate now counts (§21.4): 280 481 estimated for the 307 896 billed) `--provider claude-code`, `--claude-path`, `--model` default per provider resolved before the plan (`sonnet`), the usage error naming the fix and the `--max-tokens` note; a live run on the Java fixture; `docs/cli.md`, `docs/insights.md`, README, CLAUDE.md and the website's explain pages name the port, the three adapters and the Anthropic API slot (§21.6) |
 
 ## 23. Decisions made in this plan (deltas vs. the design doc)
 

@@ -40,6 +40,14 @@ import { withRetry, type RetryOptions } from "./retry.js";
 /** Claude Code's alias for the latest Sonnet; a full id (`claude-sonnet-5-5`) pins the fingerprint. */
 export const CLAUDE_CODE_DEFAULT_MODEL = "sonnet";
 export const CLAUDE_CODE_DEFAULT_TIMEOUT_MS = 600_000;
+
+/**
+ * Prompt tokens `claude -p` bills per call beyond the system and user text, the
+ * response schema aside (it rides in the prompt as a tool, counted per prompt).
+ * Fitted on the Java fixture (2.1.322, 2026-11-10): 48 operation calls billed
+ * +2 292…+2 617 over the estimate, median +2 342, with a ~498-token schema.
+ */
+export const CLAUDE_CODE_SCAFFOLD_TOKENS = 1850;
 /** After SIGTERM at the timeout or on abort, how long the runner waits before SIGKILL. */
 export const CLAUDE_CODE_KILL_GRACE_MS = 5_000;
 /** After the child's exit, how long the runner waits for its pipes to close before destroying them (a descendant may hold them). */

@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { Edge, Entity } from "@codegraph/core";
 import { buildWalk } from "../src/order.js";
 import { planRun, retryScope, type PlanEnv, type PlanOptions } from "../src/plan.js";
-import { COMPLETION_TOKENS_PER_BLOCK, COMPLETION_TOKENS_PER_GLOSSARY_ENTRY, COMPLETION_TOKENS_PER_WORD } from "../src/prompt.js";
+import { COMPLETION_TOKENS_PER_BLOCK, COMPLETION_TOKENS_PER_GLOSSARY_ENTRY, COMPLETION_TOKENS_PER_WORD, estimateTokens } from "../src/prompt.js";
 import { memoryBook, type RecordBook } from "../src/records.js";
 import { executeRun, type Completer, type CompletionRequest } from "../src/run.js";
-import type { Block, FailureRecord, InsightRecord, ModuleBlock, OperationBlock, TypeBlock } from "../src/schema.js";
+import { responseJsonSchema, type Block, type FailureRecord, type InsightRecord, type ModuleBlock, type OperationBlock, type TypeBlock } from "../src/schema.js";
 import { createSourceReader, mapReader } from "../src/source.js";
 import { edge, field, graphOf, method, pkg, prepared, toySpeller, type } from "./fixture.js";
 
@@ -247,6 +247,25 @@ describe("planRun", () => {
     expect(plan.steps.find((s) => s.unit.id === m("h"))?.model).toBe("leaf-model");
     expect(plan.steps.find((s) => s.unit.id === T)?.model).toBe("rollup-model");
     for (const step of plan.steps) expect(step.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("a prompt overhead adds its tokens to every call, the response schema's when it rides in the prompt, and nothing where no call is made", () => {
+    const { walk, env } = corpus();
+    const bare = planRun(walk, new Map(), env, OPTIONS);
+    const fixed = planRun(walk, new Map(), env, { ...OPTIONS, promptOverhead: { perCall: 1000, schema: false } });
+    const schemed = planRun(walk, new Map(), env, { ...OPTIONS, promptOverhead: { perCall: 1000, schema: true } });
+    const before = new Map(bare.steps.map((s) => [s.unit.id, s]));
+    for (const [plan, schema] of [[fixed, false], [schemed, true]] as const) {
+      for (const step of plan.steps) {
+        const was = before.get(step.unit.id)!;
+        const perCall = 1000 + (schema ? estimateTokens(JSON.stringify(responseJsonSchema(step.unit.level))) : 0);
+        expect(step.promptTokens - was.promptTokens).toBe(step.calls * perCall);
+        expect(step.completionTokens).toBe(was.completionTokens);
+      }
+    }
+    expect(fixed.estimates.promptTokens - bare.estimates.promptTokens).toBe(1000 * bare.estimates.calls);
+    expect(fixed.steps.find((s) => s.unit.id === m("getTotal"))?.promptTokens).toBe(0);
+    expect(planRun(walk, new Map(), env, { ...OPTIONS, promptOverhead: { perCall: 0, schema: false } }).estimates).toEqual(bare.estimates);
   });
 
   it("--max-calls keeps a dependency-consistent prefix of the walk", () => {

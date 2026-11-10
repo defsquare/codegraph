@@ -1,4 +1,4 @@
-import { claudeCodeClient } from "./claude-code.js";
+import { CLAUDE_CODE_SCAFFOLD_TOKENS, claudeCodeClient } from "./claude-code.js";
 import { CLAUDE_CODE_PATH_VARIABLE, type ClaudeCodeDiscovery, type ClaudeCodeLocation } from "./claude-code-discovery.js";
 import type { LlmClient } from "./client.js";
 import { cloudflareGatewayClient } from "./cloudflare.js";
@@ -35,6 +35,17 @@ export const PROVIDER_VARIABLES: Readonly<Record<Provider, { readonly required: 
 };
 
 export type Env = Readonly<Record<string, string | undefined>>;
+
+/** Prompt tokens an adapter's transport adds to every call, for an estimate: a fixed count, and whether the response schema is sent as prompt. */
+export interface PromptOverhead {
+  readonly perCall: number;
+  readonly schema: boolean;
+}
+
+/** The key adapters send the schema as a response format, billed as nothing measurable (PetClinic, +115 median per operation call). */
+export function promptOverhead(provider: Provider): PromptOverhead {
+  return provider === "claude-code" ? { perCall: CLAUDE_CODE_SCAFFOLD_TOKENS, schema: true } : { perCall: 0, schema: false };
+}
 
 /** What resolution knows beyond the environment: the outcome of looking for the Claude Code binary. Absent = not looked for = not configured. */
 export interface ProviderProbe {

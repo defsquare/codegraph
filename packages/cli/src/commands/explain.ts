@@ -41,7 +41,16 @@ import {
   type RunUsage,
   type Unit,
 } from "@codegraph/insights";
-import { clientFromResolution, findClaudeCode, resolveProvider, type LlmClient, type Provider, type ProviderResolution } from "@codegraph/llm";
+import {
+  clientFromResolution,
+  findClaudeCode,
+  promptOverhead,
+  resolveProvider,
+  type LlmClient,
+  type PromptOverhead,
+  type Provider,
+  type ProviderResolution,
+} from "@codegraph/llm";
 import { buildVocabulary, definitionSpeller, rankedWords, type VocabularyArtifact } from "@codegraph/vocabulary";
 import { DEFAULT_CLAUDE_CODE_MODEL, DEFAULT_EXPLAIN_MODEL, type ExplainOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
@@ -206,7 +215,12 @@ async function confirmOnTerminal(question: string): Promise<boolean> {
 
 
 /** `ExplainOptions` once the provider is known: `--model` defaulted per provider, `--rollup-model` to it. */
-type ResolvedOptions = Omit<ExplainOptions, "model" | "rollupModel"> & { readonly model: string; readonly rollupModel: string };
+type ResolvedOptions = Omit<ExplainOptions, "model" | "rollupModel"> & {
+  readonly model: string;
+  readonly rollupModel: string;
+  /** What the resolved provider's transport adds to every prompt, and who adds it — for the estimate. */
+  readonly promptOverhead: PromptOverhead & { readonly by: Provider };
+};
 
 /** The provider and, from it, the models. `--claude-path` names a binary on purpose: on `auto` it implies `--provider claude-code`. */
 function resolveRun(flags: ExplainOptions, seam: ExplainSeam): { resolution: ProviderResolution; options: ResolvedOptions } {
@@ -214,7 +228,8 @@ function resolveRun(flags: ExplainOptions, seam: ExplainSeam): { resolution: Pro
   const choice = flags.provider === "auto" && flags.claudePath !== undefined ? "claude-code" : flags.provider;
   const resolution = resolveProvider(choice, seam.env, { claudeCode: discovery });
   const model = flags.model ?? (resolution.provider === "claude-code" ? DEFAULT_CLAUDE_CODE_MODEL : DEFAULT_EXPLAIN_MODEL);
-  return { resolution, options: { ...flags, model, rollupModel: flags.rollupModel ?? model } };
+  const overhead = { ...promptOverhead(resolution.provider), by: resolution.provider };
+  return { resolution, options: { ...flags, model, rollupModel: flags.rollupModel ?? model, promptOverhead: overhead } };
 }
 
 export async function explainCommand(
@@ -273,6 +288,7 @@ export async function explainCommand(
       maxCalls: options.maxCalls,
       inScope: options.retryFailed ? retryScope(previousFailures, walk) : scopePredicate(options.scope, graph, units),
       terms: options.terms,
+      promptOverhead: options.promptOverhead,
     });
 
     if (!source.clean) {
@@ -801,7 +817,7 @@ function printEstimate(plan: RunPlan, options: ResolvedOptions, io: IoSink): voi
         ...(options.priceOut === undefined ? {} : { priceOut: options.priceOut }),
         ...(cost === undefined ? {} : { cost }),
         assumptions: {
-          promptTokens: "characters of the rendered prompts / 4",
+          promptTokens: `characters of the rendered prompts / 4${overheadAssumption(options.promptOverhead)}`,
           completionTokens: `measured on a live run: ${outputAssumption()}`,
           excluded: "repair re-asks, rate-limit retries",
         },
@@ -835,9 +851,17 @@ function estimateLines(plan: RunPlan, options: ResolvedOptions): string[] {
   } else {
     lines.push("  cost: pass --price-in USD --price-out USD (per million tokens) for a figure");
   }
-  lines.push(`  input ≈ rendered prompts at 4 characters per token; output ≈ measured on a live run: ${outputAssumption()}.`);
+  const { perCall, schema, by } = options.promptOverhead;
+  const added = perCall === 0 && !schema ? "" : `, plus ${grouped(perCall)} per call${schema ? " and the response schema" : ""} that ${by} adds to every prompt`;
+  lines.push(`  input ≈ rendered prompts at 4 characters per token${added}; output ≈ measured on a live run: ${outputAssumption()}.`);
   lines.push("  not included: repair re-asks, rate-limit retries. Records already in the side-car are reused, not re-sent.");
   return lines;
+}
+
+/** The `--json` estimate's word for what the transport adds to every prompt; nothing when it adds nothing. */
+function overheadAssumption({ perCall, schema, by }: ResolvedOptions["promptOverhead"]): string {
+  if (perCall === 0 && !schema) return "";
+  return `, + ${perCall} per call${schema ? " + the response schema" : ""} (${by})`;
 }
 
 /** What the output figure assumes, from the constants it is computed with. */

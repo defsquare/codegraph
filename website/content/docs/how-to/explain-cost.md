@@ -99,7 +99,11 @@ without `CLOUDFLARE_AI_GATEWAY_ID` the account's default gateway is used. Claude
 Code runs in headless mode (`claude -p`), one process per call, Sonnet by
 default (`--model sonnet`); it spends the subscription — the cost the run
 reports is the CLI's `total_cost_usd` at list price — and `--max-tokens` does
-not apply. The fingerprint carries the slug as requested (`sonnet`) and each
+not apply. Every `claude -p` prompt carries Claude Code's own scaffolding and
+the response schema, so its estimate adds 1 850 tokens a call plus the schema
+and says so (`plus 1 850 per call and the response schema that claude-code
+adds to every prompt`): on the Java fixture that is 280 481 input tokens
+against 114 136 for a key provider, for the same 68 calls. The fingerprint carries the slug as requested (`sonnet`) and each
 record's `model` the id that served (`claude-sonnet-5-5`), so a new Sonnet
 behind the alias does not re-explain what was explained; a full id in `--model`
 does. `--claude-path` implies `--provider claude-code` under `auto` and is

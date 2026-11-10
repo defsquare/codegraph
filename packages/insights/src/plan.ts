@@ -3,7 +3,7 @@ import { fingerprintOf } from "./fingerprint.js";
 import type { Unit, WalkPlan } from "./order.js";
 import { estimateCompletionTokens, estimateTokens, renderPrompts, type Prompt } from "./prompt.js";
 import { sourceOf, type RecordSource } from "./records.js";
-import type { FailureRecord, InsightRecord, Level } from "./schema.js";
+import { responseJsonSchema, type FailureRecord, type InsightRecord, type Level } from "./schema.js";
 import type { TemplateKind } from "./units.js";
 
 /**
@@ -75,6 +75,18 @@ export interface PlanOptions {
   readonly inScope: ((unit: Unit) => boolean) | undefined;
   /** A module's glossary keeps its heaviest `terms` words (`--terms`). */
   readonly terms: number;
+  /** What the transport adds to every prompt, for the estimate; the caller's to know (absent = nothing). */
+  readonly promptOverhead?: PromptOverhead;
+}
+
+/**
+ * Prompt tokens a call is billed beyond its system and user text: a fixed
+ * count, plus the response schema when the transport puts it in the prompt.
+ * A number, never a provider: the walk does not learn who it talks to.
+ */
+export interface PromptOverhead {
+  readonly perCall: number;
+  readonly schema: boolean;
 }
 
 export type PlanEnv = Omit<ContextEnv, "records" | "depth" | "maxLines" | "terms">;
@@ -149,6 +161,15 @@ export function planRun(
     module: { calls: 0, promptTokens: 0, completionTokens: 0, units: 0 },
   };
   const byStatus: Record<StepStatus, number> = { llm: 0, template: 0, reuse: 0, "skip-scope": 0, "skip-budget": 0 };
+  const overhead = options.promptOverhead ?? { perCall: 0, schema: false };
+  const schemaTokens = new Map<string, number>();
+  const overheadOf = (level: Level, shape: Prompt["shape"]): number => {
+    if (!overhead.schema) return overhead.perCall;
+    const key = `${level}/${shape}`;
+    let tokens = schemaTokens.get(key);
+    if (tokens === undefined) schemaTokens.set(key, (tokens = estimateTokens(JSON.stringify(responseJsonSchema(level, shape)))));
+    return overhead.perCall + tokens;
+  };
   let budget = options.maxCalls ?? Number.POSITIVE_INFINITY;
   let exhausted = false;
   const statusOf = new Map<string, StepStatus>();
@@ -187,7 +208,7 @@ export function planRun(
         budget -= prompts.length;
       }
     }
-    const promptTokens = prompts.reduce((sum, p) => sum + estimateTokens(p.system) + estimateTokens(p.user), 0);
+    const promptTokens = prompts.reduce((sum, p) => sum + estimateTokens(p.system) + estimateTokens(p.user) + overheadOf(unit.level, p.shape), 0);
     const completionTokens = prompts.reduce((sum, p) => sum + estimateCompletionTokens(unit.level, p.memberIds.length, p.asked), 0);
     statusOf.set(unit.id, status);
     byStatus[status] += 1;

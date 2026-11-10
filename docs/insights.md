@@ -404,7 +404,11 @@ once the callee exists.
 calls it will make, the estimated prompt tokens per level — and makes no call;
 it needs no key. `--estimate` prints only the volume: calls, input and output
 tokens per level, and a cost when `--price-in`/`--price-out` (USD per million
-tokens) are given. Input is the rendered prompts at four characters per token;
+tokens) are given. Input is the rendered prompts at four characters per token,
+plus what the transport adds to every prompt — nothing on the key providers;
+on Claude Code its scaffolding (1 850 tokens a call) and the response schema,
+which it sends as prompt (fitted on the Java fixture, where operations then
+land within 1 % of what was billed);
 output is a measured figure per block asked for (operation 470, type 530,
 module 530 tokens), plus 120 per word and 125 per glossary entry asked to
 define — fitted on a live prompt-2 run of gpt-5.6-luna over Spring PetClinic,

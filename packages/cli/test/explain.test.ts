@@ -10,12 +10,14 @@ import {
   COMPLETION_TOKENS_PER_WORD,
   decodeInsights,
   encodeInsightsToString,
+  estimateTokens,
   insightsStorePathFor,
+  responseJsonSchema,
   sqliteInsightsStore,
   type InsightRecord,
   type InsightsStore,
 } from "@codegraph/insights";
-import { CLAUDE_CODE_DEFAULT_MODEL, LlmError, PROVIDERS, fakeLlmClient, type LlmClient, type LlmRequest, type Provider } from "@codegraph/llm";
+import { CLAUDE_CODE_DEFAULT_MODEL, CLAUDE_CODE_SCAFFOLD_TOKENS, LlmError, PROVIDERS, fakeLlmClient, type LlmClient, type LlmRequest, type Provider } from "@codegraph/llm";
 import { EXIT, UsageError } from "../src/exit.js";
 import { captureIo } from "../src/io.js";
 import { run } from "../src/main.js";
@@ -909,6 +911,29 @@ describe("explain runs the installed Claude Code as a provider (PLAN.md §21, M2
     const quiet = captureIo();
     expect(await explainCommand(options(["--out", OUT, "--max-tokens", "100"]), quiet, keyed.seam)).toBe(EXIT.OK);
     expect(quiet.stderr()).not.toContain("--max-tokens does not apply");
+  });
+
+  it("--estimate on claude-code counts the scaffolding and schema Claude Code adds to every prompt, and says so; a key provider adds nothing", async () => {
+    const estimate = async (args: string[], machine: ReturnType<typeof seamWith>) => {
+      const io = captureIo();
+      expect(await explainCommand(options(["--out", OUT, "--estimate", ...args]), io, machine.seam)).toBe(EXIT.OK);
+      return io.stdout();
+    };
+    const keyed = JSON.parse(await estimate(["--json"], seamWith({ OPENROUTER_API_KEY: KEY })));
+    const local = JSON.parse(await estimate(["--json", "--provider", "claude-code"], seamWith({ HOME }, binary(KNOWN))));
+    expect(local.calls).toBe(keyed.calls);
+    expect(local.completionTokens).toBe(keyed.completionTokens);
+    const levels = ["operation", "type", "module"] as const;
+    const schemas = levels.flatMap((level) => (["block", "scc"] as const).map((shape) => estimateTokens(JSON.stringify(responseJsonSchema(level, shape)))));
+    const added = local.promptTokens - keyed.promptTokens;
+    expect(added).toBeGreaterThan(keyed.calls * CLAUDE_CODE_SCAFFOLD_TOKENS);
+    expect(added).toBeLessThanOrEqual(keyed.calls * (CLAUDE_CODE_SCAFFOLD_TOKENS + Math.max(...schemas)));
+    expect(local.assumptions.promptTokens).toContain(`${CLAUDE_CODE_SCAFFOLD_TOKENS} per call + the response schema (claude-code)`);
+    expect(keyed.assumptions.promptTokens).toBe("characters of the rendered prompts / 4");
+
+    const said = `plus ${String(CLAUDE_CODE_SCAFFOLD_TOKENS).replace(/\B(?=(\d{3})+(?!\d))/gu, " ")} per call and the response schema that claude-code adds to every prompt`;
+    expect(await estimate(["--provider", "claude-code"], seamWith({ HOME }, binary(KNOWN)))).toContain(said);
+    expect(await estimate([], seamWith({ OPENROUTER_API_KEY: KEY }))).not.toContain("per call");
   });
 
   it("a 402 from claude-code aborts the run without the --max-tokens hint, which is a key provider's", async () => {
