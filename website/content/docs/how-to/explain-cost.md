@@ -84,15 +84,26 @@ way to see whether the output is worth paying for on the rest of the corpus.
 
 ## Choose a provider
 
-| Provider | Environment |
+| Provider | What it needs |
 |---|---|
 | OpenRouter | `OPENROUTER_API_KEY` |
 | Cloudflare AI Gateway | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`, optional `CLOUDFLARE_AI_GATEWAY_ID` |
+| Claude Code | an installed and logged-in Claude Code; no key; `--claude-path FILE` or `CLAUDE_CODE_PATH` when it is not on `PATH`. On Windows an npm-global `claude.cmd` is found but cannot be run (Node refuses `.cmd` without a shell: `EINVAL`); point `--claude-path` at the native installer's `%USERPROFILE%\.local\bin\claude.exe` |
 
-`--provider auto` (the default) picks whichever is configured, and OpenRouter
-when both are; `--provider openrouter` or `--provider cloudflare` forces one. The
-Cloudflare token needs the AI Gateway Run permission, and without
-`CLOUDFLARE_AI_GATEWAY_ID` the account's default gateway is used.
+`--provider auto` (the default) picks the one that is configured; with several
+it takes OpenRouter, then Cloudflare, then Claude Code — an exported key is a
+deliberate act, an installed CLI is ambient, so the CLI never overrides a key.
+`--provider openrouter`, `--provider cloudflare` or `--provider claude-code`
+forces one. The Cloudflare token needs the AI Gateway Run permission, and
+without `CLOUDFLARE_AI_GATEWAY_ID` the account's default gateway is used. Claude
+Code runs in headless mode (`claude -p`), one process per call, Sonnet by
+default (`--model sonnet`); it spends the subscription — the cost the run
+reports is the CLI's `total_cost_usd` at list price — and `--max-tokens` does
+not apply. The fingerprint carries the slug as requested (`sonnet`) and each
+record's `model` the id that served (`claude-sonnet-5-5`), so a new Sonnet
+behind the alias does not re-explain what was explained; a full id in `--model`
+does. `--claude-path` implies `--provider claude-code` under `auto` and is
+refused with a key provider.
 
 With nothing configured, the command refuses before it does any work:
 
@@ -100,8 +111,10 @@ With nothing configured, the command refuses before it does any work:
 codegraph: OPENROUTER_API_KEY is not set (no provider configured), and this run needs 1 model call
 ```
 
-Model slugs are the same `author/model` form on both providers, so switching the
-route leaves every fingerprint — and every reusable record — intact.
+Model slugs are the same `author/model` form on both key providers, so switching
+between them leaves every fingerprint — and every reusable record — intact.
+Claude Code names models its own way (`sonnet`, `claude-sonnet-5-5`), so moving
+to or from it re-explains what the new slug covers.
 
 ## Pick models per level
 

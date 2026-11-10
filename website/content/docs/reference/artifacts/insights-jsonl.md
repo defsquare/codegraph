@@ -6,7 +6,7 @@ weight: 6
 The side-car [`explain`](/docs/reference/cli/explain/) writes: one explanation record per operation, type and module, in the vocabulary of the Specy domain metamodel. It lives **beside** the model — `<model>.insights.jsonl` by default — and never inside it, so it can be regenerated, pointed at another model, or deleted without touching `model.jsonl` or `model.db`.
 
 {{< callout type="info" >}}
-This page is derived from the Zod schemas in `packages/insights/src/schema.ts` and the vocabularies in `packages/insights/src/ddd.ts`. Unlike the other artifact pages it carries no excerpt from a real run: producing one requires a model provider and an API key.
+This page is derived from the Zod schemas in `packages/insights/src/schema.ts` and the vocabularies in `packages/insights/src/ddd.ts`. Unlike the other artifact pages it carries no excerpt from a real run: producing one requires a model provider — an API key, or an installed Claude Code.
 {{< /callout >}}
 
 ## File layout
@@ -31,7 +31,7 @@ During a run, finished records are appended one per line to `<out>.journal` and 
 | `promptVersion` | string | bumped whenever the prompt or a block shape changes; every fingerprint includes it |
 | `metamodel` | string | the vocabulary the blocks speak — `specy.domain/3` |
 | `models` | `{leaf, rollup}` | the model slug used for operations, and for types and modules |
-| `provider` | string | which client served the calls (`openrouter`, `cloudflare`); absent on files written before it was recorded |
+| `provider` | string | which adapter served the calls (`openrouter`, `cloudflare`, `claude-code`); absent on files written before it was recorded |
 | `depth` | integer ≥ 0 | how many levels of dependency explanations each prompt carried |
 | `source` | `{paths, langs, view}` | the models explained, their languages, and the view |
 

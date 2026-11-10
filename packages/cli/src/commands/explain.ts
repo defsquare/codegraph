@@ -41,9 +41,9 @@ import {
   type RunUsage,
   type Unit,
 } from "@codegraph/insights";
-import { clientFromEnv, resolveProvider, type LlmClient, type Provider } from "@codegraph/llm";
+import { clientFromResolution, findClaudeCode, resolveProvider, type LlmClient, type Provider, type ProviderResolution } from "@codegraph/llm";
 import { buildVocabulary, definitionSpeller, rankedWords, type VocabularyArtifact } from "@codegraph/vocabulary";
-import type { ExplainOptions } from "../args.js";
+import { DEFAULT_CLAUDE_CODE_MODEL, DEFAULT_EXPLAIN_MODEL, type ExplainOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, errLines, outLine, type IoSink } from "../io.js";
 import { sidecarPathFor } from "../insights-paths.js";
@@ -77,6 +77,12 @@ import { resolveView } from "../view.js";
  * estimate on stderr and asks before the first call; `--yes` skips the
  * question, and with no terminal to ask on the run refuses rather than spends.
  *
+ * THE PROVIDER IS RESOLVED BEFORE THE PLAN (PLAN.md §21.4): `--provider`, or
+ * on `auto` whichever adapter the environment configures (a key) or discovery
+ * found (the Claude Code binary) — a pure function of flags, environment and
+ * an `exists` probe, so `--dry-run` prints the model that would run and spawns
+ * nothing. `--model` defaults per provider, which is why it waits for this.
+ *
  * THE SEAM: environment, filesystem, clock, the client factory and the
  * question come in one object, so the whole command runs in-process against a
  * fake model with no network and no disk (test/explain.test.ts).
@@ -107,8 +113,8 @@ export interface ExplainSeam {
   /** This process, recorded on the run so a later one can tell a live writer from a dead one. */
   readonly pid: number;
   isAlive(pid: number): boolean;
-  /** The client for a RESOLVED provider whose variables are all present in `env`. */
-  clientFor(provider: Provider, env: Readonly<Record<string, string | undefined>>): LlmClient;
+  /** The client for a resolution with nothing missing: a key provider's variables are in `env`, Claude Code's binary rides on the resolution. */
+  clientFor(resolution: ProviderResolution, env: Readonly<Record<string, string | undefined>>): LlmClient;
   now(): Date;
   /** Asks a yes/no question; undefined when there is no interactive terminal to ask on. */
   readonly confirm: ((question: string) => Promise<boolean>) | undefined;
@@ -182,7 +188,7 @@ export function realSeam(): ExplainSeam {
         return (error as NodeJS.ErrnoException).code === "EPERM";
       }
     },
-    clientFor: (provider, env) => clientFromEnv(provider, env),
+    clientFor: (resolution, env) => clientFromResolution(resolution, env),
     now: () => new Date(),
     confirm: process.stdin.isTTY && process.stderr.isTTY ? confirmOnTerminal : undefined,
   };
@@ -199,17 +205,30 @@ async function confirmOnTerminal(question: string): Promise<boolean> {
 }
 
 
+/** `ExplainOptions` once the provider is known: `--model` defaulted per provider, `--rollup-model` to it. */
+type ResolvedOptions = Omit<ExplainOptions, "model" | "rollupModel"> & { readonly model: string; readonly rollupModel: string };
+
+/** The provider and, from it, the models. `--claude-path` names a binary on purpose: on `auto` it implies `--provider claude-code`. */
+function resolveRun(flags: ExplainOptions, seam: ExplainSeam): { resolution: ProviderResolution; options: ResolvedOptions } {
+  const discovery = findClaudeCode({ explicit: flags.claudePath, env: seam.env, exists: seam.fs.exists });
+  const choice = flags.provider === "auto" && flags.claudePath !== undefined ? "claude-code" : flags.provider;
+  const resolution = resolveProvider(choice, seam.env, { claudeCode: discovery });
+  const model = flags.model ?? (resolution.provider === "claude-code" ? DEFAULT_CLAUDE_CODE_MODEL : DEFAULT_EXPLAIN_MODEL);
+  return { resolution, options: { ...flags, model, rollupModel: flags.rollupModel ?? model } };
+}
+
 export async function explainCommand(
-  options: ExplainOptions,
+  flags: ExplainOptions,
   io: IoSink,
   seam: ExplainSeam = realSeam(),
 ): Promise<ExitCode> {
-  const out = options.out ?? sidecarPathFor(options.models[0] ?? "model.jsonl");
+  const out = flags.out ?? sidecarPathFor(flags.models[0] ?? "model.jsonl");
   const storePath = insightsStorePathFor(out);
   // Neither reads a model: they move records between the store and its side-car.
-  if (options.exportOnly) return exportOnly(out, storePath, seam, io);
-  if (options.importFrom !== undefined) return importOnly(options.importFrom, out, storePath, options, seam, io);
+  if (flags.exportOnly) return exportOnly(out, storePath, seam, io);
+  if (flags.importFrom !== undefined) return importOnly(flags.importFrom, out, storePath, flags, seam, io);
 
+  const { resolution, options } = resolveRun(flags, seam);
   const source = openAnalysis(options.models, options, io);
   let store: InsightsStore | undefined;
   try {
@@ -280,7 +299,7 @@ export async function explainCommand(
         { cause: error },
       );
     }
-    const { complete, provider } = completerFor(plan, options, seam, io);
+    const { complete, provider } = completerFor(plan, options, resolution, seam, io);
     if (!(await confirmed(plan, options, seam, io))) {
       errLine(io, "aborted: no call was made, nothing was written.");
       return EXIT.OK;
@@ -338,7 +357,7 @@ export async function explainCommand(
     if (misses.length > 0) {
       errLine(io, `warning: ${misses.length} source file${misses.length === 1 ? "" : "s"} not found under ${srcRoot} (first: ${misses[0]}); those units were explained from facts alone.`);
     }
-    errLines(io, summaryLines(out, result, options));
+    errLines(io, summaryLines(out, result, options, provider));
     if (options.json) {
       outLine(io, JSON.stringify({ kind: "codegraph.explainSummary/1", out, counts: result.counts, usage: result.usage, failures: result.failures, ...(result.aborted === undefined ? {} : { aborted: result.aborted }) }));
     }
@@ -540,7 +559,7 @@ function loadExisting(out: string, storePath: string, journal: string, seam: Exp
  * run that failed: model and depth are part of every fingerprint, so a retried
  * unit explained under others is redone again by the next plain run.
  */
-function retryLines(failures: readonly FailureRecord[], previous: InsightsHeader, options: ExplainOptions): string[] {
+function retryLines(failures: readonly FailureRecord[], previous: InsightsHeader, options: ResolvedOptions): string[] {
   const lines = [`retrying ${failures.length} failed unit${failures.length === 1 ? " and its" : "s and their"} direct dependents:`];
   const byReason = new Map<string, number>();
   for (const failure of failures) {
@@ -577,32 +596,46 @@ function scopePredicate(
     unit.members.some((m) => wanted.has(m) || wanted.has(folder.containingType(m) ?? "") || wanted.has(folder.containingModule(m) ?? ""));
 }
 
+/** How to make each adapter buildable, for the usage error of a run that needs calls and cannot make them. */
+const SETUP_HINT: Readonly<Record<Provider, string>> = {
+  openrouter:
+    "Create one at https://openrouter.ai/keys, or export CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID to route through Cloudflare AI Gateway, " +
+    "or install Claude Code and pass --provider claude-code to run it locally (no key).",
+  cloudflare: "CLOUDFLARE_API_TOKEN needs the AI Gateway Run permission (wrangler auth token); CLOUDFLARE_AI_GATEWAY_ID is optional (the account's default gateway otherwise).",
+  "claude-code": "Install Claude Code (https://code.claude.com/docs/en/setup) and log in, or point at the binary with --claude-path FILE or CLAUDE_CODE_PATH.",
+};
+
 /**
- * The provider: `--provider` or, on `auto`, whichever of OpenRouter / Cloudflare
- * AI Gateway the environment configures. Resolved BEFORE any call, so a
- * missing variable is a usage error naming it — never a failed first request.
+ * The completer over the resolved provider. What it lacks — a variable, the
+ * Claude Code binary — is checked BEFORE any call, so it is a usage error
+ * naming it (and what was searched), never a failed first request.
  */
 function completerFor(
   plan: RunPlan,
-  options: ExplainOptions,
+  options: ResolvedOptions,
+  resolution: ProviderResolution,
   seam: ExplainSeam,
   io: IoSink,
 ): { complete: Completer; provider: Provider | undefined } {
   if (plan.estimates.calls === 0) return { complete: () => Promise.reject(new Error("no call was planned")), provider: undefined };
-  const resolution = resolveProvider(options.provider, seam.env);
   if (resolution.missing.length > 0) {
     const calls = `${plan.estimates.calls} model call${plan.estimates.calls === 1 ? "" : "s"}`;
-    const setup =
-      resolution.provider === "cloudflare"
-        ? "CLOUDFLARE_API_TOKEN needs the AI Gateway Run permission (wrangler auth token); CLOUDFLARE_AI_GATEWAY_ID is optional (the account's default gateway otherwise)."
-        : "Create one at https://openrouter.ai/keys, or export CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID to route through Cloudflare AI Gateway.";
+    // Claude Code leads with what discovery said: a path the user named is the message, not "a variable is not set".
+    const lacking =
+      resolution.provider === "claude-code"
+        ? resolution.reason
+        : `${resolution.missing.join(" and ")} ${resolution.missing.length === 1 ? "is" : "are"} not set (${resolution.reason})`;
     throw new UsageError(
-      `${resolution.missing.join(" and ")} ${resolution.missing.length === 1 ? "is" : "are"} not set (${resolution.reason}), and this run needs ${calls}`,
-      `${setup} Add --dry-run to see the plan without calling. Models: ${options.model}${options.rollupModel === options.model ? "" : `, ${options.rollupModel}`}.`,
+      `${lacking}, and this run needs ${calls}`,
+      `${SETUP_HINT[resolution.provider]} Add --dry-run to see the plan without calling. Models: ${options.model}${options.rollupModel === options.model ? "" : `, ${options.rollupModel}`}.`,
     );
   }
-  const client = seam.clientFor(resolution.provider, seam.env);
+  const client = seam.clientFor(resolution, seam.env);
   errLine(io, `provider: ${client.name} (${resolution.reason})`);
+  // The port carries maxTokens; the CLI has no output cap, so that adapter drops it — said here, once.
+  if (resolution.provider === "claude-code" && options.maxTokens !== undefined) {
+    errLine(io, "note: --max-tokens does not apply to claude-code (the CLI has no output cap); ignored.");
+  }
   const complete: Completer = async (request) => {
     const response = await client.complete({
       model: request.model,
@@ -646,7 +679,7 @@ function naturalKeys(paths: readonly string[], io: IoSink): ((id: string) => Rec
 }
 
 function headerFor(
-  options: ExplainOptions,
+  options: ResolvedOptions,
   provider: string | undefined,
   langs: readonly string[],
   viewName: string,
@@ -687,7 +720,7 @@ function eofFor(
   };
 }
 
-function printPlan(plan: RunPlan, options: ExplainOptions, io: IoSink): void {
+function printPlan(plan: RunPlan, options: ResolvedOptions, io: IoSink): void {
   const { estimates } = plan;
   if (options.json) {
     outLine(
@@ -746,7 +779,7 @@ export function estimatedCost(promptTokens: number, completionTokens: number, pr
  * rate-limit retries are not included, and a run that reuses records sends
  * less than a cold one.
  */
-function printEstimate(plan: RunPlan, options: ExplainOptions, io: IoSink): void {
+function printEstimate(plan: RunPlan, options: ResolvedOptions, io: IoSink): void {
   const { estimates } = plan;
   const cost = estimatedCost(estimates.promptTokens, estimates.completionTokens, options.priceIn, options.priceOut);
   const layers = (plan.steps[plan.steps.length - 1]?.unit.layer ?? -1) + 1;
@@ -779,7 +812,7 @@ function printEstimate(plan: RunPlan, options: ExplainOptions, io: IoSink): void
   outLine(io, estimateLines(plan, options).join("\n"));
 }
 
-function estimateLines(plan: RunPlan, options: ExplainOptions): string[] {
+function estimateLines(plan: RunPlan, options: ResolvedOptions): string[] {
   const { estimates } = plan;
   const cost = estimatedCost(estimates.promptTokens, estimates.completionTokens, options.priceIn, options.priceOut);
   const layers = (plan.steps[plan.steps.length - 1]?.unit.layer ?? -1) + 1;
@@ -818,7 +851,7 @@ function outputAssumption(): string {
  * that plans no call, or `--yes`, passes silently; no terminal and no `--yes`
  * is a usage error, so a script never spends by accident.
  */
-async function confirmed(plan: RunPlan, options: ExplainOptions, seam: ExplainSeam, io: IoSink): Promise<boolean> {
+async function confirmed(plan: RunPlan, options: ResolvedOptions, seam: ExplainSeam, io: IoSink): Promise<boolean> {
   if (plan.estimates.calls === 0 || options.yes) return true;
   const { calls, promptTokens, completionTokens } = plan.estimates;
   if (seam.confirm === undefined) {
@@ -834,7 +867,7 @@ async function confirmed(plan: RunPlan, options: ExplainOptions, seam: ExplainSe
   );
 }
 
-function summaryLines(out: string, result: Awaited<ReturnType<typeof executeRun>>, options: ExplainOptions): string[] {
+function summaryLines(out: string, result: Awaited<ReturnType<typeof executeRun>>, options: ExplainOptions, provider: Provider | undefined): string[] {
   const { counts, usage } = result;
   const lines = [
     `wrote ${counts.records} record${counts.records === 1 ? "" : "s"} to ${out} (${counts.llm} explained, ${counts.template} templated, ${counts.reused} reused, ${counts.failed} failed, ${counts.skipped} skipped).`,
@@ -846,7 +879,8 @@ function summaryLines(out: string, result: Awaited<ReturnType<typeof executeRun>
     // Units never reached have no failure record, so --retry-failed would miss them: a plain re-run resumes both.
     lines.push(`aborted: the provider answered ${aborted.reason.status ?? "?"} for ${aborted.unit} — every later call would get the same answer, so none was made.`);
     lines.push(`${aborted.notAttempted} unit${aborted.notAttempted === 1 ? " was" : "s were"} not attempted. Once the account is sorted out, run the same command again: it redoes the failures and resumes where this run stopped.`);
-    if (aborted.reason.status === 402 && options.maxTokens === undefined) {
+    // A cap lowers what a prepaid call must afford on a key provider; the Claude Code CLI has none.
+    if (aborted.reason.status === 402 && options.maxTokens === undefined && provider !== "claude-code") {
       lines.push("hint: without --max-tokens the provider prices every call at the model's full output window; a cap (e.g. --max-tokens 16384) lowers the balance a call needs.");
     }
   } else if (result.failures.length > 0) {

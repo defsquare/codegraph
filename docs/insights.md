@@ -21,33 +21,82 @@ is why they live beside it.
 
     @codegraph/insights   pure: units, walk order, context packs, prompts,
                           fingerprints, plan, run, side-car format
-    @codegraph/llm        the model clients: LlmClient + OpenRouter (SDK) +
-                          Cloudflare AI Gateway (REST, plain fetch) + a fake
+    @codegraph/llm        the port, LlmClient, and its adapters: OpenRouter
+                          (SDK), Cloudflare AI Gateway (REST, plain fetch),
+                          Claude Code headless (a subprocess) + a fake
 
 `insights` depends on `core` and `analyzer` only and does no I/O: source text
 arrives through an injected reader, the model call through an injected
 `Completer`, finished records leave through a hook. `llm` is the **only
 package allowed to import the provider SDK** — `packages/llm/test/boundary.test.ts`
 scans the workspace for the import, and `eslint.config.js` restricts it. The
-CLI wires the two: it owns the filesystem, the environment variable
-(`OPENROUTER_API_KEY`) and the progress narration.
+CLI wires the two: it owns the filesystem, the environment (the keys,
+`CLAUDE_CODE_PATH`, `PATH`) and the progress narration.
 
 The provider SDK is itself held behind a one-function `OpenRouterTransport`,
 so every request/response/error path is driven by a fake transport in tests,
 and an SDK change is repaired in one file.
 
-**Two providers, one contract.** Both speak OpenAI's chat-completion shape,
-parsed once in `chat.ts`. What differs: OpenRouter goes through its SDK
-(camel-cased request and reply, its own API key per request); Cloudflare AI
-Gateway goes through the AI REST API on `api.cloudflare.com` with plain
-`fetch` (snake_case wire, one Cloudflare API token that both authenticates
-and bills through Unified Billing or a stored provider key, an optional
-`cf-aig-gateway-id`). Model names are the same `author/model` form on both,
-so switching the route leaves every fingerprint — and every reusable record
-— intact. `providers.ts` resolves `--provider auto|openrouter|cloudflare`
-from the environment in one place: the single configured provider wins;
-with both configured OpenRouter stays the default and the choice is printed.
-The side-car header records the provider that served the run.
+**One port, three adapters.** `LlmClient` (`client.ts`) is the port: one
+structured completion in, parsed JSON out, one error type with `retryable`
+decided once. Nothing above it — the run's `Completer`, the CLI's
+`completerFor`, the store, the side-car — knows which adapter answered.
+The two key adapters speak OpenAI's chat-completion shape, parsed once in
+`chat.ts`: OpenRouter goes through its SDK (camel-cased request and reply,
+its own API key per request); Cloudflare AI Gateway goes through the AI REST
+API on `api.cloudflare.com` with plain `fetch` (snake_case wire, one
+Cloudflare API token that both authenticates and bills through Unified
+Billing or a stored provider key, an optional `cf-aig-gateway-id`). Model
+names are the same `author/model` form on both, so switching the route
+leaves every fingerprint — and every reusable record — intact.
+
+The third adapter, **Claude Code headless** (`claude-code.ts`, PLAN.md §21),
+is a subprocess: one `claude -p --output-format json` process per call, so
+`--concurrency N` is N processes. It runs with `--safe-mode`, not `--bare`:
+`--bare` restricts authentication to an API key and drops the subscription
+login this adapter exists for, while `--safe-mode` keeps the login and
+disables every customization (CLAUDE.md, hooks, plugins, MCP servers, output
+styles); the default persona is replaced by `--system-prompt` and tools are
+off (`--tools ""`), so the model can only answer. The user prompt goes
+through stdin — a context pack with source can exceed Linux's 128 KB
+per-argument limit — while the system prompt and the `--json-schema` ride as
+arguments. The result JSON is read into the port's response:
+`structured_output` is the parsed answer (fenced text through the shared
+`extractJson` when a version lacks it), `usage` gives the tokens (input,
+cache creation and cache read summed as what was sent), `total_cost_usd`
+the cost (list price; a subscription is billed by its plan). The fingerprint
+carries the slug as requested (`sonnet`), the record's `model` the id that
+served (`modelUsage`'s key, `claude-sonnet-5-5`): a new Sonnet behind the
+alias does not re-explain what was explained, a full id in `--model` does.
+`--max-tokens` has no counterpart on the CLI and is noted, then
+ignored. Like the SDK behind `OpenRouterTransport`, the process is held
+behind a one-function seam (`ClaudeCodeProcess.run`): every test drives the
+adapter with recorded stdout, stderr and exit codes, and nothing is spawned.
+
+**Discovery and precedence.** `claude-code-discovery.ts` finds the binary as
+a pure function of the flag, the environment and an `exists` probe — never a
+process, so `--dry-run` resolves a provider without spawning — in this
+order: `--claude-path`, `CLAUDE_CODE_PATH`, `claude` in each directory of
+`PATH`, then the install locations the docs name (`~/.local/bin/claude`,
+`~/.claude/local/claude`, Homebrew's, and on Windows
+`%USERPROFILE%\.local\bin\claude.exe` and `%APPDATA%\npm\claude.cmd`). An
+explicit path that does not exist is an answer naming it, never a
+fall-through to another binary. One Windows limit: a found `claude.cmd`
+cannot be run — the adapter spawns without a shell, and Node refuses
+`.cmd`/`.bat` there (`EINVAL`, the CVE-2024-27980 mitigation) — so the run
+fails with `claude-code: cannot run …\claude.cmd: EINVAL`; the native
+installer's `claude.exe` works, and `--claude-path` can point at it.
+`providers.ts` resolves `--provider
+auto|openrouter|cloudflare|claude-code` in one place: a key provider is
+configured when its variables are set, Claude Code when discovery found a
+binary; `auto` takes the single configured one, and with several a fixed
+precedence — OpenRouter, then Cloudflare, then Claude Code — because an
+exported key is a deliberate act while an installed CLI is ambient, so the
+CLI never overrides a key (the reason line names the flag for each
+alternative). The side-car header records the provider that served the run.
+The fourth adapter — the Anthropic API with `ANTHROPIC_API_KEY`,
+`--provider anthropic` — is a named, empty slot (PLAN.md §21.6): one more
+entry in `providers.ts`, nothing above the port.
 
 ## IN-2 · Units and the walk order
 

@@ -177,15 +177,27 @@ When you do have a key, the run is:
 OPENROUTER_API_KEY=… codegraph explain order.jsonl --src "$SRC" --max-calls 50
 ```
 
-or, for the other supported provider:
+or, for the other key provider:
 
 ```bash
 CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… \
   codegraph explain order.jsonl --src "$SRC" --provider cloudflare
 ```
 
-Model names are the same `author/model` form on both, so switching provider
-leaves every fingerprint — and therefore every reusable record — intact.
+Model names are the same `author/model` form on both, so switching between
+them leaves every fingerprint — and therefore every reusable record — intact.
+
+With no key at all but Claude Code installed and logged in, the run goes
+through it in headless mode:
+
+```bash
+codegraph explain order.jsonl --src "$SRC" --provider claude-code
+```
+
+What it costs: the subscription, on Sonnet (`--model sonnet` by default) — each
+call is one `claude -p` process carrying roughly 1 100 cached scaffolding tokens
+on top of the prompt; the cost the run reports is the CLI's `total_cost_usd` at
+list price. `auto` picks it by itself when no key is exported.
 
 {{< callout type="warning" >}}
 `--concurrency` defaults to 4. A new OpenRouter account is limited to 20

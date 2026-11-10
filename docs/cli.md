@@ -78,7 +78,8 @@ codegraph domain-facts [model.jsonl] [--framework spring] [--out FILE]
 
 codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
                    [--estimate [--price-in USD --price-out USD]]
-                   [--provider auto|openrouter|cloudflare]
+                   [--provider auto|openrouter|cloudflare|claude-code]
+                   [--claude-path FILE]
                    [--model SLUG] [--rollup-model SLUG] [--depth N]
                    [--max-calls N] [--max-tokens N] [--scope IDS]
                    [--concurrency N]
@@ -320,10 +321,34 @@ writes the side-car from the store and stops — after an interrupted run, or a
 deleted file. Neither flag reads the model or needs a key.
 Mutually dependent units (a cycle) are explained as one unit. Re-runs redo
 only what changed (Merkle fingerprints over inputs, never over explanation
-text). Needs `OPENROUTER_API_KEY`, or `CLOUDFLARE_API_TOKEN` +
-`CLOUDFLARE_ACCOUNT_ID` [+ `CLOUDFLARE_AI_GATEWAY_ID`], unless `--dry-run` or
-`--estimate`. `--model SLUG` overrides the model (default
-`openai/gpt-5.6-luna`, `author/model` form on either provider) for every unit;
+text). The model calls go through one of three adapters of one port
+(`LlmClient`, in `@codegraph/llm`): `--provider openrouter` needs
+`OPENROUTER_API_KEY`; `--provider cloudflare` (AI Gateway) needs
+`CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` [+ `CLOUDFLARE_AI_GATEWAY_ID`];
+`--provider claude-code` needs an installed and logged-in Claude Code and no
+key — it runs the CLI in headless mode (`claude -p`), one process per call, so
+`--concurrency N` is N processes and `--max-tokens` does not apply (the CLI has
+no output cap; the flag is noted and ignored). The binary is `--claude-path
+FILE` (which implies `claude-code` under `auto`, and is refused with a key
+provider), else `CLAUDE_CODE_PATH`, else `claude` on `PATH`, else the known
+install locations; naming one that does not exist is an error, never a
+fall-through.
+On Windows, an npm-global `claude.cmd` is found but cannot run (the adapter
+spawns without a shell, and Node refuses `.cmd`/`.bat` there: `EINVAL`); use
+the native installer's `claude.exe` (`%USERPROFILE%\.local\bin\claude.exe`),
+with `--claude-path` if needed.
+`auto` (the default) takes the one that is configured, and with several
+OpenRouter, then Cloudflare, then Claude Code: a key is deliberate, an
+installed CLI is ambient. `--dry-run` and `--estimate` need none of it. A
+fourth adapter, the Anthropic API with an API key, is a named slot for later
+(PLAN.md §21.6). `--model SLUG` overrides the model for every unit; it defaults
+per provider: `openai/gpt-5.6-luna` (`author/model` form) on OpenRouter and
+Cloudflare, `sonnet` on Claude Code — an alias the CLI resolves to the latest
+Sonnet. The fingerprint carries the slug as requested (`sonnet`), each
+record's `model` the id that served (`claude-sonnet-5-5`): a new Sonnet
+behind the alias does not re-explain what was explained; a full id in
+`--model` does. The trailer's cost on Claude Code is the CLI's
+`total_cost_usd` at list price — a subscription is billed by its plan.
 `--rollup-model SLUG` overrides it again for types and modules. The slug is
 part of each record's fingerprint, so a new model re-explains what it covers.
 A run that makes model calls first prints its token estimate on
