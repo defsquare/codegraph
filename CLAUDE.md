@@ -176,6 +176,8 @@ cd extractors/java && ./mvnw package    # Maven Wrapper — `mvn` is NOT install
 java -jar target/codegraph-java.jar --src <dir> --out model.jsonl
 # the jar needs a JDK on PATH; non-interactive shells do not source sdkman:
 #   export JAVA_HOME="$HOME/.sdkman/candidates/java/25.0.4-tem"
+./bin/codegraph-java --src <dir> --out model.jsonl   # the jar, from the repo root, on the first Java 17+
+#   in JAVA_HOME, on PATH or under ~/.sdkman — no export needed
 ./build.sh --java --native             # GraalVM binary for THIS platform only —
                                        # native-image cannot cross-compile, so CI
                                        # builds one RID per runner
@@ -187,6 +189,7 @@ cd extractors/csharp && dotnet test -c Release   # needs the .NET 10 SDK (see ex
 ./build.sh --csharp --publish-all                # linux-x64/arm64, osx-x64/arm64, win-x64 — all from this host
 ./test.sh --csharp                               # dotnet test + the published binary must reproduce the snapshot
 extractors/csharp/dist/linux-x64/codegraph-csharp --src <dir> --out model.jsonl
+./bin/codegraph-csharp --src <dir> --out model.jsonl   # the same, for THIS host's RID
 #   runtime-only or SDK forms (dotnet <dll>, dotnet run): docs/csharp-extractor.md
 
 ./build.sh --ts --sea                  # ONE Node single-executable of the CLI + daemon + both frontends

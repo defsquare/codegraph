@@ -64,6 +64,9 @@ Go or .NET extractor would use.
 ```bash
 java -jar target/codegraph-java.jar --src src/main/java --out model.jsonl
 
+# the same jar from the repo root, on the first Java 17+ in JAVA_HOME, on PATH or under ~/.sdkman
+./bin/codegraph-java --src src/main/java --out model.jsonl
+
 # both options default: extract the current directory into <current-dir>-codegraph.jsonl
 java -jar target/codegraph-java.jar
 ```
