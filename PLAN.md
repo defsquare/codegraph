@@ -5535,7 +5535,8 @@ and `confidence` are generated columns over it. The decisions:
   word estimates (28 206 records, 131 190 entries): the import takes 1.5 s and
   the export is byte-identical. The projection is 22 MB of a 91 MB store,
   `WHERE word = 'order'` takes 0.5 ms, and the migration's backfill 0.6 s. The
-  real Broadleaf side-car is owed.
+  real file is PetClinic's (139 records, `cmp`-identical; §20.4's definition
+  of done), not Broadleaf's.
 
 **As built — the store's readers (2026-10-27).** `codegraph insights --word`,
 `--glossary`, `--polysemy` and `--concerns`, over `glossary.ts` in
@@ -5806,36 +5807,56 @@ The decisions:
 - [x] The store at version 2: migration 1 creating `insight_word`, written
       per record in the unit's transaction and rebuilt on `--import`; the
       migration tests of §20.3; the round-trip property unchanged and green
-      on every existing side-car. *(The real Broadleaf side-car is owed;
-      measured on a synthetic one at its scale.)*
-- [ ] `--terms N`; `--dry-run`/`--estimate` reflecting the longer
+      on every existing side-car. *(Scale measured on a synthetic side-car
+      at Broadleaf's counts; the real file is PetClinic's — the definition
+      of done.)*
+- [x] `--terms N`; `--dry-run`/`--estimate` reflecting the longer
       completions (`COMPLETION_TOKENS_PER_BLOCK` re-measured); a reader's
       answer for a record explained under prompt `"1"`; on the fake client
       and live on the Java fixture; the §20.3 estimate replaced by the
-      Broadleaf measurement. *(In: `--terms`, the estimate's per-word
-      figures, the fake-client run, the prompt-1 answer; the measurement,
-      from a live run on Spring PetClinic in Broadleaf's place, 2026-10-29,
-      §20.3 "Measured". Owed: the live run on the Java fixture.)*
+      PetClinic measurement. *(The measurement: a live run on Spring
+      PetClinic in Broadleaf's place, 2026-10-29, §20.3 "Measured". The live
+      run on the Java fixture: M20's, 2026-11-10 (§21.4), Claude Code with
+      Sonnet under prompt `"2"` — 68 calls, 79 records, the 70 a model wrote
+      every one with `words`, the 3 modules with `glossary`; the 9 templated
+      operations carry none, as built.)*
 - [x] Readers: `insights --word`, `--glossary`, `--polysemy`, `--concerns`;
       `vocabulary --drift-insights`; `/glossary.json`; the entries in the
       Vocabulary tab and in the Navigate panel as inferences.
-- [ ] `docs/vocabulary.md` (the idioms per profile, the classes, the
+- [x] `docs/vocabulary.md` (the idioms per profile, the classes, the
       weights, the artifact, the three layers, the readers, the drift
       reports); README names the feature; `docs/cli.md` the command and the
       flags; `docs/insights.md` the `words` and `glossary` fields and the
-      version bump.
+      version bump. *(`docs/vocabulary.md` is the design record VO-1…VO-16,
+      merged 2026-11-05 with #45.)*
 
-Definition of done: the five `vocabulary.json` snapshots byte-identical to
-the package's output; `codegraph vocabulary` on Broadleaf prints a commerce
-vocabulary under `domain`; the tab and the coloured city reviewed as
-screenshots; `explain` on the Java fixture, live and on the fake client,
-writes a side-car whose every record carries `words` and whose module
-records carry `glossary`; the Broadleaf side-car (28 206 records, prompt
-`"1"`) imports into a version-2 store with its counts intact and exports
-`cmp`-equal, and `--estimate` under prompt `"2"` prices the re-explanation
-before it runs; `insights --word order` on the re-explained Broadleaf store
-answers in under a second; `pnpm -r test`, typecheck and `./test.sh --ts`
-green; the coverage table and the cost filled in this section.
+Definition of done — M19a and M19b on Broadleaf, where the demo images were
+made; M19c on Spring PetClinic, the user's choice (2026-10-29): small enough
+to read every answer, where re-explaining Broadleaf's 28 206 records was
+not. The five `vocabulary.json` snapshots byte-identical to the package's
+output; `codegraph vocabulary` on Broadleaf prints a commerce vocabulary
+under `domain`; the tab and the coloured city reviewed as screenshots;
+`explain` on the Java fixture, live and on the fake client, writes a
+side-car whose every record a model wrote carries `words` and whose module
+records carry `glossary`; `--estimate` prices a PetClinic run before it runs
+and the live run's measurement replaces its per-block figures; the PetClinic
+side-car (prompt `"2"`, 139 records) imports into a fresh version-2 store
+with its counts intact and exports `cmp`-equal, a version-1 store migrates
+(`store-v1.sql`, and the synthetic side-car at Broadleaf's scale); `insights
+--word pet` on the PetClinic store answers in under a second; `pnpm -r test`,
+typecheck and `./test.sh --ts` green; the coverage table and the cost filled
+in this section.
+
+**Met (2026-11-12, main `4e3aa82`).** The Java-fixture live run is M20's
+(above). PetClinic, on a copy of the paid store: 139 records imported (109
+operations, 76 by a model, every one with `words`; 25 types; 5 modules, each
+with `glossary`: 301 word and 52 glossary entries), exported `cmp`-identical;
+`insights --word pet` 0.14 s, 81 MB. `--estimate` had said 66 570 completion
+tokens, the run took 96 356; refitted (§20.3 "Measured"), it now prices the
+53 calls the function-word change made stale (#42) — 121 067 in, 55 665 out,
+~$0.08 at the run's fitted prices — before any is sent. CI green on that
+commit: the workspace's build, typecheck and tests, and the TypeScript
+extractor's `cmp` gate that `./test.sh --ts` runs.
 
 ### 20.5 Deferred, explicitly
 
@@ -6115,9 +6136,9 @@ builds `claudeCodeClient`; the seam's `clientFor` takes the whole resolution.
 | M18a | Ruby extractor — profile + skeleton | ✅ (2026-10-13, worktree `ruby-extractor`) `rb` profile in core (the eleventh: the module is the file, `class` and `module` are types below it, mixins are `traitUsage`, no interface — §19.2); `extractors/ruby/` in Rust on Prism 1.9.0 (`ruby-prism`, pinned), no Ruby to build or run; the core table distilled from RBS 4.2.0 `core/` with RBS's own parser (915 constants: 304 classes, 26 modules, 585 values); walking skeleton — files, classes and modules (the wrapper rule, one entity per declaring file, reopenings `attachedTo` their primary, a `String` patch attached to `<ruby>/String`), methods and parameters, `require`/`require_relative` by path and by load root, superclasses and mixins resolved lexically, the `derived` import, stubs — → `fixtures/ruby/expected/model.jsonl` (24 files, 102 entities / 38 edges) byte-identical to core's encoder and profile-valid with zero issues; 60 cargo tests (50 unit, 10 contract: snapshot, CRLF + reversed creation order, the CLI contract) + 16 core gate tests; `codegraph validate` OK; `bin/codegraph-ruby`; `build.sh --ruby` (a 1.2 MB binary) / `test.sh --ruby` with the release-binary `cmp`; `ruby-test` written in CI, not yet run there |
 | M18b | Ruby extractor — model | ✅ (2026-10-13, worktree `ruby-extractor`) `field` (an instance variable, its `attr_*`, a Struct member: one entity `@x`) and `constant` (keyed by full path, with its literal `value`); `Struct.new` / `Data.define` / `Class.new` / `Module.new` assigned to a constant as types, a `Struct.new` superclass as a `generated` inheritance; constant references resolved lexically then through the ancestors; the core table extended with superclasses, mixins and methods (RBS 4.2.0: 915 constants, 23 mixins, 2428 methods) so lookup crosses from the corpus into the VM's classes; the invocation tiers of §19.4 — `declared` where the receiver's class is written, `derived` for typed locals, typed instance variables and the sole-library-ancestor attribution, the language resolved with no edge, untyped receivers dropped and counted; `access` with read/write, `throws`, comments, `sloc` + `cyclomatic`, literals; the Ruby 1.8 require idioms, `load`, `autoload`, shebang scripts; `--explain-dropped`, every drop with its line → `fixtures/ruby/expected/model.jsonl` (27 files, 154 entities / 136 edges; 152 sites, 77.0 % resolved) byte-identical to core's encoder and profile-valid with zero issues; `ruby` in the metrics pass and the fifth `model.metrics.jsonl` (86 of 88 joined, `sloc = ploc` on all 86); 101 cargo tests (90 unit, 11 contract) + 24 core gate tests; the fixture in the analyzer, city, navigator, CLI `validate` and metrics suites; `validate`, `analyze`, `navigator`, `city --layout` and `serve` run on it, City and Navigate screenshots reviewed |
 | M18c | Ruby extractor — audit + oracles + distribution | ✅ (2026-10-13, worktree `ruby-extractor`; CI not yet run) rake 13.2.1, rubygems 3.6.2, Mastodon 4.3.0 and rails 8.0.2 audited `validate`-clean (100 / 794 / 2 541 / 3 334 files; 77.8 / 54.4 / 31.2 / 57.0 % of sites resolved, Mastodon's `app/`+`lib/` 62.1 %; rails in 4.7 s). Seven defects found and fixed test-first: a library namespace the corpus reopens below dropped as `namespace-only` (592 `Rails.*` in Mastodon); class methods given by an `included` hook unseen (now read where literal — plain Ruby and ActiveSupport::Concern — and `derived`); a library mixin ignored as a class-side candidate (`validates` charged to ActiveRecord::Base); a per-type `dynamic` flag clouding both sides; a compact declaration's qualifier not read; a constant qualified by a subclass stubbed below `<gems>`; `--explain-dropped` not saying what decided a drop. Oracles: Packwerk 3.3.1 over Mastodon — 4 289 of its 4 335 cross-file references in the model (98.9 %), the rest the wrapper rule; rake booted under its own tests — 1 006 of 1 012 declared methods held by the VM on the same line, 1 533 of 2 829 observed calls already edges. The trace tool (`trace/codegraph_trace.rb`, one file) and `--trace`: `generated` `traitUsage`, `dynamic-candidate` invocations with `candidates`, no entity added — exercised end to end in a container and `validate`-clean. `fixtures/ruby` → 31 files, 181 entities / 153 edges, 177 sites, 76.3 %; metrics 106 of 109 joined. 119 cargo tests (107 unit, 12 contract) + 27 core gate tests. Distribution wired: `ruby-native` on four Unix runners, the release loop, `Formula/codegraph-ruby.rb`, the catalogue row; `docs/ruby-extractor.md` |
-| M19a | Vocabulary — lexicon, split, artifact | ✅ (2026-10-26, five stacked PRs from #26, not yet merged; Broadleaf 76 310 entities → 3 381 terms in 0.29 s, 2.9 MB, its top ten a commerce vocabulary after 13 words joined the shared list) `Profile.lexicon` on the eleven profiles (keywords, conventional names, affixes, separators — the profile half of #19), METAMODEL §5 row, printed by `profiles --lang`; `@codegraph/vocabulary`: one idiom-parametrized splitter with the acronym rule on Unicode categories, four term classes as tags (never filters), role weights recorded in the artifact, scopes = the fold's containers; `codegraph vocabulary` report, `--level`/`--scope`/`--class`/`--drift FILE`; five `vocabulary.json` snapshots byte-identical, closure and determinism properties; the coverage table of §20.1 filled on fixtures, Broadleaf, codegraph, Mastodon, Plausible |
-| M19b | Vocabulary — cloud, tab, city channel | ✅ (2026-10-26, three stacked PRs from #31, not yet merged; Broadleaf's cloud and its city raised by `order` are the demo images) deterministic spiral layout with an injected measurer and the no-overlap property; `--svg` with the fixture snapshot; `serve` builds `/vocabulary.json` and answers `/carriers.json?scope=&term=`; the sixth navigator tab (scope follows the selection, chips, table, carriers → reveal), literals pinned, types-only import; `vocabulary:<term>` metric source through the CLI hook, city unchanged; the two demo images under `docs/` and the README section — the issue's fourth criterion |
-| M19c | Vocabulary — glossary in the explanation | `words` on every insight block — the words of the unit's name, its parameters' and (for a type) its fields', each with `in`, `concern` (domain / technical / ambiguous), `sense`, `meaning`, in that entity's context, asked in the SAME call that explains it; `glossary` on the module block reconciling its types' entries with `polysemous`; `PROMPT_VERSION` 2, the words `.optional()` in the record schema so every existing side-car round-trips byte-identical — no new record type, no format change; the store at version 2 with the `insight_word` projection (rebuilt on `--import`); readers `insights --word/--glossary/--polysemy/--concerns`, `vocabulary --drift-insights`, `/glossary.json`, the entries shown as inferences in both panels; the Broadleaf re-explanation priced by `--estimate` and measured; `docs/vocabulary.md` |
+| M19a | Vocabulary — lexicon, split, artifact | ✅ (2026-10-26, five stacked PRs from #26 — #26 merged to main 2026-10-27, #27–#30 with #46 on 2026-11-05; Broadleaf 76 310 entities → 3 381 terms in 0.29 s, 2.9 MB, its top ten a commerce vocabulary after 13 words joined the shared list) `Profile.lexicon` on the eleven profiles (keywords, conventional names, affixes, separators — the profile half of #19), METAMODEL §5 row, printed by `profiles --lang`; `@codegraph/vocabulary`: one idiom-parametrized splitter with the acronym rule on Unicode categories, four term classes as tags (never filters), role weights recorded in the artifact, scopes = the fold's containers; `codegraph vocabulary` report, `--level`/`--scope`/`--class`/`--drift FILE`; five `vocabulary.json` snapshots byte-identical, closure and determinism properties; the coverage table of §20.1 filled on fixtures, Broadleaf, codegraph, Mastodon, Plausible |
+| M19b | Vocabulary — cloud, tab, city channel | ✅ (2026-10-26, three stacked PRs from #31, merged to main with #46 on 2026-11-05; Broadleaf's cloud and its city raised by `order` are the demo images) deterministic spiral layout with an injected measurer and the no-overlap property; `--svg` with the fixture snapshot; `serve` builds `/vocabulary.json` and answers `/carriers.json?scope=&term=`; the sixth navigator tab (scope follows the selection, chips, table, carriers → reveal), literals pinned, types-only import; `vocabulary:<term>` metric source through the CLI hook, city unchanged; the two demo images under `docs/` and the README section — the issue's fourth criterion |
+| M19c | Vocabulary — glossary in the explanation | ✅ (2026-11-12; merged 2026-11-05 with #46 and #42–#45; tested on Spring PetClinic in Broadleaf's place, §20.4) `words` on every insight block — the words of the unit's name, its parameters' and (for a type) its fields', each with `in`, `concern` (domain / technical / ambiguous), `sense`, `meaning`, in that entity's context, asked in the SAME call that explains it; `glossary` on the module block reconciling its types' entries with `polysemous`; `PROMPT_VERSION` 2, the words `.optional()` in the record schema so every existing side-car round-trips byte-identical — no new record type, no format change; the store at version 2 with the `insight_word` projection (rebuilt on `--import`); readers `insights --word/--glossary/--polysemy/--concerns`, `vocabulary --drift-insights`, `/glossary.json`, the entries shown as inferences in both panels; the PetClinic run priced by `--estimate` and measured; `docs/vocabulary.md` |
 | M20a | Model providers — the Claude Code adapter | ✅ (2026-11-10, 94 `@codegraph/llm` tests) `claudeCodeClient` in `@codegraph/llm` (§21.1): `claude -p --output-format json --json-schema --system-prompt --tools "" --safe-mode --no-session-persistence`, the user prompt on stdin, `structured_output` / `usage` / `total_cost_usd` / `modelUsage` read into the port's response, every failure classified into the port's one error type; `findClaudeCode` (option → `CLAUDE_CODE_PATH` → PATH → known install locations, pure) and `resolveProvider` with the fixed precedence; fake-process tests, the boundary test unchanged |
 | M20b | Model providers — wired and documented | ✅ (2026-11-10, live on Claude Code 2.1.322, Java fixture: 68 calls, 0 failed, 79 records — 70 explained, stamped `claude-sonnet-5-5`, 9 templated — decode-clean, eof `$1.03` for 307 896 + 54 688 tokens; the prompt side came in ≈ 2.7× the bare estimate — Claude Code's per-call scaffolding and schema, which the estimate now counts (§21.4): 280 481 estimated for the 307 896 billed) `--provider claude-code`, `--claude-path`, `--model` default per provider resolved before the plan (`sonnet`), the usage error naming the fix and the `--max-tokens` note; a live run on the Java fixture; `docs/cli.md`, `docs/insights.md`, README, CLAUDE.md and the website's explain pages name the port, the three adapters and the Anthropic API slot (§21.6) |
 
