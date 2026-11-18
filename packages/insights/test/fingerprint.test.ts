@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { canonicalJson, digestOf, fingerprintOf, type FingerprintInputs } from "../src/fingerprint.js";
+import { canonicalJson, chainOf, digestOf, fingerprintOf, type FingerprintInputs } from "../src/fingerprint.js";
 
 const BASE: FingerprintInputs = {
   level: "operation",
@@ -52,6 +52,29 @@ describe("fingerprintOf", () => {
       const fp = fingerprintOf(v);
       expect(seen.has(fp)).toBe(false);
       seen.add(fp);
+    }
+  });
+
+  it("chainOf hashes every input but the words: no other change escapes it", () => {
+    const { words: _, ...rest } = BASE;
+    const variants: Omit<FingerprintInputs, "words">[] = [
+      { ...rest, sources: ["int f() { return 2; }"] },
+      { ...rest, comments: ["doc"] },
+      { ...rest, signatures: ["f(int)"] },
+      { ...rest, factsDigest: digestOf({ calls: ["g"] }) },
+      { ...rest, dependencyFingerprints: ["a".repeat(64)] },
+      { ...rest, missingDependencies: ["java:p/B.g()"] },
+      { ...rest, model: "other" },
+      { ...rest, depth: 2 },
+      { ...rest, level: "type" },
+    ];
+    const seen = new Set([chainOf(rest), fingerprintOf(BASE)]);
+    expect(seen.size).toBe(2);
+    for (const v of variants) {
+      const chain = chainOf(v);
+      expect(chain).toMatch(/^[0-9a-f]{64}$/);
+      expect(seen.has(chain)).toBe(false);
+      seen.add(chain);
     }
   });
 

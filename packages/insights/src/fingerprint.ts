@@ -12,6 +12,12 @@ import { PROMPT_VERSION, type Level } from "./schema.js";
  * DELIBERATELY EXCLUDED: the explanation text itself. Two runs of the same
  * prompt can return different words, and if those words fed the fingerprint a
  * single non-deterministic answer would cascade re-runs up the whole graph.
+ *
+ * TWO HASHES PER UNIT. The fingerprint is stored on its records; the CHAIN is
+ * the same hash without the words asked, and is what a dependent hashes of a
+ * dependency whose words its prompt never shows (plan.ts `readsWordsOf`). So a
+ * lexicon correction re-explains the units whose words moved and the modules
+ * that reconcile them — not every caller above them. Never stored.
  */
 
 export interface FingerprintInputs {
@@ -25,7 +31,7 @@ export interface FingerprintInputs {
   readonly signatures: readonly string[];
   /** A digest of the facts shown (calls, accesses, throws, fields, imports…). */
   readonly factsDigest: string;
-  /** Fingerprints of the units this one depends on, sorted. */
+  /** Per dependency, sorted: its fingerprint where this unit's prompt reads its words, else its chain. */
   readonly dependencyFingerprints: readonly string[];
   /** Dependencies that had NO record when this unit was explained, sorted — once one exists, redo. */
   readonly missingDependencies: readonly string[];
@@ -34,8 +40,8 @@ export interface FingerprintInputs {
   /**
    * Per member, the words its prompt asks to define and a module's glossary
    * words: a function of the names and the lexicon, hashed so a lexicon
-   * correction re-explains the units whose words it changed — and, through
-   * `dependencyFingerprints`, everything that depends on them.
+   * correction re-explains the units whose words it changed. Left out of the
+   * chain: only a module's fingerprint carries its types' (theirs, whole).
    */
   readonly words: readonly { readonly names: readonly { readonly identifier: string; readonly words: readonly string[] }[]; readonly glossary: readonly string[] }[];
 }
@@ -67,4 +73,9 @@ export function digestOf(value: unknown): string {
 
 export function fingerprintOf(inputs: FingerprintInputs): string {
   return digestOf({ promptVersion: PROMPT_VERSION, ...inputs });
+}
+
+/** A unit as its word-blind dependents see it: every input but the words, over its dependencies' chains. */
+export function chainOf(inputs: Omit<FingerprintInputs, "words">): string {
+  return digestOf({ promptVersion: PROMPT_VERSION, chain: true, ...inputs });
 }

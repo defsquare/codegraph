@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { Edge, Entity } from "@codegraph/core";
+import { contextPackFor, type Speller } from "../src/context.js";
+import { fingerprintOf } from "../src/fingerprint.js";
 import { buildWalk } from "../src/order.js";
-import { planRun, retryScope, type PlanEnv, type PlanOptions } from "../src/plan.js";
+import { planRun, retryScope, type PlanEnv, type PlanOptions, type RunPlan } from "../src/plan.js";
 import { COMPLETION_TOKENS_PER_BLOCK, COMPLETION_TOKENS_PER_GLOSSARY_ENTRY, COMPLETION_TOKENS_PER_WORD, estimateTokens } from "../src/prompt.js";
 import { memoryBook, type RecordBook } from "../src/records.js";
 import { executeRun, type Completer, type CompletionRequest } from "../src/run.js";
 import { responseJsonSchema, type Block, type FailureRecord, type InsightRecord, type ModuleBlock, type OperationBlock, type TypeBlock } from "../src/schema.js";
 import { createSourceReader, mapReader } from "../src/source.js";
-import { edge, field, graphOf, method, pkg, prepared, toySpeller, type } from "./fixture.js";
+import { edge, field, graphOf, method, packageCorpus, pkg, prepared, toySpeller, type } from "./fixture.js";
 
 const P = "java:p";
 const T = "java:p/T";
@@ -281,6 +283,114 @@ describe("planRun", () => {
     const plan = planRun(walk, new Map(), env, { ...OPTIONS, inScope: (u) => u.level !== "module" });
     expect(plan.steps.find((s) => s.unit.id === P)?.status).toBe("skip-scope");
     expect(plan.steps.find((s) => s.unit.id === T)?.status).toBe("llm");
+  });
+});
+
+/** A lexicon correction in miniature: one entity's name now spells one more word, every other entity's the same. */
+function respelled(speller: Speller, id: string, word: string): Speller {
+  return { ...speller, words: (entity) => (entity === id ? [...speller.words(entity), word] : speller.words(entity)) };
+}
+
+const statusOf = (plan: RunPlan): Map<string, string> => new Map(plan.steps.map((s) => [s.unit.id, s.status]));
+
+describe("a words-only change (PLAN §20.3): stale where a prompt reads the words, nowhere else", () => {
+  it("re-explains the operation whose words moved, not its callers nor its type, which see its summary only", async () => {
+    const first = await run(new Map());
+    const existing = new Map(first.result.records.map((r) => [r.id, r]));
+    const { walk, env } = corpus();
+    const status = statusOf(planRun(walk, existing, { ...env, speller: respelled(env.speller, m("h"), "extra") }, OPTIONS));
+    expect(status.get(m("h"))).toBe("llm");
+    expect(status.get(m("g"))).toBe("reuse");
+    expect(status.get(m("f"))).toBe("reuse");
+    expect(status.get(T)).toBe("reuse");
+    expect(status.get(P)).toBe("reuse");
+  });
+
+  it("re-explains a type whose words moved and its module, which reconciles its types' words — even when its own candidates did not move", async () => {
+    const first = await run(new Map());
+    const existing = new Map(first.result.records.map((r) => [r.id, r]));
+    const { walk, env } = corpus();
+    // `total` is already the module's one candidate (the field's word): only the type's own entry changes.
+    const status = statusOf(planRun(walk, existing, { ...env, speller: respelled(env.speller, T, "total") }, OPTIONS));
+    expect(status.get(T)).toBe("llm");
+    expect(status.get(P)).toBe("llm");
+    for (const op of [m("f"), m("g"), m("h")]) expect(status.get(op)).toBe("reuse");
+  });
+
+  it("a type that depends on it and a module that imports its module stay reused", async () => {
+    const graph = packageCorpus(2, [[1, 0]]);
+    const { facts, units } = prepared(graph);
+    const walk = buildWalk(units, graph);
+    const env: PlanEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map())), unitOf: walk.unitOf, speller: toySpeller(graph) };
+    const C0 = "java:p0/C";
+    const C1 = "java:p1/C";
+    expect(walk.unitOf.get(C1)?.deps).toContain(C0);
+    expect(walk.unitOf.get("java:p1")?.deps).toContain("java:p0");
+    const cold = planRun(walk, new Map(), env, OPTIONS);
+    const first = await executeRun(cold, env, new Map(), fakeCompleter(), { maxScc: 12, depth: 1, maxLines: 100, terms: 60 }, { concurrency: 1 });
+    const existing = new Map(first.records.map((r) => [r.id, r]));
+    const status = statusOf(planRun(walk, existing, { ...env, speller: respelled(env.speller, C0, "extra") }, OPTIONS));
+    expect(status.get(C0)).toBe("llm");
+    expect(status.get("java:p0")).toBe("llm");
+    expect(status.get(C1)).toBe("reuse");
+    expect(status.get("java:p1")).toBe("reuse");
+  });
+
+  it("a source change still reaches every transitive dependent", async () => {
+    const first = await run(new Map());
+    const existing = new Map(first.result.records.map((r) => [r.id, r]));
+    const { walk, env } = corpus();
+    const edited = SOURCE.replace("return 1;", "return 2;");
+    const status = statusOf(planRun(walk, existing, { ...env, reader: createSourceReader(mapReader(new Map([["T.java", edited]]))) }, OPTIONS));
+    for (const id of [m("h"), m("g"), m("f"), T, P]) expect(status.get(id)).toBe("llm");
+  });
+});
+
+describe("records stamped before the split (every dependent hashed its dependencies' whole fingerprints)", () => {
+  /** The previous fold, restated here rather than read from the plan: a unit hashed its dependencies' fingerprints, words included. */
+  function stampedBefore(records: ReadonlyMap<string, InsightRecord>): Map<string, InsightRecord> {
+    const { walk, env } = corpus();
+    const contextEnv = { ...env, records: memoryBook([]), depth: 1, maxLines: 100, terms: 60 };
+    const before = new Map<string, string>();
+    for (const unit of walk.units) {
+      const pack = contextPackFor(unit, contextEnv);
+      const { sources, comments, signatures, factsDigest, words } = pack;
+      const model = unit.level === "operation" ? OPTIONS.models.leaf : OPTIONS.models.rollup;
+      const dependencyFingerprints = unit.deps.map((d) => before.get(d) ?? "").sort();
+      before.set(unit.id, fingerprintOf({ level: unit.level, members: unit.members, model, sources, comments, signatures, factsDigest, dependencyFingerprints, missingDependencies: [], depth: 1, words }));
+    }
+    return new Map([...records].map(([id, r]) => [id, { ...r, fingerprint: before.get(walk.unitOf.get(id)?.id ?? "") ?? "" }]));
+  }
+
+  it("are reused while nothing changed: a store paid for before the split is not re-explained for it", async () => {
+    const first = await run(new Map());
+    const records = new Map(first.result.records.map((r) => [r.id, r]));
+    const stamped = stampedBefore(records);
+    // Not vacuous: every unit with a dependency is stamped differently from now on.
+    expect([...stamped.values()].filter((r) => r.fingerprint !== records.get(r.id)?.fingerprint).map((r) => r.id).sort()).toEqual([m("f"), m("g"), P, T].sort());
+    const second = await run(stamped);
+    expect(second.completer.requests).toHaveLength(0);
+    expect(second.plan.estimates.byStatus.reuse).toBe(5);
+  });
+
+  it("follow a dependency's words once more, since that stamp cannot tell them apart; what is re-explained moves to the split", async () => {
+    const first = await run(new Map());
+    const stamped = stampedBefore(new Map(first.result.records.map((r) => [r.id, r])));
+    const { walk, env } = corpus();
+    const status = statusOf(planRun(walk, stamped, { ...env, speller: respelled(env.speller, m("h"), "extra") }, OPTIONS));
+    expect(status.get(m("h"))).toBe("llm");
+    expect(status.get(m("g"))).toBe("llm");
+    expect(status.get(m("f"))).toBe("llm");
+    expect(status.get(m("getTotal"))).toBe("template");
+  });
+
+  it("a stale stamp from before is not reused: a source change still re-explains", async () => {
+    const first = await run(new Map());
+    const stamped = stampedBefore(new Map(first.result.records.map((r) => [r.id, r])));
+    const { walk, env } = corpus();
+    const edited = SOURCE.replace("return 1;", "return 2;");
+    const status = statusOf(planRun(walk, stamped, { ...env, reader: createSourceReader(mapReader(new Map([["T.java", edited]]))) }, OPTIONS));
+    for (const id of [m("h"), m("g"), m("f"), T, P]) expect(status.get(id)).toBe("llm");
   });
 });
 

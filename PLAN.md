@@ -5682,7 +5682,9 @@ Their senses were grammar ("lookup criterion", "boolean predicate",
   prompt, ~56 k completion tokens, about $0.08 at the run's prices): 9 units
   directly (7 operations, 2 controllers with an `…_OR_…` view field), 44
   through their dependencies. Nothing is lost before a run: the old records
-  stay, and the readers show their entries until they are replaced.
+  stay, and the readers show their entries until they are replaced. *(The 44
+  are gone for stores stamped since: "As built — the words leave the
+  chain".)*
 - **The Java fixture's plan** is now 114 474 prompt and 52 415 completion
   tokens (was 114 483 and 52 900).
 
@@ -5741,6 +5743,47 @@ The decisions:
   can check. No fingerprint input moved: no record goes stale.
 - **On PetClinic** `--polysemy` lists 14 words, was 16 (`owners` and `or`
   gone; `or` is no longer asked at all since the function words).
+
+**As built — the words leave the chain (2026-11-15).** The function words
+made 9 PetClinic units stale and 44 more only because a dependent hashed its
+dependencies' whole fingerprints, words included — though no caller's prompt
+shows a callee's words (`DependencySummary`: summary and concept). The user's
+choice among four (keep the cascade; split the hash; a words-only re-ask; no
+words in the fingerprint): split it. The decisions:
+
+- **Two hashes per unit.** `unitHashes` in `plan.ts` gives the fingerprint
+  (stored, as before) and the *chain* — `chainOf` in `fingerprint.ts`, every
+  input but the words, over the dependencies' chains; never stored. A
+  dependent hashes a dependency's chain unless its prompt reads that
+  dependency's words: `readsWordsOf(unit, dependency)`, true for a module and
+  its types only, since it reconciles their entries (`context.ts`). Its own
+  candidates are hashed as before; its types' whole fingerprints cover an
+  entry that changed under a candidate that did not.
+- **What still cascades:** source, comments, signatures, facts, model,
+  depth, prompt version, a missing dependency — all in the chain. A words-only
+  change re-explains the units whose words moved and the modules above those
+  types.
+- **No store re-explained for the switch.** A record stamped under the fold
+  before is reused while that stamp matches (`stampedBeforeSplit`, computed
+  beside the fingerprint, read for `reuse` only): a match means every
+  transitive input is unchanged, words included, so the split would reuse it
+  too. A leaf's two stamps are one. What is re-explained gets the new stamp;
+  nothing is rewritten on reuse. The cost: an old stamp cannot tell a
+  dependency's words from its source, so a store stamped before still pays
+  the 53 once.
+- **Measured on PetClinic** (the paid store, on a copy; stamps restated under
+  the words as they were before the function words): the old fold's 106
+  stamps reproduced exactly (0 calls); the function words then cost 53 calls
+  as stamped (121 067 in, 55 665 out, ~$0.08) and **10** stamped under the
+  split (7 operations, 2 types, 1 module; 26 758 in, 12 925 out, ~$0.02).
+- **Tests:** a callee's words leave its callers and its type reused; a type's
+  words re-explain its module even when the module's candidates did not move;
+  a type depending on it and a module importing its module stay reused; a
+  source change still reaches every dependent; old stamps reused while
+  nothing changed, followed once more on a dependency's words, refused on a
+  source change. Six mutants (no module rule, the old fold, old stamps
+  refused, words in the chain, whole fingerprints in the chain, the run
+  stamping the chain) each fail at least one.
 
 ### 20.4 Milestone split
 
@@ -6261,6 +6304,7 @@ builds `claudeCodeClient`; the seam's `clientFor` takes the whole resolution.
 | Glossary tied to the entity (M19c) | each explained unit's block carries `words`: the words its name (and its parameters' or fields' names) is made of, with sense and concern in that entity's context, asked in the explanation call itself; the module block reconciles its types' words into `glossary`; scopes and the corpus roll up from the records | a meaning belongs to the entity that uses the word, and the context pack of that entity is the one place the pipeline has its source, facts and dependencies' explanations together; a scope has a vocabulary, not a meaning — the two earlier drafts (a standalone command over a term table; a second request per scope) asked at the wrong altitude |
 | Glossary storage (M19c) | the insights store, version 2: an `insight_word (id, word, in, concern, sense, confidence)` projection written with the record and rebuilt on `--import`, indexed on `word`; the side-car stays the one source of truth | bought, so it shares the insights' lifecycle (migrated, never regenerated); a projection makes `--word` an index lookup without a second authoritative copy — the M16b rule (what is queried is a column over the JSON, what is fetched is the block) |
 | Glossary wire format (M19c) | no new record type: `words`/`glossary` live inside `block`, `.optional()` in the record schema and required on the wire by `strictify`; `PROMPT_VERSION` 2 | M11 put the prompt version in every fingerprint so a better prompt re-explains what it improves — the designed case; a version-1 record decodes and re-encodes to its own bytes, so every existing side-car round-trips, and nothing is deleted by the bump |
+| Words out of the chain (M19c) | every unit has two hashes: its fingerprint (stored) and its chain (the fingerprint without the words, over its dependencies' chains; never stored); a dependent hashes a dependency's chain, a module its types' whole fingerprints; a record stamped before is reused while that stamp matches | no caller's prompt shows a callee's words, only a module reads its types' — so a lexicon correction re-explains 10 PetClinic units instead of 53; a match on the old stamp implies one on the new, so no paid store is re-explained for the switch |
 | Port and adapters (M20) | `LlmClient` is the port; OpenRouter, Cloudflare AI Gateway and Claude Code are adapters behind it, each holding its transport behind one function; the Anthropic API is a named empty slot (§21.6), not a stub | the walk, the store and the CLI never learn a provider; a fourth adapter is one file and one entry in `providers.ts` |
 | Claude Code as a subprocess (M20) | the user's own `claude` binary in headless mode — `--safe-mode` (not `--bare`, which drops OAuth), tools off, no session, the system prompt replaced, the user prompt on stdin | the installation, login and version are the user's; no second SDK enters the workspace; argv has a 128 KB per-argument limit |
 | Provider precedence (M20) | `auto` takes the single configured provider; with several, OpenRouter, then Cloudflare, then Claude Code, the reason naming the flag for the others; `--model` defaults per provider (`sonnet` on Claude Code) | an exported key is a deliberate act, an installed CLI is ambient; `openai/gpt-5.6-luna` means nothing to Claude Code |

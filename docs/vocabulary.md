@@ -623,12 +623,15 @@ module's glossary *candidates* — never what a type said of them, and not
 which candidates a type defined — join the fingerprint inputs. So a lexicon
 correction re-explains exactly the units whose words it changed, and the same
 `--terms` reuses every module while another redoes exactly the modules whose
-cut moved. Because a dependent hashes its dependencies' fingerprints (IN-5),
-a words-only change cascades: adding the function words made 9 of
-PetClinic's units stale directly and 53 of its 106 calls in all (about
-$0.08). Whether a words-only change *should* cascade is an open design
-question (PLAN.md §20.3); nothing is lost before a run, since the old records
-stay and the readers show them until they are replaced.
+cut moved. A words-only change does not cascade: a dependent hashes a
+dependency's *chain*, its fingerprint without the words, since no caller's
+prompt shows a callee's words — except a module, which hashes its types'
+whole fingerprints because it reconciles their entries (IN-5). On PetClinic
+the function words cost 10 calls on a store stamped this way, against 53 of
+its 106 when every dependent hashed its dependencies' whole fingerprints. A
+store stamped before the split is reused as stamped, so it still pays the 53
+once; nothing is lost before a run, since the old records stay and the
+readers show them until they are replaced.
 
 **Cost, measured.** No new call; a completion grows by what it defines. The
 estimate's figures were fitted on a live prompt-2 run over Spring PetClinic

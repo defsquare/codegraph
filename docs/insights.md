@@ -385,13 +385,27 @@ Every record carries a sha256 over what it was computed from: the prompt
 version, the model slug, the level, the source slices, the comments, the
 signatures, a digest of the facts shown, the words its prompt asks to define
 and a module's glossary candidates (so a lexicon correction re-explains the
-units whose words it changed, and through the next input what depends on them,
-and another `--terms` exactly the modules whose cut moved; which candidates a
-type defined is not hashed), the **fingerprints of the units it depended on**,
-and the ids of dependencies that had no record. Merkle-style:
-change one leaf's source and exactly its transitive dependents and containers
-change; nothing else does. The explanation text is deliberately **not**
-hashed — a non-deterministic answer must never cascade re-runs.
+units whose words it changed, and another `--terms` exactly the modules whose
+cut moved; which candidates a type defined is not hashed), **its
+dependencies' hashes**, and the ids of dependencies that had no record.
+Merkle-style: change one leaf's source and exactly its transitive dependents
+and containers change; nothing else does. The explanation text is
+deliberately **not** hashed — a non-deterministic answer must never cascade
+re-runs.
+
+**Two hashes per unit.** A unit's *chain* is its fingerprint without the
+words, over its dependencies' chains; it is never stored. A dependent hashes a
+dependency's chain — except a module, which hashes its types' whole
+fingerprints, because its prompt reconciles their word entries into its
+glossary. A caller sees a callee's summary and concept, a type its
+operations', never their words, so a words-only change re-explains the units
+whose words moved and the modules above those types, and nothing else. On
+Spring PetClinic, the function-word correction would cost 10 calls stamped
+this way, against 53 when every dependent hashed its dependencies' whole
+fingerprints (the fold before 2026-11). A record stamped under that fold is
+still reused while its stamp matches — a match there means every transitive
+input is unchanged, words included — so no store is re-explained for the
+switch; it moves to the new stamp when it is next re-explained.
 
 A re-run plans `reuse` for every unit whose members' records match; `--force`
 overrides. Because a missing dependency is part of the fingerprint, a

@@ -149,7 +149,9 @@ A re-run reuses every unit whose fingerprint still matches. Because the
 fingerprint covers the unit's inputs *and* its dependencies' fingerprints,
 changing one method's source re-explains exactly its transitive dependents and
 containers. Explanation text is deliberately not hashed, so a differently-worded
-answer never cascades.
+answer never cascades. Nor does a change to the words a unit is asked to define:
+it re-explains that unit, and the module above it when it is a type, never its
+callers.
 
 ```bash
 codegraph explain model.jsonl --src src/main/java --force
