@@ -4,7 +4,7 @@ linkTitle: Metrics pass
 weight: 14
 ---
 
-`codegraph-metrics` 0.2.0 (big-code-analysis 2.2.0) — the measuring pass over any extractor's model. A Cargo package in `extractors/metrics/`, linking [big-code-analysis](https://github.com/dekobon/big-code-analysis) as a library with five tree-sitter grammars. It is **not an extractor**: it reads a `model.jsonl`, parses every source file the measured entities are anchored in, joins big-code-analysis's function and class spaces to those entities on their anchors, and rewrites their `metrics` maps — cognitive complexity, Halstead, the maintainability index, ABC, exits, logical and comment lines, public methods and attributes. No other byte of the file moves. One binary serves Java, C#, TypeScript, Elixir and Ruby; what each key means is on [Measures and literals](/docs/reference/metamodel/measures-literals/), and what each counts, where it comes from and how to read it on the [Metrics catalogue](/docs/reference/metrics-catalogue/).
+`codegraph-metrics` 0.3.0 (big-code-analysis 2.2.0) — the measuring pass over any extractor's model. A Cargo package in `extractors/metrics/`, linking [big-code-analysis](https://github.com/dekobon/big-code-analysis) as a library with five tree-sitter grammars. It is **not an extractor**: it reads a `model.jsonl`, parses every source file the measured entities are anchored in, joins big-code-analysis's function and class spaces to those entities on their anchors, and rewrites their `metrics` maps — cognitive complexity, Halstead, the maintainability index, ABC, exits, logical and comment lines, public methods and attributes. No other byte of the file moves. One binary serves Java, C#, TypeScript, Elixir and Ruby; what each key means is on [Measures and literals](/docs/reference/metamodel/measures-literals/), and what each counts, where it comes from and how to read it on the [Metrics catalogue](/docs/reference/metrics-catalogue/).
 
 ```bash
 brew install defsquare/tap/codegraph-metrics    # already there if any extractor came from the tap
@@ -38,7 +38,7 @@ codegraph-metrics --version | --help | --licenses
 | `--history` | also measure change history — per file from one git walk, per measured entity from one blame per file — at the commit the model describes, clocked at that commit's time. Written to a **side-car**, never the model: `<out without .jsonl>.history-metrics.jsonl` | — |
 | `--history-out <file>` | where the side-car goes instead | beside the model |
 | `--ref <rev>` | the commit the history is measured at, overriding the header | the header's `repository.commit`, else `HEAD` |
-| `--version` | `codegraph-metrics 0.2.0 (big-code-analysis 2.2.0)` | — |
+| `--version` | `codegraph-metrics 0.3.0 (big-code-analysis 2.2.0)` | — |
 | `--licenses` | the embedded third-party notice | — |
 | `--help` | print the help and exit | — |
 

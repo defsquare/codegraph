@@ -573,7 +573,7 @@ class EdgeExtractorTest {
 
     Model model =
         Model.sorted(
-            new ExtractorInfo("codegraph-spoon", "0.2.0", Boolean.TRUE),
+            new ExtractorInfo("codegraph-spoon", "0.3.0", Boolean.TRUE),
             root.toString(),
             entities,
             closed);

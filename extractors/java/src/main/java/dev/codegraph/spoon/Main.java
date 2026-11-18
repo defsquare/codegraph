@@ -44,7 +44,7 @@ import spoon.reflect.CtModel;
 public final class Main {
 
   private static final String NAME = "codegraph-spoon";
-  private static final String VERSION = "0.2.0";
+  private static final String VERSION = "0.3.0";
   /** Also the release the embedded platform reference is distilled for (see the pom). */
   static final int COMPLIANCE_LEVEL = 17;
 

@@ -4,7 +4,7 @@ linkTitle: Ruby extractor
 weight: 13
 ---
 
-`codegraph-ruby` 0.2.0 — the Ruby extractor on Prism, CRuby's own parser. A Cargo package in `extractors/ruby/`, released as one binary with the parser linked in, so it needs **nothing installed, Ruby least of all**, and it runs nothing: no file is loaded, no bundle is read, a `Gemfile.lock` that no longer resolves is no obstacle. **Every `*.rb`, `*.rake`, `*.gemspec` and `*.ru` under the roots is parsed**, with the extensionless files Ruby names (`Rakefile`, `Gemfile`, …) and any file whose first line is a `ruby` shebang; constants resolve lexically against what the corpus declares and an embedded table of what the VM defines; a file with syntax errors is still extracted from the tree Prism recovered. It emits [`model.jsonl`](/docs/reference/model-jsonl/) and nothing else: all trait, profile and validation logic lives in `@codegraph/core`.
+`codegraph-ruby` 0.3.0 — the Ruby extractor on Prism, CRuby's own parser. A Cargo package in `extractors/ruby/`, released as one binary with the parser linked in, so it needs **nothing installed, Ruby least of all**, and it runs nothing: no file is loaded, no bundle is read, a `Gemfile.lock` that no longer resolves is no obstacle. **Every `*.rb`, `*.rake`, `*.gemspec` and `*.ru` under the roots is parsed**, with the extensionless files Ruby names (`Rakefile`, `Gemfile`, …) and any file whose first line is a `ruby` shebang; constants resolve lexically against what the corpus declares and an embedded table of what the VM defines; a file with syntax errors is still extracted from the tree Prism recovered. It emits [`model.jsonl`](/docs/reference/model-jsonl/) and nothing else: all trait, profile and validation logic lives in `@codegraph/core`.
 
 ```bash
 brew install defsquare/tap/codegraph-ruby       # macOS and Linux, arm64 and x64; or the release's codegraph-ruby-<platform>
@@ -60,7 +60,7 @@ Ruby binds names when the program runs, so the extractor does the part that is t
 - **Constants resolve lexically**, as `Module.nesting` would, then through the ancestors of the innermost scope, then at the top level. What the corpus does not declare is a stub: below `<ruby>` when the VM defines it before any file runs — a table distilled from RBS `core/` at a pinned version, embedded; the header names it — and below `<gems>` otherwise, the standard library included:
 
   ```json
-  {"name":"codegraph-ruby","version":"0.2.0","prism":"1.9.0","rbs":"4.2.0"}
+  {"name":"codegraph-ruby","version":"0.3.0","prism":"1.9.0","rbs":"4.2.0"}
   ```
 
 - **A `require` is an import; so is a constant.** A Zeitwerk application writes no `require`: the constant reference is the load. A constant that resolves to another file is an `import` with provenance `derived`, one per (file, target file).

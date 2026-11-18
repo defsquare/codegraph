@@ -616,7 +616,7 @@ class EntityExtractorTest {
     List<Entity> all = new ArrayList<>(extracted);
     all.addAll(new StubSynthesizer().synthesize(referenced, CorpusWhitelist.of(known)));
     return Model.sorted(
-        new ExtractorInfo("codegraph-spoon", "0.2.0", Boolean.TRUE), root.toString(), all, List.of());
+        new ExtractorInfo("codegraph-spoon", "0.3.0", Boolean.TRUE), root.toString(), all, List.of());
   }
 
   private static void addIfPresent(Set<String> target, String id) {

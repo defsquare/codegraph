@@ -47,7 +47,7 @@ also a direct download; see [Without Homebrew](#without-homebrew).
    ```bash
    codegraph --version      # 0.1.0
    codegraph-java --version
-   codegraph-metrics --version   # codegraph-metrics 0.2.0 (big-code-analysis 2.2.0)
+   codegraph-metrics --version   # codegraph-metrics 0.3.0 (big-code-analysis 2.2.0)
    codegraph profiles       # the eleven language profiles core ships
    ```
 
