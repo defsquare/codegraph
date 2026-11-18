@@ -3,7 +3,7 @@ import { contextPackFor, type ContextEnv } from "../src/context.js";
 import { buildWalk } from "../src/order.js";
 import { estimateTokens, renderPrompts } from "../src/prompt.js";
 import { memoryBook } from "../src/records.js";
-import { unitFingerprint } from "../src/plan.js";
+import { unitHashes } from "../src/plan.js";
 import type { InsightRecord, OperationBlock, TypeBlock, WordEntry } from "../src/schema.js";
 import { createSourceReader, mapReader } from "../src/source.js";
 import { edge, field, graphOf, method, pkg, prepared, toySpeller, type } from "./fixture.js";
@@ -298,7 +298,7 @@ describe("words to define (PLAN.md §20.3)", () => {
   });
 
   it("fingerprints the words asked and the glossary cut, never what the types said", () => {
-    const fp = (pack: ReturnType<ReturnType<typeof shop>["pack"]>) => unitFingerprint(pack, "m", 1, [], []);
+    const fp = (pack: ReturnType<ReturnType<typeof shop>["pack"]>) => unitHashes(pack, "m", 1, [], []).fingerprint;
     const base = fp(shop().pack(SHOP));
     const said = fp(shop([typeRecord(LINE, [entry("order", "a purchase", "Bought.")])]).pack(SHOP));
     expect(said).toBe(base);

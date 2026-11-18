@@ -177,6 +177,16 @@ Including the *missing* dependencies in the fingerprint is the other half. A uni
 explained while its callee had failed, or was out of scope, is redone once the
 callee exists — automatically, because its inputs genuinely changed.
 
+The words a prompt asks the model to define are hashed too, but a dependent
+does not inherit them. Each unit has a second hash, its *chain* — the
+fingerprint without the words — and that is what a caller hashes of its
+callee, since no caller's prompt shows a callee's words. A module is the
+exception: it reconciles its types' word entries into its glossary, so it
+hashes their whole fingerprints. A correction to the word lists therefore
+re-explains the units whose words moved and the modules above those types —
+10 calls on Spring PetClinic, where hashing whole fingerprints all the way up
+would have cost 53.
+
 ## IN-6 · Budget controls, because this one costs money
 
 This is the only command that opens a socket and the only one that costs

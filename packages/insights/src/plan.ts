@@ -1,5 +1,5 @@
 import { contextPackFor, type ContextEnv, type ContextPack } from "./context.js";
-import { fingerprintOf } from "./fingerprint.js";
+import { chainOf, fingerprintOf } from "./fingerprint.js";
 import type { Unit, WalkPlan } from "./order.js";
 import { estimateCompletionTokens, estimateTokens, renderPrompts, type Prompt } from "./prompt.js";
 import { sourceOf, type RecordSource } from "./records.js";
@@ -12,6 +12,7 @@ import type { TemplateKind } from "./units.js";
  *
  *   template     a trivial member; the block is computed, no model call
  *   reuse        every member already has a record with THIS fingerprint
+ *                (or with the stamp from before the split, `stampedBeforeSplit`)
  *   skip-scope   outside `--scope` and not reusable; dependents see it as
  *                NOT EXPLAINED
  *   skip-budget  `--max-calls` is spent; this and every later call is skipped,
@@ -22,7 +23,7 @@ import type { TemplateKind } from "./units.js";
  * a plain map of records, which is copied into one.
  *
  * Fingerprints are exact here — they depend on inputs and on dependency
- * fingerprints, never on explanation text — so `reuse` is decided correctly
+ * hashes, never on explanation text — so `reuse` is decided correctly
  * before any call. Token counts are ESTIMATES: prompts are rendered against
  * the records that exist now, and a dependency explained later in this run
  * will make the real prompt a little longer.
@@ -53,7 +54,8 @@ export interface LevelEstimate {
 
 export interface RunPlan {
   readonly steps: readonly PlanStep[];
-  readonly fingerprints: ReadonlyMap<string, string>;
+  /** Per unit id, its plan-time hashes: what the run's records and dependents hash. */
+  readonly hashes: ReadonlyMap<string, UnitHashes>;
   readonly estimates: {
     readonly calls: number;
     readonly promptTokens: number;
@@ -95,15 +97,30 @@ export function modelFor(level: Level, models: PlanOptions["models"]): string {
   return level === "operation" ? models.leaf : models.rollup;
 }
 
-/** The fingerprint of a unit from its pack and its dependencies' fingerprints. */
-export function unitFingerprint(
-  pack: ContextPack,
-  model: string,
-  depth: number,
-  dependencyFingerprints: readonly string[],
-  missingDependencies: readonly string[],
-): string {
-  return fingerprintOf({
+/** A planned unit's two hashes (fingerprint.ts): the one its records carry, and the one a word-blind dependent takes. */
+export interface UnitHashes {
+  readonly level: Level;
+  readonly fingerprint: string;
+  readonly chain: string;
+}
+
+/**
+ * Whether a unit's prompt shows a dependency's words — then it hashes that
+ * dependency's whole fingerprint, else its chain. Only a module does, of its
+ * types: it reconciles their entries into its glossary (context.ts). A caller
+ * sees a callee's summary and concept, a type its operations', never words.
+ */
+export function readsWordsOf(unit: Level, dependency: Level): boolean {
+  return unit === "module" && dependency === "type";
+}
+
+/** A unit's dependencies as already hashed, in `unit.deps` order. */
+export function dependenciesOf(unit: Unit, hashes: ReadonlyMap<string, UnitHashes>): readonly UnitHashes[] {
+  return unit.deps.map((d) => hashes.get(d) ?? { level: unit.level, fingerprint: "", chain: "" });
+}
+
+function inputsOf(pack: ContextPack, model: string, depth: number, missingDependencies: readonly string[]) {
+  return {
     level: pack.level,
     members: pack.unit.members,
     model,
@@ -111,22 +128,56 @@ export function unitFingerprint(
     comments: pack.comments,
     signatures: pack.signatures,
     factsDigest: pack.factsDigest,
-    dependencyFingerprints: [...dependencyFingerprints].sort(),
     // A dependency unit that had no record when this unit was explained is
     // part of what it was explained WITHOUT; once it exists, redo the unit.
     // At plan time that is a skipped dependency; at run time (run.ts) it is
     // also a failed one — the record carries the run-time value.
     missingDependencies: [...missingDependencies].sort(),
     depth,
-    words: pack.words,
-  });
+  };
+}
+
+/** A unit's hashes from its pack and its dependencies' hashes. */
+export function unitHashes(
+  pack: ContextPack,
+  model: string,
+  depth: number,
+  dependencies: readonly UnitHashes[],
+  missingDependencies: readonly string[],
+): UnitHashes {
+  const inputs = inputsOf(pack, model, depth, missingDependencies);
+  return {
+    level: pack.level,
+    fingerprint: fingerprintOf({
+      ...inputs,
+      dependencyFingerprints: dependencies.map((d) => (readsWordsOf(pack.level, d.level) ? d.fingerprint : d.chain)).sort(),
+      words: pack.words,
+    }),
+    chain: chainOf({ ...inputs, dependencyFingerprints: dependencies.map((d) => d.chain).sort() }),
+  };
+}
+
+/**
+ * The fingerprint as stamped before the split (2026-11): a unit hashed its
+ * dependencies' whole fingerprints. Read for `reuse` only, never written: a
+ * match means every transitive input is unchanged, words included, so the
+ * split would reuse the record too. A leaf's is its fingerprint.
+ */
+export function stampedBeforeSplit(
+  pack: ContextPack,
+  model: string,
+  depth: number,
+  dependencyFingerprints: readonly string[],
+  missingDependencies: readonly string[],
+): string {
+  return fingerprintOf({ ...inputsOf(pack, model, depth, missingDependencies), dependencyFingerprints: [...dependencyFingerprints].sort(), words: pack.words });
 }
 
 /**
  * The scope of a RETRY: the units a side-car recorded as failed, plus their
  * DIRECT dependents — explained without them, so stale the moment they exist.
  * Nothing further up moves: a unit hashes its dependencies' plan-time
- * fingerprints, which a failure never changed. Matching is by member, so a
+ * hashes, which a failure never changed. Matching is by member, so a
  * failure still finds its unit after a re-extraction regrouped a cycle.
  */
 export function retryScope(failures: readonly FailureRecord[], walk: WalkPlan): (unit: Unit) => boolean {
@@ -153,7 +204,8 @@ export function planRun(
 ): RunPlan {
   const records = sourceOf(existing);
   const contextEnv: ContextEnv = { ...env, records, depth: options.depth, maxLines: options.maxLines, terms: options.terms };
-  const fingerprints = new Map<string, string>();
+  const hashes = new Map<string, UnitHashes>();
+  const before = new Map<string, string>();
   const steps: PlanStep[] = [];
   const byLevel: Record<Level, LevelEstimate> = {
     operation: { calls: 0, promptTokens: 0, completionTokens: 0, units: 0 },
@@ -177,20 +229,26 @@ export function planRun(
   for (const unit of walk.units) {
     const model = modelFor(unit.level, options.models);
     const pack = contextPackFor(unit, contextEnv);
-    const depFingerprints = unit.deps.map((d) => fingerprints.get(d) ?? "");
     const missing = unit.deps.filter((d) => {
       const status = statusOf.get(d);
       return status === "skip-scope" || status === "skip-budget";
     });
-    const fingerprint = unitFingerprint(pack, model, options.depth, depFingerprints, missing);
-    fingerprints.set(unit.id, fingerprint);
+    const own = unitHashes(pack, model, options.depth, dependenciesOf(unit, hashes), missing);
+    const { fingerprint } = own;
+    hashes.set(unit.id, own);
+    const stamped =
+      unit.deps.length === 0 ? fingerprint : stampedBeforeSplit(pack, model, options.depth, unit.deps.map((d) => before.get(d) ?? ""), missing);
+    before.set(unit.id, stamped);
     byLevel[unit.level].units += 1;
 
     const template = templateOf(env, unit);
     const reusable =
       !options.force &&
       // Fingerprints alone: a plan that reuses everything reads no block (M16b).
-      unit.members.every((id) => records.fingerprint(id) === fingerprint);
+      unit.members.every((id) => {
+        const held = records.fingerprint(id);
+        return held === fingerprint || held === stamped;
+      });
 
     let status: StepStatus;
     let prompts: readonly Prompt[] = [];
@@ -220,7 +278,7 @@ export function planRun(
 
   return {
     steps,
-    fingerprints,
+    hashes,
     estimates: {
       calls: steps.reduce((n, s) => n + s.calls, 0),
       promptTokens: steps.reduce((n, s) => n + s.promptTokens, 0),

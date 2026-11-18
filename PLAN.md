@@ -5535,7 +5535,8 @@ and `confidence` are generated columns over it. The decisions:
   word estimates (28 206 records, 131 190 entries): the import takes 1.5 s and
   the export is byte-identical. The projection is 22 MB of a 91 MB store,
   `WHERE word = 'order'` takes 0.5 ms, and the migration's backfill 0.6 s. The
-  real Broadleaf side-car is owed.
+  real file is PetClinic's (139 records, `cmp`-identical; §20.4's definition
+  of done), not Broadleaf's.
 
 **As built — the store's readers (2026-10-27).** `codegraph insights --word`,
 `--glossary`, `--polysemy` and `--concerns`, over `glossary.ts` in
@@ -5681,7 +5682,9 @@ Their senses were grammar ("lookup criterion", "boolean predicate",
   prompt, ~56 k completion tokens, about $0.08 at the run's prices): 9 units
   directly (7 operations, 2 controllers with an `…_OR_…` view field), 44
   through their dependencies. Nothing is lost before a run: the old records
-  stay, and the readers show their entries until they are replaced.
+  stay, and the readers show their entries until they are replaced. *(The 44
+  are gone for stores stamped since: "As built — the words leave the
+  chain".)*
 - **The Java fixture's plan** is now 114 474 prompt and 52 415 completion
   tokens (was 114 483 and 52 900).
 
@@ -5740,6 +5743,47 @@ The decisions:
   can check. No fingerprint input moved: no record goes stale.
 - **On PetClinic** `--polysemy` lists 14 words, was 16 (`owners` and `or`
   gone; `or` is no longer asked at all since the function words).
+
+**As built — the words leave the chain (2026-11-15).** The function words
+made 9 PetClinic units stale and 44 more only because a dependent hashed its
+dependencies' whole fingerprints, words included — though no caller's prompt
+shows a callee's words (`DependencySummary`: summary and concept). The user's
+choice among four (keep the cascade; split the hash; a words-only re-ask; no
+words in the fingerprint): split it. The decisions:
+
+- **Two hashes per unit.** `unitHashes` in `plan.ts` gives the fingerprint
+  (stored, as before) and the *chain* — `chainOf` in `fingerprint.ts`, every
+  input but the words, over the dependencies' chains; never stored. A
+  dependent hashes a dependency's chain unless its prompt reads that
+  dependency's words: `readsWordsOf(unit, dependency)`, true for a module and
+  its types only, since it reconciles their entries (`context.ts`). Its own
+  candidates are hashed as before; its types' whole fingerprints cover an
+  entry that changed under a candidate that did not.
+- **What still cascades:** source, comments, signatures, facts, model,
+  depth, prompt version, a missing dependency — all in the chain. A words-only
+  change re-explains the units whose words moved and the modules above those
+  types.
+- **No store re-explained for the switch.** A record stamped under the fold
+  before is reused while that stamp matches (`stampedBeforeSplit`, computed
+  beside the fingerprint, read for `reuse` only): a match means every
+  transitive input is unchanged, words included, so the split would reuse it
+  too. A leaf's two stamps are one. What is re-explained gets the new stamp;
+  nothing is rewritten on reuse. The cost: an old stamp cannot tell a
+  dependency's words from its source, so a store stamped before still pays
+  the 53 once.
+- **Measured on PetClinic** (the paid store, on a copy; stamps restated under
+  the words as they were before the function words): the old fold's 106
+  stamps reproduced exactly (0 calls); the function words then cost 53 calls
+  as stamped (121 067 in, 55 665 out, ~$0.08) and **10** stamped under the
+  split (7 operations, 2 types, 1 module; 26 758 in, 12 925 out, ~$0.02).
+- **Tests:** a callee's words leave its callers and its type reused; a type's
+  words re-explain its module even when the module's candidates did not move;
+  a type depending on it and a module importing its module stay reused; a
+  source change still reaches every dependent; old stamps reused while
+  nothing changed, followed once more on a dependency's words, refused on a
+  source change. Six mutants (no module rule, the old fold, old stamps
+  refused, words in the chain, whole fingerprints in the chain, the run
+  stamping the chain) each fail at least one.
 
 ### 20.4 Milestone split
 
@@ -5806,36 +5850,56 @@ The decisions:
 - [x] The store at version 2: migration 1 creating `insight_word`, written
       per record in the unit's transaction and rebuilt on `--import`; the
       migration tests of §20.3; the round-trip property unchanged and green
-      on every existing side-car. *(The real Broadleaf side-car is owed;
-      measured on a synthetic one at its scale.)*
-- [ ] `--terms N`; `--dry-run`/`--estimate` reflecting the longer
+      on every existing side-car. *(Scale measured on a synthetic side-car
+      at Broadleaf's counts; the real file is PetClinic's — the definition
+      of done.)*
+- [x] `--terms N`; `--dry-run`/`--estimate` reflecting the longer
       completions (`COMPLETION_TOKENS_PER_BLOCK` re-measured); a reader's
       answer for a record explained under prompt `"1"`; on the fake client
       and live on the Java fixture; the §20.3 estimate replaced by the
-      Broadleaf measurement. *(In: `--terms`, the estimate's per-word
-      figures, the fake-client run, the prompt-1 answer; the measurement,
-      from a live run on Spring PetClinic in Broadleaf's place, 2026-10-29,
-      §20.3 "Measured". Owed: the live run on the Java fixture.)*
+      PetClinic measurement. *(The measurement: a live run on Spring
+      PetClinic in Broadleaf's place, 2026-10-29, §20.3 "Measured". The live
+      run on the Java fixture: M20's, 2026-11-10 (§21.4), Claude Code with
+      Sonnet under prompt `"2"` — 68 calls, 79 records, the 70 a model wrote
+      every one with `words`, the 3 modules with `glossary`; the 9 templated
+      operations carry none, as built.)*
 - [x] Readers: `insights --word`, `--glossary`, `--polysemy`, `--concerns`;
       `vocabulary --drift-insights`; `/glossary.json`; the entries in the
       Vocabulary tab and in the Navigate panel as inferences.
-- [ ] `docs/vocabulary.md` (the idioms per profile, the classes, the
+- [x] `docs/vocabulary.md` (the idioms per profile, the classes, the
       weights, the artifact, the three layers, the readers, the drift
       reports); README names the feature; `docs/cli.md` the command and the
       flags; `docs/insights.md` the `words` and `glossary` fields and the
-      version bump.
+      version bump. *(`docs/vocabulary.md` is the design record VO-1…VO-16,
+      merged 2026-11-05 with #45.)*
 
-Definition of done: the five `vocabulary.json` snapshots byte-identical to
-the package's output; `codegraph vocabulary` on Broadleaf prints a commerce
-vocabulary under `domain`; the tab and the coloured city reviewed as
-screenshots; `explain` on the Java fixture, live and on the fake client,
-writes a side-car whose every record carries `words` and whose module
-records carry `glossary`; the Broadleaf side-car (28 206 records, prompt
-`"1"`) imports into a version-2 store with its counts intact and exports
-`cmp`-equal, and `--estimate` under prompt `"2"` prices the re-explanation
-before it runs; `insights --word order` on the re-explained Broadleaf store
-answers in under a second; `pnpm -r test`, typecheck and `./test.sh --ts`
-green; the coverage table and the cost filled in this section.
+Definition of done — M19a and M19b on Broadleaf, where the demo images were
+made; M19c on Spring PetClinic, the user's choice (2026-10-29): small enough
+to read every answer, where re-explaining Broadleaf's 28 206 records was
+not. The five `vocabulary.json` snapshots byte-identical to the package's
+output; `codegraph vocabulary` on Broadleaf prints a commerce vocabulary
+under `domain`; the tab and the coloured city reviewed as screenshots;
+`explain` on the Java fixture, live and on the fake client, writes a
+side-car whose every record a model wrote carries `words` and whose module
+records carry `glossary`; `--estimate` prices a PetClinic run before it runs
+and the live run's measurement replaces its per-block figures; the PetClinic
+side-car (prompt `"2"`, 139 records) imports into a fresh version-2 store
+with its counts intact and exports `cmp`-equal, a version-1 store migrates
+(`store-v1.sql`, and the synthetic side-car at Broadleaf's scale); `insights
+--word pet` on the PetClinic store answers in under a second; `pnpm -r test`,
+typecheck and `./test.sh --ts` green; the coverage table and the cost filled
+in this section.
+
+**Met (2026-11-12, main `4e3aa82`).** The Java-fixture live run is M20's
+(above). PetClinic, on a copy of the paid store: 139 records imported (109
+operations, 76 by a model, every one with `words`; 25 types; 5 modules, each
+with `glossary`: 301 word and 52 glossary entries), exported `cmp`-identical;
+`insights --word pet` 0.14 s, 81 MB. `--estimate` had said 66 570 completion
+tokens, the run took 96 356; refitted (§20.3 "Measured"), it now prices the
+53 calls the function-word change made stale (#42) — 121 067 in, 55 665 out,
+~$0.08 at the run's fitted prices — before any is sent. CI green on that
+commit: the workspace's build, typecheck and tests, and the TypeScript
+extractor's `cmp` gate that `./test.sh --ts` runs.
 
 ### 20.5 Deferred, explicitly
 
@@ -6115,9 +6179,9 @@ builds `claudeCodeClient`; the seam's `clientFor` takes the whole resolution.
 | M18a | Ruby extractor — profile + skeleton | ✅ (2026-10-13, worktree `ruby-extractor`) `rb` profile in core (the eleventh: the module is the file, `class` and `module` are types below it, mixins are `traitUsage`, no interface — §19.2); `extractors/ruby/` in Rust on Prism 1.9.0 (`ruby-prism`, pinned), no Ruby to build or run; the core table distilled from RBS 4.2.0 `core/` with RBS's own parser (915 constants: 304 classes, 26 modules, 585 values); walking skeleton — files, classes and modules (the wrapper rule, one entity per declaring file, reopenings `attachedTo` their primary, a `String` patch attached to `<ruby>/String`), methods and parameters, `require`/`require_relative` by path and by load root, superclasses and mixins resolved lexically, the `derived` import, stubs — → `fixtures/ruby/expected/model.jsonl` (24 files, 102 entities / 38 edges) byte-identical to core's encoder and profile-valid with zero issues; 60 cargo tests (50 unit, 10 contract: snapshot, CRLF + reversed creation order, the CLI contract) + 16 core gate tests; `codegraph validate` OK; `bin/codegraph-ruby`; `build.sh --ruby` (a 1.2 MB binary) / `test.sh --ruby` with the release-binary `cmp`; `ruby-test` written in CI, not yet run there |
 | M18b | Ruby extractor — model | ✅ (2026-10-13, worktree `ruby-extractor`) `field` (an instance variable, its `attr_*`, a Struct member: one entity `@x`) and `constant` (keyed by full path, with its literal `value`); `Struct.new` / `Data.define` / `Class.new` / `Module.new` assigned to a constant as types, a `Struct.new` superclass as a `generated` inheritance; constant references resolved lexically then through the ancestors; the core table extended with superclasses, mixins and methods (RBS 4.2.0: 915 constants, 23 mixins, 2428 methods) so lookup crosses from the corpus into the VM's classes; the invocation tiers of §19.4 — `declared` where the receiver's class is written, `derived` for typed locals, typed instance variables and the sole-library-ancestor attribution, the language resolved with no edge, untyped receivers dropped and counted; `access` with read/write, `throws`, comments, `sloc` + `cyclomatic`, literals; the Ruby 1.8 require idioms, `load`, `autoload`, shebang scripts; `--explain-dropped`, every drop with its line → `fixtures/ruby/expected/model.jsonl` (27 files, 154 entities / 136 edges; 152 sites, 77.0 % resolved) byte-identical to core's encoder and profile-valid with zero issues; `ruby` in the metrics pass and the fifth `model.metrics.jsonl` (86 of 88 joined, `sloc = ploc` on all 86); 101 cargo tests (90 unit, 11 contract) + 24 core gate tests; the fixture in the analyzer, city, navigator, CLI `validate` and metrics suites; `validate`, `analyze`, `navigator`, `city --layout` and `serve` run on it, City and Navigate screenshots reviewed |
 | M18c | Ruby extractor — audit + oracles + distribution | ✅ (2026-10-13, worktree `ruby-extractor`; CI not yet run) rake 13.2.1, rubygems 3.6.2, Mastodon 4.3.0 and rails 8.0.2 audited `validate`-clean (100 / 794 / 2 541 / 3 334 files; 77.8 / 54.4 / 31.2 / 57.0 % of sites resolved, Mastodon's `app/`+`lib/` 62.1 %; rails in 4.7 s). Seven defects found and fixed test-first: a library namespace the corpus reopens below dropped as `namespace-only` (592 `Rails.*` in Mastodon); class methods given by an `included` hook unseen (now read where literal — plain Ruby and ActiveSupport::Concern — and `derived`); a library mixin ignored as a class-side candidate (`validates` charged to ActiveRecord::Base); a per-type `dynamic` flag clouding both sides; a compact declaration's qualifier not read; a constant qualified by a subclass stubbed below `<gems>`; `--explain-dropped` not saying what decided a drop. Oracles: Packwerk 3.3.1 over Mastodon — 4 289 of its 4 335 cross-file references in the model (98.9 %), the rest the wrapper rule; rake booted under its own tests — 1 006 of 1 012 declared methods held by the VM on the same line, 1 533 of 2 829 observed calls already edges. The trace tool (`trace/codegraph_trace.rb`, one file) and `--trace`: `generated` `traitUsage`, `dynamic-candidate` invocations with `candidates`, no entity added — exercised end to end in a container and `validate`-clean. `fixtures/ruby` → 31 files, 181 entities / 153 edges, 177 sites, 76.3 %; metrics 106 of 109 joined. 119 cargo tests (107 unit, 12 contract) + 27 core gate tests. Distribution wired: `ruby-native` on four Unix runners, the release loop, `Formula/codegraph-ruby.rb`, the catalogue row; `docs/ruby-extractor.md` |
-| M19a | Vocabulary — lexicon, split, artifact | ✅ (2026-10-26, five stacked PRs from #26, not yet merged; Broadleaf 76 310 entities → 3 381 terms in 0.29 s, 2.9 MB, its top ten a commerce vocabulary after 13 words joined the shared list) `Profile.lexicon` on the eleven profiles (keywords, conventional names, affixes, separators — the profile half of #19), METAMODEL §5 row, printed by `profiles --lang`; `@codegraph/vocabulary`: one idiom-parametrized splitter with the acronym rule on Unicode categories, four term classes as tags (never filters), role weights recorded in the artifact, scopes = the fold's containers; `codegraph vocabulary` report, `--level`/`--scope`/`--class`/`--drift FILE`; five `vocabulary.json` snapshots byte-identical, closure and determinism properties; the coverage table of §20.1 filled on fixtures, Broadleaf, codegraph, Mastodon, Plausible |
-| M19b | Vocabulary — cloud, tab, city channel | ✅ (2026-10-26, three stacked PRs from #31, not yet merged; Broadleaf's cloud and its city raised by `order` are the demo images) deterministic spiral layout with an injected measurer and the no-overlap property; `--svg` with the fixture snapshot; `serve` builds `/vocabulary.json` and answers `/carriers.json?scope=&term=`; the sixth navigator tab (scope follows the selection, chips, table, carriers → reveal), literals pinned, types-only import; `vocabulary:<term>` metric source through the CLI hook, city unchanged; the two demo images under `docs/` and the README section — the issue's fourth criterion |
-| M19c | Vocabulary — glossary in the explanation | `words` on every insight block — the words of the unit's name, its parameters' and (for a type) its fields', each with `in`, `concern` (domain / technical / ambiguous), `sense`, `meaning`, in that entity's context, asked in the SAME call that explains it; `glossary` on the module block reconciling its types' entries with `polysemous`; `PROMPT_VERSION` 2, the words `.optional()` in the record schema so every existing side-car round-trips byte-identical — no new record type, no format change; the store at version 2 with the `insight_word` projection (rebuilt on `--import`); readers `insights --word/--glossary/--polysemy/--concerns`, `vocabulary --drift-insights`, `/glossary.json`, the entries shown as inferences in both panels; the Broadleaf re-explanation priced by `--estimate` and measured; `docs/vocabulary.md` |
+| M19a | Vocabulary — lexicon, split, artifact | ✅ (2026-10-26, five stacked PRs from #26 — #26 merged to main 2026-10-27, #27–#30 with #46 on 2026-11-05; Broadleaf 76 310 entities → 3 381 terms in 0.29 s, 2.9 MB, its top ten a commerce vocabulary after 13 words joined the shared list) `Profile.lexicon` on the eleven profiles (keywords, conventional names, affixes, separators — the profile half of #19), METAMODEL §5 row, printed by `profiles --lang`; `@codegraph/vocabulary`: one idiom-parametrized splitter with the acronym rule on Unicode categories, four term classes as tags (never filters), role weights recorded in the artifact, scopes = the fold's containers; `codegraph vocabulary` report, `--level`/`--scope`/`--class`/`--drift FILE`; five `vocabulary.json` snapshots byte-identical, closure and determinism properties; the coverage table of §20.1 filled on fixtures, Broadleaf, codegraph, Mastodon, Plausible |
+| M19b | Vocabulary — cloud, tab, city channel | ✅ (2026-10-26, three stacked PRs from #31, merged to main with #46 on 2026-11-05; Broadleaf's cloud and its city raised by `order` are the demo images) deterministic spiral layout with an injected measurer and the no-overlap property; `--svg` with the fixture snapshot; `serve` builds `/vocabulary.json` and answers `/carriers.json?scope=&term=`; the sixth navigator tab (scope follows the selection, chips, table, carriers → reveal), literals pinned, types-only import; `vocabulary:<term>` metric source through the CLI hook, city unchanged; the two demo images under `docs/` and the README section — the issue's fourth criterion |
+| M19c | Vocabulary — glossary in the explanation | ✅ (2026-11-12; merged 2026-11-05 with #46 and #42–#45; tested on Spring PetClinic in Broadleaf's place, §20.4) `words` on every insight block — the words of the unit's name, its parameters' and (for a type) its fields', each with `in`, `concern` (domain / technical / ambiguous), `sense`, `meaning`, in that entity's context, asked in the SAME call that explains it; `glossary` on the module block reconciling its types' entries with `polysemous`; `PROMPT_VERSION` 2, the words `.optional()` in the record schema so every existing side-car round-trips byte-identical — no new record type, no format change; the store at version 2 with the `insight_word` projection (rebuilt on `--import`); readers `insights --word/--glossary/--polysemy/--concerns`, `vocabulary --drift-insights`, `/glossary.json`, the entries shown as inferences in both panels; the PetClinic run priced by `--estimate` and measured; `docs/vocabulary.md` |
 | M20a | Model providers — the Claude Code adapter | ✅ (2026-11-10, 94 `@codegraph/llm` tests) `claudeCodeClient` in `@codegraph/llm` (§21.1): `claude -p --output-format json --json-schema --system-prompt --tools "" --safe-mode --no-session-persistence`, the user prompt on stdin, `structured_output` / `usage` / `total_cost_usd` / `modelUsage` read into the port's response, every failure classified into the port's one error type; `findClaudeCode` (option → `CLAUDE_CODE_PATH` → PATH → known install locations, pure) and `resolveProvider` with the fixed precedence; fake-process tests, the boundary test unchanged |
 | M20b | Model providers — wired and documented | ✅ (2026-11-10, live on Claude Code 2.1.322, Java fixture: 68 calls, 0 failed, 79 records — 70 explained, stamped `claude-sonnet-5-5`, 9 templated — decode-clean, eof `$1.03` for 307 896 + 54 688 tokens; the prompt side came in ≈ 2.7× the bare estimate — Claude Code's per-call scaffolding and schema, which the estimate now counts (§21.4): 280 481 estimated for the 307 896 billed) `--provider claude-code`, `--claude-path`, `--model` default per provider resolved before the plan (`sonnet`), the usage error naming the fix and the `--max-tokens` note; a live run on the Java fixture; `docs/cli.md`, `docs/insights.md`, README, CLAUDE.md and the website's explain pages name the port, the three adapters and the Anthropic API slot (§21.6) |
 
@@ -6240,6 +6304,7 @@ builds `claudeCodeClient`; the seam's `clientFor` takes the whole resolution.
 | Glossary tied to the entity (M19c) | each explained unit's block carries `words`: the words its name (and its parameters' or fields' names) is made of, with sense and concern in that entity's context, asked in the explanation call itself; the module block reconciles its types' words into `glossary`; scopes and the corpus roll up from the records | a meaning belongs to the entity that uses the word, and the context pack of that entity is the one place the pipeline has its source, facts and dependencies' explanations together; a scope has a vocabulary, not a meaning — the two earlier drafts (a standalone command over a term table; a second request per scope) asked at the wrong altitude |
 | Glossary storage (M19c) | the insights store, version 2: an `insight_word (id, word, in, concern, sense, confidence)` projection written with the record and rebuilt on `--import`, indexed on `word`; the side-car stays the one source of truth | bought, so it shares the insights' lifecycle (migrated, never regenerated); a projection makes `--word` an index lookup without a second authoritative copy — the M16b rule (what is queried is a column over the JSON, what is fetched is the block) |
 | Glossary wire format (M19c) | no new record type: `words`/`glossary` live inside `block`, `.optional()` in the record schema and required on the wire by `strictify`; `PROMPT_VERSION` 2 | M11 put the prompt version in every fingerprint so a better prompt re-explains what it improves — the designed case; a version-1 record decodes and re-encodes to its own bytes, so every existing side-car round-trips, and nothing is deleted by the bump |
+| Words out of the chain (M19c) | every unit has two hashes: its fingerprint (stored) and its chain (the fingerprint without the words, over its dependencies' chains; never stored); a dependent hashes a dependency's chain, a module its types' whole fingerprints; a record stamped before is reused while that stamp matches | no caller's prompt shows a callee's words, only a module reads its types' — so a lexicon correction re-explains 10 PetClinic units instead of 53; a match on the old stamp implies one on the new, so no paid store is re-explained for the switch |
 | Port and adapters (M20) | `LlmClient` is the port; OpenRouter, Cloudflare AI Gateway and Claude Code are adapters behind it, each holding its transport behind one function; the Anthropic API is a named empty slot (§21.6), not a stub | the walk, the store and the CLI never learn a provider; a fourth adapter is one file and one entry in `providers.ts` |
 | Claude Code as a subprocess (M20) | the user's own `claude` binary in headless mode — `--safe-mode` (not `--bare`, which drops OAuth), tools off, no session, the system prompt replaced, the user prompt on stdin | the installation, login and version are the user's; no second SDK enters the workspace; argv has a 128 KB per-argument limit |
 | Provider precedence (M20) | `auto` takes the single configured provider; with several, OpenRouter, then Cloudflare, then Claude Code, the reason naming the flag for the others; `--model` defaults per provider (`sonnet` on Claude Code) | an exported key is a deliberate act, an installed CLI is ambient; `openai/gpt-5.6-luna` means nothing to Claude Code |

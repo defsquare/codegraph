@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { contextPackFor, glossaryAsked, type ContextEnv, type MemberPack } from "./context.js";
 import type { Unit } from "./order.js";
-import { unitFingerprint, type PlanEnv, type PlanStep, type RunPlan } from "./plan.js";
+import { dependenciesOf, unitHashes, type PlanEnv, type PlanStep, type RunPlan } from "./plan.js";
 import { renderPrompts, type Prompt } from "./prompt.js";
 import { bookOf, type RecordBook } from "./records.js";
 import {
@@ -339,7 +339,7 @@ export async function executeRun(
       const dep = env.unitOf.get(d);
       return dep === undefined || dep.members.some((member) => !explained(member));
     });
-    const fingerprint = unitFingerprint(pack, step.model, options.depth, unit.deps.map((d) => plan.fingerprints.get(d) ?? ""), missing);
+    const { fingerprint } = unitHashes(pack, step.model, options.depth, dependenciesOf(unit, plan.hashes), missing);
     const produced: InsightRecord[] = [];
     let calls = 0;
     try {
