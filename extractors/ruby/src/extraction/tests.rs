@@ -1,5 +1,6 @@
 use super::*;
 use crate::corpus::{SourceFile, line_count};
+use crate::ids::LANG;
 
 fn extraction(files: &[(&str, &str)]) -> Extraction {
     traced(files, None)
@@ -19,7 +20,7 @@ fn traced(files: &[(&str, &str)], trace: Option<&str>) -> Extraction {
             lines: line_count(source.as_bytes()),
         })
         .collect();
-    files.sort_by(|a, b| crate::model::utf16_cmp(&a.rel, &b.rel));
+    files.sort_by(|a, b| codegraph_model::utf16_cmp(&a.rel, &b.rel));
     let corpus = Corpus {
         root_display: "src".to_owned(),
         files,
@@ -33,7 +34,7 @@ fn one(source: &str) -> Extraction {
 }
 
 fn ids_of(extraction: &Extraction) -> Vec<String> {
-    let mut ids: Vec<String> = extraction.model.entities.iter().map(|e| e.key.render()).collect();
+    let mut ids: Vec<String> = extraction.model.entities.iter().map(|e| e.key.render(LANG)).collect();
     ids.sort();
     ids
 }
@@ -45,7 +46,7 @@ fn edges_of(extraction: &Extraction, kind: &str) -> Vec<(String, String, &'stati
         .edges
         .iter()
         .filter(|e| e.kind == kind)
-        .map(|e| (e.from.render(), e.to.render(), e.provenance, e.anchor.start))
+        .map(|e| (e.from.render(LANG), e.to.render(LANG), e.provenance, e.anchor.start))
         .collect();
     edges.sort();
     edges
@@ -57,8 +58,8 @@ fn from(extraction: &Extraction, kind: &str, from: &str) -> Vec<(String, &'stati
         .model
         .edges
         .iter()
-        .filter(|e| e.kind == kind && e.from.render() == from)
-        .map(|e| (e.to.render(), e.provenance, e.anchor.start))
+        .filter(|e| e.kind == kind && e.from.render(LANG) == from)
+        .map(|e| (e.to.render(LANG), e.provenance, e.anchor.start))
         .collect();
     edges.sort_by(|a, b| (a.2, &a.0).cmp(&(b.2, &b.0)));
     edges
@@ -69,7 +70,7 @@ fn entity<'a>(extraction: &'a Extraction, id: &str) -> &'a Entity {
         .model
         .entities
         .iter()
-        .find(|e| e.key.render() == id)
+        .find(|e| e.key.render(LANG) == id)
         .unwrap_or_else(|| panic!("no entity {id}"))
 }
 
@@ -78,7 +79,7 @@ fn edge<'a>(extraction: &'a Extraction, kind: &str, from: &str, to: &str) -> &'a
         .model
         .edges
         .iter()
-        .find(|e| e.kind == kind && e.from.render() == from && e.to.render() == to)
+        .find(|e| e.kind == kind && e.from.render(LANG) == from && e.to.render(LANG) == to)
         .unwrap_or_else(|| panic!("no {kind} edge {from} -> {to}"))
 }
 
@@ -440,7 +441,13 @@ fn a_constant_declared_in_another_file_is_a_derived_import_unless_required() {
 fn keys_parameters_by_name_and_by_ordinal_when_there_is_none_or_it_repeats() {
     let run = one("class Order\n  def each(first, *, _, _, &blk); end\n  def self.call(*); end\nend\n");
     let each = entity(&run, "rb:a.rb/Order.each");
-    let keys: Vec<String> = each.parameters.as_ref().unwrap().iter().map(Key::render).collect();
+    let keys: Vec<String> = each
+        .parameters
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|key| key.render(LANG))
+        .collect();
     assert_eq!(
         keys,
         vec![
@@ -680,8 +687,8 @@ fn an_instance_variable_and_the_attr_that_exposes_it_are_one_field() {
         .model
         .edges
         .iter()
-        .filter(|e| e.kind == "access" && e.from.render() == "rb:a.rb/Order.add")
-        .map(|e| (e.to.render(), e.access, e.anchor.start))
+        .filter(|e| e.kind == "access" && e.from.render(LANG) == "rb:a.rb/Order.add")
+        .map(|e| (e.to.render(LANG), e.access, e.anchor.start))
         .collect();
     assert_eq!(
         accesses,
@@ -1194,15 +1201,15 @@ fn a_trace_binds_an_untyped_call_to_what_it_reached_as_a_dynamic_candidate() {
         .model
         .edges
         .iter()
-        .filter(|e| e.kind == "invocation" && e.from.render() == "rb:lib%2Fa.rb/Order.run")
+        .filter(|e| e.kind == "invocation" && e.from.render(LANG) == "rb:lib%2Fa.rb/Order.run")
         .map(|e| {
             (
-                e.to.render(),
+                e.to.render(LANG),
                 e.provenance,
                 e.anchor.start,
                 e.candidates
                     .as_ref()
-                    .map(|c| c.iter().map(Key::render).collect::<Vec<_>>()),
+                    .map(|c| c.iter().map(|key| key.render(LANG)).collect::<Vec<_>>()),
             )
         })
         .collect();

@@ -1,13 +1,11 @@
-//! The model as this extractor holds it before writing: natural keys, entities
+//! The model as an extractor holds it before writing: natural keys, entities
 //! and outgoing edges. Vocabulary strings (kinds, traits, edge kinds,
 //! provenance) are core's, written verbatim and never interpreted here.
 
 use std::cmp::Ordering;
 
-pub const LANG: &str = "rb";
-
-/// A natural key `(module, symbol, disambiguator?)` — `lang` is `rb` for every
-/// key this extractor writes. A module names itself: empty symbol, no
+/// A natural key `(module, symbol, disambiguator?)` — `lang` is the model's,
+/// one for every key a file holds. A module names itself: empty symbol, no
 /// disambiguator (schemas/README.md §2).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Key {
@@ -59,9 +57,9 @@ impl Key {
         }
     }
 
-    /// The display projection `rb:<module>[/<symbol>][#<d>]` — for messages and tests only.
-    pub fn render(&self) -> String {
-        let mut out = format!("{LANG}:{}", self.module);
+    /// The display projection `<lang>:<module>[/<symbol>][#<d>]` — for messages and tests only.
+    pub fn render(&self, lang: &str) -> String {
+        let mut out = format!("{lang}:{}", self.module);
         if !self.symbol.is_empty() {
             out.push('/');
             out.push_str(&self.symbol);
@@ -172,6 +170,9 @@ pub struct Edge {
 
 #[derive(Debug)]
 pub struct Model {
+    /// The header's `lang`: the profile every record is read against, and the
+    /// prefix of every rendered id.
+    pub lang: &'static str,
     /// The header's `extractor` object, in the order written.
     pub extractor: Vec<(&'static str, String)>,
     pub root: String,
@@ -189,19 +190,22 @@ mod tests {
     fn a_module_names_itself_and_members_nest_with_a_dot() {
         let file = Key::module("lib%2Forder.rb");
         assert!(file.is_module());
-        assert_eq!(file.render(), "rb:lib%2Forder.rb");
+        assert_eq!(file.render("rb"), "rb:lib%2Forder.rb");
         let order = Key {
             module: file.module.clone(),
             symbol: "Acme::Order".into(),
             d: None,
         };
-        assert_eq!(order.member("total").render(), "rb:lib%2Forder.rb/Acme::Order.total");
-        // A top-level method sits directly below the file.
-        assert_eq!(file.member("main").render(), "rb:lib%2Forder.rb/main");
-        let call = order.member("call").disambiguated("self");
-        assert_eq!(call.render(), "rb:lib%2Forder.rb/Acme::Order.call#self");
         assert_eq!(
-            call.disambiguated("param:args").render(),
+            order.member("total").render("rb"),
+            "rb:lib%2Forder.rb/Acme::Order.total"
+        );
+        // A top-level method sits directly below the file.
+        assert_eq!(file.member("main").render("rb"), "rb:lib%2Forder.rb/main");
+        let call = order.member("call").disambiguated("self");
+        assert_eq!(call.render("rb"), "rb:lib%2Forder.rb/Acme::Order.call#self");
+        assert_eq!(
+            call.disambiguated("param:args").render("rb"),
             "rb:lib%2Forder.rb/Acme::Order.call#self#param:args"
         );
     }

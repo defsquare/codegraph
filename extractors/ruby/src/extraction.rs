@@ -13,11 +13,11 @@ use crate::declarations::{
     What, declarations, is_operator,
 };
 use crate::ids;
-use crate::model::{Anchor, Edge, Entity, Key, Literal, Model};
 use crate::resolve::{Ancestor, Found, Place, Resolution, Step, TypeKind, Whitelist};
 use crate::stats::{Stats, TraceStats};
 use crate::trace::Trace;
 use crate::{NAME, PRISM_VERSION, VERSION};
+use codegraph_model::{Anchor, Edge, Entity, Key, Literal, Model};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
@@ -1589,6 +1589,7 @@ pub fn extract(
         ("rbs", core.version().to_owned()),
     ];
     let model = Model {
+        lang: ids::LANG,
         extractor: extractor_header,
         root: corpus.root_display.clone(),
         repository,

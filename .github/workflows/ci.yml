@@ -14,8 +14,9 @@
 #   typescript-smoke the bundled TypeScript extractor on a runner of each OS must
 #                   reproduce its fixture snapshot byte for byte (PLAN.md §14.7):
 #                   Windows paths, CRLF checkouts, case-insensitive walks
-#   ruby-test       the Prism extractor's own suite (PLAN.md §19), then its release
-#                   binary re-extracting the fixture snapshot byte for byte
+#   ruby-test       the Prism extractor's own suite (PLAN.md §19) and the shared
+#                   writer's (extractors/model-rs), then its release binary
+#                   re-extracting the fixture snapshot byte for byte
 #   ruby-native     its binary built on each of the four Unix runners, each one
 #                   reproducing that snapshot; the tap's formula ships these
 #   metrics         the metrics pass's own suite (PLAN.md §18): join, snapshots, history
@@ -217,11 +218,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # The Ruby extractor (PLAN.md §19): the walker, resolver and writer suites,
-  # the fixture snapshot byte for byte under CRLF and a reversed creation order,
-  # then the RELEASE binary re-extracting it. Building needs libclang — bindgen
-  # reads Prism's C headers — which the runner's clang provides; running needs
-  # nothing, least of all Ruby.
+  # The Ruby extractor (PLAN.md §19): the walker and resolver suites, the
+  # shared writer's (extractors/model-rs, a path dependency — the checkout
+  # holds it), the fixture snapshot byte for byte under CRLF and a reversed
+  # creation order, then the RELEASE binary re-extracting it. Building needs
+  # libclang — bindgen reads Prism's C headers — which the runner's clang
+  # provides; running needs nothing, least of all Ruby.
   ruby-test:
     name: ruby extractor
     runs-on: ubuntu-latest
@@ -233,7 +235,8 @@ jobs:
           path: |
             ~/.cargo/registry
             extractors/ruby/target
-          key: ruby-test-${{ hashFiles('extractors/ruby/Cargo.lock') }}
+            extractors/model-rs/target
+          key: ruby-test-${{ hashFiles('extractors/ruby/Cargo.lock', 'extractors/model-rs/Cargo.lock') }}
       # bindgen loads libclang at build time; a runner image without clang gets it here.
       - run: command -v clang >/dev/null || (sudo apt-get update && sudo apt-get install -y libclang-dev)
       - shell: bash

@@ -21,7 +21,9 @@
 #   Ruby       : cargo build     -> extractors/ruby/target/release/codegraph-ruby
 #                                   (Prism linked in: needs nothing on the machine
 #                                   that runs it — bin/codegraph-ruby; building it
-#                                   needs libclang, for the parser bindings)
+#                                   needs libclang, for the parser bindings; the
+#                                   shared writer extractors/model-rs is a path
+#                                   dependency, built with it)
 #   Metrics    : cargo build     -> extractors/metrics/target/release/codegraph-metrics
 #                                   (the big-code-analysis pass over any extractor's
 #                                   model, PLAN.md §18 — bin/codegraph-metrics)

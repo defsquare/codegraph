@@ -20,8 +20,9 @@
 #              re-extracts fixtures/elixir/src and must reproduce the committed
 #              snapshot byte for byte — the only test that sees the escript's
 #              own code path (embedded Elixir, the OTP table baked at build)
-#   ruby       cargo test, then the RELEASE binary (if build.sh made one)
-#              re-extracts fixtures/ruby/src and must reproduce the committed
+#   ruby       cargo test of the extractor and of the writer it shares
+#              (extractors/model-rs), then the RELEASE binary (if build.sh made
+#              one) re-extracts fixtures/ruby/src and must reproduce the committed
 #              snapshot byte for byte — Prism and the core table as linked in
 #
 # No build is required first: packages/cli/vitest.config.ts aliases the
@@ -54,7 +55,8 @@ Options:
                        only extractors/csharp (dotnet test + published-binary smoke test)
   --elixir, --elixir-only
                        only extractors/elixir (mix test + built-escript smoke test)
-  --ruby, --ruby-only  only extractors/ruby (cargo test + built-binary smoke test)
+  --ruby, --ruby-only  only extractors/ruby and the writer it shares, extractors/model-rs
+                       (cargo test + built-binary smoke test)
   --metrics, --metrics-only
                        only extractors/metrics (cargo test: the join + the five enriched snapshots)
   --all                everything (default)
@@ -311,9 +313,14 @@ fi
 # ------------------------------------------------------------------ ruby ----
 
 if wants_ruby && [ "$SKIP_RUBY" = "no" ]; then
-  # The unit tests pin the walker, the resolver and the writer;
-  # tests/contract.rs holds the library to the committed snapshot, byte for
-  # byte, under CRLF and a reversed creation order, and to the CLI contract.
+  # The writer's own unit tables — keys, canonical order, JSON bytes — live in
+  # the crate the Rust extractors share; each extractor's snapshot is the rest.
+  phase "model writer tests (cargo test)" \
+    cargo test --locked --manifest-path "$MODEL_RS_DIR/Cargo.toml"
+
+  # The unit tests pin the walker and the resolver; tests/contract.rs holds
+  # the library to the committed snapshot, byte for byte, under CRLF and a
+  # reversed creation order, and to the CLI contract.
   phase "ruby extractor tests (cargo test)" \
     cargo_ruby test --locked --manifest-path "$RUBY_DIR/Cargo.toml"
 

@@ -5,7 +5,7 @@
 //! thing to get right is the order of everything.
 
 use crate::json;
-use crate::model::{Anchor, Edge, Entity, Key, LANG, Literal, Model, utf16_cmp};
+use crate::model::{Anchor, Edge, Entity, Key, Literal, Model, utf16_cmp};
 use std::collections::HashMap;
 use std::io::{self, Write};
 
@@ -78,11 +78,12 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
     let mut entities: Vec<&Entity> = model.entities.iter().collect();
     entities.sort_by(|a, b| a.key.canonical_cmp(&b.key));
 
+    let lang = model.lang;
     let mut surrogate_of: HashMap<&Key, usize> = HashMap::with_capacity(entities.len());
     let mut module_surrogate: HashMap<&str, usize> = HashMap::new();
     for (index, entity) in entities.iter().enumerate() {
         if surrogate_of.insert(&entity.key, index).is_some() {
-            return Err(WriteError::DuplicateKey(entity.key.render()));
+            return Err(WriteError::DuplicateKey(entity.key.render(lang)));
         }
         // 2. A module names itself: the entity with an empty, undisambiguated symbol.
         if entity.key.is_module() {
@@ -91,8 +92,8 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
     }
     let reference = |key: &Key, from: &Key| -> Result<usize, WriteError> {
         surrogate_of.get(key).copied().ok_or_else(|| WriteError::Dangling {
-            from: from.render(),
-            to: key.render(),
+            from: from.render(lang),
+            to: key.render(lang),
         })
     };
 
@@ -136,7 +137,7 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
     line.push_str("{\"t\":\"header\",\"schemaVersion\":");
     json::string(&mut line, SCHEMA_VERSION);
     line.push_str(",\"lang\":");
-    json::string(&mut line, LANG);
+    json::string(&mut line, lang);
     line.push_str(",\"extractor\":");
     object(&mut line, &model.extractor);
     line.push_str(",\"root\":");
@@ -167,7 +168,7 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
     for (index, entity) in entities.iter().enumerate() {
         let module_index = *module_surrogate
             .get(entity.key.module.as_str())
-            .ok_or_else(|| WriteError::NoModule(entity.key.render()))?;
+            .ok_or_else(|| WriteError::NoModule(entity.key.render(lang)))?;
         line.clear();
         line.push_str(&format!(
             "{{\"t\":\"e\",\"i\":{index},\"k\":{},\"tr\":",
@@ -363,10 +364,10 @@ fn object(line: &mut String, pairs: &[(&'static str, String)]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids;
 
+    /// A file module, keyed by a path that needs no escaping.
     fn file(path: &str) -> Entity {
-        let mut entity = Entity::new(ids::file_key(path), "file", &["TNamed", "TModule", "TWithChildren"]);
+        let mut entity = Entity::new(Key::module(path), "file", &["TNamed", "TModule", "TWithChildren"]);
         entity.name = Some(path.to_owned());
         entity.is_stub = Some(false);
         entity.defined_in = Some(vec![path.to_owned()]);
@@ -375,6 +376,7 @@ mod tests {
 
     fn model(entities: Vec<Entity>, edges: Vec<Edge>) -> Model {
         Model {
+            lang: "rb",
             extractor: vec![("name", "codegraph-ruby".into()), ("version", "0.0.0".into())],
             root: "src".into(),
             repository: None,
@@ -454,9 +456,25 @@ mod tests {
         let duplicate = write(&model(vec![file("a.rb"), file("a.rb")], vec![]), &mut Vec::new());
         assert!(matches!(duplicate, Err(WriteError::DuplicateKey(key)) if key == "rb:a.rb"));
 
-        let mut orphan = Entity::new(ids::type_key(&ids::file_key("a.rb"), "A"), "class", &["TNamed"]);
-        orphan.parent = Some(ids::file_key("missing.rb"));
+        let mut orphan = Entity::new(Key::module("a.rb").member("A"), "class", &["TNamed"]);
+        orphan.parent = Some(Key::module("missing.rb"));
         let dangling = write(&model(vec![file("a.rb"), orphan], vec![]), &mut Vec::new());
         assert!(matches!(dangling, Err(WriteError::Dangling { to, .. }) if to == "rb:missing.rb"));
+    }
+
+    #[test]
+    fn the_header_and_every_message_name_the_models_own_language() {
+        let mut python = model(vec![file("a.py")], vec![]);
+        python.lang = "python";
+        python.extractor = vec![("name", "codegraph-python".into()), ("ruff", "0.0.0".into())];
+        let text = written(&python);
+        let header = text.lines().next().expect("a header");
+        assert!(
+            header.contains(r#""lang":"python","extractor":{"name":"codegraph-python","ruff":"0.0.0"}"#),
+            "{header}"
+        );
+        python.entities.push(file("a.py"));
+        let duplicate = write(&python, &mut Vec::new());
+        assert!(matches!(duplicate, Err(WriteError::DuplicateKey(key)) if key == "python:a.py"));
     }
 }

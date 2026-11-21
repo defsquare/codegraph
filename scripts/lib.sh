@@ -19,6 +19,8 @@ CSHARP_DIR="$ROOT/extractors/csharp"
 ELIXIR_DIR="$ROOT/extractors/elixir"
 METRICS_DIR="$ROOT/extractors/metrics"
 RUBY_DIR="$ROOT/extractors/ruby"
+# The model.jsonl writer the Rust extractors depend on by path (not an extractor).
+MODEL_RS_DIR="$ROOT/extractors/model-rs"
 
 # ---------------------------------------------------------------- output ----
 

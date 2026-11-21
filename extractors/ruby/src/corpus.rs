@@ -2,7 +2,7 @@
 //! bytes: nothing is run, no bundle is read, and what the model writes of a
 //! path is `/`-separated and root-relative on every OS.
 
-use crate::model::utf16_cmp;
+use codegraph_model::utf16_cmp;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
