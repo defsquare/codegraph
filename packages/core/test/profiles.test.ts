@@ -9,6 +9,7 @@ import {
   clojureProfile,
   elixirProfile,
   getProfile,
+  pythonProfile,
   rubyProfile,
   typescriptProfile,
 } from "../src/profiles/index.js";
@@ -757,6 +758,296 @@ describe("structural claims that must not silently regress", () => {
       expect(validateEntity(rb, rogue).map((i) => i.code)).toEqual(["trait-not-allowed"]);
     });
   });
+
+  /**
+   * Python profile v2 (PLAN §23.2): the corrections M22 forces on a profile
+   * that predates M10, M12 and M13 — data before the Ruff-parser extractor is
+   * written against it, so relaxing any claim un-licenses what it will emit.
+   */
+  describe("Python profile v2 licenses what the Ruff-parser extractor emits", () => {
+    const py = pythonProfile;
+    const allowed = (kind: string): Set<string> =>
+      new Set([...(py.kinds[kind]?.required ?? []), ...(py.kinds[kind]?.optional ?? [])]);
+
+    it("has no decorator and no lambda kind: an application is an edge, a lambda part of what writes it", () => {
+      expect(Object.keys(py.kinds).sort()).toEqual(
+        ["attribute", "class", "function", "method", "module", "parameter", "variable"],
+      );
+      expect(py.edges).toContain("annotationUse");
+    });
+
+    it("names raise sites as throws, and keeps interfaceImplementation for the analyzer's Protocol conformance", () => {
+      expect(py.edges).toContain("throws");
+      expect(py.edges).toContain("interfaceImplementation");
+      expect(allowed("class")).toContain("TWithImplements");
+    });
+
+    it("makes the module the file: no parent link to a package's __init__, and a body that runs code", () => {
+      expect(py.kinds["module"]?.required).toEqual(["TNamed", "TModule", "TWithChildren"]);
+      expect(allowed("module")).not.toContain("TChildOf");
+      for (const trait of ["TWithInvocations", "TWithAccesses"]) expect(allowed("module"), trait).toContain(trait);
+    });
+
+    it("makes every invocable a container of its parameters and nested defs, holding no locals", () => {
+      for (const kind of ["function", "method"]) {
+        expect(py.kinds[kind]?.required, kind).toContain("TWithChildren");
+        expect(py.kinds[kind]?.required, kind).toContain("TWithParameters");
+        expect(allowed(kind), kind).not.toContain("TWithLocalVariables");
+      }
+      for (const kind of Object.keys(py.kinds)) expect(allowed(kind), kind).not.toContain("TWithLocalVariables");
+    });
+
+    it("carries measures on modules, classes and invocables (M10b), values on bindings (M10c)", () => {
+      for (const kind of ["module", "class", "function", "method"]) expect(allowed(kind), kind).toContain("TMetrics");
+      for (const kind of ["variable", "attribute", "parameter"]) expect(allowed(kind), kind).toContain("TWithValue");
+    });
+
+    it("documents the id scheme, the stub roots, the provenance tiers and the stated limits", () => {
+      const notes = py.notes?.join("\n") ?? "";
+      expect(notes).toMatch(/%2F/);
+      expect(notes).toMatch(/<builtins>/);
+      expect(notes).toMatch(/<stdlib>/);
+      expect(notes).toMatch(/<site>/);
+      expect(notes).toMatch(/untyped-receiver/);
+      expect(notes).toMatch(/annotation-typed/);
+      expect(notes).toMatch(/star-attributed/);
+      expect(notes).toMatch(/type-checking-only/);
+      expect(notes).toMatch(/Python 2/);
+      expect(notes).toMatch(/MRO/);
+      // v1 said the extractor guesses candidates and emits synthesized members; it does neither.
+      expect(notes).not.toMatch(/candidates list/);
+      expect(notes).not.toMatch(/cannot be attributed/);
+      expect(notes).not.toMatch(/emit the members/);
+    });
+
+    it("validates a module, its class, a method with parameters, a module global and the three stub roots", () => {
+      const file = "src/acme/order.py";
+      const order = "python:src%2Facme%2Forder.py";
+      const model = parseModel({
+        schemaVersion: SCHEMA_VERSION,
+        lang: "python",
+        extractor: { name: "codegraph-python", version: "0.0.0" },
+        root: "fixtures/python/src",
+        entities: [
+          {
+            id: order,
+            kind: "module",
+            traits: ["TNamed", "TModule", "TWithChildren", "TSourceAnchor", "TMetrics", "TWithInvocations"],
+            name: file,
+            definedIn: [file],
+            isStub: false,
+            metrics: { sloc: 11 },
+            anchor: { file, span: [1, 14] },
+          },
+          {
+            // A package is its __init__ file — a module beside the others, parent of none.
+            id: "python:src%2Facme%2F__init__.py",
+            kind: "module",
+            traits: ["TNamed", "TModule", "TWithChildren", "TSourceAnchor"],
+            name: "src/acme/__init__.py",
+            definedIn: ["src/acme/__init__.py"],
+            isStub: false,
+            anchor: { file: "src/acme/__init__.py", span: [1, 1] },
+          },
+          {
+            id: `${order}/MAX_LINES`,
+            kind: "variable",
+            traits: ["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor", "TWithValue"],
+            name: "MAX_LINES",
+            parent: order,
+            value: { k: "number", v: "100" },
+            anchor: { file, span: [5, 5] },
+          },
+          {
+            id: `${order}/Order`,
+            kind: "class",
+            traits: ["TNamed", "TType", "TWithInheritances", "TWithChildren", "TChildOf", "TSourceAnchor", "TMetrics"],
+            name: "Order",
+            isStub: false,
+            parent: order,
+            metrics: { sloc: 7 },
+            anchor: { file, span: [8, 14] },
+          },
+          {
+            id: `${order}/Order.lines`,
+            kind: "attribute",
+            traits: ["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor", "TWithValue"],
+            name: "lines",
+            parent: `${order}/Order`,
+            value: { k: "array", items: [] },
+            anchor: { file, span: [9, 9] },
+          },
+          {
+            id: `${order}/Order.total`,
+            kind: "method",
+            traits: [
+              "TNamed",
+              "TInvocable",
+              "TWithChildren",
+              "TWithParameters",
+              "TWithInvocations",
+              "TWithAccesses",
+              "TTypedEntity",
+              "TChildOf",
+              "TSourceAnchor",
+              "TMetrics",
+            ],
+            name: "total",
+            signature: "total(self, currency='EUR')",
+            parameters: [`${order}/Order.total#param:self`, `${order}/Order.total#param:currency`],
+            parent: `${order}/Order`,
+            metrics: { cyclomatic: 2, sloc: 4 },
+            anchor: { file, span: [11, 14] },
+          },
+          {
+            id: `${order}/Order.total#param:self`,
+            kind: "parameter",
+            traits: ["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"],
+            name: "self",
+            parent: `${order}/Order.total`,
+            anchor: { file, span: [11, 11] },
+          },
+          {
+            id: `${order}/Order.total#param:currency`,
+            kind: "parameter",
+            traits: ["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor", "TWithValue"],
+            name: "currency",
+            parent: `${order}/Order.total`,
+            value: { k: "string", v: "EUR" },
+            anchor: { file, span: [11, 11] },
+          },
+          {
+            id: "python:<builtins>",
+            kind: "module",
+            traits: ["TNamed", "TModule", "TWithChildren"],
+            name: "<builtins>",
+            definedIn: [],
+            isStub: true,
+          },
+          {
+            id: "python:<builtins>/ValueError",
+            kind: "class",
+            traits: ["TNamed", "TType", "TChildOf"],
+            name: "ValueError",
+            isStub: true,
+            parent: "python:<builtins>",
+          },
+          {
+            id: "python:<stdlib>%2Ffunctools",
+            kind: "module",
+            traits: ["TNamed", "TModule", "TWithChildren"],
+            name: "functools",
+            definedIn: [],
+            isStub: true,
+          },
+          {
+            id: "python:<site>%2Fdjango.db.models",
+            kind: "module",
+            traits: ["TNamed", "TModule", "TWithChildren"],
+            name: "django.db.models",
+            definedIn: [],
+            isStub: true,
+          },
+          {
+            id: "python:<site>%2Fdjango.db.models/Model",
+            kind: "class",
+            traits: ["TNamed", "TType", "TChildOf"],
+            name: "Model",
+            isStub: true,
+            parent: "python:<site>%2Fdjango.db.models",
+          },
+        ],
+        edges: [
+          {
+            // `from .order import Order` in the package: the re-export is an import like any other.
+            edge: "import",
+            from: "python:src%2Facme%2F__init__.py",
+            to: order,
+            provenance: "declared",
+            anchor: { file: "src/acme/__init__.py", span: [1, 1] },
+          },
+          {
+            edge: "import",
+            from: order,
+            to: "python:<stdlib>%2Ffunctools",
+            provenance: "declared",
+            anchor: { file, span: [1, 1] },
+          },
+          {
+            edge: "import",
+            from: order,
+            to: "python:<site>%2Fdjango.db.models",
+            provenance: "declared",
+            anchor: { file, span: [2, 2] },
+          },
+          {
+            edge: "inheritance",
+            from: `${order}/Order`,
+            to: "python:<site>%2Fdjango.db.models/Model",
+            provenance: "declared",
+            anchor: { file, span: [8, 8] },
+          },
+          {
+            // `@functools.cache` names a function of a stub module: the edge folds to the module.
+            edge: "annotationUse",
+            from: `${order}/Order.total`,
+            to: "python:<stdlib>%2Ffunctools",
+            provenance: "declared",
+            anchor: { file, span: [10, 10] },
+            arguments: [],
+          },
+          {
+            edge: "throws",
+            from: `${order}/Order.total`,
+            to: "python:<builtins>/ValueError",
+            provenance: "declared",
+            anchor: { file, span: [13, 13] },
+          },
+        ],
+      });
+      expect(validateModel(model, py).map((i) => `${i.code} @ ${i.path}: ${i.message}`)).toEqual([]);
+    });
+
+    it("refuses v1's shapes: a submodule parented by its package, a function holding locals, a decorator or lambda entity", () => {
+      const submodule = Entity.parse({
+        id: "python:src%2Facme%2Forder.py",
+        kind: "module",
+        traits: ["TNamed", "TModule", "TWithChildren", "TChildOf"],
+        name: "src/acme/order.py",
+        definedIn: ["src/acme/order.py"],
+        isStub: false,
+        parent: "python:src%2Facme%2F__init__.py",
+      });
+      expect(validateEntity(py, submodule).map((i) => i.code)).toEqual(["trait-not-allowed"]);
+      const withLocals = Entity.parse({
+        id: "python:src%2Facme%2Forder.py/total_of",
+        kind: "function",
+        traits: [
+          "TNamed",
+          "TInvocable",
+          "TWithChildren",
+          "TWithParameters",
+          "TWithLocalVariables",
+          "TWithInvocations",
+          "TWithAccesses",
+          "TTypedEntity",
+          "TChildOf",
+          "TSourceAnchor",
+        ],
+        name: "total_of",
+        signature: "total_of(lines)",
+        parameters: [],
+        localVariables: [],
+        parent: "python:src%2Facme%2Forder.py",
+        anchor: { file: "src/acme/order.py", span: [3, 6] },
+      });
+      expect(validateEntity(py, withLocals).map((i) => i.code)).toEqual(["trait-not-allowed"]);
+      for (const kind of ["decorator", "lambda"]) {
+        const gone = Entity.parse({ id: `python:src%2Fa.py/x#${kind}`, kind, traits: ["TSourceAnchor"], anchor: { file: "src/a.py", span: [1, 1] } });
+        expect(validateEntity(py, gone).map((i) => i.code), kind).toEqual(["unknown-kind"]);
+      }
+    });
+  });
 });
 
 /**
@@ -838,6 +1129,7 @@ describe("the lexicon of every shipped profile", () => {
       ex: ["file"],
       js: ["module"],
       php: ["codeFile"],
+      python: ["module"],
       rb: ["file"],
       ts: ["module"],
     });
@@ -858,7 +1150,8 @@ describe("the lexicon of every shipped profile", () => {
       java: { package: "." },
       js: { module: "/" },
       php: { codeFile: "/", namespace: "\\" },
-      python: { module: "." },
+      // The module is the file, named by its path (§23.3): never the dotted name.
+      python: { module: "/" },
       rb: { file: "/", class: "::", module: "::", constant: "::" },
       ts: { module: "/" },
     });

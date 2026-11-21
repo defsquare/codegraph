@@ -36,7 +36,7 @@ go         10      9  import, interfaceImplementation, invocation, access, refer
 java       12     15  import, inheritance, interfaceImplementation, invocation, access, reference, annotationUse, throws
 js          8     13  import, inheritance, invocation, access, reference
 php        12     10  import, inheritance, interfaceImplementation, invocation, access, reference, traitUsage, fileInclude
-python      9     10  import, inheritance, interfaceImplementation, invocation, access, reference
+python      7     19  import, inheritance, interfaceImplementation, invocation, access, reference, annotationUse, throws
 ```
 
 Trimmed to seven of the nine profiles.

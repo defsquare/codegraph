@@ -90,11 +90,10 @@ describe("the shipped profiles", () => {
   const having = (role: Role): readonly string[] =>
     [...roles].filter(([, r]) => r === role).map(([key]) => key).sort();
 
-  it("give no role trait to five kinds, three of them named", () => {
+  it("give no role trait to four kinds, two of them named", () => {
     expect(having("other")).toEqual([
       "clj:implBlock",
       "php:codeFile",
-      "python:decorator",
       "rust:impl",
       "ts:namespace",
     ]);

@@ -60,7 +60,7 @@ also a direct download; see [Without Homebrew](#without-homebrew).
    java       12     17  import, inheritance, interfaceImplementation, invocation, access, reference, annotationUse, throws
    js          8     13  import, inheritance, invocation, access, reference
    php        12     10  import, inheritance, interfaceImplementation, invocation, access, reference, traitUsage, fileInclude
-   python      9     10  import, inheritance, interfaceImplementation, invocation, access, reference
+   python      7     19  import, inheritance, interfaceImplementation, invocation, access, reference, annotationUse, throws
    rb          7     27  import, inheritance, traitUsage, invocation, access, reference, throws
    rust       13     12  import, interfaceImplementation, invocation, access, reference
    ts         14     28  import, inheritance, interfaceImplementation, invocation, access, reference, annotationUse, throws

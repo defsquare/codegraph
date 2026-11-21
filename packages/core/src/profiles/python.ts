@@ -1,90 +1,98 @@
 import type { Profile } from "../profile.js";
 
 /**
- * Python: a module *is* a file (TModule.definedIn holds exactly one path), and
- * almost nothing is statically guaranteed — hence the reliance on `derived`,
- * `dynamic-candidate` and `generated` provenance rather than richer traits.
+ * Python profile (v2, PLAN.md §23.2 — the Ruff-parser extractor's contract).
+ * The module is the FILE, keyed and named by its path (the TypeScript and
+ * Ruby rule): a package is its `__init__.py`, a module like the others, and
+ * nothing links a submodule to it — a namespace package has no `__init__` to
+ * be a parent, and a file is not written in another file (invariant 5).
+ *
+ * Python binds names before it runs and nothing else: what a bare name reads
+ * is `declared`, what flow or an annotation says of a receiver is `derived`,
+ * and an attribute of a receiver nothing types is dropped and counted. A
+ * decorator application is an `annotationUse` edge and a lambda part of what
+ * writes it, so neither is a kind; a local is flow, so no kind holds locals.
  */
 export const pythonProfile: Profile = {
   lang: "python",
+
   kinds: {
+    // A source file, an `__init__.py` included. Its body is executable code
+    // (`app = Flask(__name__)`, a script), hence the markers. `<builtins>`,
+    // every `<stdlib>` and `<site>` module an import names, and the target of
+    // a relative import no file answers are this kind too, with `isStub: true`.
     module: {
       required: ["TNamed", "TModule", "TWithChildren"],
-      // TChildOf links a submodule to its package's `__init__` module.
-      optional: ["TChildOf", "TSourceAnchor", "TComment"],
+      optional: ["TSourceAnchor", "TComment", "TMetrics", "TWithInvocations", "TWithAccesses"],
     },
+
+    // `class` at any depth, and a `namedtuple(…)` / `NamedTuple(…)` /
+    // `TypedDict(…)` / `Enum(…)` call bound to a module name. A class body is
+    // executable code. TWithImplements: for the analyzer's Protocol
+    // conformance — the extractor writes no `interfaceImplementation`.
     class: {
-      required: [
-        "TNamed",
-        "TType",
-        "TWithInheritances",
-        "TWithChildren",
-        "TChildOf",
-        "TSourceAnchor",
-      ],
-      // A class body is executable code, so it may itself call and read.
-      optional: ["TWithImplements", "TWithInvocations", "TWithAccesses", "TComment"],
+      required: ["TNamed", "TType", "TWithInheritances", "TWithChildren", "TChildOf", "TSourceAnchor"],
+      optional: ["TWithImplements", "TWithInvocations", "TWithAccesses", "TComment", "TMetrics"],
     },
+
+    // `def` / `async def` in a module or a function. TWithChildren: its
+    // parameters and the `def`s and `class`es written in it carry `parent`.
+    // TTypedEntity: the return annotation, when it names a class.
     function: {
       required: [
         "TNamed",
         "TInvocable",
+        "TWithChildren",
         "TWithParameters",
-        "TWithLocalVariables",
         "TWithInvocations",
         "TWithAccesses",
         "TTypedEntity",
         "TChildOf",
         "TSourceAnchor",
       ],
-      optional: ["TComment"],
+      optional: ["TComment", "TMetrics"],
     },
+
+    // `def` directly in a class body, `@staticmethod` and `@classmethod`
+    // included. TAttachedTo is reserved for a function bound onto a class it
+    // is not written in — a literal monkey patch, which M22 does not extract.
     method: {
       required: [
         "TNamed",
         "TInvocable",
+        "TWithChildren",
         "TWithParameters",
-        "TWithLocalVariables",
         "TWithInvocations",
         "TWithAccesses",
         "TTypedEntity",
         "TChildOf",
         "TSourceAnchor",
       ],
-      // TAttachedTo only for functions bound onto a class they are not written in.
-      optional: ["TAttachedTo", "TComment"],
+      optional: ["TAttachedTo", "TComment", "TMetrics"],
     },
+
+    // A class-level assignment or annotation, and `self.x = …` in a method:
+    // ONE entity per class and name. TWithValue: its literal value.
     attribute: {
       required: ["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"],
-      optional: ["TComment"],
+      optional: ["TWithValue", "TComment"],
     },
+
+    // A MODULE-level binding only (`DEBUG = False`, `logger = …`): what other
+    // files read. A function's local is flow, never an entity.
     variable: {
       required: ["TNamed", "TStructural", "TTypedEntity", "TChildOf"],
-      optional: ["TSourceAnchor", "TComment"],
+      optional: ["TSourceAnchor", "TWithValue", "TComment"],
     },
+
+    // Every parameter: `*args` and `**kwargs` have names. TWithValue: a
+    // literal default.
     parameter: {
       required: ["TNamed", "TStructural", "TTypedEntity", "TChildOf"],
-      optional: ["TSourceAnchor"],
-    },
-    lambda: {
-      // No TNamed and no TWithLocalVariables: a lambda body is one expression.
-      required: [
-        "TInvocable",
-        "TWithParameters",
-        "TWithInvocations",
-        "TWithAccesses",
-        "TChildOf",
-        "TSourceAnchor",
-      ],
-      optional: ["TTypedEntity"],
-    },
-    decorator: {
-      // The decorator *application*, not the decorator callable (that is a function):
-      // it attaches to the decorated entity and invokes the callable.
-      required: ["TAttachedTo", "TWithInvocations", "TSourceAnchor"],
-      optional: ["TNamed", "TChildOf", "TComment"],
+      optional: ["TSourceAnchor", "TWithValue"],
     },
   },
+
   edges: [
     "import",
     "inheritance",
@@ -92,18 +100,30 @@ export const pythonProfile: Profile = {
     "invocation",
     "access",
     "reference",
+    "annotationUse",
+    "throws",
   ],
+
   notes: [
-    "A module is a file: TModule.definedIn holds exactly one path (1-1 cardinality). A package is the module of its __init__.py.",
-    "Multiple inheritance emits N inheritance edges from the class. MRO (C3 linearization) order is NOT represented: the edge set is unordered, so method-resolution questions cannot be answered from the model.",
-    "Protocols (PEP 544) are structural, never declared: conformance yields interfaceImplementation edges with provenance 'derived'. Explicit `class X(Protocol)` subclassing is a plain declared inheritance edge instead.",
-    "Decorators that synthesize members (dataclasses, attrs, ORM/metaclass bases) emit the members and their edges with provenance 'generated'; a pre-expansion extraction sees none of them.",
-    "Duck typing: a call whose receiver type is not statically known resolves to provenance 'dynamic-candidate' with a candidates list, or is absent entirely.",
-    "Monkey patching (assigning functions or attributes onto classes and modules at runtime) is invisible to static extraction; the model shows the original definition site only.",
-    "getattr/setattr/hasattr and importlib.import_module/__import__ resolve only for literal string arguments; computed names produce no edge.",
-    "Type hints are optional and may be deferred strings (PEP 563 / `from __future__ import annotations`), so TTypedEntity.declaredType is frequently absent even where the trait is present.",
-    "`from x import *` yields a module-level import edge only; the individual names it binds cannot be attributed.",
-    "Conditional and `if TYPE_CHECKING:` imports are emitted like any other import — this profile declares no Space, so type-only dependencies are indistinguishable from runtime ones.",
+    "The module is the file, keyed AND named by its path below the root (`python:src%2Facme%2Forder.py`, named `src/acme/order.py` — the TypeScript and Ruby rule): `TModule.definedIn` has exactly one entry, and a package is its `__init__.py`, a module like the others. The dotted name is neither the key nor the name: it is not unique in a repository (`conftest`, `setup`, `tests.test_models` recur), and it depends on which directory is taken for a root, which is an inference — a key must not move when a heuristic does. No parent links a submodule to its package: a namespace package (PEP 420) has no `__init__` to be one, and a file is not written in another file. Directories carry the nesting.",
+    "Key components are percent-encoded: `/`, `#` and `%` in every path segment, and `<`, so that no walked path can spell a reserved module (the Ruby rule). A name is an identifier and needs no escaping: `.` cannot occur in one, so it separates nesting unescaped — `Order.Line`, `total_of.helper`, a class in a function `make.Local`. Identifiers are NFKC-normalized, as the language normalizes them. Python has no overloading and a class holds one member per name, so a key carries no arity and no `static` mark; the only names that coexist are a property's accessors, `Order.total#setter` and `Order.total#deleter`, the word the source writes after the dot. A parameter is keyed `#param:<name>` below its invocable. A `def` written twice under one name (a platform `if`, a redefinition) is ONE entity anchored at the first, both bodies' edges its own; `@overload` signatures and their implementation are one entity, anchored at the implementation.",
+    "Corpus membership is a whitelist of what the roots declare, never a name-prefix test, and nothing installed is read: no `site-packages`, no virtual environment. Everything else is a stub below one of three reserved modules: `<builtins>`, what the interpreter binds before any file runs (`ValueError`, `object`); `<stdlib>`, a module of the standard library as the import writes it (`<stdlib>%2Fos.path`), from a table distilled from typeshed `stdlib/` at a pinned commit and embedded in the extractor — every module of its `VERSIONS`, removed ones included, so keys do not move with the interpreter, and the header names the commit; `<site>`, every module nothing here declares and the table does not name (`<site>%2Fdjango.db.models`). An external module is one stub per dotted name as written — `django.db` and `django.db.models` are two — and which distribution ships it is written nowhere in the source, so it is not guessed. A stub type's symbol is the name as written at the site, below the module it was imported from. A `<site>` name is a stub CLASS on evidence — a site inherits from it, raises or catches it, or annotates with it; a function or a value of a stub module folds to that MODULE.",
+    "`import a.b.c` and `from a.b import c` are `import` edges from the file wherever they are written — under `try`/`except ImportError`, under `if`, inside a function. `from a.b import c` names the file of `a.b` when it binds `c` at its top level, else the file of the submodule (`a/b/c.py`, `a/b/c/__init__.py`): the order Python itself tries. A relative import is resolved from the importing file's directory by path arithmetic, and one to a file that is not there is a stub module keyed by that path. An absolute import is looked up in the roots the layout implies — a regular package names its own (climb while the directory holds an `__init__.py`) — plus the corpus root and each `--import-root`: the root nearest the importing file wins, a tie is dropped and counted (`ambiguous-root`), and a hit through a namespace package or answered only by a sibling of the importing file (`implicit-relative`) is counted on its own — facts about the layout, not the language. The corpus answers before the table: a corpus `logging/` shadows the standard library, as it does on `sys.path`. `importlib.import_module` and `__import__` with a literal are imports; a computed name is dropped and counted.",
+    "A name reached through a re-export (`acme/__init__.py` writes `from .order import Order`; a file writes `from acme import Order`) yields an `import` of `acme/__init__.py` — what the source writes — while every `reference` and `invocation` of `Order` names the class in `acme/order.py` — what it is (the TypeScript `export … from` rule); chains are followed to the declaration, cycle-guarded. `from x import *` is an `import`, and its names ARE bound: `__all__` where it is a literal list, else every public top-level name — of a corpus module and of the table's. A name bound only by a star import of ONE module nothing answers is attributed to that module, provenance `derived`, counted `star-attributed`; with two such imports it is dropped.",
+    "`if TYPE_CHECKING:` imports are written, so they are emitted like any other import, and counted `type-checking-only` on stderr. The idiom exists to break an import cycle the program never has; this profile declares no `space`, so the model does not tell a type-only dependency from a runtime one, and the Cycles tab shows that cycle.",
+    "`class A(B, C)` yields one `inheritance` edge per base, each anchored at its base; a subscripted base (`Generic[T]`, `Base[int]`) is an inheritance to the name, its arguments `reference`s. The edge set is unordered: the method resolution order (C3) is NOT represented, so a method-resolution question cannot be answered from the model — the extractor uses the order for its lookup and does not write it. `class A(namedtuple(\"A\", \"x y\"))` inherits `<builtins>/tuple` with provenance `generated`: the language defines it, the source writes no `tuple`. A computed base (`make_base()`, `six.with_metaclass(M, B)`) is dropped and counted.",
+    "A decorator application is not an entity: `@app.route(\"/orders\", methods=[\"GET\"])` is an `annotationUse` edge from the decorated `def` or class to what the decorator names, carrying its literal arguments — the TypeScript rule, so `annotationUse` means in Python what it means in Java. The entity stays the `def`: what the decorator returns in its place is not in the model. `@staticmethod`, `@classmethod` and `@property` are the language — they shape the entity and the lookup, and are no edge. A `@property` and its `@x.setter` / `@x.deleter` are methods; reading `obj.x` is an `access` to the first, not an invocation (the C# property rule).",
+    "A lambda is one expression: it contributes its calls and reads to the invocable that writes it and is no entity (the Ruby block rule); `f = lambda: …` at module level is the variable `f`. Nothing declares a local — its first assignment is its declaration — so a function's locals are flow, not structure, and no kind holds `localVariables`. A `variable` is a MODULE-level binding (`settings.DEBUG`, `app = Flask(__name__)`, `logger`): what other files read, with its literal `value`; read from a body it is an `access`, written under `global` an `access` that writes. An `attribute` is a class-level assignment or annotation, or `self.x = …` in a method, ONE per class and name, owned by the root-most corpus ancestor that has the name. A `def` of the same name in the same class — or, for a module global, a `def` or a `class` — wins the key: the binding is counted, not an entity.",
+    "A bare name is resolved as the compiler binds it — the enclosing function scopes (never a class body), the module, then `builtins`; `global` and `nonlocal` say otherwise, and a comprehension is a scope — so what it reads is `declared`. `f(…)`, `Order(…)`, `mod.f(…)`, `Order.create(…)`, `self.total()`, `cls.make()` and `super().save()` are `declared` `invocation`s: the callee is a name the scoping rules bind, or an attribute of a receiver whose class is WRITTEN — a module, a class named at the site, `self` / `cls` (the first parameter of a method, by what decorates it) along written bases, `super()` from the next class of the MRO. `Order(…)` is `Order.__init__` where a corpus class of the MRO writes one, else the class itself. A bare name that reads a corpus class or function without calling it is a `reference` (`isinstance(x, Order)`, `except OrderError`, `Thread(target=run)`).",
+    "`len(x)`, `print(…)`, `str(x)`, a method of a literal (`\"x\".upper()`) and an annotation of `int`, `str`, `None` or a built-in container are the LANGUAGE: resolved, counted, never an edge. A name of `builtins` is a stub below `<builtins>` only as a base, a `raise` or an `except` target. A call of a module-level function of a stub module (`os.getcwd()`, `json.dumps(…)`) is an `invocation` of the stub MODULE.",
+    "`derived` says the receiver's class was inferred, not written at the site: a local assigned `Foo(…)` once in its function, or an attribute only ever assigned one class — flow; a parameter, an attribute or a call result ANNOTATED with a class (`def f(repo: Repo)`, `-> Repo`; an `Optional` or a union with `None` unwrapped, anything wider untyped), counted `annotation-typed` — the interpreter never checks an annotation, so a `declared`-only analysis must not hold what it says; and a member nothing in the corpus declares, where exactly ONE library class stands in the MRO, counted `ancestor-attributed` — where `Order.objects` and `self.assertEqual` land. With two library ancestors the site is dropped (`ambiguous-ancestor`, the drop naming both); with none, `unbound-self-call`; in a class that writes `__getattr__` / `__getattribute__`, has a `metaclass=` or a computed base, `unbound-dynamic` — \"nothing declares it\" is no longer evidence there.",
+    "A receiver no reader can type without running the code — a bare parameter, a call's result, a subscript — is the stated ceiling: `x.y` there is dropped and counted `untyped-receiver`, never guessed. The extractor writes no `dynamic-candidate` edge of its own, candidate generation being the analyzer's; `dynamic-candidate` comes only from a run-time trace merged with `--trace`, which also writes the bases the interpreter holds and no line writes as `generated` inheritance. `--explain-dropped` lists every dropped site with its reason, file and line.",
+    "`raise Foo`, `raise Foo(…)` and `raise Foo(…) from e` are `throws` edges to Foo; `raise e` inside `except Foo as e` throws Foo, which the clause guarantees; a bare `raise` throws nothing new; any other value is dropped and counted (`raise-of-a-value`).",
+    "An annotation (`x: Order`, `-> Order`, `Optional[Order]`, `list[Order]`, a string annotation `\"Order\"`) sets `declaredType` as written when it names one class, and is a `reference` to each class it names. Annotations are optional and may be deferred strings (PEP 563), so `declaredType` is frequently absent where `TTypedEntity` is present; `# type:` comments are not read.",
+    "Python 2 is read from the recovered tree: Ruff's parser reads every Python 3 grammar in one build and recovers from errors, so a Python 2 file (a `print` statement, `except E, e`, backticks) — like any file with syntax errors — is extracted from the tree the parser recovered, and named on stderr. Its declarations survive recovery (measured on CPython 2.7.18's `Lib/` against `lib2to3`: every class, function and import statement); what recovery does to a BODY — the calls inside a `print` statement — is not yet measured. A source is read as bytes: a BOM and the PEP 263 coding cookie of the first two lines are honoured, UTF-8, Latin-1, ASCII and cp1252 decoded; any other encoding is read lossily (U+FFFD) and counted. The file is never rejected.",
+    "Walked: `*.py`, `*.pyw`, `*.pyi` and extensionless files whose first line is a `python` shebang, under the roots. A virtual environment below a root is not corpus: it is recognised by what it IS — a directory holding `pyvenv.cfg` — not by a name; `site-packages`, `__pycache__`, `node_modules` and dot-directories are skipped by name. Code a repository vendors (`_vendor/`) is written there and is corpus.",
+    "Comments (`TComment`): a docstring, else the `#` block directly above a declaration — the coding cookie, the shebang and the `# type:` / `# noqa` / `# pylint:` / `# pragma:` directives left out. Measures (`TMetrics`, METAMODEL.md §3.8): `sloc` on modules, classes and invocables, `cyclomatic` on invocables.",
+    "Explicitly NOT extracted: members a decorator or a metaclass synthesizes — a dataclass's `__init__`, a Django model's manager; the class's own written fields ARE attributes. Monkey patching (`Order.total = total`): the model shows the original definition site only. Protocol (PEP 544) conformance: structural, so `interfaceImplementation` stays in the profile for a `derived` enrichment of the analyzer, never mixed in, and the extractor writes none — `class X(Protocol)` is a plain inheritance. What a string names (`ForeignKey(\"orders.Order\")`, `INSTALLED_APPS`, an entry point in `pyproject.toml`): framework semantics. `isinstance` narrowing, notebooks and Cython.",
   ],
 
   lexicon: {
@@ -133,6 +153,8 @@ export const pythonProfile: Profile = {
     technical: [
       "dict", "kwargs", "metaclass", "py", "tuple",
     ],
-    qualified: { module: "." },
+    // The module is the file: its name is a path whose extension is not a word.
+    fileKinds: ["module"],
+    qualified: { module: "/" },
   },
 };
