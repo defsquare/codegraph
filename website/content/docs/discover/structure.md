@@ -60,10 +60,12 @@ codegraph validate app.jsonl
 A multi-module repository is the one decision this step forces on you:
 [Extract Java](/docs/how-to/extract-java/) explains when to extract everything
 in one run (modules reference each other) and when to keep separate models.
-The C# and TypeScript extractors take the same `--src`/`--out` flags and write
-the same file format; each has its own reference page:
+Every other extractor takes the same `--src`/`--out` flags and writes the same
+file format; each has its own reference page:
 [Java](/docs/reference/java-extractor/), [C#](/docs/reference/csharp-extractor/),
-[TypeScript](/docs/reference/typescript-extractor/).
+[TypeScript](/docs/reference/typescript-extractor/),
+[Elixir](/docs/reference/elixir-extractor/), [Ruby](/docs/reference/ruby-extractor/),
+[Python](/docs/reference/python-extractor/).
 
 {{< callout type="info" >}}
 Extract `src/main` and `src/test` as two separate models, never in one run.
