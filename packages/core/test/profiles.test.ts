@@ -813,6 +813,7 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/untyped-receiver/);
       expect(notes).toMatch(/annotation-typed/);
       expect(notes).toMatch(/star-attributed/);
+      expect(notes).toMatch(/`redefinition-of-another-kind`/);
       expect(notes).toMatch(/`ambiguous-star`/);
       expect(notes).toMatch(/bound once and never grown/);
       expect(notes).toMatch(/A package's submodule answers before a star import that binds its name/);
