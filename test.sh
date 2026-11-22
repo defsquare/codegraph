@@ -24,6 +24,10 @@
 #              (extractors/model-rs), then the RELEASE binary (if build.sh made
 #              one) re-extracts fixtures/ruby/src and must reproduce the committed
 #              snapshot byte for byte — Prism and the core table as linked in
+#   python     cargo test of the extractor, of its stdlib-table generator and of
+#              the writer it shares, then the RELEASE binary (if build.sh made one)
+#              re-extracts fixtures/python/src and must reproduce the committed
+#              snapshot byte for byte — Ruff's parser and the typeshed table as linked in
 #
 # No build is required first: packages/cli/vitest.config.ts aliases the
 # workspace packages to their SOURCE, and the CLI e2e suite builds its own dist
@@ -57,6 +61,9 @@ Options:
                        only extractors/elixir (mix test + built-escript smoke test)
   --ruby, --ruby-only  only extractors/ruby and the writer it shares, extractors/model-rs
                        (cargo test + built-binary smoke test)
+  --python, --python-only
+                       only extractors/python, its table generator and the writer it
+                       shares (cargo test + built-binary smoke test)
   --metrics, --metrics-only
                        only extractors/metrics (cargo test: the join + the five enriched snapshots)
   --all                everything (default)
@@ -128,10 +135,14 @@ printf '%scodegraph test%s  %s(%s)%s\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$ROOT" "$
 
 step "toolchain"
 if wants_ts; then check_node; ensure_pnpm; fi
-SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"; SKIP_RUBY="no"; SKIP_METRICS="no"
+SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"; SKIP_RUBY="no"; SKIP_PYTHON="no"; SKIP_METRICS="no"
 if wants_ruby; then
   if have_ruby_extractor; then ensure_cargo "$RUBY_DIR" "the Ruby extractor (extractors/ruby)"; ensure_libclang
   else warn "no extractors/ruby in this checkout — skipping the Ruby tests"; SKIP_RUBY="yes"; fi
+fi
+if wants_python; then
+  if have_python_extractor; then ensure_cargo "$PYTHON_DIR" "the Python extractor (extractors/python)"; ensure_c_compiler
+  else warn "no extractors/python in this checkout — skipping the Python tests"; SKIP_PYTHON="yes"; fi
 fi
 if wants_java; then
   if have_java_extractor; then ensure_jdk; ensure_mvnw
@@ -310,14 +321,19 @@ if wants_elixir && [ "$SKIP_ELIXIR" = "no" ]; then
   fi
 fi
 
+# ------------------------------------------------------------- model-rs ----
+
+# The writer's own unit tables — keys, canonical order, JSON bytes — live in
+# the crate the Rust extractors share; each extractor's snapshot is the rest.
+# Run once, for whichever of them is in scope.
+if { wants_ruby && [ "$SKIP_RUBY" = "no" ]; } || { wants_python && [ "$SKIP_PYTHON" = "no" ]; }; then
+  phase "model writer tests (cargo test)" \
+    cargo test --locked --manifest-path "$MODEL_RS_DIR/Cargo.toml"
+fi
+
 # ------------------------------------------------------------------ ruby ----
 
 if wants_ruby && [ "$SKIP_RUBY" = "no" ]; then
-  # The writer's own unit tables — keys, canonical order, JSON bytes — live in
-  # the crate the Rust extractors share; each extractor's snapshot is the rest.
-  phase "model writer tests (cargo test)" \
-    cargo test --locked --manifest-path "$MODEL_RS_DIR/Cargo.toml"
-
   # The unit tests pin the walker and the resolver; tests/contract.rs holds
   # the library to the committed snapshot, byte for byte, under CRLF and a
   # reversed creation order, and to the CLI contract.
@@ -333,6 +349,31 @@ if wants_ruby && [ "$SKIP_RUBY" = "no" ]; then
       sh -c "cd '$ROOT' && out=\$(mktemp) && ./bin/codegraph-ruby --src fixtures/ruby/src --out \"\$out\" --progress none >/dev/null 2>&1 && cmp \"\$out\" fixtures/ruby/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
   else
     warn "no binary at $RUBY_DIR/target/release — run ./build.sh --ruby for the smoke test"
+  fi
+fi
+
+# ---------------------------------------------------------------- python ----
+
+if wants_python && [ "$SKIP_PYTHON" = "no" ]; then
+  # The unit tests pin the walker, the decoding, the scopes and the resolver;
+  # tests/contract.rs holds the library to the committed snapshot, byte for
+  # byte, under CRLF and a reversed creation order, and to the CLI contract.
+  phase "python extractor tests (cargo test)" \
+    cargo test --locked --manifest-path "$PYTHON_DIR/Cargo.toml"
+
+  # The generator of the embedded table: a development tool, kept from rotting.
+  phase "python stdlib-table generator tests (cargo test)" \
+    cargo test --locked --manifest-path "$PYTHON_DIR/tools/stdlib-table/Cargo.toml"
+
+  # The release binary, not `cargo test`, must reproduce the snapshot: it is
+  # the artifact users run, with Ruff's parser and the typeshed table linked in.
+  bin="$PYTHON_DIR/target/release/codegraph-python"
+  [ -x "$bin" ] || bin="$bin.exe"
+  if [ -x "$bin" ]; then
+    phase "built python binary reproduces the snapshot" \
+      sh -c "cd '$ROOT' && out=\$(mktemp) && ./bin/codegraph-python --src fixtures/python/src --out \"\$out\" --progress none >/dev/null 2>&1 && cmp \"\$out\" fixtures/python/expected/model.jsonl; rc=\$?; rm -f \"\$out\"; exit \$rc"
+  else
+    warn "no binary at $PYTHON_DIR/target/release — run ./build.sh --python for the smoke test"
   fi
 fi
 

@@ -19,6 +19,9 @@
 #                   re-extracting the fixture snapshot byte for byte
 #   ruby-native     its binary built on each of the four Unix runners, each one
 #                   reproducing that snapshot; the tap's formula ships these
+#   python-test     the Ruff-parser extractor's own suite (PLAN.md §23), its
+#                   stdlib-table generator's and the shared writer's, then its
+#                   release binary re-extracting the fixture snapshot byte for byte
 #   metrics         the metrics pass's own suite (PLAN.md §18): join, snapshots, history
 #   metrics-native  its binary built on each of the four Unix runners, re-measuring
 #                   the five fixtures byte for byte; the tap's formula ships these
@@ -283,6 +286,33 @@ jobs:
           path: extractors/ruby/target/release/codegraph-ruby
           if-no-files-found: error
           retention-days: 14
+
+  # The Python extractor (PLAN.md §23): the walker, decoding, scope and
+  # resolver suites, the fixture snapshot byte for byte under CRLF and a
+  # reversed creation order, the stdlib table's generator, the shared writer
+  # (extractors/model-rs), then the RELEASE binary re-extracting the fixture.
+  # Ruff's parser is a git dependency at one tag, its commit in Cargo.lock and
+  # every build --locked; building needs a C compiler (psm, the parser's stack
+  # growth), which the runner has; running needs nothing, least of all Python.
+  python-test:
+    name: python extractor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            extractors/python/target
+            extractors/python/tools/stdlib-table/target
+            extractors/model-rs/target
+          key: python-test-${{ hashFiles('extractors/python/Cargo.lock', 'extractors/python/tools/stdlib-table/Cargo.lock', 'extractors/model-rs/Cargo.lock') }}
+      - shell: bash
+        run: |
+          ./build.sh --python --skip-install --no-auto-install
+          ./test.sh --python --skip-install --no-auto-install
 
   csharp-test:
     name: csharp extractor
