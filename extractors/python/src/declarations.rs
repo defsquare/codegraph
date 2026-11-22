@@ -513,10 +513,15 @@ fn synthetic_fields(form: &str, arguments: &[ArgumentDecl]) -> Vec<String> {
             .collect(),
         _ => Vec::new(),
     };
-    names.retain(|name| {
-        name.chars().all(|c| c.is_alphanumeric() || c == '_') && !name.starts_with(|c: char| c.is_ascii_digit())
-    });
+    names.retain(|name| is_identifier(name));
     names
+}
+
+/// A name a class or a slot can have: what a string must be to name one.
+fn is_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars.next().is_some_and(|first| first.is_alphabetic() || first == '_')
+        && chars.all(|c| c.is_alphanumeric() || c == '_')
 }
 
 fn last_name(expr: &Expr) -> Option<String> {
@@ -1195,7 +1200,9 @@ impl Reader<'_> {
     /// a dict's string keys — each with the line its string is written on.
     fn slots(&self, value: &Expr) -> Vec<(String, u32)> {
         let name = |expr: &Expr| match expr {
-            Expr::StringLiteral(text) => Some((text.value.to_str().to_owned(), self.line(expr.start().to_u32()))),
+            Expr::StringLiteral(text) if is_identifier(text.value.to_str()) => {
+                Some((text.value.to_str().to_owned(), self.line(expr.start().to_u32())))
+            }
             _ => None,
         };
         match value {

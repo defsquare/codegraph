@@ -613,7 +613,8 @@ fn records_the_literal_names_of_a_class_slots_each_at_its_string() {
         "class P:\n    __slots__ = (\"_x\",\n                 \"_y\")\n\
          class Q:\n    __slots__ = \"only\"\n\
          class R:\n    __slots__ = {\"a\": \"doc\", \"b\": \"doc\"}\n\
-         class S:\n    __slots__ = names\n",
+         class S:\n    __slots__ = names\n\
+         class T:\n    __slots__ = [\"\", \"a b\", \"1x\", \"ok\"]\n",
     );
     let slots = |class: usize| -> Vec<(&str, u32)> {
         decls.classes[class]
@@ -627,4 +628,6 @@ fn records_the_literal_names_of_a_class_slots_each_at_its_string() {
     assert_eq!(slots(2), vec![("a", 7), ("b", 7)]);
     // Computed: no line names them.
     assert_eq!(slots(3), vec![]);
+    // A string that is no identifier names no slot (the interpreter refuses it).
+    assert_eq!(slots(4), vec![("ok", 11)]);
 }
