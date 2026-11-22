@@ -78,7 +78,7 @@ impl Stubs {
     }
 
     fn module(&mut self, key: Key, name: &str) -> Key {
-        self.modules.insert(key.module.clone(), name.to_owned());
+        self.modules.insert(key.module.to_string(), name.to_owned());
         key
     }
 
@@ -289,7 +289,7 @@ impl Extractor<'_> {
 
     fn anchor(&self, file: usize, span: Span) -> Anchor {
         Anchor {
-            file: self.corpus.files[file].rel.clone(),
+            file: self.corpus.files[file].rel.as_str().into(),
             start: span.0,
             end: span.1,
         }
@@ -589,7 +589,7 @@ impl Extractor<'_> {
             entity.defined_in = Some(vec![file.rel.clone()]);
             entity.metrics = Some(vec![("sloc", self.files[index].sloc((1, file.lines)))]);
             entity.anchor = Some(Anchor {
-                file: file.rel.clone(),
+                file: file.rel.as_str().into(),
                 start: 1,
                 end: file.lines,
             });

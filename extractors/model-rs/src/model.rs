@@ -3,22 +3,30 @@
 //! provenance) are core's, written verbatim and never interpreted here.
 
 use std::cmp::Ordering;
+use std::sync::{Arc, OnceLock};
 
 /// A natural key `(module, symbol, disambiguator?)` — `lang` is the model's,
 /// one for every key a file holds. A module names itself: empty symbol, no
-/// disambiguator (schemas/README.md §2).
+/// disambiguator (schemas/README.md §2). Components are shared text: a key
+/// cloned from another, or below it, holds its module's path once, not a copy.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Key {
-    pub module: String,
-    pub symbol: String,
-    pub d: Option<String>,
+    pub module: Arc<str>,
+    pub symbol: Arc<str>,
+    pub d: Option<Arc<str>>,
+}
+
+/// The empty symbol every module key holds, allocated once.
+pub fn no_symbol() -> Arc<str> {
+    static EMPTY: OnceLock<Arc<str>> = OnceLock::new();
+    EMPTY.get_or_init(|| Arc::from("")).clone()
 }
 
 impl Key {
-    pub fn module(module: impl Into<String>) -> Self {
+    pub fn module(module: impl Into<Arc<str>>) -> Self {
         Key {
             module: module.into(),
-            symbol: String::new(),
+            symbol: no_symbol(),
             d: None,
         }
     }
@@ -34,9 +42,9 @@ impl Key {
             return self.disambiguated(name);
         }
         let symbol = if self.symbol.is_empty() {
-            name.to_owned()
+            name.into()
         } else {
-            format!("{}.{}", self.symbol, name)
+            format!("{}.{}", self.symbol, name).into()
         };
         Key {
             module: self.module.clone(),
@@ -46,9 +54,9 @@ impl Key {
     }
 
     pub fn disambiguated(&self, tag: &str) -> Key {
-        let d = match &self.d {
-            None => tag.to_owned(),
-            Some(d) => format!("{d}#{tag}"),
+        let d: Arc<str> = match &self.d {
+            None => tag.into(),
+            Some(d) => format!("{d}#{tag}").into(),
         };
         Key {
             module: self.module.clone(),
@@ -94,7 +102,8 @@ pub fn utf16_cmp(a: &str, b: &str) -> Ordering {
 /// `[file, startLine, endLine]`, 1-based and inclusive; `file` is root-relative.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Anchor {
-    pub file: String,
+    /// Shared: every anchor in one file holds its path once.
+    pub file: Arc<str>,
     pub start: u32,
     pub end: u32,
 }

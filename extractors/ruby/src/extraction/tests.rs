@@ -91,9 +91,9 @@ fn key(id: &str) -> Key {
     };
     let (module, symbol) = rest.split_once('/').unwrap_or((rest, ""));
     Key {
-        module: module.to_owned(),
-        symbol: symbol.to_owned(),
-        d,
+        module: module.into(),
+        symbol: symbol.into(),
+        d: d.map(Into::into),
     }
 }
 

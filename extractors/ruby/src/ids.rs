@@ -70,7 +70,7 @@ pub fn reserved_key(reserved: &str) -> Key {
 pub fn type_key(module: &Key, fqn: &str) -> Key {
     Key {
         module: module.module.clone(),
-        symbol: escape_name(fqn),
+        symbol: escape_name(fqn).into(),
         d: None,
     }
 }

@@ -19,6 +19,7 @@ use crate::{NAME, RUFF_TAG, VERSION};
 use codegraph_model::{Anchor, Edge, Entity, Key, Literal, Model, NamedArgument};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::{BuildHasher, RandomState};
+use std::sync::Arc;
 
 mod annotations;
 mod sites;
@@ -54,55 +55,83 @@ pub struct Extraction {
     pub stats: Stats,
 }
 
-/// What nothing under the roots declares, collected as edges name it.
+/// What nothing under the roots declares, collected as edges name it. Each key
+/// is made once and handed out shared, so every edge to a stub holds no copy.
 #[derive(Default)]
 struct Stubs {
-    /// Module key → its name: a dotted name, `<builtins>`, or a missing file's path.
-    modules: BTreeMap<String, String>,
-    /// (module key, symbol as written).
-    types: BTreeMap<(String, String), ()>,
+    /// Module key text → the key, and its name: a dotted name, `<builtins>`, or a missing file's path.
+    modules: BTreeMap<Arc<str>, (Key, String)>,
+    /// What each module an import names is, made once.
+    by_module: HashMap<ModuleRef, Key>,
+    /// Module key text → symbol as written → the type's key.
+    types: BTreeMap<Arc<str>, BTreeMap<String, Key>>,
 }
 
 impl Stubs {
     fn module(&mut self, module: &ModuleRef, file_keys: &[Key]) -> Key {
+        if let ModuleRef::File(file) = module {
+            return file_keys[*file].clone();
+        }
+        if let Some(key) = self.by_module.get(module) {
+            return key.clone();
+        }
         let (key, name) = match module {
-            ModuleRef::File(file) => return file_keys[*file].clone(),
+            ModuleRef::File(_) => unreachable!("answered above"),
             ModuleRef::Stdlib(dotted) => (ids::stdlib_key(dotted), dotted.clone()),
             ModuleRef::Site(dotted) => (ids::site_key(dotted), dotted.clone()),
             ModuleRef::Missing(path) => (ids::file_key(path), path.clone()),
             ModuleRef::Namespace(dir) => unreachable!("a namespace package is no module entity: {dir}"),
         };
-        self.modules.insert(key.module.clone(), name);
+        let key = self.register(key, name);
+        self.by_module.insert(module.clone(), key.clone());
         key
     }
 
     fn builtins(&mut self) -> Key {
         let key = ids::builtins_key();
-        self.modules.insert(key.module.clone(), ids::BUILTINS.to_owned());
-        key
+        self.register(key, ids::BUILTINS.to_owned())
+    }
+
+    /// The one key of a stub module, whichever way it was reached.
+    fn register(&mut self, key: Key, name: String) -> Key {
+        self.modules
+            .entry(key.module.clone())
+            .or_insert_with(|| (key, name))
+            .0
+            .clone()
     }
 
     fn type_below(&mut self, module: Key, symbol: &str) -> Key {
-        self.types.insert((module.module.clone(), symbol.to_owned()), ());
-        ids::stub_type_key(&module, symbol)
+        let below = self.types.entry(module.module.clone()).or_default();
+        if let Some(key) = below.get(symbol) {
+            return key.clone();
+        }
+        let key = ids::stub_type_key(&module, symbol);
+        below.insert(symbol.to_owned(), key.clone());
+        key
     }
 
     fn entities(self) -> Vec<Entity> {
-        let mut out = Vec::with_capacity(self.modules.len() + self.types.len());
-        for (module, name) in self.modules {
-            let mut entity = Entity::new(Key::module(module), "module", STUB_MODULE_TRAITS);
+        let types: usize = self.types.values().map(BTreeMap::len).sum();
+        let mut out = Vec::with_capacity(self.modules.len() + types);
+        let mut parents: HashMap<Arc<str>, Key> = HashMap::new();
+        for (module, (key, name)) in self.modules {
+            parents.insert(module, key.clone());
+            let mut entity = Entity::new(key, "module", STUB_MODULE_TRAITS);
             entity.name = Some(name);
             entity.is_stub = Some(true);
             entity.defined_in = Some(Vec::new());
             out.push(entity);
         }
-        for (module, symbol) in self.types.into_keys() {
-            let parent = Key::module(module);
-            let mut entity = Entity::new(ids::stub_type_key(&parent, &symbol), "class", STUB_TYPE_TRAITS);
-            entity.name = Some(symbol);
-            entity.is_stub = Some(true);
-            entity.parent = Some(parent);
-            out.push(entity);
+        for (module, below) in self.types {
+            let parent = parents.get(&module).cloned().unwrap_or_else(|| Key::module(module));
+            for (symbol, key) in below {
+                let mut entity = Entity::new(key, "class", STUB_TYPE_TRAITS);
+                entity.name = Some(symbol);
+                entity.is_stub = Some(true);
+                entity.parent = Some(parent.clone());
+                out.push(entity);
+            }
         }
         out
     }
@@ -208,6 +237,8 @@ struct Extractor<'a> {
     invokes: HashSet<Key>,
     accesses: HashSet<Key>,
     file_keys: Vec<Key>,
+    /// Each file's path, shared by every anchor in it.
+    paths: Vec<Arc<str>>,
     /// Per file, per scope: the entity whose body it is; `None` where the declaration was dropped.
     scope_keys: Vec<Vec<Option<Key>>>,
     /// Every key an entity holds → its kind, so a second declaration of one key merges or is dropped.
@@ -224,7 +255,7 @@ struct Extractor<'a> {
 impl Extractor<'_> {
     fn anchor(&self, file: usize, span: Span) -> Anchor {
         Anchor {
-            file: self.corpus.files[file].rel.clone(),
+            file: self.paths[file].clone(),
             start: span.0,
             end: span.1,
         }
@@ -284,7 +315,7 @@ impl Extractor<'_> {
             entity.is_stub = Some(false);
             entity.defined_in = Some(vec![file.rel.clone()]);
             entity.anchor = Some(Anchor {
-                file: file.rel.clone(),
+                file: self.paths[index].clone(),
                 start: 1,
                 end: file.lines,
             });
@@ -943,6 +974,7 @@ pub fn extract(
         invokes: HashSet::new(),
         accesses: HashSet::new(),
         file_keys: corpus.files.iter().map(|file| ids::file_key(&file.rel)).collect(),
+        paths: corpus.files.iter().map(|file| Arc::from(file.rel.as_str())).collect(),
         scope_keys: Vec::with_capacity(files.len()),
         kinds: HashMap::new(),
         stubs: Stubs::default(),
@@ -995,8 +1027,10 @@ pub fn extract(
     }
     stats.dotted_site_classes = stubs
         .types
-        .keys()
-        .filter(|(module, symbol)| module.starts_with("<site>") && symbol.contains('.'))
+        .iter()
+        .filter(|(module, _)| module.starts_with("<site>"))
+        .flat_map(|(_, below)| below.keys())
+        .filter(|symbol| symbol.contains('.'))
         .count();
     let stub_entities = stubs.entities();
     stats.stubs = stub_entities.len();

@@ -87,7 +87,7 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
         }
         // 2. A module names itself: the entity with an empty, undisambiguated symbol.
         if entity.key.is_module() {
-            module_surrogate.insert(entity.key.module.as_str(), index);
+            module_surrogate.insert(&*entity.key.module, index);
         }
     }
     let reference = |key: &Key, from: &Key| -> Result<usize, WriteError> {
@@ -107,7 +107,7 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
             paths.extend(defined_in.iter().map(String::as_str));
         }
     }
-    paths.extend(model.edges.iter().map(|edge| edge.anchor.file.as_str()));
+    paths.extend(model.edges.iter().map(|edge| &*edge.anchor.file));
     let files = sorted_distinct(paths);
     let file_ref = index_of(&files);
 
@@ -124,11 +124,7 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
     let anchor = |line: &mut String, anchor: &Anchor| {
         json::integers(
             line,
-            [
-                file_ref[anchor.file.as_str()],
-                anchor.start as usize,
-                anchor.end as usize,
-            ],
+            [file_ref[&*anchor.file], anchor.start as usize, anchor.end as usize],
         );
     };
 
@@ -167,7 +163,7 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
 
     for (index, entity) in entities.iter().enumerate() {
         let module_index = *module_surrogate
-            .get(entity.key.module.as_str())
+            .get(&*entity.key.module)
             .ok_or_else(|| WriteError::NoModule(entity.key.render(lang)))?;
         line.clear();
         line.push_str(&format!(
@@ -270,7 +266,7 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
         af.cmp(bf)
             .then(ao.cmp(bo))
             .then_with(|| utf16_cmp(a.kind, b.kind))
-            .then_with(|| file_ref[a.anchor.file.as_str()].cmp(&file_ref[b.anchor.file.as_str()]))
+            .then_with(|| file_ref[&*a.anchor.file].cmp(&file_ref[&*b.anchor.file]))
             .then(a.anchor.start.cmp(&b.anchor.start))
             .then(a.anchor.end.cmp(&b.anchor.end))
             .then_with(|| utf16_cmp(a.provenance, b.provenance))
