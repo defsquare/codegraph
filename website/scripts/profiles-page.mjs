@@ -10,8 +10,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const codegraph = (...args) => execFileSync(join(root, "bin", "codegraph"), args, { encoding: "utf8" });
 
 const NAMES = { clj: "Clojure", csharp: "C#", ex: "Elixir", go: "Go", java: "Java", js: "JavaScript", php: "PHP", python: "Python", rb: "Ruby", rust: "Rust", ts: "TypeScript" };
-const EXTRACTORS = [["java", "Java"], ["csharp", "C#"], ["ts", "TypeScript"], ["ex", "Elixir"], ["rb", "Ruby"]];
-const PAGE = { java: "java-extractor", csharp: "csharp-extractor", ts: "typescript-extractor", ex: "elixir-extractor", rb: "ruby-extractor" };
+const EXTRACTORS = [["java", "Java"], ["csharp", "C#"], ["ts", "TypeScript"], ["ex", "Elixir"], ["rb", "Ruby"], ["python", "Python"]];
+const PAGE = { java: "java-extractor", csharp: "csharp-extractor", ts: "typescript-extractor", ex: "elixir-extractor", rb: "ruby-extractor", python: "python-extractor" };
 // A code span whose text holds a backtick needs a double-backtick fence.
 const FENCED = ["Repository`1", "System.Func`2<!!0,System.String>"];
 

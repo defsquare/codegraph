@@ -33,7 +33,7 @@ A profile licenses an entity by the rule `required(kind) ⊆ traits ⊆ required
 | `rust` | Rust | 13 | 5 | 12 |
 | `ts` | TypeScript | 14 | 8 | 28 |
 
-A profile that is specified but has no shipped extractor is complete, not deficient: the profile is the contract an extractor is written against. Today `java`, `csharp`, `ts`, `ex` and `rb` have one: see the [Java](/docs/reference/java-extractor/), [C#](/docs/reference/csharp-extractor/), [TypeScript](/docs/reference/typescript-extractor/), [Elixir](/docs/reference/elixir-extractor/) and [Ruby](/docs/reference/ruby-extractor/) extractor pages. Every shipped extractor's model can then be measured by the [metrics pass](/docs/reference/metrics-pass/).
+A profile that is specified but has no shipped extractor is complete, not deficient: the profile is the contract an extractor is written against. Today `java`, `csharp`, `ts`, `ex`, `rb` and `python` have one: see the [Java](/docs/reference/java-extractor/), [C#](/docs/reference/csharp-extractor/), [TypeScript](/docs/reference/typescript-extractor/), [Elixir](/docs/reference/elixir-extractor/), [Ruby](/docs/reference/ruby-extractor/) and [Python](/docs/reference/python-extractor/) extractor pages. Every shipped extractor's model can then be measured by the [metrics pass](/docs/reference/metrics-pass/).
 
 ## Clojure — `clj`
 

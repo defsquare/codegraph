@@ -1,7 +1,7 @@
 ---
 title: Metrics pass
 linkTitle: Metrics pass
-weight: 14
+weight: 15
 ---
 
 `codegraph-metrics` 0.3.0 (big-code-analysis 2.2.0) — the measuring pass over any extractor's model. A Cargo package in `extractors/metrics/`, linking [big-code-analysis](https://github.com/dekobon/big-code-analysis) as a library with six tree-sitter grammars. It is **not an extractor**: it reads a `model.jsonl`, parses every source file the measured entities are anchored in, joins big-code-analysis's function and class spaces to those entities on their anchors, and rewrites their `metrics` maps — cognitive complexity, Halstead, the maintainability index, ABC, exits, logical and comment lines, public methods and attributes. No other byte of the file moves. One binary serves Java, C#, TypeScript, Elixir, Ruby and Python; what each key means is on [Measures and literals](/docs/reference/metamodel/measures-literals/), and what each counts, where it comes from and how to read it on the [Metrics catalogue](/docs/reference/metrics-catalogue/).

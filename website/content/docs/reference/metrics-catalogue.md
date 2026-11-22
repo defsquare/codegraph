@@ -1,7 +1,7 @@
 ---
 title: Metrics catalogue
 linkTitle: Metrics catalogue
-weight: 15
+weight: 16
 ---
 
 Every measure a model or its side-car can carry — what it counts, who writes it, where it comes from and how to read it. Three readers of source write measures, and nothing else does:
