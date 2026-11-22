@@ -445,11 +445,11 @@ mod tests {
         let mut variable = Entity::new(a.key.member("DEFAULT"), "variable", &["TNamed", "TTypedEntity"]);
         variable.name = Some("DEFAULT".into());
         variable.signature = Some("DEFAULT".into());
-        variable.declared_type = Some(class.key.clone());
-        variable.value = Some(Literal::Enum {
+        variable.declared_type = Some(Box::new(class.key.clone()));
+        variable.value = Some(Box::new(Literal::Enum {
             ty: class.key.clone(),
             name: "RED".into(),
-        });
+        }));
         let edge = Edge {
             kind: "annotationUse",
             from: variable.key.clone(),

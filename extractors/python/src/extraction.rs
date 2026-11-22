@@ -1019,9 +1019,9 @@ pub fn extract(
         }
     }
     for entity in &mut entities {
-        entity.declared_type = declared_types.remove(&entity.key);
+        entity.declared_type = declared_types.remove(&entity.key).map(Box::new);
         if let Some(value) = values.remove(&entity.key) {
-            entity.value = Some(value);
+            entity.value = Some(Box::new(value));
             entity.traits.push("TWithValue");
         }
     }
@@ -1277,7 +1277,7 @@ mod tests {
     #[test]
     fn a_written_value_is_a_literal_a_class_a_type_an_enum_member_its_member_and_code_none() {
         let extraction = extract_sources(&[("m.py", BINDINGS)]);
-        let value = |rendered: &str| entity(&extraction, rendered).value.clone();
+        let value = |rendered: &str| entity(&extraction, rendered).value.as_deref().cloned();
         let kind = entity(&extraction, "python:m.py/Kind").key.clone();
         let enum_member = |name: &str| {
             Some(Literal::Enum {

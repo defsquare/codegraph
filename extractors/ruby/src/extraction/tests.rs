@@ -148,11 +148,11 @@ fn a_reopening_is_one_entity_per_file_attached_to_the_primary_declaration() {
     ]);
     // `a_patch.rb` sorts first, and the body that writes a superclass is still the primary.
     assert_eq!(
-        entity(&run, "rb:a_patch.rb/Order").attached_to,
+        entity(&run, "rb:a_patch.rb/Order").attached_to.as_deref().cloned(),
         Some(key("rb:order.rb/Order"))
     );
     assert!(entity(&run, "rb:a_patch.rb/Order").traits.contains(&"TAttachedTo"));
-    assert_eq!(entity(&run, "rb:order.rb/Order").attached_to, None);
+    assert_eq!(entity(&run, "rb:order.rb/Order").attached_to.as_deref().cloned(), None);
     // Two bodies in one file: one entity, anchored at the first, holding both methods.
     assert_eq!(
         entity(&run, "rb:order.rb/Order")
@@ -165,7 +165,7 @@ fn a_reopening_is_one_entity_per_file_attached_to_the_primary_declaration() {
     // A corpus body of a core class is attached to the VM's, which is a stub.
     let string = entity(&run, "rb:string.rb/String");
     assert_eq!(string.is_stub, Some(false));
-    assert_eq!(string.attached_to, Some(key("rb:<ruby>/String")));
+    assert_eq!(string.attached_to.as_deref().cloned(), Some(key("rb:<ruby>/String")));
     assert_eq!(entity(&run, "rb:<ruby>/String").is_stub, Some(true));
 }
 
@@ -606,7 +606,7 @@ fn a_value_constant_is_an_entity_with_what_the_source_assigns() {
     let limit = entity(&run, "rb:a.rb/Acme::LIMIT");
     assert_eq!((limit.kind, limit.name.as_deref()), ("constant", Some("Acme::LIMIT")));
     assert_eq!(limit.parent, Some(key("rb:a.rb/Acme")));
-    assert_eq!(limit.value, Some(Literal::Number("3".into())));
+    assert_eq!(limit.value.as_deref().cloned(), Some(Literal::Number("3".into())));
     assert_eq!(limit.comments, Some(vec!["The limit.".to_owned()]));
     assert_eq!(
         limit.traits,
@@ -621,7 +621,7 @@ fn a_value_constant_is_an_entity_with_what_the_source_assigns() {
     );
     assert_eq!(limit.anchor.as_ref().map(|a| (a.start, a.end)), Some((3, 3)));
     assert_eq!(
-        entity(&run, "rb:a.rb/Acme::ROLES").value,
+        entity(&run, "rb:a.rb/Acme::ROLES").value.as_deref().cloned(),
         Some(Literal::Array(vec![
             Literal::String("admin".into()),
             Literal::String("guest".into())
@@ -629,21 +629,21 @@ fn a_value_constant_is_an_entity_with_what_the_source_assigns() {
     );
     // A constant naming a type is a type literal, closed against the model — the VM's too.
     assert_eq!(
-        entity(&run, "rb:a.rb/Acme::DEFAULT").value,
+        entity(&run, "rb:a.rb/Acme::DEFAULT").value.as_deref().cloned(),
         Some(Literal::Type(key("rb:a.rb/Acme::Money")))
     );
     assert_eq!(
-        entity(&run, "rb:a.rb/Acme::ERROR").value,
+        entity(&run, "rb:a.rb/Acme::ERROR").value.as_deref().cloned(),
         Some(Literal::Type(key("rb:<ruby>/StandardError")))
     );
     // A library's constant may be a value as well as a type: its text is all that is known.
     assert_eq!(
-        entity(&run, "rb:a.rb/Acme::LIB").value,
+        entity(&run, "rb:a.rb/Acme::LIB").value.as_deref().cloned(),
         Some(Literal::Unevaluated("Nokogiri".into()))
     );
     // Computed at load time: no value, and the call is the constant's own.
     let now = entity(&run, "rb:a.rb/Acme::NOW");
-    assert_eq!(now.value, None);
+    assert_eq!(now.value.as_deref().cloned(), None);
     assert!(now.traits.contains(&"TWithInvocations"));
     assert_eq!(
         from(&run, "invocation", "rb:a.rb/Acme::NOW"),
@@ -1092,11 +1092,11 @@ fn carries_comments_and_measures_and_says_so_in_the_traits() {
     // A parameter with a default carries it.
     let run = one("def f(mode = :fast, n: 2); end\n");
     assert_eq!(
-        entity(&run, "rb:a.rb/f#param:mode").value,
+        entity(&run, "rb:a.rb/f#param:mode").value.as_deref().cloned(),
         Some(Literal::Unevaluated(":fast".into()))
     );
     assert_eq!(
-        entity(&run, "rb:a.rb/f#param:n").value,
+        entity(&run, "rb:a.rb/f#param:n").value.as_deref().cloned(),
         Some(Literal::Number("2".into()))
     );
     assert!(entity(&run, "rb:a.rb/f#param:n").traits.contains(&"TWithValue"));

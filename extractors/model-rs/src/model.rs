@@ -142,17 +142,18 @@ pub struct Entity {
     pub traits: Vec<&'static str>,
     pub name: Option<String>,
     pub signature: Option<String>,
-    /// The type `TTypedEntity` names, by key: closed like any reference.
-    pub declared_type: Option<Key>,
+    /// The type `TTypedEntity` names, by key: closed like any reference. Boxed, as the
+    /// other fields most entities lack: an entity is held per declaration, so its size counts.
+    pub declared_type: Option<Box<Key>>,
     pub is_stub: Option<bool>,
     pub parent: Option<Key>,
-    pub attached_to: Option<Key>,
+    pub attached_to: Option<Box<Key>>,
     pub parameters: Option<Vec<Key>>,
     pub defined_in: Option<Vec<String>>,
     pub comments: Option<Vec<String>>,
     /// Measures by key (METAMODEL §3.8); written key-sorted.
     pub metrics: Option<Vec<(&'static str, u32)>>,
-    pub value: Option<Literal>,
+    pub value: Option<Box<Literal>>,
     pub anchor: Option<Anchor>,
 }
 

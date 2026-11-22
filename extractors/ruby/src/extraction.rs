@@ -625,7 +625,7 @@ impl Extractor<'_> {
                     _ => None,
                 };
                 if let Some(primary) = primary.filter(|primary| *primary != key) {
-                    entity.attached_to = Some(primary);
+                    entity.attached_to = Some(Box::new(primary));
                     entity.traits.push("TAttachedTo");
                 }
                 if let Some(comment) = &self.files[file].scopes[scope].comment {
@@ -705,7 +705,7 @@ impl Extractor<'_> {
                         entity.traits.push("TComment");
                     }
                     if let Some(value) = &constant.value {
-                        entity.value = Some(self.literal(file, scope_index, value));
+                        entity.value = Some(Box::new(self.literal(file, scope_index, value)));
                         entity.traits.push("TWithValue");
                     }
                     self.entities.push(entity);
@@ -769,7 +769,7 @@ impl Extractor<'_> {
             entity.parent = Some(key.clone());
             entity.anchor = Some(self.anchor(file, parameter.span));
             if let Some(default) = &parameter.default {
-                entity.value = Some(self.literal(file, scope, default));
+                entity.value = Some(Box::new(self.literal(file, scope, default)));
                 entity.traits.push("TWithValue");
             }
             self.entities.push(entity);
