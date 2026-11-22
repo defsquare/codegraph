@@ -25,7 +25,7 @@ const SHAPING: &[&str] = &[
 ];
 
 /// `typing` forms whose first argument is the type: unwrapped for `declaredType`.
-const WRAPPERS: &[&str] = &[
+pub(super) const WRAPPERS: &[&str] = &[
     "Optional",
     "ClassVar",
     "Final",

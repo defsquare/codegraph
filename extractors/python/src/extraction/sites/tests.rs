@@ -363,6 +363,37 @@ fn a_literal_holds_values_and_annotated_one_type_with_its_metadata() {
     }
 }
 
+#[test]
+fn a_function_result_and_an_any_are_untyped_and_a_wrapper_types_what_it_wraps() {
+    let extraction = extract_sources(&[(
+        "m.py",
+        "from typing import Any, Annotated\nfrom urllib.parse import urlparse\nclass Repo:\n    def save(self): pass\n\
+         def f(u, x: Any, r: Annotated[Repo, \"meta\"]):\n    parsed = urlparse(u)\n    parsed.geturl()\n    x.anything()\n    r.save()\n",
+    )]);
+    let calls: Vec<(u32, String, &str)> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "invocation" || (e.kind == "access" && e.provenance == "derived"))
+        .map(|e| (e.anchor.start, e.to.render(ids::LANG), e.provenance))
+        .collect();
+    assert_eq!(
+        calls,
+        vec![
+            (6, "python:<stdlib>%2Furllib.parse".to_owned(), "declared"),
+            (9, "python:m.py/Repo.save".to_owned(), "derived"),
+        ]
+    );
+    let untyped: Vec<u32> = extraction
+        .stats
+        .drops
+        .iter()
+        .filter(|drop| drop.reason == "untyped-receiver")
+        .map(|drop| drop.line)
+        .collect();
+    assert_eq!(untyped, vec![7, 8]);
+}
+
 /// `(from, to, provenance, [(argument, value)])` of an annotation use.
 type Use<'a> = (String, String, &'a str, Vec<(String, String)>);
 

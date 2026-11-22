@@ -120,6 +120,16 @@ struct Ctx<'s> {
     emit: bool,
 }
 
+/// Whether an annotation naming this library name types an instance: a class (on evidence, for
+/// a name no table describes) — not a function, a value, `Any`, nor a `typing` form.
+fn names_instances(module: &ModuleRef, symbol: &[String], kind: Option<Kind>) -> bool {
+    if super::annotations::is_typing(module) {
+        let [name] = symbol else { return false };
+        return name != "Any" && stdlib_table::table().name("typing", name) == Some(Kind::Class);
+    }
+    !matches!(kind, Some(Kind::Function | Kind::Value | Kind::Module(_)))
+}
+
 impl Extractor<'_> {
     /// What makes a name no table describes a CLASS: a site inherits from it, raises or
     /// catches it, or annotates with it. Without it, a library name folds to its module.
@@ -1007,6 +1017,11 @@ impl Extractor<'_> {
                     object: false,
                     inferred: Some("flow-typed"),
                 },
+                // What a function or a value of the table returns is a call's result: untyped.
+                Some(Typed::External {
+                    kind: Some(Kind::Function | Kind::Value | Kind::Module(_)),
+                    ..
+                }) => Typed::Untyped,
                 Some(Typed::External {
                     module, symbol, kind, ..
                 }) => Typed::Folded {
@@ -1087,7 +1102,10 @@ impl Extractor<'_> {
                     object: false,
                     inferred,
                 }),
-                Typed::External { module, symbol, .. } => Some(Typed::Folded {
+                // A function, a value, `Any` or another `typing` form names no class of instances.
+                Typed::External {
+                    module, symbol, kind, ..
+                } if names_instances(&module, &symbol, kind) => Some(Typed::Folded {
                     fold: Fold::Written {
                         module,
                         symbol: symbol.join("."),
@@ -1105,7 +1123,9 @@ impl Extractor<'_> {
                     _ => String::new(),
                 };
                 match typing.as_str() {
-                    "Optional" => self.annotated(file, scope, arguments.first()?),
+                    form if super::annotations::WRAPPERS.contains(&form) => {
+                        self.annotated(file, scope, arguments.first()?)
+                    }
                     "Union" => self.annotated(file, scope, &TypeExpr::Union(arguments.clone())),
                     _ => self.annotated(file, scope, &TypeExpr::Named(chain.clone(), *span)),
                 }
