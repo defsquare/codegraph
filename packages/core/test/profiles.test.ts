@@ -815,6 +815,8 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/star-attributed/);
       expect(notes).toMatch(/`redefinition-of-another-kind`/);
       expect(notes).toMatch(/Audit \(M22c,/);
+      expect(notes).toMatch(/no standard-library class has two keys in any of the five models/);
+      expect(notes).toMatch(/one of them with a Capitalized segment before the last/);
       expect(notes).toMatch(/grimp/);
       expect(notes).toMatch(/scip-python/);
       expect(notes).toMatch(/`Any`, a `typing` form, a function or a value types nothing/);

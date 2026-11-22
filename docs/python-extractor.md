@@ -76,13 +76,28 @@ is true before it does:
   the Python 2.7 module index) or `<site>`, one stub module per dotted name as
   written. A `<site>` name is a class only on evidence (a base, a `raise`, an
   `except`, an annotation); a library function or value folds to its module.
+- **One key per library class.** A standard-library class is keyed where
+  typeshed declares it, its re-exports followed — `unittest.TestCase` is
+  `<stdlib>%2Funittest.case/TestCase`, `collections.abc.Mapping` is `typing`'s,
+  `io.StringIO` is `_io`'s — whatever the import names; that may be a private
+  module and differ from the run-time `__module__`. A Python 2 module's names
+  (the 2.7 list carries no re-export data) stay as written. A `<site>` class
+  reached through an imported name (`from django.db import models` …
+  `models.Model`) is keyed at the dotted module, `<site>%2Fdjango.db.models/Model`,
+  every segment before the last taken for module path — a guess (`models` may
+  be a class or a value of `django.db`), counted `dotted-site-class`. The
+  `import` edge always names the module written.
 - **Bases resolve to classes; the MRO answers members.** `class A(B, C)` is one
   `inheritance` per base. The extractor computes the C3 order to look members
   up and does not write it.
 - **A call is an edge when its receiver's class is written**: a module, a
   class named at the site, `self`/`cls` along written bases, `super()` —
   `declared`. Inferred receivers are `derived` (§4). A bare parameter, a call's
-  result, a subscript: dropped and counted, never guessed.
+  result, a subscript: dropped and counted, never guessed. A corpus class
+  written as the receiver of a member only a library ancestor answers
+  (`UserProfile.objects.all()`) is also a `declared` `reference` to the class,
+  at its name: the class is written there, and the member edge names the
+  library.
 
 ## 3. Options and exit codes
 
@@ -130,8 +145,8 @@ RESOLUTION SUMMARY
   alias-base                          : 3
   dotted-site-class                   : 1
   imports         : 64 (relative 24; by package root 9, by namespace package 2, implicit-relative 1; <stdlib> 18, <site> 9; missing 1; type-checking-only 1)
-  entities        : 372 (stubs: 43)
-  edges           : 222 (self-edges dropped: 0)
+  entities        : 374 (stubs: 45)
+  edges           : 223 (self-edges dropped: 0)
 ```
 
 A **site** is something written that names something: a name read, a call, an
@@ -154,8 +169,9 @@ The **provenance tiers**. `declared`: the source writes the receiver's class.
 `generated` is a base the language gives a class a standard form makes
 (`namedtuple` → `tuple`), or one the trace saw (§5); `dynamic-candidate` comes
 only from a trace. `rebound-name` counts resolved names bound more than once;
-`dotted-site-class` the `<site>` classes named through an imported name
-(`<site>%2Fdjango.db/models.Model`). On the `imports` line: `relative`,
+`dotted-site-class` the `<site>` classes keyed at a dotted module the site only
+implies (`models.Model` through `from django.db import models`), each a guess.
+On the `imports` line: `relative`,
 `by package root`, `by namespace package` and `implicit-relative` say how a
 corpus file was found; `<stdlib>`, `<site>` and `missing` (a file a corpus
 package does not have) what the others reached; `type-checking-only` the
@@ -250,10 +266,10 @@ nothing installed read, nothing run (the release binary, `/usr/bin/time -v`):
 | corpus | files | sites | resolved | entities (stubs) | edges | time | peak RSS |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | psf/requests | 37 | 5 768 | 81.6 % | 2 529 (158) | 3 592 | 0.06 s | 20 MB |
-| Django | 2 922 | 278 073 | 73.4 % | 111 583 (575) | 215 020 | 2.9 s | 433 MB |
-| Zulip | 2 125 | 228 523 | 81.9 % | 54 715 (1 053) | 168 860 | 1.9 s | 306 MB |
-| CPython 3.14.10 `Lib/` | 1 876 | 623 485 | 77.0 % | 206 240 (669) | 418 767 | 5.1 s | 822 MB |
-| CPython 2.7.18 `Lib/` | 1 613 | 303 632 | 78.7 % | 141 273 (503) | 215 693 | 2.8 s | 478 MB |
+| Django | 2 922 | 278 073 | 73.4 % | 111 593 (585) | 215 023 | 2.9 s | 433 MB |
+| Zulip | 2 125 | 228 523 | 81.9 % | 54 725 (1 063) | 173 638 | 2.0 s | 307 MB |
+| CPython 3.14.10 `Lib/` | 1 876 | 623 485 | 77.0 % | 206 234 (663) | 418 812 | 5.1 s | 822 MB |
+| CPython 2.7.18 `Lib/` | 1 613 | 303 632 | 78.7 % | 141 281 (511) | 216 890 | 2.8 s | 478 MB |
 
 The rate is over everything written, tests included. `untyped-receiver` is the
 largest remainder everywhere. 590 of 2.7's files are Python 2 syntax the
@@ -261,6 +277,16 @@ parser recovers. Memory grows with the corpus: 822 MB peak on CPython 3.14's
 `Lib/`, the largest. The metrics pass joins 823 of 825 measured entities on
 requests, 45 876 of 46 504 on Django, 18 852 of 19 001 on Zulip, 85 214 of
 85 289 on CPython 3.14 and 44 692 of 44 725 on 2.7.
+
+No standard-library class has two keys in any of the five models: the
+same-name pairs left are different classes (`threading.Event` and
+`asyncio.locks.Event`, `binascii.Error` and `configparser.Error`); the Python 2
+names, kept as written, are the exception (`Tkinter.TclError` beside
+`_tkinter.TclError` on 2.7). The dotted-module guess keys 66 `<site>` classes
+over the five corpora, one with a Capitalized segment before the last —
+Zulip's `pika.spec` `Basic.Deliver`, a nested class the guess takes for a
+module. The receiver `reference`s add 4 778 edges on Zulip, 1 199 on 2.7, 48
+on 3.14 and 3 on Django.
 
 In CPython 3's own `Lib/`, every import of a module that has a file there
 reaches that file; the 229 modules reached outside it have none — built into
@@ -299,15 +325,20 @@ the model agrees with:
 
 | tier | requests | Zulip |
 |---|---|---|
-| `declared` | 98.6 % of 1 346 | 98.2 % of 107 140 |
-| `annotation-typed` | 99.1 % of 108 | 98.9 % of 4 977 |
-| `flow-typed` | 100 % of 38 | 96.3 % of 1 564 |
-| `ancestor-attributed` | 100 % of 4 | 100 % of 37 |
+| `declared` | 98.6 % of 1 344 | 98.2 % of 111 882 |
+| `annotation-typed` | 99.1 % of 108 | 98.9 % of 4 980 |
+| `flow-typed` | 100 % of 38 | 96.3 % of 1 567 |
+| `ancestor-attributed` | 100 % of 4 | 100 % of 54 |
 
 — up to the stated folds: a class called is its `__init__`, a library function
 or value its module, a library member its class, an attribute its root-most
-owner, a library name as the site imports it. No `alias-base` or
-`star-attributed` edge lies in the files it indexed.
+owner, a library name as the site imports it. That last fold is what is left
+of the library re-exports: a `<site>` package's (`requests.Response` is
+`requests.models`', which no table says), and the differences between the
+pinned typeshed and the one pyright bundles (`io` / `_io`, `decimal` /
+`_decimal`) — 30 edges on requests and 1 399 on Zulip, against 86 and 1 935
+before the standard library was keyed where typeshed declares it. No
+`alias-base` or `star-attributed` edge lies in the files it indexed.
 
 **requests' own tests** (615 passed; the four that need a routable network
 fail without one) executed 282 import statements: 262 reach what the model
@@ -320,21 +351,10 @@ the interpreter makes inside a call (`warnings.warn`, `time.strptime`,
 
 Each is current behaviour, measured; none is a promise either way.
 
-- **Two spellings of one library class.** A class reached through an imported
-  name is keyed as written: `<site>/django.db/models.Model` beside
-  `<site>/django.db.models/Model`. On Zulip, 48 such classes carry 6 841 edges;
-  12 of them also exist in the other spelling (`models.Model`: 5 643 edges).
-- **A standard-library class re-exported** is keyed under the module the import
-  names: Django's `unittest/TestCase` (31 789 edges) and `unittest.case/TestCase`
-  (5) are two keys for one class, as are `TestResult` and `TestSuite`;
-  requests' `Mapping` is keyed under `collections.abc` and `typing`.
 - **A star-imported name read from another file.** Inside `signal.py`,
   `from _signal import *` makes `SIGINT` `star-attributed`; `signal.SIGINT`
   read elsewhere is dropped `unbound-name` — 578 `signal.*` and 91 `struct.*`
   reads in CPython 3.14's `Lib/`.
-- **A corpus class named as a receiver whose member lands on a library
-  ancestor** (`UserProfile.objects`): the edge names the library class, and no
-  edge names the corpus class — 5 109 such references on Zulip.
 - **`if TYPE_CHECKING:` imports** are counted, not marked on the edge, so an
   import cycle they close is drawn: requests' only cycle (8 files) exists
   through them; on Zulip they bring 6 files into its largest cycle.
