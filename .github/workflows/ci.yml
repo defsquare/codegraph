@@ -22,6 +22,8 @@
 #   python-test     the Ruff-parser extractor's own suite (PLAN.md §23), its
 #                   stdlib-table generator's and the shared writer's, then its
 #                   release binary re-extracting the fixture snapshot byte for byte
+#   python-native   its binary built on each of the four Unix runners, each one
+#                   reproducing that snapshot; the tap's formula ships these
 #   metrics         the metrics pass's own suite (PLAN.md §18): join, snapshots, history
 #   metrics-native  its binary built on each of the four Unix runners, re-measuring
 #                   the six fixtures byte for byte; the tap's formula ships these
@@ -313,6 +315,45 @@ jobs:
         run: |
           ./build.sh --python --skip-install --no-auto-install
           ./test.sh --python --skip-install --no-auto-install
+
+  # One binary per RID, each built on a runner of its own OS — the Ruby job's
+  # matrix, without its libclang step: the parser is Rust, and only psm (its
+  # stack growth) compiles a little C, with the runner's own compiler. Each
+  # binary then re-extracts the fixture and must reproduce the committed
+  # snapshot byte for byte: the cross-OS proof of principle 3 (PLAN.md §23).
+  # No Windows build, as for Ruby and the metrics pass.
+  python-native:
+    name: python native ${{ matrix.rid }}
+    needs: python-test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    rid: linux-x64 }
+          - { os: ubuntu-24.04-arm, rid: linux-arm64 }
+          - { os: macos-latest,     rid: osx-arm64 }
+          - { os: macos-15-intel,   rid: osx-x64 }
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - shell: bash
+        run: ./build.sh --python --skip-install --no-auto-install
+      - shell: bash
+        run: |
+          bin=extractors/python/target/release/codegraph-python
+          "$bin" --version
+          "$bin" --licenses > /dev/null   # the embedded notice (no pipe: pipefail and SIGPIPE)
+          # The relative --src on purpose: the path as typed is the header's `root`.
+          "$bin" --src fixtures/python/src --out out.jsonl --progress plain
+          cmp out.jsonl fixtures/python/expected/model.jsonl
+          echo "the binary reproduces the snapshot on ${{ matrix.os }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codegraph-python-${{ matrix.rid }}
+          path: extractors/python/target/release/codegraph-python
+          if-no-files-found: error
+          retention-days: 14
 
   csharp-test:
     name: csharp extractor
@@ -682,7 +723,7 @@ jobs:
   release:
     name: github release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [verify, java, java-native, metrics-native, ruby-native, csharp-smoke, typescript-smoke, elixir-smoke, elixir-native, sea, desktop, desktop-bundle, npm-publish]
+    needs: [verify, java, java-native, metrics-native, ruby-native, python-native, csharp-smoke, typescript-smoke, elixir-smoke, elixir-native, sea, desktop, desktop-bundle, npm-publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -699,7 +740,7 @@ jobs:
           set -euo pipefail
           mkdir -p release
           # The metrics pass rides the same loop: `codegraph-metrics-<rid>`.
-          for extractor in csharp java metrics ruby; do
+          for extractor in csharp java metrics python ruby; do
             for dir in artifacts/codegraph-$extractor-*; do
               rid="${dir#artifacts/codegraph-$extractor-}"
               for f in "$dir"/codegraph-$extractor*; do
