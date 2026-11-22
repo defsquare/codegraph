@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { blockFacts, createInsightLoader, type Insight } from "../insight.js";
+import { WalkAnswer } from "./WalkAnswer.js";
 
 /**
  * What `codegraph explain` wrote about the selected node, under its header.
@@ -13,6 +14,9 @@ import { blockFacts, createInsightLoader, type Insight } from "../insight.js";
  *
  * Nothing to show renders NOTHING: no store, no such route, an id nobody
  * explained. The header looks exactly as it did before explanations existed.
+ *
+ * A walk's store (`serve --insights <model>.N.walk.db`) answers with the walk's
+ * block, shown generically by `WalkAnswer`, in the same frame.
  */
 
 /** One loader for the page: an id is asked for once, however often it is reselected. */
@@ -42,11 +46,18 @@ export function InsightPanel({ id }: InsightPanelProps) {
 
   if (insight === undefined || insight.status === "none") return null;
 
+  if (insight.status === "answered") return <WalkAnswer insight={insight} />;
+
   if (insight.status === "failed") {
     return (
       <section className="insight insight-failed">
         <p className="insight-byline">
-          <span className="insight-badge">not explained</span>
+          <span className="insight-badge">{insight.walk === undefined ? "not explained" : "not answered"}</span>
+          {insight.walk !== undefined && (
+            <span className="insight-walk-name">
+              walk <strong>{insight.walk}</strong>
+            </span>
+          )}
           {insight.model !== undefined && <span>{insight.model}</span>}
           {insight.attempts !== undefined && <span>{insight.attempts === 1 ? "1 attempt" : `${insight.attempts} attempts`}</span>}
         </p>

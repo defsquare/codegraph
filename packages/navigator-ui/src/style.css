@@ -490,6 +490,82 @@ button.twisty:hover {
   overflow-wrap: anywhere;
 }
 
+/*
+ * A walk's answer (`codegraph walk`): the same inference frame, read
+ * generically. The answer leads, the fields follow open — they are what the
+ * walk asked — and the description, the line that flowed upward, closes it.
+ */
+.insight-walk-name {
+  font-family: var(--mono);
+}
+
+.insight-answer {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--paper);
+  white-space: pre-line;
+}
+
+.insight-fields {
+  margin: 8px 0;
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.insight-fields > div,
+.insight-nested > div {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 12px;
+}
+
+.insight-fields dt,
+.insight-nested dt {
+  font-family: var(--mono);
+  color: var(--paper-faint);
+}
+
+.insight-fields dd,
+.insight-nested dd {
+  margin: 0;
+  color: var(--paper-dim);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.insight-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  /* Wide enough that each item's rule stands apart: an object item is several lines. */
+  gap: 6px;
+}
+
+.insight-list > li {
+  padding-left: 10px;
+  border-left: 1px solid var(--paper-faint);
+}
+
+.insight-nested {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.insight-nested > div {
+  grid-template-columns: 90px 1fr;
+}
+
+.insight-description {
+  font-size: 12px;
+  color: var(--paper-dim);
+}
+
 .pane-tabs {
   display: flex;
   gap: 2px;
