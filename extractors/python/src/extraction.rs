@@ -18,6 +18,7 @@ use crate::stdlib_table::{self, Kind};
 use crate::{NAME, RUFF_TAG, VERSION};
 use codegraph_model::{Anchor, Edge, Entity, Key, Literal, Model, NamedArgument};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::hash::{BuildHasher, RandomState};
 
 mod annotations;
 mod sites;
@@ -160,6 +161,28 @@ fn signature(function: &FunctionDecl) -> String {
     format!("{}({})", function.name, parts.join(", "))
 }
 
+/// The edges that share a hash: almost always one.
+enum Bucket {
+    One(u32),
+    Many(Vec<u32>),
+}
+
+impl Bucket {
+    fn indices(&self) -> &[u32] {
+        match self {
+            Bucket::One(index) => std::slice::from_ref(index),
+            Bucket::Many(indices) => indices,
+        }
+    }
+
+    fn push(&mut self, index: u32) {
+        match self {
+            Bucket::One(first) => *self = Bucket::Many(vec![*first, index]),
+            Bucket::Many(indices) => indices.push(index),
+        }
+    }
+}
+
 /// Where a name is bound: its line, its span, and the assignment when one binds it.
 type BindingSite = (u32, Span, Option<usize>);
 
@@ -193,7 +216,9 @@ struct Extractor<'a> {
     stats: Stats,
     entities: Vec<Entity>,
     edges: Vec<Edge>,
-    seen_edges: HashSet<Edge>,
+    /// Every edge written, by its hash: indices into `edges`, so a repeat is found without a copy.
+    edge_index: HashMap<u64, Bucket>,
+    edge_hasher: RandomState,
 }
 
 impl Extractor<'_> {
@@ -236,12 +261,18 @@ impl Extractor<'_> {
             candidates: None,
             arguments: arguments.filter(|arguments| !arguments.is_empty()),
         };
-        if self.seen_edges.insert(edge.clone()) {
-            self.edges.push(edge);
-            true
-        } else {
-            false
+        let hash = self.edge_hasher.hash_one(&edge);
+        let index = self.edges.len() as u32;
+        let edges = &self.edges;
+        match self.edge_index.get_mut(&hash) {
+            Some(bucket) if bucket.indices().iter().any(|at| edges[*at as usize] == edge) => return false,
+            Some(bucket) => bucket.push(index),
+            None => {
+                self.edge_index.insert(hash, Bucket::One(index));
+            }
         }
+        self.edges.push(edge);
+        true
     }
 
     // ------------------------------------------------------------ entities ----
@@ -919,7 +950,8 @@ pub fn extract(
         stats,
         entities: Vec::new(),
         edges: Vec::new(),
-        seen_edges: HashSet::new(),
+        edge_index: HashMap::new(),
+        edge_hasher: RandomState::new(),
     };
     extractor.modules();
     extractor.declarations();
