@@ -181,11 +181,22 @@ impl<'a> Modules<'a> {
         let names: Vec<&str> = dotted.split('.').collect();
         let from = parent_dir(self.rel(file));
 
-        // 1. The corpus, at the root nearest the importing file.
+        // 1. The corpus, at the root nearest the importing file. Another file's root does not
+        // shadow the standard library: only the importer's own, the corpus root and an
+        // `--import-root` are on its path for certain.
+        let own = crate::corpus::package_root(self.rel(file), &self.packages, self.corpus.root_name.as_deref());
+        let standard = self.table.is_module(names[0]);
+        let reachable = |root: &Root| {
+            !standard
+                || *root == own
+                || (root.dir.is_empty() && root.prefix.is_none())
+                || self.corpus.import_roots.contains(&root.dir)
+        };
         let mut hits: Vec<(usize, usize, ModuleRef, bool)> = self
             .roots
             .iter()
             .enumerate()
+            .filter(|(_, root)| reachable(root))
             .filter_map(|(index, root)| {
                 self.in_root(root, &names)
                     .map(|(module, namespace)| (distance(from, root), index, module, namespace))
@@ -223,7 +234,7 @@ impl<'a> Modules<'a> {
                 .roots
                 .iter()
                 .enumerate()
-                .filter(|(_, root)| root.prefix.is_none())
+                .filter(|(_, root)| root.prefix.is_none() && reachable(root))
                 .filter_map(|(index, root)| match self.in_root(root, &names[..1]) {
                     Some((ModuleRef::File(init), _)) if crate::corpus::is_package_init(self.rel(init)) => {
                         Some((distance(from, root), index))
@@ -1045,6 +1056,54 @@ mod tests {
             tie,
             Lookup::Ambiguous(vec!["tests/integration".into(), "tests/unit".into()])
         );
+    }
+
+    #[test]
+    fn another_files_root_does_not_shadow_the_standard_library_its_own_root_does() {
+        // CPython's `Lib/`: `test/dtracedata/` holds a `gc.py` the DTrace tests read; no
+        // `sys.path` of `test/test_gc.py` holds that directory.
+        let corpus = corpus(&[
+            ("test/__init__.py", ""),
+            ("test/test_gc.py", ""),
+            ("test/dtracedata/gc.py", ""),
+            ("test/dtracedata/run.py", ""),
+            ("tests/queue.py", ""),
+            ("tests/test_queue.py", ""),
+        ]);
+        let modules = Modules::new(&corpus);
+        let found = |from: &str, dotted: &str| match modules.absolute(index(&corpus, from), dotted) {
+            Lookup::Found { module, .. } => module,
+            other => panic!("{dotted}: {other:?}"),
+        };
+        assert_eq!(found("test/test_gc.py", "gc"), ModuleRef::Stdlib("gc".into()));
+        // Its own directory's script runs with that directory first on the path.
+        assert_eq!(
+            found("test/dtracedata/run.py", "gc"),
+            ModuleRef::File(index(&corpus, "test/dtracedata/gc.py"))
+        );
+        assert_eq!(
+            found("tests/test_queue.py", "queue"),
+            ModuleRef::File(index(&corpus, "tests/queue.py"))
+        );
+        // A package below another file's root names no missing file either: the standard library's.
+        let corpus = super::tests::corpus(&[
+            ("scripts/email/__init__.py", ""),
+            ("scripts/email/parser.py", ""),
+            ("app/main.py", ""),
+        ]);
+        let modules = Modules::new(&corpus);
+        let main = index(&corpus, "app/main.py");
+        assert!(matches!(
+            modules.absolute(main, "email.parser"),
+            Lookup::Found { module: ModuleRef::Stdlib(ref dotted), .. } if dotted == "email.parser"
+        ));
+        assert!(matches!(
+            modules.absolute(main, "email.nothing"),
+            Lookup::Found {
+                module: ModuleRef::Stdlib(_) | ModuleRef::Site(_),
+                ..
+            }
+        ));
     }
 
     #[test]

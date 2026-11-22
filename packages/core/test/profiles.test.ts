@@ -835,6 +835,7 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/a name bound once to such a call is that module by flow/);
       // Decision 3: the roots, a file missing below a corpus package, the table, a sibling in a package, `<site>`.
       expect(notes).toMatch(/then the standard library's table, then a sibling of the importing file/);
+      expect(notes).toMatch(/another file's root .* does not shadow it/);
       expect(notes).toMatch(/64 MiB/);
       // Body recovery is measured, no longer owed.
       expect(notes).not.toMatch(/not yet measured/);
