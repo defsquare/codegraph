@@ -329,6 +329,7 @@ impl Extractor<'_> {
             anchor,
             access,
             candidates: None,
+            arguments: None,
         };
         if self.seen_edges.insert(edge.clone()) {
             self.edges.push(edge);
@@ -493,6 +494,7 @@ impl Extractor<'_> {
                 anchor: self.anchor(file, span),
                 access: None,
                 candidates: Some(candidates),
+                arguments: None,
             };
             if self.seen_edges.insert(edge.clone()) {
                 self.edges.push(edge);

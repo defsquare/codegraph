@@ -178,6 +178,7 @@ impl Extractor<'_> {
             anchor,
             access: None,
             candidates: None,
+            arguments: None,
         };
         if self.seen_edges.insert(edge.clone()) {
             self.edges.push(edge);

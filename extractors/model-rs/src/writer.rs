@@ -199,6 +199,9 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
             line.push_str(",\"signature\":");
             json::string(&mut line, signature);
         }
+        if let Some(declared_type) = &entity.declared_type {
+            line.push_str(&format!(",\"declaredType\":{}", reference(declared_type, &entity.key)?));
+        }
         if let Some(is_stub) = entity.is_stub {
             line.push_str(if is_stub {
                 ",\"isStub\":true"
@@ -285,6 +288,20 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
                 .collect::<Result<Vec<String>, WriteError>>()?;
             line.push_str(&format!(",\"candidates\":[{}]", refs.join(",")));
         }
+        if let Some(arguments) = edge.arguments.as_ref().filter(|arguments| !arguments.is_empty()) {
+            line.push_str(",\"arguments\":[");
+            for (index, argument) in arguments.iter().enumerate() {
+                if index > 0 {
+                    line.push(',');
+                }
+                line.push_str("{\"name\":");
+                json::string(&mut line, &argument.name);
+                line.push_str(",\"value\":");
+                literal(&mut line, &argument.value, &|key| reference(key, &edge.from))?;
+                line.push('}');
+            }
+            line.push(']');
+        }
         if let Some((read, write)) = edge.access {
             line.push_str(&format!(",\"isRead\":{read},\"isWrite\":{write}"));
         }
@@ -329,6 +346,11 @@ fn literal(
         }
         Literal::Boolean(flag) => line.push_str(&format!("{{\"k\":\"boolean\",\"v\":{flag}}}")),
         Literal::Null => line.push_str("{\"k\":\"null\"}"),
+        Literal::Enum { ty, name } => {
+            line.push_str(&format!("{{\"k\":\"enum\",\"type\":{},\"name\":", reference(ty)?));
+            json::string(line, name);
+            line.push('}');
+        }
         Literal::Type(key) => line.push_str(&format!("{{\"k\":\"type\",\"type\":{}}}", reference(key)?)),
         Literal::Array(items) => {
             line.push_str("{\"k\":\"array\",\"items\":[");
@@ -364,6 +386,7 @@ fn object(line: &mut String, pairs: &[(&'static str, String)]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::NamedArgument;
 
     /// A file module, keyed by a path that needs no escaping.
     fn file(path: &str) -> Entity {
@@ -408,6 +431,7 @@ mod tests {
             },
             access: None,
             candidates: Some(vec![b.key.clone(), c.key.clone()]),
+            arguments: None,
         };
         let text = written(&model(vec![a, b, c], vec![edge]));
         // core's key order (packages/core/src/jsonl.ts): candidates, isRead, isWrite, anchor.
@@ -415,6 +439,78 @@ mod tests {
             text.contains(r#"{"t":"x","k":0,"f":0,"o":1,"p":0,"candidates":[1,2],"anchor":[0,3,3]}"#),
             "{text}"
         );
+    }
+
+    #[test]
+    fn writes_a_declared_type_and_annotation_arguments_in_cores_key_order() {
+        let a = file("a.py");
+        let mut class = Entity::new(a.key.member("Color"), "class", &["TNamed"]);
+        class.name = Some("Color".into());
+        let mut variable = Entity::new(a.key.member("DEFAULT"), "variable", &["TNamed", "TTypedEntity"]);
+        variable.name = Some("DEFAULT".into());
+        variable.signature = Some("DEFAULT".into());
+        variable.declared_type = Some(class.key.clone());
+        variable.value = Some(Literal::Enum {
+            ty: class.key.clone(),
+            name: "RED".into(),
+        });
+        let edge = Edge {
+            kind: "annotationUse",
+            from: variable.key.clone(),
+            to: class.key.clone(),
+            provenance: "declared",
+            anchor: Anchor {
+                file: "a.py".into(),
+                start: 2,
+                end: 2,
+            },
+            access: None,
+            candidates: None,
+            arguments: Some(vec![
+                NamedArgument {
+                    name: "path".into(),
+                    value: Literal::String("/orders".into()),
+                },
+                NamedArgument {
+                    name: "methods".into(),
+                    value: Literal::Array(vec![Literal::String("GET".into())]),
+                },
+                NamedArgument {
+                    name: "arg2".into(),
+                    value: Literal::Type(class.key.clone()),
+                },
+            ]),
+        };
+        let text = written(&model(vec![a, class, variable], vec![edge]));
+        // core's ENTITY_KEY_ORDER: name, signature, declaredType, isStub, …, value, anchor.
+        assert!(
+            text.contains(r#""s":"DEFAULT","name":"DEFAULT","signature":"DEFAULT","declaredType":1,"value":{"k":"enum","type":1,"name":"RED"}}"#),
+            "{text}"
+        );
+        // core's EDGE_KEY_ORDER: candidates, arguments, isRead, isWrite, anchor.
+        assert!(
+            text.contains(
+                r#""p":0,"arguments":[{"name":"path","value":{"k":"string","v":"/orders"}},{"name":"methods","value":{"k":"array","items":[{"k":"string","v":"GET"}]}},{"name":"arg2","value":{"k":"type","type":1}}],"anchor":[0,2,2]}"#
+            ),
+            "{text}"
+        );
+        // An empty list is omitted, as core omits it: the edge kind vouches for the key.
+        let mut bare = model(vec![file("b.py"), file("c.py")], vec![]);
+        bare.edges.push(Edge {
+            kind: "annotationUse",
+            from: Key::module("b.py"),
+            to: Key::module("c.py"),
+            provenance: "declared",
+            anchor: Anchor {
+                file: "b.py".into(),
+                start: 1,
+                end: 1,
+            },
+            access: None,
+            candidates: None,
+            arguments: Some(Vec::new()),
+        });
+        assert!(written(&bare).contains(r#""p":0,"anchor":[0,1,1]}"#));
     }
 
     #[test]
@@ -433,6 +529,7 @@ mod tests {
             },
             access: None,
             candidates: None,
+            arguments: None,
         };
         let text = written(&model(vec![b, a], vec![edge]));
         let lines: Vec<&str> = text.lines().collect();

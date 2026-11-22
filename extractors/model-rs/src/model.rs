@@ -100,18 +100,30 @@ pub struct Anchor {
 }
 
 /// A written, declaration-site value (METAMODEL §1.6) in core's closed tag set.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Literal {
     String(String),
     /// Canonical decimal text.
     Number(String),
     Boolean(bool),
     Null,
+    /// A member of an enumeration: its type, by key, and the member's simple name.
+    Enum {
+        ty: Key,
+        name: String,
+    },
     /// A type, by key: closed against the model like any reference.
     Type(Key),
     Array(Vec<Literal>),
     /// A constant expression not folded: its source text.
     Unevaluated(String),
+}
+
+/// One argument of an annotation use, always named (METAMODEL §1.6).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct NamedArgument {
+    pub name: String,
+    pub value: Literal,
 }
 
 #[derive(Clone, Debug)]
@@ -121,6 +133,8 @@ pub struct Entity {
     pub traits: Vec<&'static str>,
     pub name: Option<String>,
     pub signature: Option<String>,
+    /// The type `TTypedEntity` names, by key: closed like any reference.
+    pub declared_type: Option<Key>,
     pub is_stub: Option<bool>,
     pub parent: Option<Key>,
     pub attached_to: Option<Key>,
@@ -141,6 +155,7 @@ impl Entity {
             traits: traits.to_vec(),
             name: None,
             signature: None,
+            declared_type: None,
             is_stub: None,
             parent: None,
             attached_to: None,
@@ -166,6 +181,8 @@ pub struct Edge {
     /// Every target a `dynamic-candidate` invocation was seen to reach, `to`
     /// among them; absent on any other edge.
     pub candidates: Option<Vec<Key>>,
+    /// An `annotationUse`'s written arguments, in source order; an empty list is not written.
+    pub arguments: Option<Vec<NamedArgument>>,
 }
 
 #[derive(Debug)]

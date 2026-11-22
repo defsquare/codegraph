@@ -10,5 +10,5 @@ mod json;
 mod model;
 mod writer;
 
-pub use model::{Anchor, Edge, Entity, Key, Literal, Model, utf16_cmp};
+pub use model::{Anchor, Edge, Entity, Key, Literal, Model, NamedArgument, utf16_cmp};
 pub use writer::{Counts, WriteError, write};
