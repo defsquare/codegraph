@@ -21,7 +21,8 @@ pub(super) type Inferred = Option<&'static str>;
 /// What a value is, as far as the reader can say without running it.
 #[derive(Clone, Debug)]
 pub(super) enum Typed {
-    Module(ModuleRef),
+    /// A module, and the inference that made the value one (`m = import_module("a.b")`).
+    Module(ModuleRef, Inferred),
     /// A corpus class: the class itself (`object`), or one of its instances.
     Corpus {
         file: usize,
@@ -42,10 +43,7 @@ pub(super) enum Typed {
         inferred: Inferred,
     },
     /// A library's class or module, which takes every step below it.
-    Folded {
-        fold: Fold,
-        inferred: Inferred,
-    },
+    Folded { fold: Fold, inferred: Inferred },
     /// A name below a library module, as written: a class on evidence, else its module's.
     External {
         module: ModuleRef,
@@ -348,7 +346,7 @@ impl Extractor<'_> {
                 Ok(landed)
             }
             Typed::Builtin(_) | Typed::Language => Ok(Landed::Language),
-            Typed::Module(_) | Typed::Corpus { .. } | Typed::Super { .. } | Typed::Untyped => Ok(Landed::Nothing),
+            Typed::Module(..) | Typed::Corpus { .. } | Typed::Super { .. } | Typed::Untyped => Ok(Landed::Nothing),
         }
     }
 
@@ -431,7 +429,7 @@ impl Extractor<'_> {
                 Ok((landed, Typed::Folded { fold, inferred }))
             }
             Typed::Builtin(_) | Typed::Language => Ok((Landed::Language, Typed::Language)),
-            Typed::Module(_) | Typed::Super { .. } | Typed::Untyped => {
+            Typed::Module(..) | Typed::Super { .. } | Typed::Untyped => {
                 Err(dropped("untyped-receiver", ctx.site.text.clone()))
             }
         }
@@ -648,7 +646,7 @@ impl Extractor<'_> {
                 function,
                 inferred,
             },
-            Value::Module(module) => Typed::Module(module),
+            Value::Module(module) => Typed::Module(module, inferred),
             Value::External { module, symbol, kind } => Typed::External {
                 module,
                 symbol,
@@ -685,9 +683,9 @@ impl Extractor<'_> {
     /// `receiver.name`.
     fn attribute(&mut self, ctx: &Ctx<'_>, receiver: Typed, name: &str, self_receiver: bool) -> Result<Step, Dropped> {
         match receiver {
-            Typed::Module(module) => {
+            Typed::Module(module, inferred) => {
                 let value = self.resolver.module_member(ctx.file, &module, name);
-                self.value(ctx, value, None)
+                self.value(ctx, value, inferred)
             }
             Typed::Corpus {
                 file,
@@ -960,7 +958,40 @@ impl Extractor<'_> {
         let typed = if let Some(annotation) = &decl.annotation {
             self.annotated(file, scope, annotation).unwrap_or(Typed::Untyped)
         } else if let Some(callee) = &decl.constructed {
-            match self.quiet(file, scope, callee).map(|step| step.typed) {
+            let typed = self.quiet(file, scope, callee).map(|step| step.typed);
+            // `importlib.import_module("a.b")` is `a.b`; `__import__("a.b")` is `a`, as the interpreter returns it.
+            let imported = match &typed {
+                Some(Typed::External {
+                    module: ModuleRef::Stdlib(module),
+                    symbol,
+                    ..
+                }) if module == "importlib" && symbol == &["import_module"] => Some(false),
+                Some(Typed::Builtin(name)) if name == "__import__" => Some(true),
+                _ => None,
+            };
+            if let Some(top) = imported {
+                let typed = match decl
+                    .literal
+                    .as_deref()
+                    .filter(|dotted| !dotted.is_empty() && !dotted.starts_with('.'))
+                {
+                    Some(dotted) => {
+                        let dotted = if top {
+                            dotted.split('.').next().unwrap_or(dotted)
+                        } else {
+                            dotted
+                        };
+                        match self.resolver.modules.absolute(file, dotted) {
+                            crate::resolve::Lookup::Found { module, .. } => Typed::Module(module, Some("flow-typed")),
+                            _ => Typed::Untyped,
+                        }
+                    }
+                    None => Typed::Untyped,
+                };
+                self.typing.remove(&(file, assignment));
+                return typed;
+            }
+            match typed {
                 Some(Typed::Corpus {
                     file,
                     class,

@@ -629,3 +629,39 @@ fn a_literal_slot_is_an_attribute_of_its_class_anchored_at_its_string_with_no_va
     assert_eq!(of(&all, "P.__init__"), vec![("access", "P._x", "declared", WRITE)]);
     assert!(extraction.stats.drops.iter().all(|d| d.reason != "unbound-self-call"));
 }
+
+#[test]
+fn a_name_bound_once_to_a_literal_import_module_is_that_module_by_flow() {
+    let extraction = extract_sources(&[
+        ("pkg/__init__.py", "def helper(): pass\n"),
+        ("pkg/sub.py", "class Thing: pass\n"),
+        (
+            "m.py",
+            "import importlib\njson_mod = importlib.import_module(\"json\")\nsub = importlib.import_module(\"pkg.sub\")\n\
+             top = __import__(\"pkg.sub\")\nlater = importlib.import_module(name)\n\
+             def f():\n    json_mod.dumps(1)\n    sub.Thing()\n    top.helper()\n    later.anything()\n",
+        ),
+    ]);
+    let all = edges(&extraction);
+    // `__import__("pkg.sub")` is `pkg`, as the interpreter returns it; a computed name types nothing.
+    assert_eq!(
+        of(&all, "f"),
+        vec![
+            ("access", "json_mod", "declared", READ),
+            ("access", "later", "declared", READ),
+            ("access", "sub", "declared", READ),
+            ("access", "top", "declared", READ),
+            ("invocation", "<stdlib>%2Fjson", "derived", None),
+            ("invocation", "pkg%2F__init__.py/helper", "derived", None),
+            ("invocation", "pkg%2Fsub.py/Thing", "derived", None),
+        ]
+    );
+    let untyped: Vec<&str> = extraction
+        .stats
+        .drops
+        .iter()
+        .filter(|d| d.reason == "untyped-receiver")
+        .map(|d| d.what.as_str())
+        .collect();
+    assert_eq!(untyped, vec!["later.anything()"]);
+}

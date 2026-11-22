@@ -75,3 +75,11 @@ class AuditedService(Service):
     def __init__(self, handler):
         super().__init__(handler)
         self.audits = []
+
+
+shipping = importlib.import_module("acme_order.shipping")
+
+
+def default_carrier():
+    """A name bound once to `import_module` with a literal is that module, by flow."""
+    return shipping.Carrier.POST

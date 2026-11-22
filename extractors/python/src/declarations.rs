@@ -301,6 +301,8 @@ pub struct AssignDecl {
     pub value: Option<ValueDecl>,
     /// The value is a call: its callee.
     pub constructed: Option<Chain>,
+    /// …and its first positional argument, when it is a string literal (`import_module("a.b")`).
+    pub literal: Option<String>,
     pub annotation: Option<TypeExpr>,
     pub augmented: bool,
     pub span: Span,
@@ -1032,15 +1034,22 @@ impl Reader<'_> {
     }
 
     fn assignment(&self, value: Option<&Expr>, annotation: Option<&Expr>, augmented: bool, span: Span) -> AssignDecl {
-        let constructed = match value {
-            Some(Expr::Call(call)) => Some(self.chain(&call.func, &mut Vec::new())),
-            _ => None,
+        let (constructed, literal) = match value {
+            Some(Expr::Call(call)) => (
+                Some(self.chain(&call.func, &mut Vec::new())),
+                call.arguments.args.first().and_then(|first| match self.value(first) {
+                    ValueDecl::Str(text) => Some(text),
+                    _ => None,
+                }),
+            ),
+            _ => (None, None),
         };
         AssignDecl {
             scope: self.scope,
             target: Target::Name(String::new()),
             value: value.filter(|_| !augmented).map(|value| self.value(value)),
             constructed,
+            literal,
             annotation: annotation.map(|annotation| self.type_expr(annotation)),
             augmented,
             span,

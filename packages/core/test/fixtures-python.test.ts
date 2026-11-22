@@ -272,6 +272,8 @@ describe("fixtures/python/expected/model.jsonl", () => {
     const position = entity(model, `${cursor}._position`);
     expect([position["kind"], position["value"], SourceAnchor.parse(position["anchor"]).span]).toEqual(["attribute", undefined, [15, 15]]);
     expect(hasEdge(model, "access", `${cursor}.position`, `${cursor}._position`)).toBe(true);
+    // A name bound once to `import_module("…")` is that module by flow.
+    expect(hasEdge(model, "access", `${services}/default_carrier`, `${PKG}shipping.py/Carrier.POST`, "derived")).toBe(true);
     // A variable with its value and comment; `global counter` then `counter += 1` reads and writes it.
     const currency = entity(model, `${PKG}settings.py/DEFAULT_CURRENCY`);
     expect([currency["value"], currency["comments"]]).toEqual([
