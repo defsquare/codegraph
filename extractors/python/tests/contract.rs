@@ -378,7 +378,6 @@ fn lists_every_dropped_site_on_stderr_when_asked_and_changes_no_byte_of_the_mode
         "dropped unbound-name: src/acme_order/cycle_a.py:5 Token (an import cycle)\n",
         // The parameter `Base`, never the class of that name the module imports.
         "dropped computed-base: src/acme_order/factory.py:24 Base (bound to a value)\n",
-        "dropped unbound-name: src/acme_order/legacy/report.py:15 StandardError\n",
         "dropped unnamed-declaration: src/acme_order/legacy/broken.py:12 def\n",
         "dropped ambiguous-root: tests/test_tie.py:2 fakes (tests/integration or tests/unit)\n",
         "dropped unbound-name: tests/test_tie.py:5 fakes.Fake\n",

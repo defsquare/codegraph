@@ -813,6 +813,9 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/star-attributed/);
       expect(notes).toMatch(/type-checking-only/);
       expect(notes).toMatch(/Python 2/);
+      // Python 2's standard library and builtins are stubs of their own roots, never `<site>` or unbound.
+      expect(notes).toMatch(/Python 2\.7 Library Reference/);
+      expect(notes).toMatch(/`StandardError`/);
       expect(notes).toMatch(/MRO/);
       // v1 said the extractor guesses candidates and emits synthesized members; it does neither.
       expect(notes).not.toMatch(/candidates list/);

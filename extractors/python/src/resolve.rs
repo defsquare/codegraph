@@ -1101,6 +1101,14 @@ mod tests {
                 kind: Kind::Class
             }
         );
-        assert_eq!(value("StandardError"), Value::Unbound { cycle: false });
+        // Python 2's builtin, where Python 3 binds nothing; a name neither binds is unbound.
+        assert_eq!(
+            value("StandardError"),
+            Value::Builtin {
+                name: "StandardError".into(),
+                kind: Kind::Class
+            }
+        );
+        assert_eq!(value("NothingBindsThis"), Value::Unbound { cycle: false });
     }
 }

@@ -49,7 +49,7 @@ the hazard. The last three are `-text` in `.gitattributes`.
 | `unicode_names.py` | a non-ASCII identifier (`Café`) and an NFKC twin: `def ﬁnd` (U+FB01) and `def find` are one name, one entity |
 | `promo#2024.py` | a `#` in a file name: escaped in the key, kept in the name |
 | `_vendor/` | vendored code is written in the repository: corpus |
-| `legacy/report.py` | a Python 2 file (`print` statement, backticks, `except E, e`, a tuple parameter), read from the recovered tree; `import helpers` answered only by its sibling (`implicit-relative`); `import ConfigParser`, a Python 2 module no table of Python 3 names (`<site>`, until M22b's module list); `StandardError`, a Python 2 builtin, dropped |
+| `legacy/report.py` | a Python 2 file (`print` statement, backticks, `except E, e`, a tuple parameter), read from the recovered tree; `import helpers` answered only by its sibling (`implicit-relative`); `import ConfigParser`, a module Python 3 dropped, still `<stdlib>` by the 2.7 Library Reference's index; `LegacyError(StandardError)`, a Python 2 builtin, `<builtins>/StandardError` |
 | `legacy/broken.py` | a Python 3 file with real syntax errors: the class and its methods survive; `def 1():` has no name, dropped `unnamed-declaration` |
 | `legacy/latin.py` | Latin-1 with its PEP 263 cookie: the method is `réduire`, decoded |
 | `legacy/bom.py` | UTF-8 behind a byte-order mark: the mark is not text |
@@ -62,10 +62,10 @@ the hazard. The last three are `-text` in `.gitattributes`.
 
 ## What the numbers are
 
-36 files, 185 entities (26 of them stubs), 66 edges: 35 `import`, 31
-`inheritance`, all `declared`. Of 37 sites — every base is one — 31 resolve
-(83.8 %): 17 to the corpus, 5 to `<builtins>`, 5 to `<stdlib>`, 3 to `<site>`,
-1 below a missing module; 6 are dropped (a computed base, a parameter, four
+36 files, 186 entities (27 of them stubs), 67 edges: 35 `import`, 32
+`inheritance`, all `declared`. Of 37 sites — every base is one — 32 resolve
+(86.5 %): 17 to the corpus, 6 to `<builtins>`, 5 to `<stdlib>`, 3 to `<site>`,
+1 below a missing module; 5 are dropped (a computed base, a parameter, three
 bases nothing binds). Of the 35 imports, 11 are relative, 6 found by a package root, 2
-through the namespace package, 1 implicit-relative, 8 in the standard library,
-6 third parties', 1 a missing file; one is for a type checker only.
+through the namespace package, 1 implicit-relative, 9 in the standard library,
+5 third parties', 1 a missing file; one is for a type checker only.

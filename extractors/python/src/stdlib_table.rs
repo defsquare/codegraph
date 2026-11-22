@@ -9,6 +9,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 const TABLE: &str = include_str!("../data/typeshed-stdlib-2e4d4dcf657f82305709bbe3e86bca4d27d4dd46.tsv");
+/// Python 2.7's standard library, by its Library Reference's module index.
+const PY2_MODULES: &str = include_str!("../data/stdlib-py2.txt");
+/// Python 2.7's builtins Python 3 does not have.
+const PY2_BUILTINS: &str = include_str!("../data/builtins-py2.txt");
 
 /// What a module of the table binds a name to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -178,6 +182,32 @@ fn parse(text: &'static str) -> StdlibTable {
             _ => panic!("stdlib table: unknown record {line:?}"),
         }
     }
+    // Python 2's names after Python 3's, which answer first.
+    for module in PY2_MODULES
+        .lines()
+        .filter(|line| !line.starts_with('#') && !line.is_empty())
+    {
+        table.modules.insert(module);
+    }
+    for line in PY2_BUILTINS
+        .lines()
+        .filter(|line| !line.starts_with('#') && !line.is_empty())
+    {
+        let fields: Vec<&'static str> = line.split('\t').collect();
+        let (kind, name, base) = match fields.as_slice() {
+            ["class", name, base] => (Kind::Class, *name, Some(*base)),
+            ["function", name] => (Kind::Function, *name, None),
+            _ => panic!("python 2 builtins: unknown record {line:?}"),
+        };
+        if table.names.contains_key(&("builtins", name)) {
+            continue;
+        }
+        table.names.insert(("builtins", name), kind);
+        if let Some(base) = base {
+            table.declared.insert(("builtins", name), ("builtins", name));
+            table.bases.insert(("builtins", name), vec![(0, ("builtins", base))]);
+        }
+    }
     table
 }
 
@@ -228,8 +258,34 @@ mod tests {
         // A stub-only class is no builtin, and neither is a private name.
         assert_eq!(stdlib.builtin("function"), None);
         assert_eq!(stdlib.builtin("_T"), None);
-        // Python 2's builtins are not Python 3's.
-        assert_eq!(stdlib.builtin("StandardError"), None);
+    }
+
+    #[test]
+    fn reads_python_2s_standard_library_and_builtins_where_python_3_has_none() {
+        let stdlib = table();
+        // The 2.7 Library Reference's index: what Python 3 dropped is still the standard library.
+        for module in [
+            "ConfigParser",
+            "urllib2",
+            "cPickle",
+            "StringIO",
+            "Tkinter",
+            "__builtin__",
+            "md5",
+        ] {
+            assert!(stdlib.is_module(module), "{module}");
+        }
+        assert!(!stdlib.is_module("simplejson"));
+        assert_eq!(stdlib.builtin("StandardError"), Some(Kind::Class));
+        assert_eq!(stdlib.bases(("builtins", "StandardError")), [("builtins", "Exception")]);
+        assert_eq!(stdlib.builtin("unicode"), Some(Kind::Class));
+        assert_eq!(stdlib.bases(("builtins", "unicode")), [("builtins", "basestring")]);
+        assert_eq!(stdlib.class("builtins", "long"), Some(("builtins", "long")));
+        assert_eq!(stdlib.builtin("raw_input"), Some(Kind::Function));
+        // A keyword in Python 3 is the language, in either.
+        assert_eq!(stdlib.builtin("True"), None);
+        // Python 3 answers first: its `str` is typeshed's, no Python 2 name.
+        assert_eq!(stdlib.bases(("builtins", "str")), [("typing", "Sequence")]);
     }
 
     #[test]
