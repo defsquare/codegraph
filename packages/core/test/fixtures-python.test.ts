@@ -223,6 +223,51 @@ describe("fixtures/python/expected/model.jsonl", () => {
     }
   });
 
+  it("holds every provenance tier the extractor writes and every edge kind of the profile but the analyzer's", () => {
+    const model = loadSnapshot();
+    expect([...new Set(model.edges.map((e) => e.provenance))].sort()).toEqual(["declared", "derived", "generated"]);
+    const kinds = pythonProfile.edges.filter((kind) => kind !== "interfaceImplementation").sort();
+    expect([...new Set(model.edges.map((e) => e.edge))].sort()).toEqual(kinds);
+  });
+
+  it("lands every receiver shape in the tier the notes give it", () => {
+    const model = loadSnapshot();
+    const services = `${PKG}services.py`;
+    const save = `${PKG}repository.py/Repository.save`;
+    // Declared: `cls(…)`, `super().__init__`, a class named at the site, a stub module's function.
+    expect(hasEdge(model, "invocation", `${services}/Service.create`, `${services}/Service.__init__`)).toBe(true);
+    expect(hasEdge(model, "invocation", `${services}/AuditedService.__init__`, `${services}/Service.__init__`)).toBe(true);
+    expect(hasEdge(model, "invocation", `${services}/Service.run`, `${ORDER}.__init__`)).toBe(true);
+    expect(hasEdge(model, "invocation", `${services}/checkout`, "python:<stdlib>%2Fjson")).toBe(true);
+    // Derived: an attribute assigned one class, an annotation, the one library class that could answer.
+    expect(hasEdge(model, "invocation", `${services}/Service.run`, save, "derived")).toBe(true);
+    expect(hasEdge(model, "invocation", `${services}/Service.run`, save, "declared")).toBe(false);
+    expect(hasEdge(model, "invocation", `${services}/checkout`, save, "derived")).toBe(true);
+    const tracked = `${PKG}shipping.py/Tracked.recent`;
+    expect(hasEdge(model, "invocation", tracked, "python:<site>%2Fdjango.db/models.Model", "derived")).toBe(true);
+    // A raise of what `except … as` caught, of a corpus class; a class a call makes.
+    expect(hasEdge(model, "throws", `${services}/Service.run`, "python:<builtins>/KeyError")).toBe(true);
+    expect(hasEdge(model, "throws", `${services}/Service.run`, `${PKG}errors.py/OrderError`)).toBe(true);
+    expect(hasEdge(model, "inheritance", `${PKG}money.py/Price`, "python:<builtins>/tuple", "generated")).toBe(true);
+    expect(entity(model, `${PKG}money.py/Amount.currency`)["kind"]).toBe("attribute");
+    // A corpus decorator names its positional arguments; an annotation types what it annotates.
+    const retry = model.edges.find((e) => e.edge === "annotationUse" && e.from === `${services}/checkout`);
+    expect((retry as unknown as Bag)["arguments"]).toEqual([
+      { name: "times", value: { k: "number", v: "3" } },
+      { name: "backoff", value: { k: "number", v: "2" } },
+    ]);
+    expect(entity(model, `${services}/checkout`)["declaredType"]).toBe(ORDER);
+    expect(entity(model, `${services}/checkout#param:repository`)["declaredType"]).toBe(`${PKG}repository.py/Repository`);
+    // A variable with its value and comment; `global counter` then `counter += 1` reads and writes it.
+    const currency = entity(model, `${PKG}settings.py/DEFAULT_CURRENCY`);
+    expect([currency["value"], currency["comments"]]).toEqual([
+      { k: "string", v: "EUR" },
+      ["The currency an order takes when none is given."],
+    ]);
+    const bump = model.edges.find((e) => e.edge === "access" && e.from === `${PKG}settings.py/bump`) as unknown as Bag;
+    expect([bump["to"], bump["isRead"], bump["isWrite"]]).toEqual([`${PKG}settings.py/counter`, true, true]);
+  });
+
   it("makes a def written twice ONE entity anchored at the first, and an NFKC twin one name", () => {
     const model = loadSnapshot();
     const dataDir = model.entities.filter((e) => e.id === `${PKG}compat.py/data_dir`);

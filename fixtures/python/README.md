@@ -4,10 +4,11 @@ A small order-management corpus in the `src/` layout — `src/acme_order/`, a
 `tests/` tree, a repository-level `conftest.py` — that pins the hazards
 PLAN.md §23 names for the walking skeleton (M22a): the walk and its decoding,
 the import roots, declarations at every nesting, imports and their re-export
-chains, bases, and the three stub roots. It is the acceptance corpus for
+chains, bases, and the three stub roots — and what a body says (M22b):
+variables and attributes with their values, every receiver shape the site
+resolution types and each it cannot, decorators, annotations, raises,
+classes a call makes, comments and measures. It is the acceptance corpus for
 `extractors/python`: `expected/model.jsonl` is produced from **this** tree.
-M22b grows both — what a body says: attributes, calls, accesses, decorators,
-annotations.
 
 ```bash
 ./build.sh --python
@@ -42,9 +43,12 @@ the hazard. The last three are `-text` in `.gitattributes`.
 | `pricing/__init__.py` | `from . import discounts` in a package's own `__init__.py`: the name is the submodule, so `DefaultDiscount(discounts.Discount)` reads the class through it |
 | `pricing/discounts.py` | a diamond: `Combo(Percent, Fixed)`, both of `Discount` |
 | `pricing/rules.py` | relative imports one dot and two dots up; `from . import discounts`, a submodule; `from .missing import Seasonal`, a file that is not there — a stub module keyed by the path it would have, and a stub class below it |
+| `services.py` (+ `repository.py`, `retry.py`, `settings.py`) | the receiver table. Declared: a name bound by scoping (`build_error`), a module's attribute (`settings.bump()`, `json.dumps` → the stub MODULE), a class named at the site (`Service.create()`, `Order(…)` → `Order.__init__`), `self` / `cls` along written bases, `super().__init__` along the MRO. Derived: an annotated parameter (`order: Order`, `Optional[Repository]` unwrapped) counted `annotation-typed`; an attribute and a local assigned one class (`self.repository`, `local`) counted `flow-typed`. Dropped: a bare parameter and an attribute no class types (`untyped-receiver`), `self.missing()` (`unbound-self-call`), `local.nothing` (`unbound-attribute`), `raise build_error(order)` (`raise-of-a-value`), `import_module(order.reference)` (`computed-import`), a spread in `@register(*settings.HOOKS, …)` (`spread-argument`). `@retry(3, backoff=2.0)` is an `annotationUse` whose positional argument takes the corpus decorator's parameter name; `raise error` in `except KeyError as error` throws `KeyError`; `print`, `len`: the language |
+| `money.py` | classes a call makes: `Amount = namedtuple(…)`, `Rounding = Enum(…)`, `class Price(namedtuple(…))` — classes with their fields as attributes, inheriting `tuple` / `Enum` as `generated` |
+| `settings.py` | module variables with their literal values and the `#` block above one; `global counter` then `counter += 1`: an access that reads and writes |
 | `shapes.py` + `packing.py` | bases read through star imports: `Box` is in `shapes.__all__`, a declared edge; `Crate` is not, and only `from pallets.lib import *`, which nothing here answers, could bind it — `<site>%2Fpallets.lib/Crate`, `derived`, counted `star-attributed`; the `#` block above `Crate` is its comment, the `# noqa` under it left out |
 | `two_stars.py` | two star imports of unknown modules: which binds `Widget`, no line says — dropped `ambiguous-star`, naming both |
-| `shipping.py` | `<stdlib>` bases: `enum.Enum`, `abc.ABC`, `from collections import abc` → `<stdlib>%2Fcollections.abc/Mapping` (the submodule: `collections` does not bind `abc`), the subscripted `Generic[T]`; `<site>` bases: `from django.db import models` → `<site>%2Fdjango.db/models.Model` (nothing says `models` is a module), `import sqlalchemy.orm` → `<site>%2Fsqlalchemy.orm/DeclarativeBase` (the import says it is); a computed base and a base nothing binds, both dropped |
+| `shipping.py` | `<stdlib>` bases: `enum.Enum`, `abc.ABC`, `from collections import abc` → `<stdlib>%2Fcollections.abc/Mapping` (the submodule: `collections` does not bind `abc`), the subscripted `Generic[T]`; `<site>` bases: `from django.db import models` → `<site>%2Fdjango.db/models.Model` (nothing says `models` is a module), `import sqlalchemy.orm` → `<site>%2Fsqlalchemy.orm/DeclarativeBase` (the import says it is); a computed base and a base nothing binds, both dropped; `Tracked.objects.filter()` — no corpus member, ONE library class of the MRO could answer: `derived`, counted `ancestor-attributed`; `Ledger(Shipment, Row)`: two could, dropped `ambiguous-ancestor`; `Proxy` writes `__getattr__`: `self.anything()` dropped `unbound-dynamic` |
 | `compat.py` | a `def` written twice under a platform `if` — one entity, anchored at the first; `try: import simplejson as json` / `except ImportError: import json`; an `if TYPE_CHECKING:` import, counted `type-checking-only`; a name bound twice (`JSONDecodeError`), the first that names a declaration kept, counted `rebound-name` |
 | `factory.py` | a class in a function (`make.Local`), a function in its method, a nested function (`outer.inner`); a base that is the function's parameter (`wrap(Base)`), never the module's `Base`: dropped `computed-base` |
 | `payments.py` + `src/acme_plugins/stripe.py` | a namespace package (no `__init__.py`): `import acme_plugins.stripe` and `from acme_plugins import stripe`, counted on their own; `from ._speedups import checksum`, answered by a stub alone (`_speedups.pyi`, a compiled extension's) |
@@ -67,9 +71,9 @@ the hazard. The last three are `-text` in `.gitattributes`.
 
 ## What the numbers are
 
-42 files; 227 entities (35 of them stubs): 7 attribute, 76 class, 17 function, 17 method, 59 module, 48 parameter, 3 variable.
-113 edges: 9 `access` declared, 43 `import` declared, 38 `inheritance` declared, 1 `inheritance` derived, 10 `invocation` declared, 1 `invocation` derived, 10 `reference` declared, 1 `throws` declared.
+47 files; 303 entities (40 of them stubs): 18 attribute, 87 class, 23 function, 29 method, 67 module, 72 parameter, 7 variable.
+178 edges: 22 `access` declared, 3 `access` derived, 2 `annotationUse` declared, 56 `import` declared, 42 `inheritance` declared, 1 `inheritance` derived, 3 `inheritance` generated, 26 `invocation` declared, 5 `invocation` derived, 15 `reference` declared, 3 `throws` declared.
 
-Sites: 100; resolved 82 (corpus 41, <builtins> 10, <stdlib> 11, <site> 5, missing modules 1, the language 14); unresolved 18; rate 82.0%.
-Imports: 43 (relative 14; by package root 7, by namespace package 2, implicit-relative 1; <stdlib> 10, <site> 8; missing 1; type-checking-only 1).
-Counted: ambiguous-root (dropped): 1; ambiguous-star (dropped): 1; computed-base (dropped): 2; rebinding-of-a-declaration (dropped): 1; unbound-name (dropped): 10; unnamed-declaration (dropped): 1; untyped-receiver (dropped): 5; rebound-name: 1; ancestor-attributed: 1; star-attributed: 1; dotted-site-class: 1.
+Sites: 162; resolved 135 (corpus 77, <builtins> 14, <stdlib> 18, <site> 7, missing modules 1, the language 18); unresolved 27; rate 83.3%.
+Imports: 56 (relative 20; by package root 8, by namespace package 2, implicit-relative 1; <stdlib> 15, <site> 9; missing 1; type-checking-only 1).
+Counted: ambiguous-ancestor (dropped): 1; ambiguous-root (dropped): 1; ambiguous-star (dropped): 1; computed-base (dropped): 2; computed-import (dropped): 1; raise-of-a-value (dropped): 1; rebinding-of-a-declaration (dropped): 1; spread-argument (dropped): 1; unbound-attribute (dropped): 1; unbound-dynamic (dropped): 1; unbound-name (dropped): 10; unbound-self-call (dropped): 1; unnamed-declaration (dropped): 1; untyped-receiver (dropped): 9; rebound-name: 1; flow-typed: 3; annotation-typed: 3; ancestor-attributed: 2; star-attributed: 1; dotted-site-class: 1.

@@ -957,6 +957,7 @@ impl Reader<'_> {
     // --------------------------------------------------------- statements ----
 
     fn targets(&mut self, target: &Expr, assignment: Option<AssignDecl>) {
+        let augmented = assignment.as_ref().is_some_and(|assignment| assignment.augmented);
         match target {
             Expr::Name(name) => {
                 let scope = self.scope;
@@ -977,7 +978,7 @@ impl Reader<'_> {
                     .iter()
                     .any(|global| global == name.id.as_str());
                 if global && self.out.scopes[scope].kind != ScopeKind::Module {
-                    self.site(target, SiteKind::Store { augmented: false });
+                    self.site(target, SiteKind::Store { augmented });
                 }
             }
             Expr::Tuple(tuple) => {

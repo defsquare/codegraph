@@ -388,6 +388,17 @@ fn lists_every_dropped_site_on_stderr_when_asked_and_changes_no_byte_of_the_mode
         "dropped unnamed-declaration: src/acme_order/legacy/broken.py:12 def\n",
         "dropped ambiguous-root: tests/test_tie.py:2 fakes (tests/integration or tests/unit)\n",
         "dropped unbound-name: tests/test_tie.py:5 fakes.Fake\n",
+        // One of every site the receiver table drops (M22b), with what decided it.
+        "dropped untyped-receiver: src/acme_order/services.py:53 order.reference\n",
+        "dropped untyped-receiver: src/acme_order/services.py:54 self.handler.process()\n",
+        "dropped unbound-self-call: src/acme_order/services.py:55 self.missing() (Service)\n",
+        "dropped unbound-attribute: src/acme_order/services.py:56 local.nothing (Order)\n",
+        "dropped computed-import: src/acme_order/services.py:58 importlib.import_module(order.reference)\n",
+        "dropped raise-of-a-value: src/acme_order/services.py:68 build_error(order)\n",
+        "dropped spread-argument: src/acme_order/services.py:45 @register(*settings.HOOKS, name=\"run\")\n",
+        "dropped ambiguous-ancestor: src/acme_order/shipping.py:57 self.flush() (django.db.models.Model or sqlalchemy.orm.DeclarativeBase)\n",
+        "dropped unbound-dynamic: src/acme_order/shipping.py:67 self.anything() (Proxy)\n",
+        "dropped rebinding-of-a-declaration: src/acme_order/compat.py:23 JSONDecodeError (an import binds it)\n",
     ] {
         assert!(explained.stderr.contains(line), "{line}{}", explained.stderr);
     }

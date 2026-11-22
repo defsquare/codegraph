@@ -41,3 +41,27 @@ class Dynamic(make_base()):
 
 class Orphan(NothingBindsThis):
     pass
+
+
+class Tracked(Shipment):
+    """`objects` is no corpus member: the one library class of the order answers it."""
+
+    def recent(self):
+        return Tracked.objects.filter()
+
+
+class Ledger(Shipment, Row):
+    """Two library classes could answer: no guess."""
+
+    def close(self):
+        self.flush()
+
+
+class Proxy:
+    """A class that answers any name at run time: nothing declaring one is no evidence."""
+
+    def __getattr__(self, name):
+        return name
+
+    def forward(self):
+        return self.anything()
