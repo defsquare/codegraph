@@ -189,11 +189,14 @@ fn help_and_version_are_the_only_things_on_stdout() {
     assert_eq!(help.code, EXIT_OK);
     assert!(help.stdout.contains("--repo-remote"));
     assert!(help.stdout.contains("--import-root"));
+    // What the walk takes, and the exit codes it can return: every pass is written.
+    assert!(help.stdout.contains("every *.py, *.pyw and *.pyi"));
+    assert!(help.stdout.contains("Exit codes: 0 ok, 1 failure, 2 usage.\n"));
     assert_eq!(help.stderr, "");
 }
 
 #[test]
-fn exits_2_on_bad_usage_1_on_a_root_that_is_not_there_and_3_on_a_pass_not_written_yet() {
+fn exits_2_on_bad_usage_and_1_on_a_root_that_is_not_there() {
     let cwd = repository();
     let usage = run(&["--frobnicate"], &cwd);
     assert_eq!(usage.code, EXIT_USAGE);

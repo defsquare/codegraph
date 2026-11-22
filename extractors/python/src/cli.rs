@@ -210,13 +210,13 @@ OPTIONS
   --version             print the extractor version
   --help                this text
 
-Nothing is run and no Python is needed: every *.py and *.pyw under the roots
-(dot-directories, __pycache__, site-packages, node_modules and any directory
-holding pyvenv.cfg excluded) is decoded as Python decodes it and parsed with
-Ruff's parser, Python 2 and files with syntax errors included; imports resolve
-against the roots the layout implies, then an embedded table of the standard
-library; what nothing here declares is a stub. Exit codes: 0 ok, 1 failure,
-2 usage, 3 unimplemented.
+Nothing is run and no Python is needed: every *.py, *.pyw and *.pyi under the
+roots (dot-directories, __pycache__, site-packages, node_modules and any
+directory holding pyvenv.cfg excluded) is decoded as Python decodes it and
+parsed with Ruff's parser, Python 2 and files with syntax errors included;
+imports resolve against the roots the layout implies, then an embedded table of
+the standard library; what nothing here declares is a stub.
+Exit codes: 0 ok, 1 failure, 2 usage.
 "
     )
 }
