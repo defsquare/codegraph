@@ -665,3 +665,40 @@ fn a_name_bound_once_to_a_literal_import_module_is_that_module_by_flow() {
         .collect();
     assert_eq!(untyped, vec!["later.anything()"]);
 }
+
+#[test]
+fn overloads_and_their_implementation_are_one_function_anchored_at_the_implementation() {
+    let extraction = extract_sources(&[(
+        "m.py",
+        "from typing import overload\nfrom lib import Order\n\
+         @overload\ndef total(order: Order) -> int: ...\n@overload\ndef total(order: None) -> None: ...\n\
+         def total(order=None):\n    \"\"\"The implementation.\"\"\"\n    return 0\n\
+         @overload\ndef only(x: Order) -> Order: ...\n@overload\ndef only(x: int) -> int: ...\n",
+    )]);
+    let entity = |rendered: &str| super::super::tests::entity(&extraction, rendered);
+    let total = entity("python:m.py/total");
+    assert_eq!(total.anchor.as_ref().map(|a| (a.start, a.end)), Some((7, 9)));
+    assert_eq!(total.signature.as_deref(), Some("total(order=…)"));
+    assert_eq!(total.comments, Some(vec!["The implementation.".to_owned()]));
+    // The implementation's types: it writes none; the signatures' names are still read.
+    let order = entity("python:m.py/total#param:order");
+    assert_eq!(
+        (order.declared_type.is_none(), order.value.as_deref().cloned()),
+        (true, Some(codegraph_model::Literal::Null))
+    );
+    let all = edges(&extraction);
+    assert_eq!(
+        of(&all, "total"),
+        vec![("reference", "<site>%2Flib/Order", "declared", None)]
+    );
+    // Signatures alone (a stub's): the first.
+    let only = entity("python:m.py/only");
+    assert_eq!(only.anchor.as_ref().map(|a| (a.start, a.end)), Some((11, 11)));
+    assert_eq!(
+        entity("python:m.py/only#param:x")
+            .declared_type
+            .as_ref()
+            .map(|key| key.render(ids::LANG)),
+        Some("python:<site>%2Flib/Order".to_owned())
+    );
+}

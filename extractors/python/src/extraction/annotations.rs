@@ -39,13 +39,16 @@ impl Extractor<'_> {
     pub(super) fn annotations(&mut self) {
         let files = self.files;
         for (file, decls) in files.iter().enumerate() {
-            for function in &decls.functions {
+            for (index, function) in decls.functions.iter().enumerate() {
                 let Some(key) = self.function_key_of(file, function) else {
                     continue;
                 };
+                // Every signature names what it names; the entity's types are its primary `def`'s.
+                let primary = self.primary[file][index];
                 for parameter in &function.parameters {
                     if let Some(annotation) = &parameter.annotation
                         && let Some(declared) = self.annotation(file, function.scope, annotation, &key)
+                        && primary
                     {
                         self.declared_types
                             .insert(ids::parameter_key(&key, &parameter.name), declared);
@@ -53,6 +56,7 @@ impl Extractor<'_> {
                 }
                 if let Some(returns) = &function.returns
                     && let Some(declared) = self.annotation(file, function.scope, returns, &key)
+                    && primary
                 {
                     self.declared_types.insert(key.clone(), declared);
                 }

@@ -137,6 +137,26 @@ impl Stubs {
     }
 }
 
+/// Per `def` of a file: whether it is the one an entity is made of — of those written in one
+/// scope under one name, the first that is no `@overload` signature, else the first.
+fn primaries(decls: &FileDecls) -> Vec<bool> {
+    let mut first: HashMap<(usize, &str, Option<&str>), usize> = HashMap::new();
+    for (index, function) in decls.functions.iter().enumerate() {
+        let group = (function.scope, function.name.as_str(), function.accessor);
+        match first.get(&group) {
+            Some(chosen) if !decls.functions[*chosen].overload || function.overload => {}
+            _ => {
+                first.insert(group, index);
+            }
+        }
+    }
+    let mut primary = vec![false; decls.functions.len()];
+    for index in first.into_values() {
+        primary[index] = true;
+    }
+    primary
+}
+
 /// A docstring, else the `#` block above: one string, `TComment`.
 fn comment(entity: &mut Entity, text: Option<&String>) {
     if let Some(text) = text.filter(|text| !text.is_empty()) {
@@ -224,6 +244,8 @@ struct Extractor<'a> {
     attribute_keys: HashMap<(usize, usize, String), Key>,
     /// (file, name) → a module variable's key.
     variable_keys: HashMap<(usize, String), Key>,
+    /// Per file, per `def`: whether its entity is made of it (`primaries`).
+    primary: Vec<Vec<bool>>,
     /// Written onto their entities once every key exists.
     values: HashMap<Key, Literal>,
     declared_types: HashMap<Key, Key>,
@@ -334,6 +356,7 @@ impl Extractor<'_> {
             let decls = &files[file];
             let mut keys: Vec<Option<Key>> = vec![None; decls.scopes.len()];
             keys[0] = Some(self.file_keys[file].clone());
+            let primary = primaries(decls);
             for scope in 1..decls.scopes.len() {
                 let parent_scope = decls.scopes[scope].parent.unwrap_or(0);
                 // Below a dropped declaration nothing has a key either.
@@ -357,9 +380,12 @@ impl Extractor<'_> {
                     }
                     ScopeKind::Module | ScopeKind::Lambda | ScopeKind::Comprehension => continue,
                 };
+                // An `@overload` signature before its implementation: the implementation makes the entity.
+                let deferred = matches!(decls.scopes[scope].kind, ScopeKind::Function(function) if !primary[function]);
                 match self.kinds.get(&key) {
                     // Written twice under one name (a platform `if`, a redefinition): the first.
                     Some(existing) if *existing == kind => keys[scope] = Some(key),
+                    None if deferred => keys[scope] = Some(key),
                     Some(existing) => {
                         let what = format!("{name} (a {existing} holds the key)");
                         self.stats.drop(file, span.0, "redefinition-of-another-kind", what);
@@ -400,6 +426,7 @@ impl Extractor<'_> {
                 }
             }
             self.scope_keys.push(keys);
+            self.primary.push(primary);
         }
     }
 
@@ -602,7 +629,9 @@ impl Extractor<'_> {
     /// A parameter's literal default, read where its `def` is written.
     fn parameter_values(&mut self, file: usize) {
         let files = self.files;
-        for function in &files[file].functions {
+        let primary = self.primary[file].clone();
+        let functions = files[file].functions.iter().enumerate();
+        for (_, function) in functions.filter(|(index, _)| primary[*index]) {
             let Some(invocable) = self.scope_keys[file][function.body].clone() else {
                 continue;
             };
@@ -979,6 +1008,7 @@ pub fn extract(
         attribute_keys: HashMap::new(),
         variable_keys: HashMap::new(),
         values: HashMap::new(),
+        primary: Vec::with_capacity(files.len()),
         declared_types: HashMap::new(),
         attribute_assignments: HashMap::new(),
         evidence: HashSet::new(),
