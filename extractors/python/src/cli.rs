@@ -5,6 +5,7 @@
 
 use crate::corpus;
 use crate::extraction;
+use crate::trace;
 use crate::{NAME, VERSION};
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -15,8 +16,6 @@ use std::time::Instant;
 pub const EXIT_OK: i32 = 0;
 pub const EXIT_FAILURE: i32 = 1;
 pub const EXIT_USAGE: i32 = 2;
-/// An extraction pass not implemented yet: `--trace` (M22c).
-pub const EXIT_UNIMPLEMENTED: i32 = 3;
 
 /// The extraction thread's stack. The parser grows its own (`stacker`), but a
 /// tree is dropped recursively: 100 000 terms of one expression overflow a
@@ -48,7 +47,7 @@ pub struct Options {
     pub import_roots: Vec<String>,
     /// List every dropped site on stderr.
     pub explain_dropped: bool,
-    /// What a run-time trace wrote (M22c): refused with exit 3 until then.
+    /// What `trace/codegraph_trace.py` wrote inside the running program.
     pub trace: Option<String>,
     pub help: bool,
     pub version: bool,
@@ -201,7 +200,9 @@ OPTIONS
                         imports resolve, never a key.
   --explain-dropped     list every drop on stderr, in source order, as
                         `dropped <reason>: <file>:<line> <what>`; the model is unchanged
-  --trace <file>        merge a run-time trace — not implemented yet (exit 3)
+  --trace <file>        merge what trace/codegraph_trace.py wrote inside the running
+                        program: bases no line writes (generated), the calls it saw
+                        (dynamic-candidate); never a key, nothing the source wrote changed
   --repo-remote <url>   normalized https clone URL, no .git suffix
   --repo-commit <sha>   the sha this tree is at — a permalink, not a branch
   --repo-root <path>    repo-relative path of the analyzed root (\"\" at the repo root)
@@ -237,13 +238,6 @@ pub fn run(argv: &[String], io: &mut Io<'_>, cwd: &Path) -> i32 {
         let _ = writeln!(io.stdout, "{VERSION}");
         return EXIT_OK;
     }
-    if let Some(trace) = &options.trace {
-        let _ = writeln!(
-            io.stderr,
-            "error: --trace {trace}: merging a run-time trace is not implemented yet"
-        );
-        return EXIT_UNIMPLEMENTED;
-    }
     match extract(&options, io, cwd) {
         Ok(()) => EXIT_OK,
         Err(message) => {
@@ -267,6 +261,15 @@ fn extract(options: &Options, io: &mut Io<'_>, cwd: &Path) -> Result<(), String>
         clock = Instant::now();
     };
 
+    // A trace that cannot be read fails before anything is written.
+    let trace = match &options.trace {
+        Some(path) => {
+            let text = std::fs::read_to_string(corpus::absolute(path, cwd))
+                .map_err(|e| format!("cannot read the trace {path}: {e}"))?;
+            Some(trace::parse(&text).map_err(|e| format!("{path}: {e}"))?)
+        }
+        None => None,
+    };
     let corpus = corpus::load(&options.sources, &options.import_roots, cwd)?;
     phase(&mut *io.stderr, "walk", format!("{} files", corpus.files.len()));
 
@@ -275,11 +278,12 @@ fn extract(options: &Options, io: &mut Io<'_>, cwd: &Path) -> Result<(), String>
     let extraction = std::thread::scope(|scope| {
         let corpus = &corpus;
         let repository = options.repository.clone();
+        let trace = trace.as_ref();
         let worker = std::thread::Builder::new()
             .name("extraction".to_owned())
             .stack_size(EXTRACTION_STACK)
             .spawn_scoped(scope, move || {
-                extraction::extract(corpus, repository, &mut |label, detail| {
+                extraction::extract(corpus, repository, trace, &mut |label, detail| {
                     let _ = sender.send((label.to_owned(), detail));
                 })
             })

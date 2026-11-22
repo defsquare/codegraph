@@ -829,6 +829,9 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/a type parameter is no attribute/);
       // An annotation names its classes from the entity it types (the Java/C#/TypeScript rule).
       expect(notes).toMatch(/from the entity it types/);
+      // The trace: the one place `dynamic-candidate` and a run-time base come from.
+      expect(notes).toMatch(/`extractors\/python\/trace\/codegraph_trace.py`/);
+      expect(notes).toMatch(/`candidates` listing every function that site was seen to reach/);
       expect(notes).toMatch(/a name bound once to such a call is that module by flow/);
       // Decision 3: the roots, a file missing below a corpus package, the table, a sibling in a package, `<site>`.
       expect(notes).toMatch(/then the standard library's table, then a sibling of the importing file/);

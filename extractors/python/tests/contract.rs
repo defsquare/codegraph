@@ -5,7 +5,7 @@
 //! `CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test` rewrites the snapshot — review
 //! the diff before committing it.
 
-use codegraph_python::cli::{self, EXIT_FAILURE, EXIT_OK, EXIT_UNIMPLEMENTED, EXIT_USAGE, Io};
+use codegraph_python::cli::{self, EXIT_FAILURE, EXIT_OK, EXIT_USAGE, Io};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -216,13 +216,62 @@ fn exits_2_on_bad_usage_1_on_a_root_that_is_not_there_and_3_on_a_pass_not_writte
             .stderr
             .contains("--import-root is not a directory under the source root")
     );
-    let trace = run(
-        &["--src", FIXTURE, "--trace", "trace.jsonl", "--out", "unused.jsonl"],
-        &cwd,
+}
+
+#[test]
+fn merges_the_fixture_trace_adding_edges_and_touching_nothing_the_source_wrote() {
+    let root = repository();
+    let dir = scratch("trace");
+    let plain = String::from_utf8(extract(&root, &dir.join("plain.jsonl"))).unwrap();
+    let out = dir.join("traced.jsonl");
+    let traced = run(
+        &[
+            "--src",
+            FIXTURE,
+            "--out",
+            out.to_str().unwrap(),
+            "--trace",
+            "fixtures/python/trace/codegraph-trace.jsonl",
+        ],
+        &root,
     );
-    assert_eq!(trace.code, EXIT_UNIMPLEMENTED);
-    assert!(trace.stderr.contains("not implemented yet"), "{}", trace.stderr);
-    assert!(!cwd.join("unused.jsonl").exists());
+    assert_eq!(traced.code, EXIT_OK, "{}", traced.stderr);
+    for line in [
+        "  trace bases     : 6 (3 in the source, 2 added as generated, 1 outside the corpus)\n",
+        "  trace functions : 4 (2 written, 1 defined at run time — no entity, 1 outside the corpus)\n",
+        "  trace calls     : 5 (1 in the model, 1 bound to 1 dynamic-candidate edges, 1 unmatched, 1 to a run-time definition, 1 outside the corpus)\n",
+    ] {
+        assert!(traced.stderr.contains(line), "{line}{}", traced.stderr);
+    }
+    // Keys never come from the trace: the same files and entities, line for line, and three
+    // edges more — two bases no line writes, one call no line types.
+    let model = fs::read_to_string(&out).unwrap();
+    let records = |text: &str, tag: &str| -> Vec<String> {
+        text.lines()
+            .filter(|line| line.starts_with(&format!("{{\"t\":\"{tag}\"")))
+            .map(str::to_owned)
+            .collect()
+    };
+    assert_eq!(records(&model, "f"), records(&plain, "f"));
+    assert_eq!(records(&model, "e"), records(&plain, "e"));
+    assert_eq!(records(&model, "x").len(), records(&plain, "x").len() + 3);
+    assert!(model.contains("\"dynamic-candidate\"") && model.contains("\"candidates\":["));
+    assert!(!plain.contains("dynamic-candidate"));
+
+    // A file that is no trace, or is not there, is a failure that says so — and writes nothing.
+    for (file, message) in [
+        ("fixtures/python/expected/model.jsonl", "not a trace"),
+        ("fixtures/python/no-such-trace.jsonl", "cannot read the trace"),
+    ] {
+        let refused = dir.join("refused.jsonl");
+        let failed = run(
+            &["--src", FIXTURE, "--out", refused.to_str().unwrap(), "--trace", file],
+            &root,
+        );
+        assert_eq!(failed.code, EXIT_FAILURE, "{}", failed.stderr);
+        assert!(failed.stderr.contains(message), "{}", failed.stderr);
+        assert!(!refused.exists());
+    }
 }
 
 #[test]

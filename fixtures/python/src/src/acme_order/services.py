@@ -83,3 +83,10 @@ shipping = importlib.import_module("acme_order.shipping")
 def default_carrier():
     """A name bound once to `import_module` with a literal is that module, by flow."""
     return shipping.Carrier.POST
+
+
+class Handler:
+    """What a `Service` is handed at run time: no line types `self.handler`, a trace can."""
+
+    def process(self):
+        return None

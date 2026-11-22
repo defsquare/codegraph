@@ -21,6 +21,7 @@ pub mod resolve;
 pub mod scopes;
 pub mod stats;
 pub mod stdlib_table;
+pub mod trace;
 
 pub const NAME: &str = "codegraph-python";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

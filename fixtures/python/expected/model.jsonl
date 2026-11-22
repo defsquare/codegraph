@@ -330,95 +330,98 @@
 {"t":"e","i":277,"k":5,"tr":[5,7,9,0,6],"m":274,"s":"retry","d":"param:times","name":"times","parent":275,"anchor":[36,4,4]}
 {"t":"e","i":278,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":274,"s":"retry.wrap","name":"wrap","signature":"wrap(function)","parent":275,"parameters":[279],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[36,5,6]}
 {"t":"e","i":279,"k":5,"tr":[5,7,9,0,6],"m":274,"s":"retry.wrap","d":"param:function","name":"function","parent":278,"anchor":[36,5,5]}
-{"t":"e","i":280,"k":4,"tr":[5,4,11,6,1,3,13],"m":280,"s":"src%2Facme_order%2Fservices.py","name":"src/acme_order/services.py","isStub":false,"definedIn":[37],"comments":["Services: every receiver shape the extractor types, and each it cannot."],"metrics":{"sloc":66},"anchor":[37,1,85]}
+{"t":"e","i":280,"k":4,"tr":[5,4,11,6,1,3,13],"m":280,"s":"src%2Facme_order%2Fservices.py","name":"src/acme_order/services.py","isStub":false,"definedIn":[37],"comments":["Services: every receiver shape the extractor types, and each it cannot."],"metrics":{"sloc":70},"anchor":[37,1,92]}
 {"t":"e","i":281,"k":1,"tr":[5,8,12,11,0,6,3],"m":280,"s":"AuditedService","name":"AuditedService","isStub":false,"parent":280,"metrics":{"sloc":4},"anchor":[37,74,77]}
 {"t":"e","i":282,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"AuditedService.__init__","name":"__init__","signature":"__init__(self, handler)","parent":281,"parameters":[284,283],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[37,75,77]}
 {"t":"e","i":283,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"AuditedService.__init__","d":"param:handler","name":"handler","parent":282,"anchor":[37,75,75]}
 {"t":"e","i":284,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"AuditedService.__init__","d":"param:self","name":"self","parent":282,"anchor":[37,75,75]}
 {"t":"e","i":285,"k":0,"tr":[5,7,9,0,6,15],"m":280,"s":"AuditedService.audits","name":"audits","parent":281,"value":{"k":"array","items":[]},"anchor":[37,77,77]}
-{"t":"e","i":286,"k":1,"tr":[5,8,12,11,0,6,1,3,10],"m":280,"s":"Service","name":"Service","isStub":false,"parent":280,"comments":["Reads through `self`, `cls` and `super()`, and what no reader can type."],"metrics":{"sloc":36},"anchor":[37,31,71]}
-{"t":"e","i":287,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"Service.__init__","name":"__init__","signature":"__init__(self, handler)","parent":286,"parameters":[289,288],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[37,36,39]}
-{"t":"e","i":288,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.__init__","d":"param:handler","name":"handler","parent":287,"anchor":[37,36,36]}
-{"t":"e","i":289,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.__init__","d":"param:self","name":"self","parent":287,"anchor":[37,36,36]}
-{"t":"e","i":290,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"Service.audit","name":"audit","signature":"audit(self)","parent":286,"parameters":[291],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[37,70,71]}
-{"t":"e","i":291,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.audit","d":"param:self","name":"self","parent":290,"anchor":[37,70,70]}
-{"t":"e","i":292,"k":0,"tr":[5,7,9,0,6,15],"m":280,"s":"Service.cache","name":"cache","parent":286,"value":{"k":"unevaluated","source":"{}"},"anchor":[37,38,38]}
-{"t":"e","i":293,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"Service.create","name":"create","signature":"create(cls)","parent":286,"parameters":[294],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[37,42,43]}
-{"t":"e","i":294,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.create","d":"param:cls","name":"cls","parent":293,"anchor":[37,42,42]}
-{"t":"e","i":295,"k":0,"tr":[5,7,9,0,6],"m":280,"s":"Service.handler","name":"handler","parent":286,"anchor":[37,39,39]}
-{"t":"e","i":296,"k":0,"tr":[5,7,9,0,6],"m":280,"s":"Service.repository","name":"repository","parent":286,"anchor":[37,37,37]}
-{"t":"e","i":297,"k":0,"tr":[5,7,9,0,6,15],"m":280,"s":"Service.retries","name":"retries","parent":286,"value":{"k":"number","v":"3"},"anchor":[37,34,34]}
-{"t":"e","i":298,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"Service.run","name":"run","signature":"run(self, order)","parent":286,"parameters":[300,299],"metrics":{"cyclomatic":4,"sloc":23},"anchor":[37,46,68]}
-{"t":"e","i":299,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.run","d":"param:order","name":"order","parent":298,"anchor":[37,46,46]}
-{"t":"e","i":300,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.run","d":"param:self","name":"self","parent":298,"anchor":[37,46,46]}
-{"t":"e","i":301,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"build_error","name":"build_error","signature":"build_error(order)","parent":280,"parameters":[302],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[37,27,28]}
-{"t":"e","i":302,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"build_error","d":"param:order","name":"order","parent":301,"anchor":[37,27,27]}
-{"t":"e","i":303,"k":2,"tr":[5,2,11,14,13,10,9,0,6,1,3],"m":280,"s":"checkout","name":"checkout","signature":"checkout(order, repository=…)","declaredType":165,"parent":280,"parameters":[304,305],"comments":["An annotation types a parameter; `Optional` is unwrapped."],"metrics":{"cyclomatic":2,"sloc":8},"anchor":[37,17,24]}
-{"t":"e","i":304,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"checkout","d":"param:order","name":"order","declaredType":165,"parent":303,"anchor":[37,17,17]}
-{"t":"e","i":305,"k":5,"tr":[5,7,9,0,6,15],"m":280,"s":"checkout","d":"param:repository","name":"repository","declaredType":267,"parent":303,"value":{"k":"null"},"anchor":[37,17,17]}
-{"t":"e","i":306,"k":2,"tr":[5,2,11,14,13,10,9,0,6,1,3],"m":280,"s":"default_carrier","name":"default_carrier","signature":"default_carrier()","parent":280,"parameters":[],"comments":["A name bound once to `import_module` with a literal is that module, by flow."],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[37,83,85]}
-{"t":"e","i":307,"k":6,"tr":[5,7,9,0,6],"m":280,"s":"shipping","name":"shipping","parent":280,"anchor":[37,80,80]}
-{"t":"e","i":308,"k":4,"tr":[5,4,11,6,1,3],"m":308,"s":"src%2Facme_order%2Fsettings.py","name":"src/acme_order/settings.py","isStub":false,"definedIn":[38],"comments":["Settings: module variables other files read and write."],"metrics":{"sloc":8},"anchor":[38,1,11]}
-{"t":"e","i":309,"k":6,"tr":[5,7,9,0,6,15],"m":308,"s":"DEBUG","name":"DEBUG","parent":308,"value":{"k":"boolean","v":false},"anchor":[38,2,2]}
-{"t":"e","i":310,"k":6,"tr":[5,7,9,0,6,1,15],"m":308,"s":"DEFAULT_CURRENCY","name":"DEFAULT_CURRENCY","parent":308,"comments":["The currency an order takes when none is given."],"value":{"k":"string","v":"EUR"},"anchor":[38,4,4]}
-{"t":"e","i":311,"k":6,"tr":[5,7,9,0,6,15],"m":308,"s":"HOOKS","name":"HOOKS","parent":308,"value":{"k":"array","items":[{"k":"string","v":"audit"},{"k":"string","v":"notify"}]},"anchor":[38,5,5]}
-{"t":"e","i":312,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":308,"s":"bump","name":"bump","signature":"bump()","parent":308,"parameters":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[38,9,11]}
-{"t":"e","i":313,"k":6,"tr":[5,7,9,0,6,15],"m":308,"s":"counter","name":"counter","parent":308,"value":{"k":"number","v":"0"},"anchor":[38,6,6]}
-{"t":"e","i":314,"k":4,"tr":[5,4,11,6,1,3],"m":314,"s":"src%2Facme_order%2Fshapes.py","name":"src/acme_order/shapes.py","isStub":false,"definedIn":[39],"comments":["Shapes: `__all__` says what a star import of this module binds."],"metrics":{"sloc":6},"anchor":[39,1,12]}
-{"t":"e","i":315,"k":1,"tr":[5,8,12,11,0,6,3],"m":314,"s":"Box","name":"Box","isStub":false,"parent":314,"metrics":{"sloc":2},"anchor":[39,5,6]}
-{"t":"e","i":316,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":314,"s":"Crate","name":"Crate","isStub":false,"parent":314,"comments":["A crate: not in `__all__`."],"metrics":{"sloc":2},"anchor":[39,11,12]}
-{"t":"e","i":317,"k":6,"tr":[5,7,9,0,6,15],"m":314,"s":"__all__","name":"__all__","parent":314,"value":{"k":"array","items":[{"k":"string","v":"Box"}]},"anchor":[39,2,2]}
-{"t":"e","i":318,"k":4,"tr":[5,4,11,6,1,3,13],"m":318,"s":"src%2Facme_order%2Fshipping.py","name":"src/acme_order/shipping.py","isStub":false,"definedIn":[40],"comments":["Shipping: what the standard library and third parties give a class."],"metrics":{"sloc":39},"anchor":[40,1,67]}
-{"t":"e","i":319,"k":1,"tr":[5,8,12,11,0,6,3],"m":318,"s":"Carrier","name":"Carrier","isStub":false,"parent":318,"metrics":{"sloc":3},"anchor":[40,13,15]}
-{"t":"e","i":320,"k":0,"tr":[5,7,9,0,6,15],"m":318,"s":"Carrier.COURIER","name":"COURIER","parent":319,"value":{"k":"string","v":"courier"},"anchor":[40,15,15]}
-{"t":"e","i":321,"k":0,"tr":[5,7,9,0,6,15],"m":318,"s":"Carrier.POST","name":"POST","parent":319,"value":{"k":"string","v":"post"},"anchor":[40,14,14]}
-{"t":"e","i":322,"k":1,"tr":[5,8,12,11,0,6,3],"m":318,"s":"Dynamic","name":"Dynamic","isStub":false,"parent":318,"metrics":{"sloc":2},"anchor":[40,38,39]}
-{"t":"e","i":323,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":318,"s":"Ledger","name":"Ledger","isStub":false,"parent":318,"comments":["Two library classes could answer: no guess."],"metrics":{"sloc":4},"anchor":[40,53,57]}
-{"t":"e","i":324,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":318,"s":"Ledger.close","name":"close","signature":"close(self)","parent":323,"parameters":[325],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[40,56,57]}
-{"t":"e","i":325,"k":5,"tr":[5,7,9,0,6],"m":318,"s":"Ledger.close","d":"param:self","name":"self","parent":324,"anchor":[40,56,56]}
-{"t":"e","i":326,"k":1,"tr":[5,8,12,11,0,6,3],"m":318,"s":"Orphan","name":"Orphan","isStub":false,"parent":318,"metrics":{"sloc":2},"anchor":[40,42,43]}
-{"t":"e","i":327,"k":1,"tr":[5,8,12,11,0,6,3,10],"m":318,"s":"Parcel","name":"Parcel","isStub":false,"parent":318,"metrics":{"sloc":2},"anchor":[40,26,27]}
-{"t":"e","i":328,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":318,"s":"Proxy","name":"Proxy","isStub":false,"parent":318,"comments":["A class that answers any name at run time: nothing declaring one is no evidence."],"metrics":{"sloc":6},"anchor":[40,60,67]}
-{"t":"e","i":329,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":318,"s":"Proxy.__getattr__","name":"__getattr__","signature":"__getattr__(self, name)","parent":328,"parameters":[331,330],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[40,63,64]}
-{"t":"e","i":330,"k":5,"tr":[5,7,9,0,6],"m":318,"s":"Proxy.__getattr__","d":"param:name","name":"name","parent":329,"anchor":[40,63,63]}
-{"t":"e","i":331,"k":5,"tr":[5,7,9,0,6],"m":318,"s":"Proxy.__getattr__","d":"param:self","name":"self","parent":329,"anchor":[40,63,63]}
-{"t":"e","i":332,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":318,"s":"Proxy.forward","name":"forward","signature":"forward(self)","parent":328,"parameters":[333],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[40,66,67]}
-{"t":"e","i":333,"k":5,"tr":[5,7,9,0,6],"m":318,"s":"Proxy.forward","d":"param:self","name":"self","parent":332,"anchor":[40,66,66]}
-{"t":"e","i":334,"k":1,"tr":[5,8,12,11,0,6,3],"m":318,"s":"Rate","name":"Rate","isStub":false,"parent":318,"metrics":{"sloc":2},"anchor":[40,18,19]}
-{"t":"e","i":335,"k":1,"tr":[5,8,12,11,0,6,3],"m":318,"s":"Row","name":"Row","isStub":false,"parent":318,"metrics":{"sloc":2},"anchor":[40,34,35]}
-{"t":"e","i":336,"k":1,"tr":[5,8,12,11,0,6,3],"m":318,"s":"Shipment","name":"Shipment","isStub":false,"parent":318,"metrics":{"sloc":2},"anchor":[40,30,31]}
-{"t":"e","i":337,"k":6,"tr":[5,7,9,0,6],"m":318,"s":"T","name":"T","parent":318,"anchor":[40,10,10]}
-{"t":"e","i":338,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":318,"s":"Tracked","name":"Tracked","isStub":false,"parent":318,"comments":["`objects` is no corpus member: the one library class of the order answers it."],"metrics":{"sloc":4},"anchor":[40,46,50]}
-{"t":"e","i":339,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":318,"s":"Tracked.recent","name":"recent","signature":"recent(self)","parent":338,"parameters":[340],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[40,49,50]}
-{"t":"e","i":340,"k":5,"tr":[5,7,9,0,6],"m":318,"s":"Tracked.recent","d":"param:self","name":"self","parent":339,"anchor":[40,49,49]}
-{"t":"e","i":341,"k":1,"tr":[5,8,12,11,0,6,3],"m":318,"s":"Zones","name":"Zones","isStub":false,"parent":318,"metrics":{"sloc":2},"anchor":[40,22,23]}
-{"t":"e","i":342,"k":4,"tr":[5,4,11,6,1,3],"m":342,"s":"src%2Facme_order%2Ftwo_stars.py","name":"src/acme_order/two_stars.py","isStub":false,"definedIn":[41],"comments":["Two star imports nothing here answers: which binds `Widget`, no line says."],"metrics":{"sloc":5},"anchor":[41,1,7]}
-{"t":"e","i":343,"k":1,"tr":[5,8,12,11,0,6,3],"m":342,"s":"Mixed","name":"Mixed","isStub":false,"parent":342,"metrics":{"sloc":2},"anchor":[41,6,7]}
-{"t":"e","i":344,"k":4,"tr":[5,4,11,6,1,3],"m":344,"s":"src%2Facme_order%2Funicode_names.py","name":"src/acme_order/unicode_names.py","isStub":false,"definedIn":[42],"comments":["Identifiers beyond ASCII: the language reads them NFKC-normalized."],"metrics":{"sloc":7},"anchor":[42,1,13]}
-{"t":"e","i":345,"k":1,"tr":[5,8,12,11,0,6,3],"m":344,"s":"Café","name":"Café","isStub":false,"parent":344,"metrics":{"sloc":2},"anchor":[42,12,13]}
-{"t":"e","i":346,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":344,"s":"find","name":"find","signature":"find(order)","parent":344,"parameters":[347],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[42,4,5]}
-{"t":"e","i":347,"k":5,"tr":[5,7,9,0,6],"m":344,"s":"find","d":"param:order","name":"order","parent":346,"anchor":[42,4,4]}
-{"t":"e","i":348,"k":4,"tr":[5,4,11,6,1,3],"m":348,"s":"src%2Facme_plugins%2Fstripe.py","name":"src/acme_plugins/stripe.py","isStub":false,"definedIn":[43],"comments":["A plugin in a directory with no __init__.py: a namespace package (PEP 420)."],"metrics":{"sloc":3},"anchor":[43,1,5]}
-{"t":"e","i":349,"k":1,"tr":[5,8,12,11,0,6,3],"m":348,"s":"Gateway","name":"Gateway","isStub":false,"parent":348,"metrics":{"sloc":2},"anchor":[43,4,5]}
-{"t":"e","i":350,"k":4,"tr":[5,4,11,6,1,3],"m":350,"s":"tests%2Fconftest.py","name":"tests/conftest.py","isStub":false,"definedIn":[44],"comments":["The tests' conftest: the nearer of the two for every test below."],"metrics":{"sloc":4},"anchor":[44,1,6]}
-{"t":"e","i":351,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":350,"s":"make_order","name":"make_order","signature":"make_order()","parent":350,"parameters":[],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[44,5,6]}
-{"t":"e","i":352,"k":4,"tr":[5,4,11,6,3],"m":352,"s":"tests%2Fintegration%2Ffakes.py","name":"tests/integration/fakes.py","isStub":false,"definedIn":[45],"metrics":{"sloc":2},"anchor":[45,1,2]}
-{"t":"e","i":353,"k":1,"tr":[5,8,12,11,0,6,3],"m":352,"s":"Fake","name":"Fake","isStub":false,"parent":352,"metrics":{"sloc":2},"anchor":[45,1,2]}
-{"t":"e","i":354,"k":4,"tr":[5,4,11,6,1,3],"m":354,"s":"tests%2Fqueue.py","name":"tests/queue.py","isStub":false,"definedIn":[46],"comments":["A test helper named like a standard module: the corpus answers first."],"metrics":{"sloc":3},"anchor":[46,1,5]}
-{"t":"e","i":355,"k":1,"tr":[5,8,12,11,0,6,3],"m":354,"s":"FakeQueue","name":"FakeQueue","isStub":false,"parent":354,"metrics":{"sloc":2},"anchor":[46,4,5]}
-{"t":"e","i":356,"k":4,"tr":[5,4,11,6,3],"m":356,"s":"tests%2Ftest_orders.py","name":"tests/test_orders.py","isStub":false,"definedIn":[47],"metrics":{"sloc":13},"anchor":[47,1,22]}
-{"t":"e","i":357,"k":1,"tr":[5,8,12,11,0,6,3],"m":356,"s":"SpecialOrder","name":"SpecialOrder","isStub":false,"parent":356,"metrics":{"sloc":2},"anchor":[47,8,9]}
-{"t":"e","i":358,"k":1,"tr":[5,8,12,11,0,6,3],"m":356,"s":"TestAcme","name":"TestAcme","isStub":false,"parent":356,"metrics":{"sloc":2},"anchor":[47,21,22]}
-{"t":"e","i":359,"k":1,"tr":[5,8,12,11,0,6,3],"m":356,"s":"TestMissing","name":"TestMissing","isStub":false,"parent":356,"metrics":{"sloc":2},"anchor":[47,17,18]}
-{"t":"e","i":360,"k":1,"tr":[5,8,12,11,0,6,3],"m":356,"s":"TestOrder","name":"TestOrder","isStub":false,"parent":356,"metrics":{"sloc":3},"anchor":[47,12,14]}
-{"t":"e","i":361,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":356,"s":"TestOrder.test_total","name":"test_total","signature":"test_total(self)","parent":360,"parameters":[362],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[47,13,14]}
-{"t":"e","i":362,"k":5,"tr":[5,7,9,0,6],"m":356,"s":"TestOrder.test_total","d":"param:self","name":"self","parent":361,"anchor":[47,13,13]}
-{"t":"e","i":363,"k":4,"tr":[5,4,11,6,3],"m":363,"s":"tests%2Ftest_queue.py","name":"tests/test_queue.py","isStub":false,"definedIn":[48],"metrics":{"sloc":3},"anchor":[48,1,5]}
-{"t":"e","i":364,"k":1,"tr":[5,8,12,11,0,6,3],"m":363,"s":"TestQueue","name":"TestQueue","isStub":false,"parent":363,"metrics":{"sloc":2},"anchor":[48,4,5]}
-{"t":"e","i":365,"k":4,"tr":[5,4,11,6,1,3],"m":365,"s":"tests%2Ftest_tie.py","name":"tests/test_tie.py","isStub":false,"definedIn":[49],"comments":["`fakes` is answered by two roots at the same distance: dropped, never chosen."],"metrics":{"sloc":4},"anchor":[49,1,6]}
-{"t":"e","i":366,"k":1,"tr":[5,8,12,11,0,6,3],"m":365,"s":"Tied","name":"Tied","isStub":false,"parent":365,"metrics":{"sloc":2},"anchor":[49,5,6]}
-{"t":"e","i":367,"k":4,"tr":[5,4,11,6,3],"m":367,"s":"tests%2Funit%2Ffakes.py","name":"tests/unit/fakes.py","isStub":false,"definedIn":[50],"metrics":{"sloc":2},"anchor":[50,1,2]}
-{"t":"e","i":368,"k":1,"tr":[5,8,12,11,0,6,3],"m":367,"s":"Fake","name":"Fake","isStub":false,"parent":367,"metrics":{"sloc":2},"anchor":[50,1,2]}
+{"t":"e","i":286,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":280,"s":"Handler","name":"Handler","isStub":false,"parent":280,"comments":["What a `Service` is handed at run time: no line types `self.handler`, a trace can."],"metrics":{"sloc":4},"anchor":[37,88,92]}
+{"t":"e","i":287,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"Handler.process","name":"process","signature":"process(self)","parent":286,"parameters":[288],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[37,91,92]}
+{"t":"e","i":288,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Handler.process","d":"param:self","name":"self","parent":287,"anchor":[37,91,91]}
+{"t":"e","i":289,"k":1,"tr":[5,8,12,11,0,6,1,3,10],"m":280,"s":"Service","name":"Service","isStub":false,"parent":280,"comments":["Reads through `self`, `cls` and `super()`, and what no reader can type."],"metrics":{"sloc":36},"anchor":[37,31,71]}
+{"t":"e","i":290,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"Service.__init__","name":"__init__","signature":"__init__(self, handler)","parent":289,"parameters":[292,291],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[37,36,39]}
+{"t":"e","i":291,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.__init__","d":"param:handler","name":"handler","parent":290,"anchor":[37,36,36]}
+{"t":"e","i":292,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.__init__","d":"param:self","name":"self","parent":290,"anchor":[37,36,36]}
+{"t":"e","i":293,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"Service.audit","name":"audit","signature":"audit(self)","parent":289,"parameters":[294],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[37,70,71]}
+{"t":"e","i":294,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.audit","d":"param:self","name":"self","parent":293,"anchor":[37,70,70]}
+{"t":"e","i":295,"k":0,"tr":[5,7,9,0,6,15],"m":280,"s":"Service.cache","name":"cache","parent":289,"value":{"k":"unevaluated","source":"{}"},"anchor":[37,38,38]}
+{"t":"e","i":296,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"Service.create","name":"create","signature":"create(cls)","parent":289,"parameters":[297],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[37,42,43]}
+{"t":"e","i":297,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.create","d":"param:cls","name":"cls","parent":296,"anchor":[37,42,42]}
+{"t":"e","i":298,"k":0,"tr":[5,7,9,0,6],"m":280,"s":"Service.handler","name":"handler","parent":289,"anchor":[37,39,39]}
+{"t":"e","i":299,"k":0,"tr":[5,7,9,0,6],"m":280,"s":"Service.repository","name":"repository","parent":289,"anchor":[37,37,37]}
+{"t":"e","i":300,"k":0,"tr":[5,7,9,0,6,15],"m":280,"s":"Service.retries","name":"retries","parent":289,"value":{"k":"number","v":"3"},"anchor":[37,34,34]}
+{"t":"e","i":301,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"Service.run","name":"run","signature":"run(self, order)","parent":289,"parameters":[303,302],"metrics":{"cyclomatic":4,"sloc":23},"anchor":[37,46,68]}
+{"t":"e","i":302,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.run","d":"param:order","name":"order","parent":301,"anchor":[37,46,46]}
+{"t":"e","i":303,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"Service.run","d":"param:self","name":"self","parent":301,"anchor":[37,46,46]}
+{"t":"e","i":304,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":280,"s":"build_error","name":"build_error","signature":"build_error(order)","parent":280,"parameters":[305],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[37,27,28]}
+{"t":"e","i":305,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"build_error","d":"param:order","name":"order","parent":304,"anchor":[37,27,27]}
+{"t":"e","i":306,"k":2,"tr":[5,2,11,14,13,10,9,0,6,1,3],"m":280,"s":"checkout","name":"checkout","signature":"checkout(order, repository=…)","declaredType":165,"parent":280,"parameters":[307,308],"comments":["An annotation types a parameter; `Optional` is unwrapped."],"metrics":{"cyclomatic":2,"sloc":8},"anchor":[37,17,24]}
+{"t":"e","i":307,"k":5,"tr":[5,7,9,0,6],"m":280,"s":"checkout","d":"param:order","name":"order","declaredType":165,"parent":306,"anchor":[37,17,17]}
+{"t":"e","i":308,"k":5,"tr":[5,7,9,0,6,15],"m":280,"s":"checkout","d":"param:repository","name":"repository","declaredType":267,"parent":306,"value":{"k":"null"},"anchor":[37,17,17]}
+{"t":"e","i":309,"k":2,"tr":[5,2,11,14,13,10,9,0,6,1,3],"m":280,"s":"default_carrier","name":"default_carrier","signature":"default_carrier()","parent":280,"parameters":[],"comments":["A name bound once to `import_module` with a literal is that module, by flow."],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[37,83,85]}
+{"t":"e","i":310,"k":6,"tr":[5,7,9,0,6],"m":280,"s":"shipping","name":"shipping","parent":280,"anchor":[37,80,80]}
+{"t":"e","i":311,"k":4,"tr":[5,4,11,6,1,3],"m":311,"s":"src%2Facme_order%2Fsettings.py","name":"src/acme_order/settings.py","isStub":false,"definedIn":[38],"comments":["Settings: module variables other files read and write."],"metrics":{"sloc":8},"anchor":[38,1,11]}
+{"t":"e","i":312,"k":6,"tr":[5,7,9,0,6,15],"m":311,"s":"DEBUG","name":"DEBUG","parent":311,"value":{"k":"boolean","v":false},"anchor":[38,2,2]}
+{"t":"e","i":313,"k":6,"tr":[5,7,9,0,6,1,15],"m":311,"s":"DEFAULT_CURRENCY","name":"DEFAULT_CURRENCY","parent":311,"comments":["The currency an order takes when none is given."],"value":{"k":"string","v":"EUR"},"anchor":[38,4,4]}
+{"t":"e","i":314,"k":6,"tr":[5,7,9,0,6,15],"m":311,"s":"HOOKS","name":"HOOKS","parent":311,"value":{"k":"array","items":[{"k":"string","v":"audit"},{"k":"string","v":"notify"}]},"anchor":[38,5,5]}
+{"t":"e","i":315,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":311,"s":"bump","name":"bump","signature":"bump()","parent":311,"parameters":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[38,9,11]}
+{"t":"e","i":316,"k":6,"tr":[5,7,9,0,6,15],"m":311,"s":"counter","name":"counter","parent":311,"value":{"k":"number","v":"0"},"anchor":[38,6,6]}
+{"t":"e","i":317,"k":4,"tr":[5,4,11,6,1,3],"m":317,"s":"src%2Facme_order%2Fshapes.py","name":"src/acme_order/shapes.py","isStub":false,"definedIn":[39],"comments":["Shapes: `__all__` says what a star import of this module binds."],"metrics":{"sloc":6},"anchor":[39,1,12]}
+{"t":"e","i":318,"k":1,"tr":[5,8,12,11,0,6,3],"m":317,"s":"Box","name":"Box","isStub":false,"parent":317,"metrics":{"sloc":2},"anchor":[39,5,6]}
+{"t":"e","i":319,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":317,"s":"Crate","name":"Crate","isStub":false,"parent":317,"comments":["A crate: not in `__all__`."],"metrics":{"sloc":2},"anchor":[39,11,12]}
+{"t":"e","i":320,"k":6,"tr":[5,7,9,0,6,15],"m":317,"s":"__all__","name":"__all__","parent":317,"value":{"k":"array","items":[{"k":"string","v":"Box"}]},"anchor":[39,2,2]}
+{"t":"e","i":321,"k":4,"tr":[5,4,11,6,1,3,13],"m":321,"s":"src%2Facme_order%2Fshipping.py","name":"src/acme_order/shipping.py","isStub":false,"definedIn":[40],"comments":["Shipping: what the standard library and third parties give a class."],"metrics":{"sloc":39},"anchor":[40,1,67]}
+{"t":"e","i":322,"k":1,"tr":[5,8,12,11,0,6,3],"m":321,"s":"Carrier","name":"Carrier","isStub":false,"parent":321,"metrics":{"sloc":3},"anchor":[40,13,15]}
+{"t":"e","i":323,"k":0,"tr":[5,7,9,0,6,15],"m":321,"s":"Carrier.COURIER","name":"COURIER","parent":322,"value":{"k":"string","v":"courier"},"anchor":[40,15,15]}
+{"t":"e","i":324,"k":0,"tr":[5,7,9,0,6,15],"m":321,"s":"Carrier.POST","name":"POST","parent":322,"value":{"k":"string","v":"post"},"anchor":[40,14,14]}
+{"t":"e","i":325,"k":1,"tr":[5,8,12,11,0,6,3],"m":321,"s":"Dynamic","name":"Dynamic","isStub":false,"parent":321,"metrics":{"sloc":2},"anchor":[40,38,39]}
+{"t":"e","i":326,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":321,"s":"Ledger","name":"Ledger","isStub":false,"parent":321,"comments":["Two library classes could answer: no guess."],"metrics":{"sloc":4},"anchor":[40,53,57]}
+{"t":"e","i":327,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":321,"s":"Ledger.close","name":"close","signature":"close(self)","parent":326,"parameters":[328],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[40,56,57]}
+{"t":"e","i":328,"k":5,"tr":[5,7,9,0,6],"m":321,"s":"Ledger.close","d":"param:self","name":"self","parent":327,"anchor":[40,56,56]}
+{"t":"e","i":329,"k":1,"tr":[5,8,12,11,0,6,3],"m":321,"s":"Orphan","name":"Orphan","isStub":false,"parent":321,"metrics":{"sloc":2},"anchor":[40,42,43]}
+{"t":"e","i":330,"k":1,"tr":[5,8,12,11,0,6,3,10],"m":321,"s":"Parcel","name":"Parcel","isStub":false,"parent":321,"metrics":{"sloc":2},"anchor":[40,26,27]}
+{"t":"e","i":331,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":321,"s":"Proxy","name":"Proxy","isStub":false,"parent":321,"comments":["A class that answers any name at run time: nothing declaring one is no evidence."],"metrics":{"sloc":6},"anchor":[40,60,67]}
+{"t":"e","i":332,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":321,"s":"Proxy.__getattr__","name":"__getattr__","signature":"__getattr__(self, name)","parent":331,"parameters":[334,333],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[40,63,64]}
+{"t":"e","i":333,"k":5,"tr":[5,7,9,0,6],"m":321,"s":"Proxy.__getattr__","d":"param:name","name":"name","parent":332,"anchor":[40,63,63]}
+{"t":"e","i":334,"k":5,"tr":[5,7,9,0,6],"m":321,"s":"Proxy.__getattr__","d":"param:self","name":"self","parent":332,"anchor":[40,63,63]}
+{"t":"e","i":335,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":321,"s":"Proxy.forward","name":"forward","signature":"forward(self)","parent":331,"parameters":[336],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[40,66,67]}
+{"t":"e","i":336,"k":5,"tr":[5,7,9,0,6],"m":321,"s":"Proxy.forward","d":"param:self","name":"self","parent":335,"anchor":[40,66,66]}
+{"t":"e","i":337,"k":1,"tr":[5,8,12,11,0,6,3],"m":321,"s":"Rate","name":"Rate","isStub":false,"parent":321,"metrics":{"sloc":2},"anchor":[40,18,19]}
+{"t":"e","i":338,"k":1,"tr":[5,8,12,11,0,6,3],"m":321,"s":"Row","name":"Row","isStub":false,"parent":321,"metrics":{"sloc":2},"anchor":[40,34,35]}
+{"t":"e","i":339,"k":1,"tr":[5,8,12,11,0,6,3],"m":321,"s":"Shipment","name":"Shipment","isStub":false,"parent":321,"metrics":{"sloc":2},"anchor":[40,30,31]}
+{"t":"e","i":340,"k":6,"tr":[5,7,9,0,6],"m":321,"s":"T","name":"T","parent":321,"anchor":[40,10,10]}
+{"t":"e","i":341,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":321,"s":"Tracked","name":"Tracked","isStub":false,"parent":321,"comments":["`objects` is no corpus member: the one library class of the order answers it."],"metrics":{"sloc":4},"anchor":[40,46,50]}
+{"t":"e","i":342,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":321,"s":"Tracked.recent","name":"recent","signature":"recent(self)","parent":341,"parameters":[343],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[40,49,50]}
+{"t":"e","i":343,"k":5,"tr":[5,7,9,0,6],"m":321,"s":"Tracked.recent","d":"param:self","name":"self","parent":342,"anchor":[40,49,49]}
+{"t":"e","i":344,"k":1,"tr":[5,8,12,11,0,6,3],"m":321,"s":"Zones","name":"Zones","isStub":false,"parent":321,"metrics":{"sloc":2},"anchor":[40,22,23]}
+{"t":"e","i":345,"k":4,"tr":[5,4,11,6,1,3],"m":345,"s":"src%2Facme_order%2Ftwo_stars.py","name":"src/acme_order/two_stars.py","isStub":false,"definedIn":[41],"comments":["Two star imports nothing here answers: which binds `Widget`, no line says."],"metrics":{"sloc":5},"anchor":[41,1,7]}
+{"t":"e","i":346,"k":1,"tr":[5,8,12,11,0,6,3],"m":345,"s":"Mixed","name":"Mixed","isStub":false,"parent":345,"metrics":{"sloc":2},"anchor":[41,6,7]}
+{"t":"e","i":347,"k":4,"tr":[5,4,11,6,1,3],"m":347,"s":"src%2Facme_order%2Funicode_names.py","name":"src/acme_order/unicode_names.py","isStub":false,"definedIn":[42],"comments":["Identifiers beyond ASCII: the language reads them NFKC-normalized."],"metrics":{"sloc":7},"anchor":[42,1,13]}
+{"t":"e","i":348,"k":1,"tr":[5,8,12,11,0,6,3],"m":347,"s":"Café","name":"Café","isStub":false,"parent":347,"metrics":{"sloc":2},"anchor":[42,12,13]}
+{"t":"e","i":349,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":347,"s":"find","name":"find","signature":"find(order)","parent":347,"parameters":[350],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[42,4,5]}
+{"t":"e","i":350,"k":5,"tr":[5,7,9,0,6],"m":347,"s":"find","d":"param:order","name":"order","parent":349,"anchor":[42,4,4]}
+{"t":"e","i":351,"k":4,"tr":[5,4,11,6,1,3],"m":351,"s":"src%2Facme_plugins%2Fstripe.py","name":"src/acme_plugins/stripe.py","isStub":false,"definedIn":[43],"comments":["A plugin in a directory with no __init__.py: a namespace package (PEP 420)."],"metrics":{"sloc":3},"anchor":[43,1,5]}
+{"t":"e","i":352,"k":1,"tr":[5,8,12,11,0,6,3],"m":351,"s":"Gateway","name":"Gateway","isStub":false,"parent":351,"metrics":{"sloc":2},"anchor":[43,4,5]}
+{"t":"e","i":353,"k":4,"tr":[5,4,11,6,1,3],"m":353,"s":"tests%2Fconftest.py","name":"tests/conftest.py","isStub":false,"definedIn":[44],"comments":["The tests' conftest: the nearer of the two for every test below."],"metrics":{"sloc":4},"anchor":[44,1,6]}
+{"t":"e","i":354,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":353,"s":"make_order","name":"make_order","signature":"make_order()","parent":353,"parameters":[],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[44,5,6]}
+{"t":"e","i":355,"k":4,"tr":[5,4,11,6,3],"m":355,"s":"tests%2Fintegration%2Ffakes.py","name":"tests/integration/fakes.py","isStub":false,"definedIn":[45],"metrics":{"sloc":2},"anchor":[45,1,2]}
+{"t":"e","i":356,"k":1,"tr":[5,8,12,11,0,6,3],"m":355,"s":"Fake","name":"Fake","isStub":false,"parent":355,"metrics":{"sloc":2},"anchor":[45,1,2]}
+{"t":"e","i":357,"k":4,"tr":[5,4,11,6,1,3],"m":357,"s":"tests%2Fqueue.py","name":"tests/queue.py","isStub":false,"definedIn":[46],"comments":["A test helper named like a standard module: the corpus answers first."],"metrics":{"sloc":3},"anchor":[46,1,5]}
+{"t":"e","i":358,"k":1,"tr":[5,8,12,11,0,6,3],"m":357,"s":"FakeQueue","name":"FakeQueue","isStub":false,"parent":357,"metrics":{"sloc":2},"anchor":[46,4,5]}
+{"t":"e","i":359,"k":4,"tr":[5,4,11,6,3],"m":359,"s":"tests%2Ftest_orders.py","name":"tests/test_orders.py","isStub":false,"definedIn":[47],"metrics":{"sloc":13},"anchor":[47,1,22]}
+{"t":"e","i":360,"k":1,"tr":[5,8,12,11,0,6,3],"m":359,"s":"SpecialOrder","name":"SpecialOrder","isStub":false,"parent":359,"metrics":{"sloc":2},"anchor":[47,8,9]}
+{"t":"e","i":361,"k":1,"tr":[5,8,12,11,0,6,3],"m":359,"s":"TestAcme","name":"TestAcme","isStub":false,"parent":359,"metrics":{"sloc":2},"anchor":[47,21,22]}
+{"t":"e","i":362,"k":1,"tr":[5,8,12,11,0,6,3],"m":359,"s":"TestMissing","name":"TestMissing","isStub":false,"parent":359,"metrics":{"sloc":2},"anchor":[47,17,18]}
+{"t":"e","i":363,"k":1,"tr":[5,8,12,11,0,6,3],"m":359,"s":"TestOrder","name":"TestOrder","isStub":false,"parent":359,"metrics":{"sloc":3},"anchor":[47,12,14]}
+{"t":"e","i":364,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":359,"s":"TestOrder.test_total","name":"test_total","signature":"test_total(self)","parent":363,"parameters":[365],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[47,13,14]}
+{"t":"e","i":365,"k":5,"tr":[5,7,9,0,6],"m":359,"s":"TestOrder.test_total","d":"param:self","name":"self","parent":364,"anchor":[47,13,13]}
+{"t":"e","i":366,"k":4,"tr":[5,4,11,6,3],"m":366,"s":"tests%2Ftest_queue.py","name":"tests/test_queue.py","isStub":false,"definedIn":[48],"metrics":{"sloc":3},"anchor":[48,1,5]}
+{"t":"e","i":367,"k":1,"tr":[5,8,12,11,0,6,3],"m":366,"s":"TestQueue","name":"TestQueue","isStub":false,"parent":366,"metrics":{"sloc":2},"anchor":[48,4,5]}
+{"t":"e","i":368,"k":4,"tr":[5,4,11,6,1,3],"m":368,"s":"tests%2Ftest_tie.py","name":"tests/test_tie.py","isStub":false,"definedIn":[49],"comments":["`fakes` is answered by two roots at the same distance: dropped, never chosen."],"metrics":{"sloc":4},"anchor":[49,1,6]}
+{"t":"e","i":369,"k":1,"tr":[5,8,12,11,0,6,3],"m":368,"s":"Tied","name":"Tied","isStub":false,"parent":368,"metrics":{"sloc":2},"anchor":[49,5,6]}
+{"t":"e","i":370,"k":4,"tr":[5,4,11,6,3],"m":370,"s":"tests%2Funit%2Ffakes.py","name":"tests/unit/fakes.py","isStub":false,"definedIn":[50],"metrics":{"sloc":2},"anchor":[50,1,2]}
+{"t":"e","i":371,"k":1,"tr":[5,8,12,11,0,6,3],"m":370,"s":"Fake","name":"Fake","isStub":false,"parent":370,"metrics":{"sloc":2},"anchor":[50,1,2]}
 {"t":"x","k":2,"f":41,"o":34,"p":0,"anchor":[0,3,3]}
 {"t":"x","k":4,"f":41,"o":34,"p":0,"anchor":[0,13,13]}
 {"t":"x","k":5,"f":41,"o":34,"p":0,"anchor":[0,13,13]}
@@ -504,14 +507,14 @@
 {"t":"x","k":0,"f":183,"o":180,"p":0,"isRead":false,"isWrite":true,"anchor":[25,26,26]}
 {"t":"x","k":6,"f":186,"o":1,"p":0,"anchor":[25,22,22]}
 {"t":"x","k":2,"f":200,"o":14,"p":0,"anchor":[26,3,3]}
-{"t":"x","k":2,"f":200,"o":314,"p":0,"anchor":[26,2,2]}
+{"t":"x","k":2,"f":200,"o":317,"p":0,"anchor":[26,2,2]}
 {"t":"x","k":3,"f":201,"o":15,"p":1,"anchor":[26,10,10]}
-{"t":"x","k":3,"f":202,"o":315,"p":0,"anchor":[26,6,6]}
+{"t":"x","k":3,"f":202,"o":318,"p":0,"anchor":[26,6,6]}
 {"t":"x","k":2,"f":203,"o":53,"p":0,"anchor":[27,5,5]}
-{"t":"x","k":2,"f":203,"o":348,"p":0,"anchor":[27,2,2]}
-{"t":"x","k":2,"f":203,"o":348,"p":0,"anchor":[27,3,3]}
-{"t":"x","k":3,"f":204,"o":349,"p":0,"anchor":[27,12,12]}
-{"t":"x","k":3,"f":205,"o":349,"p":0,"anchor":[27,8,8]}
+{"t":"x","k":2,"f":203,"o":351,"p":0,"anchor":[27,2,2]}
+{"t":"x","k":2,"f":203,"o":351,"p":0,"anchor":[27,3,3]}
+{"t":"x","k":3,"f":204,"o":352,"p":0,"anchor":[27,12,12]}
+{"t":"x","k":3,"f":205,"o":352,"p":0,"anchor":[27,8,8]}
 {"t":"x","k":2,"f":206,"o":208,"p":0,"anchor":[28,2,2]}
 {"t":"x","k":3,"f":207,"o":210,"p":0,"anchor":[28,5,5]}
 {"t":"x","k":3,"f":209,"o":214,"p":0,"anchor":[29,17,17]}
@@ -562,83 +565,83 @@
 {"t":"x","k":2,"f":280,"o":206,"p":0,"anchor":[37,11,11]}
 {"t":"x","k":2,"f":280,"o":257,"p":0,"anchor":[37,12,12]}
 {"t":"x","k":2,"f":280,"o":274,"p":0,"anchor":[37,13,13]}
-{"t":"x","k":2,"f":280,"o":308,"p":0,"anchor":[37,8,8]}
-{"t":"x","k":2,"f":280,"o":318,"p":0,"anchor":[37,57,57]}
-{"t":"x","k":2,"f":280,"o":318,"p":0,"anchor":[37,80,80]}
-{"t":"x","k":3,"f":281,"o":286,"p":0,"anchor":[37,74,74]}
+{"t":"x","k":2,"f":280,"o":311,"p":0,"anchor":[37,8,8]}
+{"t":"x","k":2,"f":280,"o":321,"p":0,"anchor":[37,57,57]}
+{"t":"x","k":2,"f":280,"o":321,"p":0,"anchor":[37,80,80]}
+{"t":"x","k":3,"f":281,"o":289,"p":0,"anchor":[37,74,74]}
 {"t":"x","k":0,"f":282,"o":285,"p":0,"isRead":false,"isWrite":true,"anchor":[37,77,77]}
-{"t":"x","k":4,"f":282,"o":287,"p":0,"anchor":[37,76,76]}
-{"t":"x","k":0,"f":286,"o":311,"p":0,"isRead":true,"isWrite":false,"anchor":[37,45,45]}
-{"t":"x","k":4,"f":287,"o":267,"p":0,"anchor":[37,37,37]}
-{"t":"x","k":0,"f":287,"o":292,"p":0,"isRead":false,"isWrite":true,"anchor":[37,38,38]}
-{"t":"x","k":0,"f":287,"o":295,"p":0,"isRead":false,"isWrite":true,"anchor":[37,39,39]}
-{"t":"x","k":0,"f":287,"o":296,"p":0,"isRead":false,"isWrite":true,"anchor":[37,37,37]}
-{"t":"x","k":4,"f":293,"o":287,"p":0,"anchor":[37,43,43]}
-{"t":"x","k":5,"f":298,"o":4,"p":0,"anchor":[37,62,62]}
-{"t":"x","k":6,"f":298,"o":4,"p":0,"anchor":[37,63,63]}
-{"t":"x","k":1,"f":298,"o":13,"p":0,"arguments":[{"name":"name","value":{"k":"string","v":"run"}}],"anchor":[37,45,45]}
-{"t":"x","k":4,"f":298,"o":32,"p":0,"anchor":[37,57,57]}
-{"t":"x","k":4,"f":298,"o":32,"p":0,"anchor":[37,58,58]}
-{"t":"x","k":4,"f":298,"o":83,"p":0,"anchor":[37,67,67]}
-{"t":"x","k":5,"f":298,"o":83,"p":0,"anchor":[37,64,64]}
-{"t":"x","k":6,"f":298,"o":83,"p":0,"anchor":[37,67,67]}
-{"t":"x","k":4,"f":298,"o":173,"p":0,"anchor":[37,49,49]}
-{"t":"x","k":0,"f":298,"o":182,"p":1,"isRead":true,"isWrite":false,"anchor":[37,50,50]}
-{"t":"x","k":4,"f":298,"o":215,"p":0,"anchor":[37,51,51]}
-{"t":"x","k":4,"f":298,"o":268,"p":1,"anchor":[37,61,61]}
-{"t":"x","k":4,"f":298,"o":271,"p":1,"anchor":[37,47,47]}
-{"t":"x","k":4,"f":298,"o":290,"p":0,"anchor":[37,48,48]}
-{"t":"x","k":4,"f":298,"o":293,"p":0,"anchor":[37,52,52]}
-{"t":"x","k":0,"f":298,"o":295,"p":0,"isRead":true,"isWrite":false,"anchor":[37,54,54]}
-{"t":"x","k":0,"f":298,"o":296,"p":0,"isRead":true,"isWrite":false,"anchor":[37,47,47]}
-{"t":"x","k":0,"f":298,"o":296,"p":0,"isRead":true,"isWrite":false,"anchor":[37,61,61]}
-{"t":"x","k":4,"f":298,"o":312,"p":0,"anchor":[37,59,59]}
-{"t":"x","k":4,"f":301,"o":83,"p":0,"anchor":[37,28,28]}
-{"t":"x","k":4,"f":303,"o":33,"p":0,"anchor":[37,22,22]}
-{"t":"x","k":5,"f":303,"o":165,"p":0,"anchor":[37,17,17]}
-{"t":"x","k":0,"f":303,"o":180,"p":1,"isRead":true,"isWrite":false,"anchor":[37,23,23]}
-{"t":"x","k":0,"f":303,"o":182,"p":1,"isRead":true,"isWrite":false,"anchor":[37,19,19]}
-{"t":"x","k":4,"f":303,"o":271,"p":1,"anchor":[37,21,21]}
-{"t":"x","k":1,"f":303,"o":275,"p":0,"arguments":[{"name":"times","value":{"k":"number","v":"3"}},{"name":"backoff","value":{"k":"number","v":"2"}}],"anchor":[37,16,16]}
-{"t":"x","k":0,"f":303,"o":310,"p":0,"isRead":true,"isWrite":false,"anchor":[37,22,22]}
-{"t":"x","k":5,"f":304,"o":165,"p":0,"anchor":[37,17,17]}
-{"t":"x","k":5,"f":305,"o":267,"p":0,"anchor":[37,17,17]}
-{"t":"x","k":0,"f":306,"o":307,"p":0,"isRead":true,"isWrite":false,"anchor":[37,85,85]}
-{"t":"x","k":0,"f":306,"o":321,"p":1,"isRead":true,"isWrite":false,"anchor":[37,85,85]}
-{"t":"x","k":0,"f":312,"o":313,"p":0,"isRead":true,"isWrite":true,"anchor":[38,11,11]}
-{"t":"x","k":2,"f":318,"o":11,"p":0,"anchor":[40,8,8]}
-{"t":"x","k":2,"f":318,"o":19,"p":0,"anchor":[40,7,7]}
-{"t":"x","k":2,"f":318,"o":24,"p":0,"anchor":[40,3,3]}
-{"t":"x","k":2,"f":318,"o":27,"p":0,"anchor":[40,4,4]}
-{"t":"x","k":2,"f":318,"o":30,"p":0,"anchor":[40,2,2]}
-{"t":"x","k":2,"f":318,"o":35,"p":0,"anchor":[40,5,5]}
-{"t":"x","k":4,"f":318,"o":38,"p":0,"anchor":[40,10,10]}
-{"t":"x","k":3,"f":319,"o":31,"p":0,"anchor":[40,13,13]}
-{"t":"x","k":3,"f":323,"o":335,"p":0,"anchor":[40,53,53]}
-{"t":"x","k":3,"f":323,"o":336,"p":0,"anchor":[40,53,53]}
-{"t":"x","k":3,"f":327,"o":36,"p":0,"anchor":[40,26,26]}
-{"t":"x","k":0,"f":327,"o":337,"p":0,"isRead":true,"isWrite":false,"anchor":[40,26,26]}
-{"t":"x","k":3,"f":334,"o":25,"p":0,"anchor":[40,18,18]}
-{"t":"x","k":3,"f":335,"o":20,"p":0,"anchor":[40,34,34]}
-{"t":"x","k":3,"f":336,"o":12,"p":0,"anchor":[40,30,30]}
-{"t":"x","k":3,"f":338,"o":336,"p":0,"anchor":[40,46,46]}
-{"t":"x","k":4,"f":339,"o":12,"p":1,"anchor":[40,50,50]}
-{"t":"x","k":3,"f":341,"o":28,"p":0,"anchor":[40,22,22]}
-{"t":"x","k":2,"f":342,"o":21,"p":0,"anchor":[41,2,2]}
-{"t":"x","k":2,"f":342,"o":22,"p":0,"anchor":[41,3,3]}
-{"t":"x","k":2,"f":350,"o":51,"p":0,"anchor":[44,2,2]}
-{"t":"x","k":4,"f":351,"o":173,"p":0,"anchor":[44,6,6]}
-{"t":"x","k":2,"f":356,"o":39,"p":0,"anchor":[47,1,1]}
-{"t":"x","k":2,"f":356,"o":47,"p":0,"anchor":[47,3,3]}
-{"t":"x","k":2,"f":356,"o":51,"p":0,"anchor":[47,4,4]}
-{"t":"x","k":2,"f":356,"o":81,"p":0,"anchor":[47,4,4]}
-{"t":"x","k":2,"f":356,"o":350,"p":0,"anchor":[47,5,5]}
-{"t":"x","k":3,"f":357,"o":165,"p":0,"anchor":[47,8,8]}
-{"t":"x","k":3,"f":358,"o":48,"p":0,"anchor":[47,21,21]}
-{"t":"x","k":3,"f":359,"o":82,"p":0,"anchor":[47,17,17]}
-{"t":"x","k":3,"f":360,"o":40,"p":0,"anchor":[47,12,12]}
-{"t":"x","k":4,"f":361,"o":40,"p":1,"anchor":[47,14,14]}
-{"t":"x","k":4,"f":361,"o":351,"p":0,"anchor":[47,14,14]}
-{"t":"x","k":2,"f":363,"o":354,"p":0,"anchor":[48,1,1]}
-{"t":"x","k":3,"f":364,"o":355,"p":0,"anchor":[48,4,4]}
-{"t":"eof","counts":{"files":51,"entities":369,"edges":222}}
+{"t":"x","k":4,"f":282,"o":290,"p":0,"anchor":[37,76,76]}
+{"t":"x","k":0,"f":289,"o":314,"p":0,"isRead":true,"isWrite":false,"anchor":[37,45,45]}
+{"t":"x","k":4,"f":290,"o":267,"p":0,"anchor":[37,37,37]}
+{"t":"x","k":0,"f":290,"o":295,"p":0,"isRead":false,"isWrite":true,"anchor":[37,38,38]}
+{"t":"x","k":0,"f":290,"o":298,"p":0,"isRead":false,"isWrite":true,"anchor":[37,39,39]}
+{"t":"x","k":0,"f":290,"o":299,"p":0,"isRead":false,"isWrite":true,"anchor":[37,37,37]}
+{"t":"x","k":4,"f":296,"o":290,"p":0,"anchor":[37,43,43]}
+{"t":"x","k":5,"f":301,"o":4,"p":0,"anchor":[37,62,62]}
+{"t":"x","k":6,"f":301,"o":4,"p":0,"anchor":[37,63,63]}
+{"t":"x","k":1,"f":301,"o":13,"p":0,"arguments":[{"name":"name","value":{"k":"string","v":"run"}}],"anchor":[37,45,45]}
+{"t":"x","k":4,"f":301,"o":32,"p":0,"anchor":[37,57,57]}
+{"t":"x","k":4,"f":301,"o":32,"p":0,"anchor":[37,58,58]}
+{"t":"x","k":4,"f":301,"o":83,"p":0,"anchor":[37,67,67]}
+{"t":"x","k":5,"f":301,"o":83,"p":0,"anchor":[37,64,64]}
+{"t":"x","k":6,"f":301,"o":83,"p":0,"anchor":[37,67,67]}
+{"t":"x","k":4,"f":301,"o":173,"p":0,"anchor":[37,49,49]}
+{"t":"x","k":0,"f":301,"o":182,"p":1,"isRead":true,"isWrite":false,"anchor":[37,50,50]}
+{"t":"x","k":4,"f":301,"o":215,"p":0,"anchor":[37,51,51]}
+{"t":"x","k":4,"f":301,"o":268,"p":1,"anchor":[37,61,61]}
+{"t":"x","k":4,"f":301,"o":271,"p":1,"anchor":[37,47,47]}
+{"t":"x","k":4,"f":301,"o":293,"p":0,"anchor":[37,48,48]}
+{"t":"x","k":4,"f":301,"o":296,"p":0,"anchor":[37,52,52]}
+{"t":"x","k":0,"f":301,"o":298,"p":0,"isRead":true,"isWrite":false,"anchor":[37,54,54]}
+{"t":"x","k":0,"f":301,"o":299,"p":0,"isRead":true,"isWrite":false,"anchor":[37,47,47]}
+{"t":"x","k":0,"f":301,"o":299,"p":0,"isRead":true,"isWrite":false,"anchor":[37,61,61]}
+{"t":"x","k":4,"f":301,"o":315,"p":0,"anchor":[37,59,59]}
+{"t":"x","k":4,"f":304,"o":83,"p":0,"anchor":[37,28,28]}
+{"t":"x","k":4,"f":306,"o":33,"p":0,"anchor":[37,22,22]}
+{"t":"x","k":5,"f":306,"o":165,"p":0,"anchor":[37,17,17]}
+{"t":"x","k":0,"f":306,"o":180,"p":1,"isRead":true,"isWrite":false,"anchor":[37,23,23]}
+{"t":"x","k":0,"f":306,"o":182,"p":1,"isRead":true,"isWrite":false,"anchor":[37,19,19]}
+{"t":"x","k":4,"f":306,"o":271,"p":1,"anchor":[37,21,21]}
+{"t":"x","k":1,"f":306,"o":275,"p":0,"arguments":[{"name":"times","value":{"k":"number","v":"3"}},{"name":"backoff","value":{"k":"number","v":"2"}}],"anchor":[37,16,16]}
+{"t":"x","k":0,"f":306,"o":313,"p":0,"isRead":true,"isWrite":false,"anchor":[37,22,22]}
+{"t":"x","k":5,"f":307,"o":165,"p":0,"anchor":[37,17,17]}
+{"t":"x","k":5,"f":308,"o":267,"p":0,"anchor":[37,17,17]}
+{"t":"x","k":0,"f":309,"o":310,"p":0,"isRead":true,"isWrite":false,"anchor":[37,85,85]}
+{"t":"x","k":0,"f":309,"o":324,"p":1,"isRead":true,"isWrite":false,"anchor":[37,85,85]}
+{"t":"x","k":0,"f":315,"o":316,"p":0,"isRead":true,"isWrite":true,"anchor":[38,11,11]}
+{"t":"x","k":2,"f":321,"o":11,"p":0,"anchor":[40,8,8]}
+{"t":"x","k":2,"f":321,"o":19,"p":0,"anchor":[40,7,7]}
+{"t":"x","k":2,"f":321,"o":24,"p":0,"anchor":[40,3,3]}
+{"t":"x","k":2,"f":321,"o":27,"p":0,"anchor":[40,4,4]}
+{"t":"x","k":2,"f":321,"o":30,"p":0,"anchor":[40,2,2]}
+{"t":"x","k":2,"f":321,"o":35,"p":0,"anchor":[40,5,5]}
+{"t":"x","k":4,"f":321,"o":38,"p":0,"anchor":[40,10,10]}
+{"t":"x","k":3,"f":322,"o":31,"p":0,"anchor":[40,13,13]}
+{"t":"x","k":3,"f":326,"o":338,"p":0,"anchor":[40,53,53]}
+{"t":"x","k":3,"f":326,"o":339,"p":0,"anchor":[40,53,53]}
+{"t":"x","k":3,"f":330,"o":36,"p":0,"anchor":[40,26,26]}
+{"t":"x","k":0,"f":330,"o":340,"p":0,"isRead":true,"isWrite":false,"anchor":[40,26,26]}
+{"t":"x","k":3,"f":337,"o":25,"p":0,"anchor":[40,18,18]}
+{"t":"x","k":3,"f":338,"o":20,"p":0,"anchor":[40,34,34]}
+{"t":"x","k":3,"f":339,"o":12,"p":0,"anchor":[40,30,30]}
+{"t":"x","k":3,"f":341,"o":339,"p":0,"anchor":[40,46,46]}
+{"t":"x","k":4,"f":342,"o":12,"p":1,"anchor":[40,50,50]}
+{"t":"x","k":3,"f":344,"o":28,"p":0,"anchor":[40,22,22]}
+{"t":"x","k":2,"f":345,"o":21,"p":0,"anchor":[41,2,2]}
+{"t":"x","k":2,"f":345,"o":22,"p":0,"anchor":[41,3,3]}
+{"t":"x","k":2,"f":353,"o":51,"p":0,"anchor":[44,2,2]}
+{"t":"x","k":4,"f":354,"o":173,"p":0,"anchor":[44,6,6]}
+{"t":"x","k":2,"f":359,"o":39,"p":0,"anchor":[47,1,1]}
+{"t":"x","k":2,"f":359,"o":47,"p":0,"anchor":[47,3,3]}
+{"t":"x","k":2,"f":359,"o":51,"p":0,"anchor":[47,4,4]}
+{"t":"x","k":2,"f":359,"o":81,"p":0,"anchor":[47,4,4]}
+{"t":"x","k":2,"f":359,"o":353,"p":0,"anchor":[47,5,5]}
+{"t":"x","k":3,"f":360,"o":165,"p":0,"anchor":[47,8,8]}
+{"t":"x","k":3,"f":361,"o":48,"p":0,"anchor":[47,21,21]}
+{"t":"x","k":3,"f":362,"o":82,"p":0,"anchor":[47,17,17]}
+{"t":"x","k":3,"f":363,"o":40,"p":0,"anchor":[47,12,12]}
+{"t":"x","k":4,"f":364,"o":40,"p":1,"anchor":[47,14,14]}
+{"t":"x","k":4,"f":364,"o":354,"p":0,"anchor":[47,14,14]}
+{"t":"x","k":2,"f":366,"o":357,"p":0,"anchor":[48,1,1]}
+{"t":"x","k":3,"f":367,"o":358,"p":0,"anchor":[48,4,4]}
+{"t":"eof","counts":{"files":51,"entities":372,"edges":222}}

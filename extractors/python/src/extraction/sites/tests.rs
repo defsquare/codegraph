@@ -785,3 +785,100 @@ fn a_type_parameter_is_bound_where_its_class_or_def_is_read_and_is_no_attribute(
         .collect();
     assert_eq!(bases, vec!["python:m.py/Box".to_owned()]);
 }
+
+const SHAPES: &str = "from .base import Base\n\n\ndef make_base():\n    return Base\n\n\n\
+    class Dynamic(make_base()):\n    pass\n\n\ndef decorate(function):\n    return function\n\n\n\
+    class Handler:\n    @decorate\n    def process(self):\n        return 1\n\n\n\
+    def factory():\n    class Local(Base):\n        pass\n    return Local\n";
+
+const MAIN: &str = "from app.shapes import Handler, factory\n\n\ndef go(handler):\n    return handler.process()\n\n\n\
+    go(Handler())\nfactory()\n";
+
+/// What `codegraph_trace.py` wrote running `main.py` under CPython 3.13 (calls on), and three
+/// records no run would: a function on a line with no `def`, one outside the corpus, and a call
+/// the baseline cannot place.
+const TRACE: &str = r#"{"t":"header","tool":"codegraph-trace","version":"0.1.0","python":"3.13.18","root":"/work"}
+{"t":"base","file":"app/base.py","class":"Base","index":0,"module":"builtins","name":"object"}
+{"t":"base","file":"app/shapes.py","class":"Dynamic","index":0,"module":"app.base","name":"Base","at":"app/base.py"}
+{"t":"base","file":"app/shapes.py","class":"Handler","index":0,"module":"builtins","name":"object"}
+{"t":"base","file":"app/shapes.py","class":"factory.<locals>.Local","index":0,"module":"app.base","name":"Base","at":"app/base.py"}
+{"t":"base","file":"lib/vendor.py","class":"Elsewhere","index":0,"module":"builtins","name":"object"}
+{"t":"function","file":"app/shapes.py","line":12,"name":"decorate"}
+{"t":"function","file":"app/shapes.py","line":17,"name":"Handler.process"}
+{"t":"function","file":"app/shapes.py","line":22,"name":"factory"}
+{"t":"function","file":"app/shapes.py","line":4,"name":"make_base"}
+{"t":"function","file":"main.py","line":4,"name":"go"}
+{"t":"function","file":"app/shapes.py","line":30,"name":"made"}
+{"t":"function","file":"lib/vendor.py","line":1,"name":"helper"}
+{"t":"call","file":"app/shapes.py","line":17,"name":"decorate","at":"app/shapes.py","def":12}
+{"t":"call","file":"app/shapes.py","line":8,"name":"make_base","at":"app/shapes.py","def":4}
+{"t":"call","file":"main.py","line":5,"name":"process","at":"app/shapes.py","def":17}
+{"t":"call","file":"main.py","line":8,"name":"go","at":"main.py","def":4}
+{"t":"call","file":"main.py","line":9,"name":"factory","at":"app/shapes.py","def":22}
+{"t":"eof","bases":5,"functions":7,"calls":5}
+"#;
+
+/// `(kind, from, to, provenance, candidates)` of an edge a trace added.
+type Added<'a> = (&'a str, String, String, &'a str, Option<Vec<String>>);
+
+#[test]
+fn a_trace_adds_the_bases_and_the_calls_no_line_writes_and_never_a_key() {
+    let sources = [
+        ("app/__init__.py", ""),
+        ("app/base.py", "class Base:\n    pass\n"),
+        ("app/shapes.py", SHAPES),
+        ("main.py", MAIN),
+    ];
+    let plain = extract_sources(&sources);
+    let trace = crate::trace::parse(TRACE).unwrap();
+    let traced = super::super::tests::extract_traced(&sources, &trace);
+    // The same entities: the trace names, it never keys.
+    let keys = |extraction: &Extraction| super::super::tests::rendered(extraction);
+    assert_eq!(keys(&traced), keys(&plain));
+    let added: Vec<Added> = traced
+        .model
+        .edges
+        .iter()
+        .filter(|edge| !plain.model.edges.contains(edge))
+        .map(|edge| {
+            (
+                edge.kind,
+                edge.from.render(ids::LANG),
+                edge.to.render(ids::LANG),
+                edge.provenance,
+                edge.candidates
+                    .as_ref()
+                    .map(|keys| keys.iter().map(|key| key.render(ids::LANG)).collect()),
+            )
+        })
+        .collect();
+    assert_eq!(
+        added,
+        vec![
+            // `make_base()` returned it: a base the interpreter holds and no line writes.
+            (
+                "inheritance",
+                "python:app%2Fshapes.py/Dynamic".to_owned(),
+                "python:app%2Fbase.py/Base".to_owned(),
+                "generated",
+                None
+            ),
+            // `handler.process()` on a parameter: the call the run saw.
+            (
+                "invocation",
+                "python:main.py/go".to_owned(),
+                "python:app%2Fshapes.py/Handler.process".to_owned(),
+                "dynamic-candidate",
+                Some(vec!["python:app%2Fshapes.py/Handler.process".to_owned()])
+            ),
+        ]
+    );
+    let summary = traced.stats.summary();
+    for line in [
+        "  trace bases     : 5 (3 in the source, 1 added as generated, 1 outside the corpus)\n",
+        "  trace functions : 7 (5 written, 1 defined at run time — no entity, 1 outside the corpus)\n",
+        "  trace calls     : 5 (3 in the model, 1 bound to 1 dynamic-candidate edges, 1 unmatched, 0 to a run-time definition, 0 outside the corpus)\n",
+    ] {
+        assert!(summary.contains(line), "{line}{summary}");
+    }
+}

@@ -15,6 +15,7 @@ use crate::ids;
 use crate::resolve::{How, ImportTarget, Lookup, ModuleRef, Modules, Resolver, Value};
 use crate::stats::Stats;
 use crate::stdlib_table::{self, Kind};
+use crate::trace::Trace;
 use crate::{NAME, RUFF_TAG, VERSION};
 use codegraph_model::{Anchor, Edge, Entity, Key, Literal, Model, NamedArgument};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -22,6 +23,7 @@ use std::hash::{BuildHasher, RandomState};
 use std::sync::Arc;
 
 mod annotations;
+mod merge;
 mod sites;
 
 const MODULE_TRAITS: &[&str] = &["TNamed", "TModule", "TWithChildren", "TSourceAnchor"];
@@ -304,7 +306,7 @@ impl Extractor<'_> {
             self.stats.self_edges += 1;
             return false;
         }
-        let edge = Edge {
+        self.push_edge(Edge {
             kind,
             from: from.clone(),
             to,
@@ -313,7 +315,11 @@ impl Extractor<'_> {
             access,
             candidates: None,
             arguments: arguments.filter(|arguments| !arguments.is_empty()),
-        };
+        })
+    }
+
+    /// Writes the edge unless it repeats one; `true` when written.
+    fn push_edge(&mut self, edge: Edge) -> bool {
         let hash = self.edge_hasher.hash_one(&edge);
         let index = self.edges.len() as u32;
         let edges = &self.edges;
@@ -973,6 +979,7 @@ impl Extractor<'_> {
 pub fn extract(
     corpus: &Corpus,
     repository: Option<Vec<(&'static str, String)>>,
+    trace: Option<&Trace>,
     phase: &mut dyn FnMut(&str, String),
 ) -> Extraction {
     let files: Vec<FileDecls> = corpus
@@ -1044,6 +1051,11 @@ pub fn extract(
     extractor.sites();
     extractor.annotations();
     phase("edges", format!("{} edges", extractor.edges.len()));
+    if let Some(trace) = trace {
+        let before = extractor.edges.len();
+        extractor.trace(trace);
+        phase("trace", format!("{} edges added", extractor.edges.len() - before));
+    }
 
     let Extractor {
         stubs,
@@ -1129,7 +1141,12 @@ mod tests {
             files,
             import_roots: Vec::new(),
         };
-        extract(&corpus, None, &mut |_, _| {})
+        extract(&corpus, None, None, &mut |_, _| {})
+    }
+
+    pub(super) fn extract_traced(files: &[(&str, &str)], trace: &Trace) -> Extraction {
+        let corpus = corpus::from_sources(files);
+        extract(&corpus, None, Some(trace), &mut |_, _| {})
     }
 
     pub(super) fn rendered(extraction: &Extraction) -> Vec<(String, &'static str)> {

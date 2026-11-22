@@ -43,7 +43,7 @@ the hazard. The last three are `-text` in `.gitattributes`.
 | `pricing/__init__.py` | `from . import discounts` in a package's own `__init__.py`: the name is the submodule, so `DefaultDiscount(discounts.Discount)` reads the class through it |
 | `pricing/discounts.py` | a diamond: `Combo(Percent, Fixed)`, both of `Discount` |
 | `pricing/rules.py` | relative imports one dot and two dots up; `from . import discounts`, a submodule; `from .missing import Seasonal`, a file that is not there — a stub module keyed by the path it would have, and a stub class below it |
-| `services.py` (+ `repository.py`, `retry.py`, `settings.py`) | the receiver table. Declared: a name bound by scoping (`build_error`), a module's attribute (`settings.bump()`, `json.dumps` → the stub MODULE), a class named at the site (`Service.create()`, `Order(…)` → `Order.__init__`), `self` / `cls` along written bases, `super().__init__` along the MRO. Derived: an annotated parameter (`order: Order`, `Optional[Repository]` unwrapped) counted `annotation-typed`; an attribute and a local assigned one class (`self.repository`, `local`) counted `flow-typed`. Dropped: a bare parameter and an attribute no class types (`untyped-receiver`), `self.missing()` (`unbound-self-call`), `local.nothing` (`unbound-attribute`), `raise build_error(order)` (`raise-of-a-value`), `import_module(order.reference)` (`computed-import`), a spread in `@register(*settings.HOOKS, …)` (`spread-argument`). `@retry(3, backoff=2.0)` is an `annotationUse` whose positional argument takes the corpus decorator's parameter name; `raise error` in `except KeyError as error` throws `KeyError`; `print`, `len`: the language; `repository.py`'s `Cursor` lists its attributes in a literal `__slots__`: each an attribute at its string, no value, and `self._position` an access of it; `shipping = importlib.import_module("acme_order.shipping")` makes `shipping.Carrier.POST` a `derived` access, the binding typed by flow |
+| `services.py` (+ `repository.py`, `retry.py`, `settings.py`) | the receiver table. Declared: a name bound by scoping (`build_error`), a module's attribute (`settings.bump()`, `json.dumps` → the stub MODULE), a class named at the site (`Service.create()`, `Order(…)` → `Order.__init__`), `self` / `cls` along written bases, `super().__init__` along the MRO. Derived: an annotated parameter (`order: Order`, `Optional[Repository]` unwrapped) counted `annotation-typed`; an attribute and a local assigned one class (`self.repository`, `local`) counted `flow-typed`. Dropped: a bare parameter and an attribute no class types (`untyped-receiver`), `self.missing()` (`unbound-self-call`), `local.nothing` (`unbound-attribute`), `raise build_error(order)` (`raise-of-a-value`), `import_module(order.reference)` (`computed-import`), a spread in `@register(*settings.HOOKS, …)` (`spread-argument`). `@retry(3, backoff=2.0)` is an `annotationUse` whose positional argument takes the corpus decorator's parameter name; `raise error` in `except KeyError as error` throws `KeyError`; `print`, `len`: the language; `repository.py`'s `Cursor` lists its attributes in a literal `__slots__`: each an attribute at its string, no value, and `self._position` an access of it; `shipping = importlib.import_module("acme_order.shipping")` makes `shipping.Carrier.POST` a `derived` access, the binding typed by flow; `Handler`, appended, is what a run reaches through `self.handler.process()` — the call the trace binds |
 | `aliases.py` | a base read through a name bound once to a class: `Ledger(Again)` with `Again = Trail = Auditable` inherits `Auditable`, `derived`, counted `alias-base`, and `self.audit()` through it is `derived` too; `TestCase = unittest.TestCase` the same; a name bound to a call (`Factory = type(…)`) or bound twice (`Twice`) stays `computed-base` |
 | `records.py` | a `@dataclass`: its written fields are attributes (`order: "Order"`, a string annotation, sets `declaredType`; `paid = False` a value; `field(…)` none), the `__init__` it makes is no entity, the decorator an `annotationUse` of `<stdlib>%2Fdataclasses`; both spellings of a named tuple — `class Point(NamedTuple)` a written, `declared` base, `Pair = NamedTuple(…)` a class whose base is `generated` — and `Totals = TypedDict(…)` (`generated` `dict`); two `@overload` signatures and the implementation: ONE function anchored at the implementation, its signature and default the implementation's, the signatures' `Order` still referenced |
 | `flows.py` | `nonlocal`: `count += 1` in `bump` drops nothing; a lambda is no entity, its call (`Order(…)`) its writer's; a comprehension's targets and a walrus in it, bound where they bind; `match`: a class pattern reads `Order`, captures are bound; `class Box[T]` and `def first[T]`: a PEP 695 type parameter is no attribute and no unbound name; `async def` is a function — nothing in the file is dropped |
@@ -73,9 +73,25 @@ the hazard. The last three are `-text` in `.gitattributes`.
 | `tests/unit/fakes.py`, `tests/integration/fakes.py`, `tests/test_tie.py` | two roots at one distance answer `import fakes`: dropped `ambiguous-root`, never chosen |
 | `env/` (holds `pyvenv.cfg`), `.tox/`, `__pycache__/`, `vendor/site-packages/` | never walked: a virtual environment by what it holds, the rest by name |
 
+## The trace
+
+`trace/codegraph-trace.jsonl` is what `extractors/python/trace/codegraph_trace.py`
+would write for a run of this corpus — its format, record by record, is the
+header of that file — with one record of each outcome the merge counts. It is
+hand-written: the corpus imports `django`, `sqlalchemy` and `simplejson`, which
+nothing here installs, and no Python runs in this repository's tests. Merged
+with `--trace` (the contract test), it adds `Dynamic → orders/base.py/Base`
+(what `make_base()` returned) and `Point → <builtins>/tuple` (what `NamedTuple`
+leaves in `__bases__`) as `generated` inheritance, and `Service.run →
+Handler.process` as ONE `dynamic-candidate` invocation at `self.handler.process()`;
+`Shipment`'s `django.db.models.base.Model` is the base the source writes as
+`models.Model`; a function on a line with no `def`, a record outside the corpus,
+a call to a name the line does not call and one into no `def` are counted. The
+snapshot is the model WITHOUT the trace.
+
 ## What the numbers are
 
-51 files; 369 entities (43 of them stubs): 31 attribute, 99 class, 33 function, 34 method, 72 module, 86 parameter, 14 variable.
+51 files; 372 entities (43 of them stubs): 31 attribute, 100 class, 33 function, 35 method, 72 module, 87 parameter, 14 variable.
 222 edges: 27 `access` declared, 4 `access` derived, 3 `annotationUse` declared, 64 `import` declared, 43 `inheritance` declared, 3 `inheritance` derived, 5 `inheritance` generated, 35 `invocation` declared, 7 `invocation` derived, 26 `reference` declared, 5 `throws` declared.
 
 Sites: 216; resolved 186 (corpus 97, <builtins> 17, <stdlib> 27, <site> 7, missing modules 1, the language 37); unresolved 30; rate 86.1%.

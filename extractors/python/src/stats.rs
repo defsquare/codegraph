@@ -38,6 +38,35 @@ impl ImportCounts {
     }
 }
 
+/// What `--trace` found in a running program's account of the corpus.
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct TraceStats {
+    pub bases: u64,
+    /// …that a written base, or `object`, already gives.
+    pub bases_known: u64,
+    pub bases_generated: u64,
+    /// …of a class, or to a corpus class, the model does not hold.
+    pub bases_outside: u64,
+    pub functions: u64,
+    /// …on a line that writes a `def`.
+    pub functions_known: u64,
+    /// …on a line that writes none: made at run time, no entity.
+    pub functions_at_run_time: u64,
+    pub functions_outside: u64,
+    pub calls: u64,
+    /// …the model already states.
+    pub calls_known: u64,
+    /// …bound to a site the model does not state them at.
+    pub calls_bound: u64,
+    /// The `dynamic-candidate` edges those made, one per site.
+    pub calls_added: u64,
+    /// …at no site of that line that calls that name.
+    pub calls_unmatched: u64,
+    /// …into a function made at run time.
+    pub calls_untargeted: u64,
+    pub calls_outside: u64,
+}
+
 #[derive(Default)]
 pub struct Stats {
     pub files: usize,
@@ -79,6 +108,8 @@ pub struct Stats {
     pub dotted_site_classes: usize,
     pub edges: usize,
     pub self_edges: u64,
+    /// `--trace`: what the trace added, and what it could not.
+    pub trace: Option<TraceStats>,
 }
 
 /// Drop reasons that are SITES — something written that named nothing the
@@ -189,6 +220,26 @@ impl Stats {
             imports.missing,
             imports.type_checking
         ));
+        if let Some(trace) = &self.trace {
+            out.push_str(&format!(
+                "  trace bases     : {} ({} in the source, {} added as generated, {} outside the corpus)\n",
+                trace.bases, trace.bases_known, trace.bases_generated, trace.bases_outside
+            ));
+            out.push_str(&format!(
+                "  trace functions : {} ({} written, {} defined at run time — no entity, {} outside the corpus)\n",
+                trace.functions, trace.functions_known, trace.functions_at_run_time, trace.functions_outside
+            ));
+            out.push_str(&format!(
+                "  trace calls     : {} ({} in the model, {} bound to {} dynamic-candidate edges, {} unmatched, {} to a run-time definition, {} outside the corpus)\n",
+                trace.calls,
+                trace.calls_known,
+                trace.calls_bound,
+                trace.calls_added,
+                trace.calls_unmatched,
+                trace.calls_untargeted,
+                trace.calls_outside
+            ));
+        }
         out.push_str(&format!(
             "  entities        : {} (stubs: {})\n",
             self.entities, self.stubs
