@@ -83,6 +83,7 @@ fn edges(extraction: &Extraction) -> Vec<Row> {
             .trim_start_matches("python:")
             .replace("lib%2Frepo.py/", "repo:")
             .replace("app.py/", "")
+            .replace("m.py/", "")
     };
     let mut out: Vec<_> = extraction
         .model
@@ -156,6 +157,8 @@ fn every_receiver_shape_lands_in_the_tier_the_notes_give_it() {
             // An annotation, a local assigned once: both inferences.
             ("invocation", "repo:Repo.find", "derived", None),
             ("invocation", "repo:Repo.save", "derived", None),
+            // The annotation itself names the class.
+            ("reference", "repo:Repo", "declared", None),
         ]
     );
     // The one library class that could answer: `self.assertEqual`, `M.objects.filter()`, `self.save()`.
@@ -186,8 +189,9 @@ fn every_receiver_shape_lands_in_the_tier_the_notes_give_it() {
         (stats.flow_typed, stats.annotation_typed, stats.ancestor_attributed),
         (2, 1, 3)
     );
-    // `self.items.append`, `len`, `print`: resolved, counted, no edge.
-    assert_eq!(stats.language, 3);
+    // `self.items.append`, `len`, `print`, and `@property`, `@size.setter`, `@classmethod`:
+    // resolved, counted, no edge.
+    assert_eq!(stats.language, 6);
     let drops: Vec<(&str, u32, &str)> = stats
         .drops
         .iter()
@@ -227,4 +231,159 @@ fn a_class_that_decides_its_members_at_run_time_and_two_library_classes_are_no_a
             ("unbound-dynamic", 11, "p.other (Proxy)"),
         ]
     );
+}
+
+const ANNOTATED: &str = "\
+import functools
+from typing import Optional
+from lib import Session, register
+from flask import Flask
+
+handlers = []
+app = Flask(__name__)
+
+class Repo: pass
+
+def retry(times, delay=0): pass
+
+class Service:
+    repo: Repo
+    cache: \"Optional[Repo]\" = None
+    def __init__(self, session: Session, items: list[Repo], count: int = 0) -> None:
+        self.session: Session = session
+    @property
+    def size(self) -> int: return 0
+    @retry(3, delay=1)
+    def go(self, *args) -> Repo: pass
+    @functools.lru_cache(maxsize=None)
+    def cached(self): pass
+    @register(*handlers, name=\"x\")
+    def spread(self): pass
+
+@retry
+def plain(): pass
+
+@app.route(\"/orders\", methods=[\"GET\"])
+def orders():
+    app.run()
+";
+
+#[test]
+fn an_annotation_sets_the_declared_type_it_names_and_references_each_class_in_it() {
+    let extraction = extract_sources(&[("m.py", ANNOTATED)]);
+    let declared = |rendered: &str| {
+        super::super::tests::entity(&extraction, rendered)
+            .declared_type
+            .as_ref()
+            .map(|key| key.render(ids::LANG))
+    };
+    let repo = Some("python:m.py/Repo".to_owned());
+    let session = Some("python:<site>%2Flib/Session".to_owned());
+    assert_eq!(declared("python:m.py/Service.repo"), repo);
+    // A string annotation is parsed; `Optional` is unwrapped.
+    assert_eq!(declared("python:m.py/Service.cache"), repo);
+    assert_eq!(declared("python:m.py/Service.session"), session);
+    assert_eq!(declared("python:m.py/Service.__init__#param:session"), session);
+    // A built-in container, `int`, `None`: the language names nothing.
+    assert_eq!(declared("python:m.py/Service.__init__#param:items"), None);
+    assert_eq!(declared("python:m.py/Service.__init__#param:count"), None);
+    assert_eq!(declared("python:m.py/Service.__init__"), None);
+    assert_eq!(declared("python:m.py/Service.go"), repo);
+    let all = edges(&extraction);
+    let references = |from: &str| -> Vec<&str> {
+        of(&all, from)
+            .into_iter()
+            .filter(|edge| edge.0 == "reference")
+            .map(|edge| edge.1)
+            .collect()
+    };
+    assert_eq!(references("Service"), vec!["Repo", "Repo"]);
+    // `list[Repo]` names no type but references the class inside it.
+    assert_eq!(
+        references("Service.__init__"),
+        vec!["<site>%2Flib/Session", "<site>%2Flib/Session", "Repo"]
+    );
+    assert_eq!(references("Service.go"), vec!["Repo"]);
+}
+
+/// `(from, to, provenance, [(argument, value)])` of an annotation use.
+type Use<'a> = (String, String, &'a str, Vec<(String, String)>);
+
+#[test]
+fn a_decorator_is_an_annotation_use_with_its_written_arguments_named() {
+    let extraction = extract_sources(&[("m.py", ANNOTATED)]);
+    let uses: Vec<Use> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "annotationUse")
+        .map(|e| {
+            let arguments = e
+                .arguments
+                .iter()
+                .flatten()
+                .map(|argument| (argument.name.clone(), format!("{:?}", argument.value)))
+                .collect();
+            (
+                e.from.render(ids::LANG).replace("python:m.py/", ""),
+                e.to.render(ids::LANG).replace("python:", ""),
+                e.provenance,
+                arguments,
+            )
+        })
+        .collect();
+    let named = |pairs: &[(&str, &str)]| -> Vec<(String, String)> {
+        pairs.iter().map(|(a, b)| ((*a).to_owned(), (*b).to_owned())).collect()
+    };
+    assert_eq!(
+        uses,
+        vec![
+            // Positional arguments take the parameter names of a corpus decorator.
+            (
+                "Service.go".to_owned(),
+                "m.py/retry".to_owned(),
+                "declared",
+                named(&[("times", "Number(\"3\")"), ("delay", "Number(\"1\")")])
+            ),
+            (
+                "Service.cached".to_owned(),
+                "<stdlib>%2Ffunctools".to_owned(),
+                "declared",
+                named(&[("maxsize", "Null")])
+            ),
+            // A spread is no argument a line can name: counted, not written.
+            (
+                "Service.spread".to_owned(),
+                "<site>%2Flib".to_owned(),
+                "declared",
+                named(&[("name", "String(\"x\")")])
+            ),
+            ("plain".to_owned(), "m.py/retry".to_owned(), "declared", Vec::new()),
+            // A library's otherwise: `arg<i>`; `app` is typed by its one assignment.
+            (
+                "orders".to_owned(),
+                "<site>%2Fflask".to_owned(),
+                "derived",
+                named(&[("arg0", "String(\"/orders\")"), ("methods", "Array([String(\"GET\")])")])
+            ),
+        ]
+    );
+    let all = edges(&extraction);
+    // Reading the module's `app` is a fact; what its one assignment made it, an inference.
+    assert_eq!(
+        of(&all, "orders"),
+        vec![
+            ("access", "app", "declared", READ),
+            ("annotationUse", "<site>%2Fflask", "derived", None),
+            ("invocation", "<site>%2Fflask", "derived", None),
+        ]
+    );
+    let spreads: Vec<(&str, u32)> = extraction
+        .stats
+        .drops
+        .iter()
+        .filter(|d| d.reason == "spread-argument")
+        .map(|d| (d.what.as_str(), d.line))
+        .collect();
+    assert_eq!(spreads, vec![("@register(*handlers, name=\"x\")", 24)]);
 }

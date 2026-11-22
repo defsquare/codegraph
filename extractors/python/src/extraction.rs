@@ -16,9 +16,10 @@ use crate::resolve::{How, ImportTarget, ModuleRef, Modules, Resolver, Value};
 use crate::stats::Stats;
 use crate::stdlib_table::{self, Kind};
 use crate::{NAME, RUFF_TAG, VERSION};
-use codegraph_model::{Anchor, Edge, Entity, Key, Literal, Model};
+use codegraph_model::{Anchor, Edge, Entity, Key, Literal, Model, NamedArgument};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+mod annotations;
 mod sites;
 
 const MODULE_TRAITS: &[&str] = &["TNamed", "TModule", "TWithChildren", "TSourceAnchor"];
@@ -173,6 +174,7 @@ struct Extractor<'a> {
     variable_keys: HashMap<(usize, String), Key>,
     /// Written onto their entities once every key exists.
     values: HashMap<Key, Literal>,
+    declared_types: HashMap<Key, Key>,
     /// Attribute key → every assignment that writes it, `(file, assignment)`, for its type.
     attribute_assignments: HashMap<Key, Vec<(usize, usize)>>,
     /// `(module, symbol)` of the library names a site gives a class's standing.
@@ -205,9 +207,11 @@ impl Extractor<'_> {
 
     /// Writes the edge unless it repeats one or points at its own source; `true` when written.
     fn edge(&mut self, kind: &'static str, from: &Key, to: Key, provenance: &'static str, anchor: Anchor) -> bool {
-        self.edge_with(kind, from, to, provenance, anchor, None)
+        self.edge_with(kind, from, to, provenance, anchor, None, None)
     }
 
+    /// `edge`, with an access's direction and an annotation use's arguments.
+    #[allow(clippy::too_many_arguments)]
     fn edge_with(
         &mut self,
         kind: &'static str,
@@ -216,6 +220,7 @@ impl Extractor<'_> {
         provenance: &'static str,
         anchor: Anchor,
         access: Option<(bool, bool)>,
+        arguments: Option<Vec<NamedArgument>>,
     ) -> bool {
         if *from == to {
             self.stats.self_edges += 1;
@@ -229,7 +234,7 @@ impl Extractor<'_> {
             anchor,
             access,
             candidates: None,
-            arguments: None,
+            arguments: arguments.filter(|arguments| !arguments.is_empty()),
         };
         if self.seen_edges.insert(edge.clone()) {
             self.edges.push(edge);
@@ -807,6 +812,7 @@ pub fn extract(
         attribute_keys: HashMap::new(),
         variable_keys: HashMap::new(),
         values: HashMap::new(),
+        declared_types: HashMap::new(),
         attribute_assignments: HashMap::new(),
         evidence: HashSet::new(),
         typing: HashSet::new(),
@@ -829,6 +835,7 @@ pub fn extract(
     extractor.bases();
     extractor.evidence();
     extractor.sites();
+    extractor.annotations();
     phase("edges", format!("{} edges", extractor.edges.len()));
 
     let Extractor {
@@ -837,6 +844,7 @@ pub fn extract(
         mut entities,
         edges,
         mut values,
+        mut declared_types,
         invokes,
         accesses,
         ..
@@ -853,6 +861,7 @@ pub fn extract(
         }
     }
     for entity in &mut entities {
+        entity.declared_type = declared_types.remove(&entity.key);
         if let Some(value) = values.remove(&entity.key) {
             entity.value = Some(value);
             entity.traits.push("TWithValue");

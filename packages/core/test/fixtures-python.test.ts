@@ -203,6 +203,15 @@ describe("fixtures/python/expected/model.jsonl", () => {
       const bag = e as unknown as Bag;
       expect(bag["isRead"] !== undefined || bag["isWrite"] !== undefined, `${e.edge} ${e.from}`).toBe(e.edge === "access");
     }
+    // A decorator's use leaves what it decorates; an annotation's type is a class.
+    for (const e of model.edges.filter((candidate) => candidate.edge === "annotationUse")) {
+      expect(["class", "function", "method"], e.from).toContain(kinds.get(e.from));
+    }
+    for (const e of model.entities) {
+      const declared = (e as unknown as Bag)["declaredType"] as string | undefined;
+      if (declared !== undefined) expect(kinds.get(declared), `${e.id} → ${declared}`).toBe("class");
+    }
+    expect(entity(model, `${PKG}pricing%2Frules.py/Rule.applies_to#param:order`)["declaredType"]).toBe(ORDER);
     // A property is read as an attribute; `self.assertEqual` is the one library class that could answer.
     expect(hasEdge(model, "access", "python:bin%2Facme-report/main", `${ORDER}.total`)).toBe(true);
     const test = "python:tests%2Ftest_orders.py/TestOrder.test_total";

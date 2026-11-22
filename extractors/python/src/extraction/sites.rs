@@ -88,8 +88,8 @@ pub(super) enum Landed {
 
 /// A site that names nothing the model can point at.
 pub(super) struct Dropped {
-    reason: &'static str,
-    what: String,
+    pub(super) reason: &'static str,
+    pub(super) what: String,
 }
 
 fn dropped(reason: &'static str, what: impl Into<String>) -> Dropped {
@@ -102,8 +102,8 @@ fn dropped(reason: &'static str, what: impl Into<String>) -> Dropped {
 /// A chain evaluated: its value, and the attribute or variable it was read from.
 #[derive(Clone, Debug)]
 pub(super) struct Step {
-    typed: Typed,
-    read: Option<(Key, Inferred)>,
+    pub(super) typed: Typed,
+    pub(super) read: Option<(Key, Inferred)>,
 }
 
 fn step(typed: Typed) -> Step {
@@ -227,7 +227,7 @@ impl Extractor<'_> {
         }
     }
 
-    fn landed(&mut self, landed: Landed) {
+    pub(super) fn landed(&mut self, landed: Landed) {
         let stats = &mut self.stats;
         match landed {
             Landed::Corpus => stats.resolved_corpus += 1,
@@ -837,7 +837,7 @@ impl Extractor<'_> {
     }
 
     /// The class a `def` is a method of, unless it is a `@staticmethod`.
-    fn method_class(&self, file: usize, function: usize) -> Option<usize> {
+    pub(super) fn method_class(&self, file: usize, function: usize) -> Option<usize> {
         let decl = &self.files[file].functions[function];
         match self.files[file].scopes[decl.scope].kind {
             ScopeKind::Class(class) if decl.binding != MethodBinding::Static => Some(class),
@@ -940,12 +940,10 @@ impl Extractor<'_> {
                 },
                 Some(Typed::External {
                     module, symbol, kind, ..
-                }) => match self.external_fold(module, symbol, kind) {
-                    fold @ (Fold::Written { .. } | Fold::Class(_)) => Typed::Folded {
-                        fold,
-                        inferred: Some("flow-typed"),
-                    },
-                    Fold::Module(_) => Typed::Untyped,
+                }) => Typed::Folded {
+                    // A class, or what a library's module makes: the library's either way.
+                    fold: self.external_fold(module, symbol, kind),
+                    inferred: Some("flow-typed"),
                 },
                 Some(Typed::Builtin(_)) => Typed::Language,
                 _ => Typed::Untyped,
@@ -1060,6 +1058,11 @@ impl Extractor<'_> {
 
     /// A chain evaluated where a binding is written, writing nothing.
     fn quiet(&mut self, file: usize, scope: usize, chain: &Chain) -> Option<Step> {
+        self.quietly(file, scope, chain).ok()
+    }
+
+    /// The same, saying why it named nothing.
+    pub(super) fn quietly(&mut self, file: usize, scope: usize, chain: &Chain) -> Result<Step, Dropped> {
         let site = Site {
             scope,
             chain: chain.clone(),
@@ -1076,16 +1079,20 @@ impl Extractor<'_> {
             site: &site,
             emit: false,
         };
-        self.eval(&ctx, chain).ok()
+        let text = chain.dotted().map(|names| names.join(".")).unwrap_or_default();
+        self.eval(&ctx, chain).map_err(|dropped| Dropped {
+            what: if dropped.what.is_empty() { text } else { dropped.what },
+            ..dropped
+        })
     }
 
     // ----------------------------------------------------------------- keys ----
 
-    fn class_key(&self, file: usize, class: usize) -> Option<Key> {
+    pub(super) fn class_key(&self, file: usize, class: usize) -> Option<Key> {
         self.scope_keys[file][self.files[file].classes[class].body].clone()
     }
 
-    fn function_key(&self, file: usize, function: usize) -> Option<Key> {
+    pub(super) fn function_key(&self, file: usize, function: usize) -> Option<Key> {
         self.scope_keys[file][self.files[file].functions[function].body].clone()
     }
 
@@ -1099,12 +1106,12 @@ impl Extractor<'_> {
             .and_then(|function| self.scope_keys[file][function.body].clone())
     }
 
-    fn attribute_key(&self, file: usize, class: usize, name: &str) -> Option<Key> {
+    pub(super) fn attribute_key(&self, file: usize, class: usize, name: &str) -> Option<Key> {
         self.attribute_keys.get(&(file, class, name.to_owned())).cloned()
     }
 
     /// The variable or the attribute an assignment at a module's or a class body's top binds.
-    fn binding_key(&self, file: usize, assignment: usize) -> Option<Key> {
+    pub(super) fn binding_key(&self, file: usize, assignment: usize) -> Option<Key> {
         let decl = &self.files[file].assignments[assignment];
         let Target::Name(name) = &decl.target else {
             return None;
@@ -1123,7 +1130,7 @@ impl Extractor<'_> {
 
     /// A name below a library module, as written: a class when the table says so or a site
     /// gives the evidence; a function or a value folds to its module.
-    fn external_fold(&self, module: ModuleRef, symbol: Vec<String>, kind: Option<Kind>) -> Fold {
+    pub(super) fn external_fold(&self, module: ModuleRef, symbol: Vec<String>, kind: Option<Kind>) -> Fold {
         let table = stdlib_table::table();
         if let (ModuleRef::Stdlib(dotted), [name]) = (&module, symbol.as_slice())
             && table.class(dotted, name).is_some()
@@ -1140,7 +1147,7 @@ impl Extractor<'_> {
         }
     }
 
-    fn fold_key(&mut self, fold: &Fold) -> (Key, Landed) {
+    pub(super) fn fold_key(&mut self, fold: &Fold) -> (Key, Landed) {
         let landed = |module: &ModuleRef| match module {
             ModuleRef::Stdlib(_) => Landed::Stdlib,
             ModuleRef::Missing(_) => Landed::Missing,
@@ -1191,7 +1198,7 @@ impl Extractor<'_> {
             return;
         }
         let provenance = if inferred.is_some() { "derived" } else { "declared" };
-        if self.edge_with(kind, &ctx.from, to, provenance, ctx.anchor.clone(), access) {
+        if self.edge_with(kind, &ctx.from, to, provenance, ctx.anchor.clone(), access, None) {
             match kind {
                 "invocation" => {
                     self.invokes.insert(ctx.from.clone());
@@ -1201,13 +1208,7 @@ impl Extractor<'_> {
                 }
                 _ => {}
             }
-            match inferred {
-                Some("flow-typed") => self.stats.flow_typed += 1,
-                Some("annotation-typed") => self.stats.annotation_typed += 1,
-                Some("ancestor-attributed") => self.stats.ancestor_attributed += 1,
-                Some("star-attributed") => self.stats.star_attributed += 1,
-                _ => {}
-            }
+            self.count_inference(inferred);
         }
     }
 }

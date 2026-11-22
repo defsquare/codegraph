@@ -820,6 +820,9 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/`unbound-attribute` on any other receiver/);
       expect(notes).toMatch(/could answer anything/);
       expect(notes).toMatch(/`__name__`/);
+      expect(notes).toMatch(/`spread-argument`/);
+      expect(notes).toMatch(/else `arg<i>`, zero-based/);
+      expect(notes).toMatch(/`Optional\[Order\]` is `Order`/);
       expect(notes).toMatch(/a member of an enumeration \(an enum literal\)/);
       expect(notes).toMatch(/type-checking-only/);
       expect(notes).toMatch(/Python 2/);
