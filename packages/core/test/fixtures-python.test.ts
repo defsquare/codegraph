@@ -193,6 +193,27 @@ describe("fixtures/python/expected/model.jsonl", () => {
     }
   });
 
+  it("writes every site's edge from the body that RUNS it, an access with its direction and no other edge with one", () => {
+    const model = loadSnapshot();
+    const kinds = new Map(model.entities.map((e) => [e.id, e.kind]));
+    for (const e of model.edges) {
+      if (!["invocation", "access", "reference", "throws"].includes(e.edge)) continue;
+      // An initializer's calls and reads are its module's, its class's or its method's — never the binding's.
+      expect(["module", "class", "function", "method"], `${e.edge} ${e.from}`).toContain(kinds.get(e.from));
+      const bag = e as unknown as Bag;
+      expect(bag["isRead"] !== undefined || bag["isWrite"] !== undefined, `${e.edge} ${e.from}`).toBe(e.edge === "access");
+    }
+    // A property is read as an attribute; `self.assertEqual` is the one library class that could answer.
+    expect(hasEdge(model, "access", "python:bin%2Facme-report/main", `${ORDER}.total`)).toBe(true);
+    const test = "python:tests%2Ftest_orders.py/TestOrder.test_total";
+    expect(hasEdge(model, "invocation", test, "python:<stdlib>%2Funittest/TestCase", "derived")).toBe(true);
+    // A module or a class whose own code calls says so.
+    const sources = new Set(model.edges.filter((e) => e.edge === "invocation").map((e) => e.from));
+    for (const e of model.entities.filter((candidate) => candidate.kind === "module" && sources.has(candidate.id))) {
+      expect(e.traits, e.id).toContain("TWithInvocations");
+    }
+  });
+
   it("makes a def written twice ONE entity anchored at the first, and an NFKC twin one name", () => {
     const model = loadSnapshot();
     const dataDir = model.entities.filter((e) => e.id === `${PKG}compat.py/data_dir`);

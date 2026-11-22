@@ -79,7 +79,18 @@ pub struct Stats {
 
 /// Drop reasons that are SITES — something written that named nothing the
 /// model can point at. The others are declarations and imports no key or edge can carry.
-const UNRESOLVED_SITES: &[&str] = &["ambiguous-star", "computed-base", "not-a-class", "unbound-name"];
+const UNRESOLVED_SITES: &[&str] = &[
+    "ambiguous-ancestor",
+    "ambiguous-star",
+    "computed-base",
+    "not-a-class",
+    "raise-of-a-value",
+    "unbound-attribute",
+    "unbound-dynamic",
+    "unbound-name",
+    "unbound-self-call",
+    "untyped-receiver",
+];
 
 impl Stats {
     pub fn drop(&mut self, file: usize, line: u32, reason: &'static str, what: impl Into<String>) {

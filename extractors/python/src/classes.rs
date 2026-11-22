@@ -191,16 +191,31 @@ impl Classes {
     /// the receiver is the class itself, so `type`'s members are the language too.
     pub fn find(&self, order: &[ClassId], dynamic: bool, name: &str, class_object: bool) -> Found {
         let table = stdlib_table::table();
-        for id in order {
-            if let ClassId::Corpus { file, class } = id
-                && let Some(member) = self.member(*file, *class, name)
-            {
-                return Found::Corpus {
-                    file: *file,
-                    class: *class,
-                    member,
-                };
+        // A `def` or a nested class anywhere in the order holds the key over an attribute (the
+        // profile's key rule); else the first corpus class that binds the name.
+        let corpus = order.iter().filter_map(|id| match id {
+            ClassId::Corpus { file, class } => self.member(*file, *class, name).map(|member| Found::Corpus {
+                file: *file,
+                class: *class,
+                member,
+            }),
+            _ => None,
+        });
+        let mut first = None;
+        for found in corpus {
+            if !matches!(
+                found,
+                Found::Corpus {
+                    member: OwnMember::Attribute,
+                    ..
+                }
+            ) {
+                return found;
             }
+            first.get_or_insert(found);
+        }
+        if let Some(found) = first {
+            return found;
         }
         let mut could = Vec::new();
         for id in order {
@@ -505,6 +520,28 @@ mod tests {
             assert_eq!(classes.find(order, false, "nothing", false), Found::Unbound);
             assert_eq!(classes.find(order, false, "__class__", false), Found::Language);
             assert_eq!(classes.find(order, false, "__name__", true), Found::Language);
+        });
+    }
+
+    #[test]
+    fn a_def_anywhere_in_the_order_holds_the_name_over_an_attribute_a_subclass_writes() {
+        let world = World::new(&[(
+            "m.py",
+            "class Base:\n    @property\n    def size(self): pass\n\
+             class Sub(Base):\n    def __init__(self):\n        self.size = 2\n",
+        )]);
+        world.with(|classes, at| {
+            let (file, sub) = at("m.py", "Sub");
+            let (_, base) = at("m.py", "Base");
+            assert_eq!(classes.member(file, sub, "size"), Some(OwnMember::Attribute));
+            assert_eq!(
+                classes.find(classes.mro(file, sub), false, "size", false),
+                Found::Corpus {
+                    file,
+                    class: base,
+                    member: OwnMember::Function(0)
+                }
+            );
         });
     }
 

@@ -547,3 +547,16 @@ fn reads_docstrings_comment_blocks_and_code_lines() {
     assert_eq!(code, vec![3, 7, 8, 9, 11, 12, 14]);
     assert_eq!(decls.sloc(decls.classes[0].span), 6);
 }
+
+#[test]
+fn a_comprehension_an_argument_or_a_head_holds_reads_its_own_targets() {
+    let decls = read("def f(xs):\n    return sum(line.quantity for line in xs) + [y for y in xs].count(y.z)\n");
+    let scope_of = |text: &str| {
+        let site = decls.sites.iter().find(|site| site.text == text).expect(text);
+        decls.scopes[site.scope].kind
+    };
+    assert_eq!(scope_of("line.quantity"), ScopeKind::Comprehension);
+    // The head `[y for y in xs]` is a comprehension too; the argument `y.z` is read outside it.
+    assert_eq!(scope_of("y"), ScopeKind::Comprehension);
+    assert_eq!(scope_of("y.z"), ScopeKind::Function(0));
+}

@@ -67,9 +67,9 @@ the hazard. The last three are `-text` in `.gitattributes`.
 
 ## What the numbers are
 
-42 files; 223 entities (31 of them stubs): 7 attribute, 72 class, 17 function, 17 method, 59 module, 48 parameter, 3 variable.
-82 edges: 43 `import` declared, 38 `inheritance` declared, 1 `inheritance` derived.
+42 files; 227 entities (35 of them stubs): 7 attribute, 76 class, 17 function, 17 method, 59 module, 48 parameter, 3 variable.
+111 edges: 9 `access` declared, 43 `import` declared, 38 `inheritance` declared, 1 `inheritance` derived, 10 `invocation` declared, 1 `invocation` derived, 8 `reference` declared, 1 `throws` declared.
 
-Sites: 45; resolved 39 (corpus 23, <builtins> 6, <stdlib> 5, <site> 4, missing modules 1, the language 0); unresolved 6; rate 86.7%.
+Sites: 91; resolved 73 (corpus 39, <builtins> 10, <stdlib> 11, <site> 5, missing modules 1, the language 7); unresolved 18; rate 80.2%.
 Imports: 43 (relative 14; by package root 7, by namespace package 2, implicit-relative 1; <stdlib> 10, <site> 8; missing 1; type-checking-only 1).
-Counted: ambiguous-root (dropped): 1; ambiguous-star (dropped): 1; computed-base (dropped): 2; rebinding-of-a-declaration (dropped): 1; unbound-name (dropped): 3; unnamed-declaration (dropped): 1; rebound-name: 1; star-attributed: 1.
+Counted: ambiguous-root (dropped): 1; ambiguous-star (dropped): 1; computed-base (dropped): 2; rebinding-of-a-declaration (dropped): 1; unbound-name (dropped): 10; unnamed-declaration (dropped): 1; untyped-receiver (dropped): 5; rebound-name: 1; ancestor-attributed: 1; star-attributed: 1.

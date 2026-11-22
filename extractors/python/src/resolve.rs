@@ -494,6 +494,22 @@ fn written_name(module: &ModuleRef) -> String {
     }
 }
 
+/// What the interpreter binds in every module before its first line runs (`__path__` in a
+/// package's): the language, like `builtins`.
+const MODULE_NAMES: &[&str] = &[
+    "__annotations__",
+    "__builtins__",
+    "__cached__",
+    "__debug__",
+    "__doc__",
+    "__file__",
+    "__loader__",
+    "__name__",
+    "__package__",
+    "__path__",
+    "__spec__",
+];
+
 pub struct Resolver<'a> {
     pub modules: &'a Modules<'a>,
     files: &'a [FileDecls],
@@ -690,6 +706,11 @@ impl<'a> Resolver<'a> {
         self.read(file, scope, names, None)
     }
 
+    /// `module.name`, read in `file`: what the module binds, else a submodule.
+    pub fn module_member(&self, file: usize, module: &ModuleRef, name: &str) -> Value {
+        self.module_attribute(file, module, name, &mut HashSet::new())
+    }
+
     /// A base of `classes[class]`: read before the class statement binds its
     /// own name, so that binding is never what the base is.
     pub fn base(&self, file: usize, class: usize, names: &[String]) -> Resolved {
@@ -772,7 +793,12 @@ impl<'a> Resolver<'a> {
             if let Some((value, attributed)) = self.star_value(file, name, visiting) {
                 return (value, false, attributed);
             }
-            let value = match self.modules.table.builtin(name) {
+            let kind = self
+                .modules
+                .table
+                .builtin(name)
+                .or_else(|| MODULE_NAMES.contains(&name).then_some(Kind::Value));
+            let value = match kind {
                 Some(kind) => Value::Builtin {
                     name: name.to_owned(),
                     kind,
@@ -1280,6 +1306,25 @@ mod tests {
             Value::Assigned { file: 0, assignment: 1 }
         );
         assert_eq!(resolver.reference(0, 1, &names("item")).value, Value::Opaque);
+    }
+
+    #[test]
+    fn the_names_the_interpreter_binds_in_every_module_are_the_language() {
+        let corpus = corpus(&[("pkg/__init__.py", ""), ("pkg/m.py", "def f():\n    return __name__\n")]);
+        let files = decls(&corpus);
+        let modules = Modules::new(&corpus);
+        let resolver = Resolver::new(&modules, &files);
+        let file = index(&corpus, "pkg/m.py");
+        for name in ["__name__", "__file__", "__doc__", "__package__", "__spec__", "__path__"] {
+            assert_eq!(
+                resolver.reference(file, 1, &[name.to_owned()]).value,
+                Value::Builtin {
+                    name: name.into(),
+                    kind: Kind::Value
+                },
+                "{name}"
+            );
+        }
     }
 
     #[test]

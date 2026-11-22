@@ -846,13 +846,10 @@ impl Reader<'_> {
             span: self.span(expr.range()),
             text: self.one_line(expr.range()),
         });
+        // An argument, or a head no name types: read where it is written — a comprehension or a
+        // lambda among them opens its own scope.
         for inner in beside {
-            if matches!(inner, Expr::Name(_) | Expr::Attribute(_) | Expr::Call(_)) {
-                self.visit_expr(inner);
-            } else {
-                // A head no name types: what is inside it is read.
-                visitor::walk_expr(self, inner);
-            }
+            self.visit_expr(inner);
         }
     }
 

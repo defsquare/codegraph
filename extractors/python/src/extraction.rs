@@ -19,6 +19,8 @@ use crate::{NAME, RUFF_TAG, VERSION};
 use codegraph_model::{Anchor, Edge, Entity, Key, Literal, Model};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+mod sites;
+
 const MODULE_TRAITS: &[&str] = &["TNamed", "TModule", "TWithChildren", "TSourceAnchor"];
 const STUB_MODULE_TRAITS: &[&str] = &["TNamed", "TModule", "TWithChildren"];
 const CLASS_TRAITS: &[&str] = &[
@@ -171,6 +173,15 @@ struct Extractor<'a> {
     variable_keys: HashMap<(usize, String), Key>,
     /// Written onto their entities once every key exists.
     values: HashMap<Key, Literal>,
+    /// Attribute key → every assignment that writes it, `(file, assignment)`, for its type.
+    attribute_assignments: HashMap<Key, Vec<(usize, usize)>>,
+    /// `(module, symbol)` of the library names a site gives a class's standing.
+    evidence: HashSet<(ModuleRef, String)>,
+    /// Assignments being typed: a binding that names itself is no type.
+    typing: HashSet<(usize, usize)>,
+    /// Entities that are the source of an invocation / of an access.
+    invokes: HashSet<Key>,
+    accesses: HashSet<Key>,
     file_keys: Vec<Key>,
     /// Per file, per scope: the entity whose body it is; `None` where the declaration was dropped.
     scope_keys: Vec<Vec<Option<Key>>>,
@@ -194,6 +205,18 @@ impl Extractor<'_> {
 
     /// Writes the edge unless it repeats one or points at its own source; `true` when written.
     fn edge(&mut self, kind: &'static str, from: &Key, to: Key, provenance: &'static str, anchor: Anchor) -> bool {
+        self.edge_with(kind, from, to, provenance, anchor, None)
+    }
+
+    fn edge_with(
+        &mut self,
+        kind: &'static str,
+        from: &Key,
+        to: Key,
+        provenance: &'static str,
+        anchor: Anchor,
+        access: Option<(bool, bool)>,
+    ) -> bool {
         if *from == to {
             self.stats.self_edges += 1;
             return false;
@@ -204,7 +227,7 @@ impl Extractor<'_> {
             to,
             provenance,
             anchor,
-            access: None,
+            access,
             candidates: None,
             arguments: None,
         };
@@ -428,6 +451,16 @@ impl Extractor<'_> {
                 Some(OwnMember::Class(_)) => Some("a class holds the key"),
                 _ => None,
             };
+            // `self.size = …` through a property of the order is a write through its setter, no binding.
+            if let crate::classes::Found::Corpus {
+                file: owner,
+                member: OwnMember::Function(function),
+                ..
+            } = classes.find(classes.mro(file, class), false, name, false)
+                && files[owner].functions[function].property
+            {
+                continue;
+            }
             let owner = classes
                 .mro(file, class)
                 .iter()
@@ -449,6 +482,10 @@ impl Extractor<'_> {
             };
             let key = ids::member_key(&owner_key, name);
             self.attribute_keys.insert((file, class, name.clone()), key.clone());
+            self.attribute_assignments
+                .entry(key.clone())
+                .or_default()
+                .extend(sites.assignments.iter().map(|assignment| (file, *assignment)));
             if self.kinds.contains_key(&key) {
                 continue;
             }
@@ -770,6 +807,11 @@ pub fn extract(
         attribute_keys: HashMap::new(),
         variable_keys: HashMap::new(),
         values: HashMap::new(),
+        attribute_assignments: HashMap::new(),
+        evidence: HashSet::new(),
+        typing: HashSet::new(),
+        invokes: HashSet::new(),
+        accesses: HashSet::new(),
         file_keys: corpus.files.iter().map(|file| ids::file_key(&file.rel)).collect(),
         scope_keys: Vec::with_capacity(files.len()),
         kinds: HashMap::new(),
@@ -785,6 +827,8 @@ pub fn extract(
     phase("entities", format!("{} entities", extractor.entities.len()));
     extractor.imports();
     extractor.bases();
+    extractor.evidence();
+    extractor.sites();
     phase("edges", format!("{} edges", extractor.edges.len()));
 
     let Extractor {
@@ -793,8 +837,21 @@ pub fn extract(
         mut entities,
         edges,
         mut values,
+        invokes,
+        accesses,
         ..
     } = extractor;
+    // A module or a class whose own code calls or reads says so (an invocable always may).
+    for entity in &mut entities {
+        if matches!(entity.kind, "module" | "class") && entity.is_stub != Some(true) {
+            if invokes.contains(&entity.key) {
+                entity.traits.push("TWithInvocations");
+            }
+            if accesses.contains(&entity.key) {
+                entity.traits.push("TWithAccesses");
+            }
+        }
+    }
     for entity in &mut entities {
         if let Some(value) = values.remove(&entity.key) {
             entity.value = Some(value);
@@ -829,7 +886,7 @@ mod tests {
     use super::*;
     use crate::corpus::{self, SourceFile};
 
-    fn extract_sources(files: &[(&str, &str)]) -> Extraction {
+    pub(super) fn extract_sources(files: &[(&str, &str)]) -> Extraction {
         let files = files
             .iter()
             .map(|(rel, text)| {
@@ -852,7 +909,7 @@ mod tests {
         extract(&corpus, None, &mut |_, _| {})
     }
 
-    fn rendered(extraction: &Extraction) -> Vec<(String, &'static str)> {
+    pub(super) fn rendered(extraction: &Extraction) -> Vec<(String, &'static str)> {
         let mut out: Vec<(String, &'static str)> = extraction
             .model
             .entities
@@ -900,7 +957,7 @@ mod tests {
         );
     }
 
-    fn entity<'a>(extraction: &'a Extraction, rendered: &str) -> &'a Entity {
+    pub(super) fn entity<'a>(extraction: &'a Extraction, rendered: &str) -> &'a Entity {
         extraction
             .model
             .entities
