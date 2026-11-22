@@ -174,6 +174,8 @@ fn every_receiver_shape_lands_in_the_tier_the_notes_give_it() {
         vec![
             ("invocation", "<site>%2Fdjango.db.models/Model", "derived", None),
             ("invocation", "<site>%2Fdjango.db.models/Model", "derived", None),
+            // `M.objects` writes the class: referenced, as written.
+            ("reference", "M", "declared", None),
         ]
     );
     assert_eq!(
@@ -612,6 +614,80 @@ fn a_literal_import_module_or_dunder_import_is_an_import_and_a_computed_name_is_
         ]
     );
     assert_eq!(extraction.stats.imports.stdlib, 2);
+}
+
+#[test]
+fn a_corpus_class_written_as_the_receiver_of_a_member_a_library_answers_is_referenced() {
+    let extraction = extract_sources(&[(
+        "m.py",
+        "from django.db import models\nclass Profile(models.Model):\n    def ping(self): pass\nclass Sub(Profile): pass\n\
+         def f():\n    Profile.objects.all()\n    Sub.ping\n    Profile.missing\n\
+         class Q(models.Model):\n    @classmethod\n    def make(cls):\n        return cls.objects.create()\n\
+         \x20   def m(self):\n        return self.objects\n",
+    )]);
+    let rows: Vec<(String, &str, String, &str, u32, u32)> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind != "import" && e.kind != "inheritance")
+        .map(|e| {
+            (
+                e.from.render(ids::LANG),
+                e.kind,
+                e.to.render(ids::LANG),
+                e.provenance,
+                e.anchor.start,
+                e.anchor.end,
+            )
+        })
+        .collect();
+    let mut rows = rows;
+    rows.sort();
+    let model = "python:<site>%2Fdjango.db.models/Model".to_owned();
+    let mut expected = vec![
+        // The class is written at the site: a declared reference, at its name, beside the
+        // member the one library ancestor answers.
+        ("python:m.py/f".to_owned(), "invocation", model.clone(), "derived", 6, 6),
+        (
+            "python:m.py/f".to_owned(),
+            "reference",
+            "python:m.py/Profile".to_owned(),
+            "declared",
+            6,
+            6,
+        ),
+        // A member a corpus ancestor declares is the edge itself.
+        (
+            "python:m.py/f".to_owned(),
+            "reference",
+            "python:m.py/Profile.ping".to_owned(),
+            "declared",
+            7,
+            7,
+        ),
+        // A member nothing declares, which the library ancestor could answer: the same.
+        ("python:m.py/f".to_owned(), "reference", model.clone(), "derived", 8, 8),
+        (
+            "python:m.py/f".to_owned(),
+            "reference",
+            "python:m.py/Profile".to_owned(),
+            "declared",
+            8,
+            8,
+        ),
+        // `cls` and `self` write no class.
+        (
+            "python:m.py/Q.make".to_owned(),
+            "invocation",
+            model.clone(),
+            "derived",
+            12,
+            12,
+        ),
+        ("python:m.py/Q.m".to_owned(), "reference", model, "derived", 14, 14),
+    ];
+    expected.sort();
+    assert_eq!(rows, expected);
 }
 
 #[test]

@@ -248,6 +248,8 @@ describe("fixtures/python/expected/model.jsonl", () => {
     expect(hasEdge(model, "invocation", `${services}/checkout`, save, "derived")).toBe(true);
     const tracked = `${PKG}shipping.py/Tracked.recent`;
     expect(hasEdge(model, "invocation", tracked, "python:<site>%2Fdjango.db.models/Model", "derived")).toBe(true);
+    // `Tracked.objects` writes the class: a declared reference to it beside the library's edge.
+    expect(hasEdge(model, "reference", tracked, `${PKG}shipping.py/Tracked`, "declared")).toBe(true);
     // A raise of what `except … as` caught, of a corpus class; a class a call makes.
     expect(hasEdge(model, "throws", `${services}/Service.run`, "python:<builtins>/KeyError")).toBe(true);
     expect(hasEdge(model, "throws", `${services}/Service.run`, `${PKG}errors.py/OrderError`)).toBe(true);

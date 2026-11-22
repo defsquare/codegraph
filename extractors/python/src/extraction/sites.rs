@@ -757,7 +757,7 @@ impl Extractor<'_> {
         file: usize,
         class: usize,
     ) -> Result<Step, Dropped> {
-        self.member_of_order(
+        let found = self.member_of_order(
             ctx,
             order,
             dynamic,
@@ -767,7 +767,32 @@ impl Extractor<'_> {
             self_receiver,
             Some((file, class)),
             Some((file, class)),
-        )
+        );
+        // A corpus class written as the receiver (`UserProfile.objects`) of a member only a
+        // library ancestor answers: the edge names the library, and the class is written there
+        // too — a `declared` reference at its name. Not `self`/`cls`, which write no class.
+        if let Ok(Step {
+            typed:
+                Typed::Folded {
+                    inferred: Some("ancestor-attributed"),
+                    ..
+                },
+            ..
+        }) = &found
+            && object
+            && inferred.is_none()
+            && !self_receiver
+            && ctx.emit
+            && let Some(key) = self.class_key(file, class)
+        {
+            let anchor = Anchor {
+                file: ctx.anchor.file.clone(),
+                start: ctx.anchor.start,
+                end: ctx.anchor.start,
+            };
+            self.edge_with("reference", &ctx.from, key, "declared", anchor, None, None);
+        }
+        found
     }
 
     #[allow(clippy::too_many_arguments)]
