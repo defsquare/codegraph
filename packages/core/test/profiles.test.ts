@@ -822,6 +822,12 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/`__name__`/);
       expect(notes).toMatch(/`spread-argument`/);
       expect(notes).toMatch(/`dotted-site-class`/);
+      // Decision 3: the roots, a file missing below a corpus package, the table, a sibling in a package, `<site>`.
+      expect(notes).toMatch(/then the standard library's table, then a sibling of the importing file/);
+      expect(notes).toMatch(/64 MiB/);
+      // Body recovery is measured, no longer owed.
+      expect(notes).not.toMatch(/not yet measured/);
+      expect(notes).toMatch(/106 148/);
       expect(notes).toMatch(/`computed-import`/);
       expect(notes).toMatch(/The extractor's own `generated` edges/);
       expect(notes).toMatch(/else `arg<i>`, zero-based/);
