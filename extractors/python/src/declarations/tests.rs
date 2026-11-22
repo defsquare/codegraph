@@ -606,3 +606,25 @@ fn a_literal_recovery_replaced_with_an_empty_expression_is_no_value() {
     let values: Vec<Option<ValueDecl>> = decls.assignments.iter().map(|a| a.value.clone()).collect();
     assert_eq!(values, vec![Some(ValueDecl::Code(String::new())); 2]);
 }
+
+#[test]
+fn records_the_literal_names_of_a_class_slots_each_at_its_string() {
+    let decls = read(
+        "class P:\n    __slots__ = (\"_x\",\n                 \"_y\")\n\
+         class Q:\n    __slots__ = \"only\"\n\
+         class R:\n    __slots__ = {\"a\": \"doc\", \"b\": \"doc\"}\n\
+         class S:\n    __slots__ = names\n",
+    );
+    let slots = |class: usize| -> Vec<(&str, u32)> {
+        decls.classes[class]
+            .slots
+            .iter()
+            .map(|(name, line)| (name.as_str(), *line))
+            .collect()
+    };
+    assert_eq!(slots(0), vec![("_x", 2), ("_y", 3)]);
+    assert_eq!(slots(1), vec![("only", 5)]);
+    assert_eq!(slots(2), vec![("a", 7), ("b", 7)]);
+    // Computed: no line names them.
+    assert_eq!(slots(3), vec![]);
+}

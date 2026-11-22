@@ -267,6 +267,11 @@ describe("fixtures/python/expected/model.jsonl", () => {
     expect(entity(model, `${aliases}/Trail`)["kind"]).toBe("variable");
     expect(targets(model, "inheritance", `${aliases}/Made`)).toEqual([]);
     expect(targets(model, "inheritance", `${aliases}/Doubled`)).toEqual([]);
+    // A literal `__slots__` name is an attribute at its string, with no value; `self._position` reads it.
+    const cursor = `${PKG}repository.py/Cursor`;
+    const position = entity(model, `${cursor}._position`);
+    expect([position["kind"], position["value"], SourceAnchor.parse(position["anchor"]).span]).toEqual(["attribute", undefined, [15, 15]]);
+    expect(hasEdge(model, "access", `${cursor}.position`, `${cursor}._position`)).toBe(true);
     // A variable with its value and comment; `global counter` then `counter += 1` reads and writes it.
     const currency = entity(model, `${PKG}settings.py/DEFAULT_CURRENCY`);
     expect([currency["value"], currency["comments"]]).toEqual([

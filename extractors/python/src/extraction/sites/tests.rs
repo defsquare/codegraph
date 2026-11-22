@@ -605,3 +605,27 @@ fn a_base_bound_once_to_a_class_is_that_class_by_flow_and_anything_else_stays_co
     }
     assert!(extraction.stats.summary().contains("alias-base"));
 }
+
+#[test]
+fn a_literal_slot_is_an_attribute_of_its_class_anchored_at_its_string_with_no_value() {
+    let extraction = extract_sources(&[(
+        "m.py",
+        "class P:\n    __slots__ = (\"_x\",\n                 \"_y\")\n\
+         \x20   def __init__(self):\n        self._x = 1\n    def get(self):\n        return self._y\n",
+    )]);
+    let attribute = |name: &str| super::super::tests::entity(&extraction, &format!("python:m.py/P.{name}"));
+    for (name, line) in [("_x", 2), ("_y", 3)] {
+        let slot = attribute(name);
+        assert_eq!(slot.kind, "attribute");
+        assert_eq!(
+            slot.anchor.as_ref().map(|a| (a.start, a.end)),
+            Some((line, line)),
+            "{name}"
+        );
+        assert_eq!(slot.value, None, "{name}");
+    }
+    let all = edges(&extraction);
+    assert_eq!(of(&all, "P.get"), vec![("access", "P._y", "declared", READ)]);
+    assert_eq!(of(&all, "P.__init__"), vec![("access", "P._x", "declared", WRITE)]);
+    assert!(extraction.stats.drops.iter().all(|d| d.reason != "unbound-self-call"));
+}

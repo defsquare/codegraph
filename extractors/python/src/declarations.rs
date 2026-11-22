@@ -229,6 +229,8 @@ pub struct ClassDecl {
     pub docstring: Option<String>,
     /// Made by a call bound to a module-level name, not by a `class` statement.
     pub synthetic: Option<Synthetic>,
+    /// The names a literal `__slots__` lists, each with the line of its string.
+    pub slots: Vec<(String, u32)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1145,6 +1147,7 @@ impl Reader<'_> {
             metaclass,
             docstring: docstring(&class.body),
             synthetic: None,
+            slots: Vec::new(),
         });
         let scope = self.scope;
         self.bind(
@@ -1179,6 +1182,27 @@ impl Reader<'_> {
         self.type_checking = checking;
     }
 
+    /// The names a literal `__slots__` value lists — a string, a list, tuple or set of strings,
+    /// a dict's string keys — each with the line its string is written on.
+    fn slots(&self, value: &Expr) -> Vec<(String, u32)> {
+        let name = |expr: &Expr| match expr {
+            Expr::StringLiteral(text) => Some((text.value.to_str().to_owned(), self.line(expr.start().to_u32()))),
+            _ => None,
+        };
+        match value {
+            Expr::StringLiteral(_) => name(value).into_iter().collect(),
+            Expr::List(ast::ExprList { elts, .. })
+            | Expr::Tuple(ast::ExprTuple { elts, .. })
+            | Expr::Set(ast::ExprSet { elts, .. }) => elts.iter().filter_map(name).collect(),
+            Expr::Dict(dict) => dict
+                .items
+                .iter()
+                .filter_map(|item| item.key.as_ref().and_then(name))
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
     /// `P = namedtuple("P", "x y")` at module level: a class named by the binding, its literal
     /// fields bound in its body. `false` when the call is no such form.
     fn synthetic_class(&mut self, name: &ast::ExprName, call: &ast::ExprCall, span: Span) -> bool {
@@ -1203,6 +1227,7 @@ impl Reader<'_> {
                 form,
                 callee: self.chain(&call.func, &mut Vec::new()),
             }),
+            slots: Vec::new(),
         });
         let scope = self.scope;
         self.bind(scope, name.id.as_str(), Bound::Class(index), name.start().to_u32());
@@ -1529,6 +1554,13 @@ impl<'a> Visitor<'a> for Reader<'_> {
                     && self.synthetic_class(name, call, span)
                 {
                     return;
+                }
+                if let ([Expr::Name(name)], ScopeKind::Class(class)) =
+                    (assign.targets.as_slice(), self.out.scopes[self.scope].kind)
+                    && name.id.as_str() == "__slots__"
+                {
+                    let slots = self.slots(&assign.value);
+                    self.out.classes[class].slots.extend(slots);
                 }
                 for target in &assign.targets {
                     let assignment = self.assignment(Some(&assign.value), None, false, span);

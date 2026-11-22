@@ -435,6 +435,13 @@ fn own_members(decls: &FileDecls) -> (Vec<HashMap<String, OwnMember>>, Vec<BTree
             }
         }
     }
+    // A literal `__slots__`: each name is an attribute, at the line of its string.
+    for (index, class) in decls.classes.iter().enumerate() {
+        for (name, line) in &class.slots {
+            note(index, name, *line, None);
+            members[index].entry(name.clone()).or_insert(OwnMember::Attribute);
+        }
+    }
     // `self.<name> = …` (`cls.<name>`) in a method, a lambda or comprehension of it included.
     for (assignment, decl) in decls.assignments.iter().enumerate() {
         let Target::Attribute { receiver, name } = &decl.target else {
