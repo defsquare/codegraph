@@ -11,7 +11,7 @@
 //! re-export of a class — to what it is, cycle-guarded.
 
 use crate::corpus::{Corpus, Root, parent_dir};
-use crate::declarations::{Bound, FileDecls, ImportKind, ValueDecl};
+use crate::declarations::{Bound, FileDecls, ImportKind, ScopeKind, ValueDecl};
 use crate::scopes;
 use crate::stdlib_table::{self, Kind, StdlibTable};
 use std::collections::{HashMap, HashSet};
@@ -717,6 +717,25 @@ impl<'a> Resolver<'a> {
         self.read(file, scope, names, None)
     }
 
+    /// Whether `scope` is a method's, or nested in one: the compiler gives it the implicit
+    /// `__class__` cell zero-argument `super()` reads.
+    fn in_method(&self, file: usize, scope: usize) -> bool {
+        let scopes = &self.files[file].scopes;
+        let mut current = Some(scope);
+        while let Some(index) = current {
+            if let ScopeKind::Function(function) = scopes[index].kind
+                && matches!(
+                    scopes[self.files[file].functions[function].scope].kind,
+                    ScopeKind::Class(_)
+                )
+            {
+                return true;
+            }
+            current = scopes[index].parent;
+        }
+        false
+    }
+
     /// `module.name`, read in `file`: what the module binds, else a submodule.
     pub fn module_member(&self, file: usize, module: &ModuleRef, name: &str) -> Value {
         self.module_attribute(file, module, name, &mut HashSet::new())
@@ -808,7 +827,8 @@ impl<'a> Resolver<'a> {
                 .modules
                 .table
                 .builtin(name)
-                .or_else(|| MODULE_NAMES.contains(&name).then_some(Kind::Value));
+                .or_else(|| MODULE_NAMES.contains(&name).then_some(Kind::Value))
+                .or_else(|| (name == "__class__" && self.in_method(file, scope)).then_some(Kind::Value));
             let value = match kind {
                 Some(kind) => Value::Builtin {
                     name: name.to_owned(),
@@ -1365,6 +1385,27 @@ mod tests {
             Value::Assigned { file: 0, assignment: 1 }
         );
         assert_eq!(resolver.reference(0, 1, &names("item")).value, Value::Opaque);
+    }
+
+    #[test]
+    fn a_method_reads_its_implicit_class_cell_and_a_module_does_not_have_one() {
+        let corpus = corpus(&[(
+            "m.py",
+            "class C:\n    def m(self):\n        def inner():\n            return __class__\n        return __class__\n\
+             def f():\n    return __class__\n",
+        )]);
+        let files = decls(&corpus);
+        let modules = Modules::new(&corpus);
+        let resolver = Resolver::new(&modules, &files);
+        let class_cell = |scope: usize| resolver.reference(0, scope, &["__class__".to_owned()]).value;
+        // scopes: 0 module, 1 C's body, 2 m's, 3 inner's, 4 f's
+        let language = Value::Builtin {
+            name: "__class__".into(),
+            kind: Kind::Value,
+        };
+        assert_eq!(class_cell(2), language);
+        assert_eq!(class_cell(3), language);
+        assert_eq!(class_cell(4), Value::Unbound { cycle: false });
     }
 
     #[test]

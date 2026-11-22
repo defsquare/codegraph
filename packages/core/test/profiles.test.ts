@@ -820,6 +820,7 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/`unbound-attribute` on any other receiver/);
       expect(notes).toMatch(/could answer anything/);
       expect(notes).toMatch(/`__name__`/);
+      expect(notes).toMatch(/`__class__` in a method/);
       expect(notes).toMatch(/`spread-argument`/);
       expect(notes).toMatch(/`dotted-site-class`/);
       // A base read through a name bound once to a class: flow, not a written base.
