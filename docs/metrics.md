@@ -62,14 +62,19 @@ its code, `--footprint attribute:lloc` sizes it by its type's own statements.
 Every run ends with one line on stderr:
 
 ```
-codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 leading, 0 contained;
-0 ambiguous, 2387 unjoined) over 2983 files; sloc = bca ploc on 16395 of 16395 exact joins
+codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 leading, 0 trailing,
+0 contained; 0 ambiguous, 2387 unjoined) over 2983 files; sloc = bca ploc on 16395 of 16395 exact joins
 ```
 
 - **exact** — the entity and a space cover the same lines.
 - **leading** — they end together and start apart by annotation, attribute or
   decorator lines only (Spoon starts a method after `@Override`, tree-sitter
   at it).
+- **trailing** (Python) — they start together and end apart by comment and
+  blank lines only: tree-sitter's block runs on over the comments written
+  after a body's last statement, at its indentation; Ruff, like CPython's
+  `ast`, ends the `def` — and a class whose last method it is — at that
+  statement.
 - **contained** — one entity over several spaces (an Elixir function's
   clauses, a C# property's accessors): charged keys only.
 - **ambiguous** — entities and spaces share a span and do not pair up. In
