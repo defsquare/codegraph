@@ -560,3 +560,52 @@ fn a_comprehension_an_argument_or_a_head_holds_reads_its_own_targets() {
     assert_eq!(scope_of("y"), ScopeKind::Comprehension);
     assert_eq!(scope_of("y.z"), ScopeKind::Function(0));
 }
+
+#[test]
+fn a_named_tuple_a_typed_dict_or_an_enum_a_call_makes_at_module_level_is_a_class_of_the_binding() {
+    let decls = read(
+        "P = namedtuple(\"P\", \"x, y\")\nQ = NamedTuple(\"Q\", [(\"a\", int), (\"b\", str)])\n\
+         T = TypedDict(\"T\", {\"k\": int})\nColor = enum.Enum(\"Color\", \"RED GREEN\")\n\
+         class A(namedtuple(\"A\", [\"u\", \"v\"])): pass\n\
+         def f():\n    L = namedtuple(\"L\", \"z\")\nN = namedtuple(name, \"z\")\n",
+    );
+    let forms: Vec<(&str, Option<&str>)> = decls
+        .classes
+        .iter()
+        .map(|class| (class.name.as_str(), class.synthetic.as_ref().map(|s| s.form)))
+        .collect();
+    assert_eq!(
+        forms,
+        vec![
+            ("P", Some("namedtuple")),
+            ("Q", Some("NamedTuple")),
+            ("T", Some("TypedDict")),
+            ("Color", Some("Enum")),
+            ("A", None),
+        ]
+    );
+    let fields = |class: usize| -> Vec<&str> {
+        decls.scopes[decls.classes[class].body]
+            .bindings
+            .iter()
+            .map(|binding| binding.name.as_str())
+            .collect()
+    };
+    assert_eq!(fields(0), vec!["x", "y"]);
+    assert_eq!(fields(1), vec!["a", "b"]);
+    assert_eq!(fields(2), vec!["k"]);
+    assert_eq!(fields(3), vec!["RED", "GREEN"]);
+    assert_eq!(fields(4), vec!["u", "v"]);
+    assert!(matches!(&decls.classes[4].bases[0].reference, Reference::Synthetic(s) if s.form == "namedtuple"));
+    let module = |name: &str| {
+        decls.scopes[0]
+            .bindings
+            .iter()
+            .find(|b| b.name == name)
+            .map(|b| b.bound)
+    };
+    assert_eq!(module("P"), Some(Bound::Class(0)));
+    // Not at module level, or no literal name: an assignment like any other.
+    assert!(matches!(module("N"), Some(Bound::Assigned(_))));
+    assert_eq!(decls.classes[0].span, (1, 1));
+}

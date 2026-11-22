@@ -387,3 +387,140 @@ fn a_decorator_is_an_annotation_use_with_its_written_arguments_named() {
         .collect();
     assert_eq!(spreads, vec![("@register(*handlers, name=\"x\")", 24)]);
 }
+
+#[test]
+fn a_class_a_call_makes_is_a_class_its_fields_attributes_its_base_generated() {
+    let extraction = extract_sources(&[
+        (
+            "m.py",
+            "from collections import namedtuple\nfrom typing import NamedTuple\nimport enum\n\
+             P = namedtuple(\"P\", \"x y\")\nclass Q(NamedTuple(\"Q\", [(\"a\", int)])): pass\n\
+             Color = enum.Enum(\"Color\", \"RED GREEN\")\n\
+             def f():\n    p = P(1, 2)\n    p.x\n    Color.RED\n",
+        ),
+        ("n.py", "from mylib import namedtuple\nR = namedtuple(\"R\", \"z\")\n"),
+    ]);
+    let kinds: Vec<(String, &str)> = super::super::tests::rendered(&extraction)
+        .into_iter()
+        .filter(|(key, kind)| matches!(*kind, "class" | "attribute") && !key.contains('<'))
+        .collect();
+    let named = |pairs: &[(&str, &'static str)]| -> Vec<(String, &'static str)> {
+        pairs
+            .iter()
+            .map(|(key, kind)| (format!("python:m.py/{key}"), *kind))
+            .collect()
+    };
+    assert_eq!(
+        kinds,
+        named(&[
+            ("Color", "class"),
+            ("Color.GREEN", "attribute"),
+            ("Color.RED", "attribute"),
+            ("P", "class"),
+            ("P.x", "attribute"),
+            ("P.y", "attribute"),
+            ("Q", "class"),
+            ("Q.a", "attribute"),
+        ])
+        .into_iter()
+        // `mylib`'s `namedtuple`: a class by its form, with no base the model can name.
+        .chain([
+            ("python:n.py/R".to_owned(), "class"),
+            ("python:n.py/R.z".to_owned(), "attribute"),
+        ])
+        .collect::<Vec<_>>()
+    );
+    let bases: Vec<(String, String, &str)> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "inheritance")
+        .map(|e| (e.from.render(ids::LANG), e.to.render(ids::LANG), e.provenance))
+        .collect();
+    assert_eq!(
+        bases,
+        vec![
+            (
+                "python:m.py/P".to_owned(),
+                "python:<builtins>/tuple".to_owned(),
+                "generated"
+            ),
+            (
+                "python:m.py/Q".to_owned(),
+                "python:<builtins>/tuple".to_owned(),
+                "generated"
+            ),
+            (
+                "python:m.py/Color".to_owned(),
+                "python:<stdlib>%2Fenum/Enum".to_owned(),
+                "generated"
+            ),
+        ]
+    );
+    let drops: Vec<(&str, u32, &str)> = extraction
+        .stats
+        .drops
+        .iter()
+        .map(|d| (d.reason, d.line, d.what.as_str()))
+        .collect();
+    assert_eq!(
+        drops,
+        vec![("computed-base", 2, "R (namedtuple is not the standard library's)")]
+    );
+    let all = edges(&extraction);
+    assert_eq!(
+        of(&all, "f"),
+        vec![
+            ("access", "Color.RED", "declared", READ),
+            ("access", "P.x", "derived", READ),
+            ("invocation", "P", "declared", None),
+        ]
+    );
+}
+
+#[test]
+fn a_literal_import_module_or_dunder_import_is_an_import_and_a_computed_name_is_counted() {
+    let extraction = extract_sources(&[
+        ("pkg/__init__.py", ""),
+        ("pkg/sub.py", ""),
+        (
+            "m.py",
+            "import importlib\nmod = importlib.import_module(\"json\")\nplugin = importlib.import_module(name)\n\
+             legacy = __import__(\"pkg.sub\")\n",
+        ),
+    ]);
+    let imports: Vec<(String, u32)> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "import" && e.from.render(ids::LANG) == "python:m.py")
+        .map(|e| (e.to.render(ids::LANG), e.anchor.start))
+        .collect();
+    assert_eq!(
+        imports,
+        vec![
+            ("python:<stdlib>%2Fimportlib".to_owned(), 1),
+            ("python:<stdlib>%2Fjson".to_owned(), 2),
+            ("python:pkg%2Fsub.py".to_owned(), 4),
+        ]
+    );
+    let drops: Vec<(&str, u32, &str)> = extraction
+        .stats
+        .drops
+        .iter()
+        .filter(|d| d.reason == "computed-import")
+        .map(|d| (d.reason, d.line, d.what.as_str()))
+        .collect();
+    assert_eq!(drops, vec![("computed-import", 3, "importlib.import_module(name)")]);
+    assert_eq!(extraction.stats.imports.stdlib, 2);
+}
+
+#[test]
+fn a_site_class_reached_through_an_imported_name_keeps_its_dotted_symbol_and_is_counted() {
+    let extraction = extract_sources(&[(
+        "m.py",
+        "from django.db import models\nfrom rest import Base\nclass O(models.Model): pass\nclass P(Base): pass\n",
+    )]);
+    assert_eq!(extraction.stats.dotted_site_classes, 1);
+    assert!(extraction.stats.summary().contains("dotted-site-class"));
+}

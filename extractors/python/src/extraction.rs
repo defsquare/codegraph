@@ -8,11 +8,11 @@
 use crate::classes::{ClassId, Classes, OwnMember};
 use crate::corpus::{Corpus, Decoding};
 use crate::declarations::{
-    Bound, FileDecls, FunctionDecl, ParameterDecl, ParameterKind, Reference, ScopeKind, Span, Target, ValueDecl,
-    declarations,
+    Bound, Chain, FileDecls, FunctionDecl, ParameterDecl, ParameterKind, Reference, ScopeKind, SiteKind, Span,
+    Synthetic, Target, ValueDecl, declarations,
 };
 use crate::ids;
-use crate::resolve::{How, ImportTarget, ModuleRef, Modules, Resolver, Value};
+use crate::resolve::{How, ImportTarget, Lookup, ModuleRef, Modules, Resolver, Value};
 use crate::stats::Stats;
 use crate::stdlib_table::{self, Kind};
 use crate::{NAME, RUFF_TAG, VERSION};
@@ -629,6 +629,77 @@ impl Extractor<'_> {
 
     // --------------------------------------------------------------- edges ----
 
+    fn count_import(&mut self, how: How, type_checking: bool) {
+        let counts = &mut self.stats.imports;
+        match how {
+            How::Relative => counts.relative += 1,
+            How::PackageRoot => counts.package_root += 1,
+            How::NamespacePackage => counts.namespace += 1,
+            How::ImplicitRelative => counts.implicit_relative += 1,
+            How::Stdlib => counts.stdlib += 1,
+            How::Site => counts.site += 1,
+            How::Missing => counts.missing += 1,
+        }
+        if type_checking {
+            counts.type_checking += 1;
+        }
+    }
+
+    /// `importlib.import_module("a.b")` and `__import__("a.b")` with a literal: an `import`, as
+    /// the statement would be; a computed name is counted `computed-import`.
+    fn dynamic_imports(&mut self) {
+        let files = self.files;
+        for (file, decls) in files.iter().enumerate() {
+            for site in &decls.sites {
+                let (SiteKind::Load, Chain::Call(callee)) = (&site.kind, &site.chain) else {
+                    continue;
+                };
+                let Some(names) = callee.dotted() else {
+                    continue;
+                };
+                let importer = match self.resolver.reference(file, site.scope, &names).value {
+                    Value::External {
+                        module: ModuleRef::Stdlib(module),
+                        symbol,
+                        ..
+                    } => module == "importlib" && symbol == ["import_module"],
+                    Value::Builtin { name, .. } => name == "__import__",
+                    _ => false,
+                };
+                if !importer {
+                    continue;
+                }
+                let first = site.arguments.iter().find(|argument| argument.keyword.is_none());
+                let dotted = match first.map(|argument| &argument.value) {
+                    Some(ValueDecl::Str(dotted)) if !dotted.starts_with('.') && !dotted.is_empty() => dotted.clone(),
+                    _ => {
+                        self.stats.drop(file, site.span.0, "computed-import", site.text.clone());
+                        continue;
+                    }
+                };
+                match self.resolver.modules.absolute(file, &dotted) {
+                    Lookup::Found {
+                        module: ModuleRef::Namespace(_),
+                        ..
+                    } => self.stats.drop(file, site.span.0, "namespace-import", dotted),
+                    Lookup::Found { module, how, .. } => {
+                        let to = self.stubs.module(&module, &self.file_keys);
+                        let from = self.file_keys[file].clone();
+                        let anchor = self.anchor(file, site.span);
+                        if self.edge("import", &from, to, "declared", anchor) {
+                            self.count_import(how, false);
+                        }
+                    }
+                    Lookup::Ambiguous(roots) => {
+                        let what = format!("{dotted} ({})", roots.join(" or "));
+                        self.stats.drop(file, site.span.0, "ambiguous-root", what);
+                    }
+                    Lookup::BeyondRoot => self.stats.drop(file, site.span.0, "relative-beyond-root", dotted),
+                }
+            }
+        }
+    }
+
     /// One `import` edge per module an alias names, from the file wherever it is written.
     fn imports(&mut self) {
         let resolver = self.resolver;
@@ -649,23 +720,33 @@ impl Extractor<'_> {
                             let from = self.file_keys[file].clone();
                             let anchor = self.anchor(file, import.span);
                             if self.edge("import", &from, to, "declared", anchor) {
-                                let counts = &mut self.stats.imports;
-                                match how {
-                                    How::Relative => counts.relative += 1,
-                                    How::PackageRoot => counts.package_root += 1,
-                                    How::NamespacePackage => counts.namespace += 1,
-                                    How::ImplicitRelative => counts.implicit_relative += 1,
-                                    How::Stdlib => counts.stdlib += 1,
-                                    How::Site => counts.site += 1,
-                                    How::Missing => counts.missing += 1,
-                                }
-                                if import.type_checking {
-                                    counts.type_checking += 1;
-                                }
+                                self.count_import(*how, import.type_checking);
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// A class a standard form makes inherits what the interpreter gives it: `generated`,
+    /// since no line writes that base.
+    fn synthetic_base(&mut self, file: usize, scope: usize, synthetic: &Synthetic, from: &Key, span: Span, what: &str) {
+        match crate::classes::synthetic_base(file, scope, synthetic, self.resolver) {
+            Some(id) => {
+                let (to, landed) = self.fold_key(&sites::Fold::Class(id));
+                let anchor = self.anchor(file, span);
+                self.edge("inheritance", from, to, "generated", anchor);
+                self.landed(landed);
+            }
+            None => {
+                let callee = synthetic
+                    .callee
+                    .dotted()
+                    .map(|names| names.join("."))
+                    .unwrap_or_default();
+                let what = format!("{what} ({callee} is not the standard library's)");
+                self.stats.drop(file, span.0, "computed-base", what);
             }
         }
     }
@@ -679,8 +760,15 @@ impl Extractor<'_> {
                 let Some(from) = self.scope_keys[file][class.body].clone() else {
                     continue;
                 };
+                if let Some(synthetic) = &class.synthetic {
+                    self.synthetic_base(file, class.scope, synthetic, &from, class.span, &class.name);
+                }
                 for base in &class.bases {
                     let line = base.span.0;
+                    if let Reference::Synthetic(synthetic) = &base.reference {
+                        self.synthetic_base(file, class.scope, synthetic, &from, base.span, &base.text);
+                        continue;
+                    }
                     let Reference::Dotted(names) = &base.reference else {
                         self.stats.drop(file, line, "computed-base", base.text.clone());
                         continue;
@@ -832,6 +920,7 @@ pub fn extract(
     extractor.bindings();
     phase("entities", format!("{} entities", extractor.entities.len()));
     extractor.imports();
+    extractor.dynamic_imports();
     extractor.bases();
     extractor.evidence();
     extractor.sites();
@@ -867,6 +956,11 @@ pub fn extract(
             entity.traits.push("TWithValue");
         }
     }
+    stats.dotted_site_classes = stubs
+        .types
+        .keys()
+        .filter(|(module, symbol)| module.starts_with("<site>") && symbol.contains('.'))
+        .count();
     let stub_entities = stubs.entities();
     stats.stubs = stub_entities.len();
     phase("stubs", format!("{} stubs", stub_entities.len()));

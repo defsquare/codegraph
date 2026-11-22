@@ -821,6 +821,9 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/could answer anything/);
       expect(notes).toMatch(/`__name__`/);
       expect(notes).toMatch(/`spread-argument`/);
+      expect(notes).toMatch(/`dotted-site-class`/);
+      expect(notes).toMatch(/`computed-import`/);
+      expect(notes).toMatch(/The extractor's own `generated` edges/);
       expect(notes).toMatch(/else `arg<i>`, zero-based/);
       expect(notes).toMatch(/`Optional\[Order\]` is `Order`/);
       expect(notes).toMatch(/a member of an enumeration \(an enum literal\)/);

@@ -73,6 +73,8 @@ pub struct Stats {
     pub drops: Vec<Drop>,
     pub entities: usize,
     pub stubs: usize,
+    /// `<site>` stub classes whose symbol is dotted: named through an imported name (`models.Model`).
+    pub dotted_site_classes: usize,
     pub edges: usize,
     pub self_edges: u64,
 }
@@ -164,6 +166,7 @@ impl Stats {
             ("annotation-typed", self.annotation_typed),
             ("ancestor-attributed", self.ancestor_attributed),
             ("star-attributed", self.star_attributed),
+            ("dotted-site-class", self.dotted_site_classes as u64),
         ] {
             if count > 0 {
                 out.push_str(&format!("  {label:<36}: {count}\n"));

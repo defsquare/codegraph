@@ -178,8 +178,18 @@ pub enum Reference {
     Dotted(Vec<String>),
     /// A call (`namedtuple("P", "x y")`, `make_base()`): the callee and its arguments.
     Call(Chain, Vec<ArgumentDecl>),
+    /// `namedtuple("A", "x y")`, `NamedTuple(…)`: a class a call makes, inherited from.
+    Synthetic(Synthetic),
     /// A starred list, any other expression: what it is is known only when it runs.
     Computed,
+}
+
+/// A class a call makes — `P = namedtuple("P", "x y")`, a base `namedtuple(…)`: its form, by
+/// name, and the callee as written, which the resolver checks is the standard library's.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Synthetic {
+    pub form: &'static str,
+    pub callee: Chain,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -216,6 +226,8 @@ pub struct ClassDecl {
     /// `metaclass=` is written: what the class holds is decided when it runs.
     pub metaclass: bool,
     pub docstring: Option<String>,
+    /// Made by a call bound to a module-level name, not by a `class` statement.
+    pub synthetic: Option<Synthetic>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -396,6 +408,18 @@ const RED_ZONE: usize = 128 * 1024;
 const GROWTH: usize = 4 * 1024 * 1024;
 
 const ACCESSORS: &[&str] = &["setter", "deleter", "getter"];
+/// Calls that make a class: the standard library's forms, by the name a site calls them.
+const SYNTHETIC_FORMS: &[&str] = &[
+    "namedtuple",
+    "NamedTuple",
+    "TypedDict",
+    "Enum",
+    "IntEnum",
+    "StrEnum",
+    "Flag",
+    "IntFlag",
+];
+const TUPLE_FORMS: &[&str] = &["namedtuple", "NamedTuple"];
 const PROPERTIES: &[&str] = &["property", "cached_property", "abstractproperty"];
 /// Comment lines that are instructions to a tool, not prose (PLAN §23.2).
 const DIRECTIVES: &[&str] = &["type:", "noqa", "pylint:", "pragma:"];
@@ -411,6 +435,83 @@ fn dotted(expr: &Expr) -> Option<Vec<String>> {
         }
         _ => None,
     }
+}
+
+/// The synthetic form a call is: a known name, called with a literal class name first.
+fn synthetic_form(callee: &Expr, arguments: &[ArgumentDecl]) -> Option<&'static str> {
+    let name = match callee {
+        Expr::Name(name) => name.id.as_str(),
+        Expr::Attribute(attribute) => attribute.attr.as_str(),
+        _ => return None,
+    };
+    let form = SYNTHETIC_FORMS.iter().copied().find(|form| *form == name)?;
+    let first = arguments
+        .iter()
+        .find(|argument| argument.keyword.is_none() && !argument.spread);
+    matches!(
+        first,
+        Some(ArgumentDecl {
+            value: ValueDecl::Str(_),
+            ..
+        })
+    )
+    .then_some(form)
+}
+
+/// The fields a synthetic form's literal arguments name: `"x y"`, `"x, y"`, `["x", "y"]`,
+/// `[("x", int)]`, `{"x": int}`, or keywords (`NamedTuple("P", x=int)`).
+fn synthetic_fields(form: &str, arguments: &[ArgumentDecl]) -> Vec<String> {
+    let positional: Vec<&ValueDecl> = arguments
+        .iter()
+        .filter(|argument| argument.keyword.is_none() && !argument.spread)
+        .map(|argument| &argument.value)
+        .collect();
+    let keyword = |name: &str| {
+        arguments
+            .iter()
+            .find(|argument| argument.keyword.as_deref() == Some(name))
+            .map(|argument| &argument.value)
+    };
+    let listed = positional.get(1).copied().or_else(|| match form {
+        "namedtuple" => keyword("field_names"),
+        "NamedTuple" | "TypedDict" => keyword("fields"),
+        _ => keyword("names"),
+    });
+    let mut names: Vec<String> = match listed {
+        Some(ValueDecl::Str(text)) => text
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect(),
+        Some(ValueDecl::Array(items)) => items
+            .iter()
+            .filter_map(|item| match item {
+                ValueDecl::Str(name) => Some(name.clone()),
+                ValueDecl::Array(pair) => match pair.first() {
+                    Some(ValueDecl::Str(name)) => Some(name.clone()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect(),
+        Some(ValueDecl::Pairs(pairs, _)) => pairs
+            .iter()
+            .filter_map(|(key, _)| match key {
+                ValueDecl::Str(name) => Some(name.clone()),
+                _ => None,
+            })
+            .collect(),
+        _ if matches!(form, "NamedTuple" | "TypedDict") => arguments
+            .iter()
+            .filter_map(|argument| argument.keyword.clone())
+            .filter(|name| !matches!(name.as_str(), "total" | "fields"))
+            .collect(),
+        _ => Vec::new(),
+    };
+    names.retain(|name| {
+        name.chars().all(|c| c.is_alphanumeric() || c == '_') && !name.starts_with(|c: char| c.is_ascii_digit())
+    });
+    names
 }
 
 fn last_name(expr: &Expr) -> Option<String> {
@@ -961,6 +1062,7 @@ impl Reader<'_> {
         let decorators = self.decorators(&class.decorator_list);
         let mut bases = Vec::new();
         let mut metaclass = false;
+        let mut fields: Vec<(String, u32)> = Vec::new();
         if let Some(arguments) = &class.arguments {
             for base in &arguments.args {
                 let reference = match base {
@@ -972,7 +1074,19 @@ impl Reader<'_> {
                     Expr::Call(call) => {
                         let callee = self.chain(&call.func, &mut Vec::new());
                         self.visit_expr(base);
-                        Reference::Call(callee, self.arguments(&call.arguments))
+                        let arguments = self.arguments(&call.arguments);
+                        match synthetic_form(&call.func, &arguments).filter(|form| TUPLE_FORMS.contains(form)) {
+                            Some(form) => {
+                                let line = self.line(base.start().to_u32());
+                                fields.extend(
+                                    synthetic_fields(form, &arguments)
+                                        .into_iter()
+                                        .map(|field| (field, line)),
+                                );
+                                Reference::Synthetic(Synthetic { form, callee })
+                            }
+                            None => Reference::Call(callee, arguments),
+                        }
                     }
                     other => match dotted(other) {
                         Some(names) => Reference::Dotted(names),
@@ -1009,6 +1123,7 @@ impl Reader<'_> {
             decorators,
             metaclass,
             docstring: docstring(&class.body),
+            synthetic: None,
         });
         let scope = self.scope;
         self.bind(
@@ -1018,6 +1133,14 @@ impl Reader<'_> {
             class.name.start().to_u32(),
         );
         self.scope(ScopeKind::Class(index), Some(scope));
+        // The fields a `namedtuple(…)` base makes are the class's.
+        for (field, line) in fields {
+            self.out.scopes[body].bindings.push(Binding {
+                name: field,
+                bound: Bound::Value,
+                line,
+            });
+        }
         if let Some(parameters) = &class.type_params {
             for parameter in &parameters.type_params {
                 self.bind(
@@ -1033,6 +1156,44 @@ impl Reader<'_> {
         self.visit_body(&class.body);
         self.scope = saved;
         self.type_checking = checking;
+    }
+
+    /// `P = namedtuple("P", "x y")` at module level: a class named by the binding, its literal
+    /// fields bound in its body. `false` when the call is no such form.
+    fn synthetic_class(&mut self, name: &ast::ExprName, call: &ast::ExprCall, span: Span) -> bool {
+        let arguments = self.arguments(&call.arguments);
+        let Some(form) = synthetic_form(&call.func, &arguments) else {
+            return false;
+        };
+        let index = self.out.classes.len();
+        let body = self.out.scopes.len();
+        let fields = synthetic_fields(form, &arguments);
+        self.out.classes.push(ClassDecl {
+            name: name.id.to_string(),
+            scope: self.scope,
+            body,
+            span,
+            head: span.0,
+            bases: Vec::new(),
+            decorators: Vec::new(),
+            metaclass: false,
+            docstring: None,
+            synthetic: Some(Synthetic {
+                form,
+                callee: self.chain(&call.func, &mut Vec::new()),
+            }),
+        });
+        let scope = self.scope;
+        self.bind(scope, name.id.as_str(), Bound::Class(index), name.start().to_u32());
+        self.scope(ScopeKind::Class(index), Some(scope));
+        for field in fields {
+            self.out.scopes[body].bindings.push(Binding {
+                name: field,
+                bound: Bound::Value,
+                line: span.0,
+            });
+        }
+        true
     }
 
     fn function(&mut self, function: &ast::StmtFunctionDef) {
@@ -1342,6 +1503,12 @@ impl<'a> Visitor<'a> for Reader<'_> {
             Stmt::Assign(assign) => {
                 self.visit_expr(&assign.value);
                 let span = self.span(stmt.range());
+                if let ([Expr::Name(name)], Expr::Call(call)) = (assign.targets.as_slice(), assign.value.as_ref())
+                    && self.out.scopes[self.scope].kind == ScopeKind::Module
+                    && self.synthetic_class(name, call, span)
+                {
+                    return;
+                }
                 for target in &assign.targets {
                     let assignment = self.assignment(Some(&assign.value), None, false, span);
                     self.targets(target, Some(assignment));

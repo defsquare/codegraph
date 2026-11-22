@@ -5,7 +5,7 @@
 //! profile's notes give it: a corpus member, the library classes that could
 //! answer, the language, a class that decides its members at run time, nothing.
 
-use crate::declarations::{Bound, FileDecls, MethodBinding, Reference, ScopeKind, Target};
+use crate::declarations::{Bound, FileDecls, MethodBinding, Reference, ScopeKind, Synthetic, Target};
 use crate::resolve::{ModuleRef, Resolver, Value};
 use crate::stdlib_table::{self, ClassRef, Kind};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -99,7 +99,20 @@ impl Classes {
                     || ["__getattr__", "__getattribute__"]
                         .iter()
                         .any(|name| matches!(file_members[index].get(*name), Some(OwnMember::Function(_))));
+                if let Some(synthetic) = &class.synthetic {
+                    match synthetic_base(file, class.scope, synthetic, resolver) {
+                        Some(id) => resolved.push(id),
+                        None => dynamic = true,
+                    }
+                }
                 for base in &class.bases {
+                    if let Reference::Synthetic(synthetic) = &base.reference {
+                        match synthetic_base(file, class.scope, synthetic, resolver) {
+                            Some(id) => resolved.push(id),
+                            None => dynamic = true,
+                        }
+                        continue;
+                    }
                     let Reference::Dotted(names) = &base.reference else {
                         dynamic = true;
                         continue;
@@ -278,6 +291,30 @@ pub fn class_of(value: &Value) -> Option<ClassId> {
             }
         }
         _ => None,
+    }
+}
+
+/// The base the interpreter gives a class a standard form makes — `tuple` for a named tuple,
+/// `dict` for a typed dict, the `Enum` called — once the callee is the standard library's.
+pub fn synthetic_base(file: usize, scope: usize, synthetic: &Synthetic, resolver: &Resolver<'_>) -> Option<ClassId> {
+    let table = stdlib_table::table();
+    let names = synthetic.callee.dotted()?;
+    let value = resolver.reference(file, scope, &names).value;
+    let Value::External {
+        module: ModuleRef::Stdlib(_),
+        symbol,
+        ..
+    } = &value
+    else {
+        return None;
+    };
+    if symbol.last().map(String::as_str) != Some(synthetic.form) {
+        return None;
+    }
+    match synthetic.form {
+        "namedtuple" | "NamedTuple" => table.class("builtins", "tuple").map(ClassId::Table),
+        "TypedDict" => table.class("builtins", "dict").map(ClassId::Table),
+        _ => class_of(&value),
     }
 }
 
