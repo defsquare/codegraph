@@ -173,6 +173,9 @@ pub struct Site {
     pub span: Span,
     /// The source text, on one line, for `--explain-dropped`.
     pub text: String,
+    /// `classes[i]` when a base's subscript argument (`Box[Order]`): the class's dependency,
+    /// not the body's that runs the header.
+    pub class: Option<usize>,
 }
 
 /// A base as the header writes it.
@@ -982,6 +985,7 @@ impl Reader<'_> {
             literal,
             span: self.span(expr.range()),
             text: self.one_line(expr.range()),
+            class: None,
         });
         // An argument, or a head no name types: read where it is written — a comprehension or a
         // lambda among them opens its own scope.
@@ -1115,8 +1119,13 @@ impl Reader<'_> {
             for base in &arguments.args {
                 let reference = match base {
                     Expr::Subscript(subscript) => {
-                        // The arguments of `Generic[T]` are read where the class is written.
+                        // The arguments of `Generic[T]` are read where the class is written, for the class.
+                        let first = self.out.sites.len();
                         self.visit_expr(&subscript.slice);
+                        let class = self.out.classes.len();
+                        for site in &mut self.out.sites[first..] {
+                            site.class = Some(class);
+                        }
                         dotted(&subscript.value).map_or(Reference::Computed, Reference::Dotted)
                     }
                     Expr::Call(call) => {

@@ -52,7 +52,7 @@ describe("navigator over the python fixture", () => {
   it("classifies the Python edge kinds into the shared role vocabulary, inferences kept apart", () => {
     const built = model();
     const roles = new Set(built.deps.map((dep) => dep.role));
-    for (const role of ["import", "extends", "invokes", "reads", "typeReference", "returnType"]) {
+    for (const role of ["import", "extends", "invokes", "reads", "typeReference", "returnType", "parameterType", "fieldType"]) {
       expect(roles, role).toContain(role);
     }
     for (const dep of built.deps) expect(["declared", "derived", "generated"]).toContain(dep.provenance);
@@ -68,6 +68,22 @@ describe("navigator over the python fixture", () => {
     // A base a `namedtuple(…)` call gives: a generated row.
     const amount = built.nodes.findIndex((node) => node.id === "python:src%2Facme_order%2Fmoney.py/Amount");
     expect(built.deps.find((dep) => dep.from === amount)?.provenance).toBe("generated");
+  });
+
+  it("reads an annotation as the type of what it annotates: a parameter, a field, a return", () => {
+    const built = model();
+    const node = (id: string) => built.nodes.findIndex((candidate) => candidate.id === id);
+    const order = node("python:src%2Facme_order%2Forders%2Forder.py/Order");
+    const rows = (from: string) => built.deps.filter((dep) => dep.from === node(from) && dep.to === order);
+    const memberOf = (dep: { member?: number } | undefined) => built.nodes[dep?.member ?? -1]?.name;
+    // `def checkout(order: Order, …) -> Order`: a parameter type and a return type.
+    const services = rows("python:src%2Facme_order%2Fservices.py");
+    const parameter = services.find((dep) => dep.role === "parameterType");
+    expect([memberOf(parameter), parameter?.detail]).toEqual(["checkout", "parameter #1 (order)"]);
+    expect(services.filter((dep) => dep.role === "returnType").map(memberOf)).toContain("checkout");
+    // A dataclass field `order: "Order"`: a field type.
+    const receipt = rows("python:src%2Facme_order%2Frecords.py/Receipt").find((dep) => dep.role === "fieldType");
+    expect(memberOf(receipt)).toBe("order");
   });
 
   it("keeps facts alone under declaredOnly and drops every stub under internalOnly", () => {

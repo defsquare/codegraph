@@ -827,6 +827,8 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/a name a literal `__slots__` lists/);
       expect(notes).toMatch(/whose parameters, values and declared types it carries/);
       expect(notes).toMatch(/a type parameter is no attribute/);
+      // An annotation names its classes from the entity it types (the Java/C#/TypeScript rule).
+      expect(notes).toMatch(/from the entity it types/);
       expect(notes).toMatch(/a name bound once to such a call is that module by flow/);
       // Decision 3: the roots, a file missing below a corpus package, the table, a sibling in a package, `<site>`.
       expect(notes).toMatch(/then the standard library's table, then a sibling of the importing file/);

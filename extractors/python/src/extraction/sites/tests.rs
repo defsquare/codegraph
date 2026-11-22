@@ -157,9 +157,12 @@ fn every_receiver_shape_lands_in_the_tier_the_notes_give_it() {
             // An annotation, a local assigned once: both inferences.
             ("invocation", "repo:Repo.find", "derived", None),
             ("invocation", "repo:Repo.save", "derived", None),
-            // The annotation itself names the class.
-            ("reference", "repo:Repo", "declared", None),
         ]
+    );
+    // The annotation names the class from the parameter it types.
+    assert_eq!(
+        of(&all, "use#param:repo"),
+        vec![("reference", "repo:Repo", "declared", None)]
     );
     // The one library class that could answer: `self.assertEqual`, `M.objects.filter()`, `self.save()`.
     assert_eq!(
@@ -297,13 +300,47 @@ fn an_annotation_sets_the_declared_type_it_names_and_references_each_class_in_it
             .map(|edge| edge.1)
             .collect()
     };
-    assert_eq!(references("Service"), vec!["Repo", "Repo"]);
-    // `list[Repo]` names no type but references the class inside it.
+    // From the TYPED entity — an attribute, a parameter — as Java, C# and TypeScript write it;
+    // a return annotation from the invocable.
+    assert_eq!(references("Service"), Vec::<&str>::new());
+    assert_eq!(references("Service.repo"), vec!["Repo"]);
+    assert_eq!(references("Service.cache"), vec!["Repo"]);
+    assert_eq!(references("Service.session"), vec!["<site>%2Flib/Session"]);
     assert_eq!(
-        references("Service.__init__"),
-        vec!["<site>%2Flib/Session", "<site>%2Flib/Session", "Repo"]
+        references("Service.__init__#param:session"),
+        vec!["<site>%2Flib/Session"]
     );
+    // `list[Repo]` names no type but references the class inside it.
+    assert_eq!(references("Service.__init__#param:items"), vec!["Repo"]);
+    assert_eq!(references("Service.__init__"), Vec::<&str>::new());
     assert_eq!(references("Service.go"), vec!["Repo"]);
+}
+
+#[test]
+fn an_annotation_with_no_typed_entity_stays_on_its_body_and_a_base_argument_is_its_class() {
+    let extraction = extract_sources(&[(
+        "m.py",
+        "from typing import Generic, TypeVar, overload\nT = TypeVar(\"T\")\nclass Repo: pass\n\
+         class Box(Generic[T]): pass\nclass Shelf(Box[Repo]): pass\n\
+         def f():\n    local: Repo = Repo()\n\
+         class C:\n    def total(self): pass\n    total: Repo\n\
+         @overload\ndef g(spare: Repo) -> None: ...\ndef g(other=None): pass\n",
+    )]);
+    let all = edges(&extraction);
+    let from = |source: &str| -> Vec<(&str, &str)> {
+        of(&all, source)
+            .into_iter()
+            .filter(|edge| matches!(edge.0, "reference" | "access"))
+            .map(|edge| (edge.0, edge.1))
+            .collect()
+    };
+    // A base's subscript arguments are the class's dependencies.
+    assert_eq!(from("Box"), vec![("access", "T")]);
+    assert_eq!(from("Shelf"), vec![("reference", "Repo")]);
+    // A local, a name a `def` holds, an overload signature's parameter: no typed entity, the body.
+    assert_eq!(from("f"), vec![("reference", "Repo")]);
+    assert_eq!(from("C"), vec![("reference", "Repo")]);
+    assert_eq!(from("g"), vec![("reference", "Repo")]);
 }
 
 /// `(from, to, provenance, [(argument, value)])` of an annotation use.

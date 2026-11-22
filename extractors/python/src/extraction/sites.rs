@@ -214,7 +214,11 @@ impl Extractor<'_> {
         let files = self.files;
         for (file, decls) in files.iter().enumerate() {
             for site in &decls.sites {
-                let Some(from) = self.scope_keys[file][decls.owner(site.scope)].clone() else {
+                let from = match site.class {
+                    Some(class) => self.class_key(file, class),
+                    None => self.scope_keys[file][decls.owner(site.scope)].clone(),
+                };
+                let Some(from) = from else {
                     continue;
                 };
                 let ctx = Ctx {
@@ -1139,6 +1143,7 @@ impl Extractor<'_> {
             literal: None,
             span: (0, 0),
             text: String::new(),
+            class: None,
         };
         let ctx = Ctx {
             file,

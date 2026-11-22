@@ -198,8 +198,11 @@ describe("fixtures/python/expected/model.jsonl", () => {
     const kinds = new Map(model.entities.map((e) => [e.id, e.kind]));
     for (const e of model.edges) {
       if (!["invocation", "access", "reference", "throws"].includes(e.edge)) continue;
-      // An initializer's calls and reads are its module's, its class's or its method's — never the binding's.
-      expect(["module", "class", "function", "method"], `${e.edge} ${e.from}`).toContain(kinds.get(e.from));
+      // An initializer's calls and reads are its module's, its class's or its method's — never the
+      // binding's; only an annotation names a class from the parameter, attribute or variable it types.
+      const typed = ["parameter", "attribute", "variable"].includes(kinds.get(e.from) ?? "");
+      if (typed) expect([e.edge, kinds.get(e.to)], e.from).toEqual(["reference", "class"]);
+      else expect(["module", "class", "function", "method"], `${e.edge} ${e.from}`).toContain(kinds.get(e.from));
       const bag = e as unknown as Bag;
       expect(bag["isRead"] !== undefined || bag["isWrite"] !== undefined, `${e.edge} ${e.from}`).toBe(e.edge === "access");
     }

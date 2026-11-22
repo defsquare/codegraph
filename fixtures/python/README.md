@@ -76,12 +76,11 @@ the hazard. The last three are `-text` in `.gitattributes`.
 ## What the numbers are
 
 51 files; 369 entities (43 of them stubs): 31 attribute, 99 class, 33 function, 34 method, 72 module, 86 parameter, 14 variable.
-220 edges: 27 `access` declared, 4 `access` derived, 3 `annotationUse` declared, 64 `import` declared, 43 `inheritance` declared, 3 `inheritance` derived, 5 `inheritance` generated, 35 `invocation` declared, 7 `invocation` derived, 24 `reference` declared, 5 `throws` declared.
+222 edges: 27 `access` declared, 4 `access` derived, 3 `annotationUse` declared, 64 `import` declared, 43 `inheritance` declared, 3 `inheritance` derived, 5 `inheritance` generated, 35 `invocation` declared, 7 `invocation` derived, 26 `reference` declared, 5 `throws` declared.
 
 Sites: 216; resolved 186 (corpus 97, <builtins> 17, <stdlib> 27, <site> 7, missing modules 1, the language 37); unresolved 30; rate 86.1%.
 Imports: 64 (relative 24; by package root 9, by namespace package 2, implicit-relative 1; <stdlib> 18, <site> 9; missing 1; type-checking-only 1).
 Counted: ambiguous-ancestor (dropped): 1; ambiguous-root (dropped): 1; ambiguous-star (dropped): 1; computed-base (dropped): 4; computed-import (dropped): 1; raise-of-a-value (dropped): 1; rebinding-of-a-declaration (dropped): 1; spread-argument (dropped): 1; unbound-attribute (dropped): 1; unbound-dynamic (dropped): 1; unbound-name (dropped): 10; unbound-self-call (dropped): 1; unnamed-declaration (dropped): 1; untyped-receiver (dropped): 10; rebound-name: 2; flow-typed: 4; annotation-typed: 3; ancestor-attributed: 3; star-attributed: 1; alias-base: 3; dotted-site-class: 1.
-
 ## The vocabulary: `currency`, counted by hand
 
 `expected/vocabulary.json` is the words of this model's names

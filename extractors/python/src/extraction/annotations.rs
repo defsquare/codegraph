@@ -46,12 +46,17 @@ impl Extractor<'_> {
                 // Every signature names what it names; the entity's types are its primary `def`'s.
                 let primary = self.primary[file][index];
                 for parameter in &function.parameters {
+                    // From the parameter, the typed entity; an overload signature's has none.
+                    let from = if primary {
+                        ids::parameter_key(&key, &parameter.name)
+                    } else {
+                        key.clone()
+                    };
                     if let Some(annotation) = &parameter.annotation
-                        && let Some(declared) = self.annotation(file, function.annotation_scope, annotation, &key)
+                        && let Some(declared) = self.annotation(file, function.annotation_scope, annotation, &from)
                         && primary
                     {
-                        self.declared_types
-                            .insert(ids::parameter_key(&key, &parameter.name), declared);
+                        self.declared_types.insert(from, declared);
                     }
                 }
                 if let Some(returns) = &function.returns
@@ -76,11 +81,16 @@ impl Extractor<'_> {
                 let Some(annotation) = &assignment.annotation else {
                     continue;
                 };
-                let Some(from) = self.scope_keys[file][decls.owner(assignment.scope)].clone() else {
+                // From the variable or attribute it types; a local, a name a `def` holds: the body.
+                let typed = self.annotated_binding(file, index);
+                let Some(from) = typed
+                    .clone()
+                    .or_else(|| self.scope_keys[file][decls.owner(assignment.scope)].clone())
+                else {
                     continue;
                 };
                 if let Some(declared) = self.annotation(file, assignment.scope, annotation, &from)
-                    && let Some(entity) = self.annotated_binding(file, index)
+                    && let Some(entity) = typed
                 {
                     self.declared_types.entry(entity).or_insert(declared);
                 }
