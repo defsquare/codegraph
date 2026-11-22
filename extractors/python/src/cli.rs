@@ -51,7 +51,13 @@ pub struct Options {
     pub trace: Option<String>,
     pub help: bool,
     pub version: bool,
+    /// Print the third-party notice the binary embeds.
+    pub licenses: bool,
 }
+
+/// Every crate the lockfile resolves, its license and the texts they ship, then the typeshed
+/// data the standard-library table is distilled from (scripts/licenses.mjs).
+const LICENSES: &str = include_str!("../THIRD-PARTY-LICENSES.txt");
 
 const VALUE_FLAGS: &[&str] = &[
     "--src",
@@ -71,7 +77,7 @@ pub fn parse(argv: &[String], cwd: &Path) -> Result<Options, String> {
     let mut out = None;
     let mut progress = Progress::Auto;
     let (mut remote, mut commit, mut root, mut provider) = (None, None, None, None);
-    let (mut help, mut version, mut explain_dropped) = (false, false, false);
+    let (mut help, mut version, mut explain_dropped, mut licenses) = (false, false, false, false);
     let mut trace = None;
 
     let mut args = argv.iter();
@@ -103,6 +109,7 @@ pub fn parse(argv: &[String], cwd: &Path) -> Result<Options, String> {
             "--explain-dropped" => explain_dropped = true,
             "--help" | "-h" => help = true,
             "--version" => version = true,
+            "--licenses" => licenses = true,
             other => return Err(format!("unknown option: {other}")),
         }
     }
@@ -128,6 +135,7 @@ pub fn parse(argv: &[String], cwd: &Path) -> Result<Options, String> {
         trace,
         help,
         version,
+        licenses,
     })
 }
 
@@ -208,6 +216,8 @@ OPTIONS
   --repo-root <path>    repo-relative path of the analyzed root (\"\" at the repo root)
   --repo-provider <p>   github or gitlab, only when the hostname does not say
   --version             print the extractor version
+  --licenses            print the third-party notice: every linked crate and the
+                        typeshed data the standard-library table is distilled from
   --help                this text
 
 Nothing is run and no Python is needed: every *.py, *.pyw and *.pyi under the
@@ -236,6 +246,10 @@ pub fn run(argv: &[String], io: &mut Io<'_>, cwd: &Path) -> i32 {
     }
     if options.version {
         let _ = writeln!(io.stdout, "{VERSION}");
+        return EXIT_OK;
+    }
+    if options.licenses {
+        let _ = write!(io.stdout, "{LICENSES}");
         return EXIT_OK;
     }
     match extract(&options, io, cwd) {

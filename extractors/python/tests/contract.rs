@@ -192,7 +192,45 @@ fn help_and_version_are_the_only_things_on_stdout() {
     // What the walk takes, and the exit codes it can return: every pass is written.
     assert!(help.stdout.contains("every *.py, *.pyw and *.pyi"));
     assert!(help.stdout.contains("Exit codes: 0 ok, 1 failure, 2 usage.\n"));
+    assert!(help.stdout.contains("--licenses"));
     assert_eq!(help.stderr, "");
+}
+
+/// The notice must name every crate the lockfile resolves and the data the binary embeds: a
+/// dependency added without regenerating it (scripts/licenses.mjs) fails here, not in a release.
+#[test]
+fn the_licenses_notice_covers_every_locked_crate_and_the_typeshed_data() {
+    let printed = run(&["--licenses"], &repository());
+    assert_eq!((printed.code, printed.stderr.as_str()), (EXIT_OK, ""));
+    let notice = printed.stdout;
+    assert!(notice.contains("typeshed's stdlib/ stubs at commit 2e4d4dcf657f82305709bbe3e86bca4d27d4dd46"));
+    assert!(notice.contains("The \"typeshed\" project is licensed under the terms of the Apache license"));
+    assert!(notice.contains("The MIT License\n\nCopyright (c) 2015 Jukka Lehtosalo and contributors"));
+    assert!(notice.contains("ruff_python_parser 0.0.23 (the repository's LICENSE)"));
+    let lock = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.lock")).expect("Cargo.lock");
+    let mut missing = Vec::new();
+    for block in lock.split("[[package]]").skip(1) {
+        let field = |key: &str| {
+            block
+                .lines()
+                .find_map(|line| line.strip_prefix(&format!("{key} = \"")))
+                .and_then(|rest| rest.strip_suffix('"'))
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let (name, version) = (field("name"), field("version"));
+        // This crate and the shared writer are the project's own (path dependencies, no source).
+        if !block.contains("source = ") {
+            continue;
+        }
+        if !notice.contains(&format!("  {name} {version} — ")) {
+            missing.push(format!("{name} {version}"));
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "not in THIRD-PARTY-LICENSES.txt — regenerate it with scripts/licenses.mjs: {missing:?}"
+    );
 }
 
 #[test]
