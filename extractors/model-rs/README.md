@@ -15,11 +15,13 @@ and the header's extractor-specific fields stay in each extractor.
 ```bash
 cargo test --manifest-path extractors/model-rs/Cargo.toml   # the unit tables
 ./test.sh --ruby                                            # these, then an extractor that uses it
+./test.sh --python                                          # the same, through the other
 ```
 
 Its own unit tests pin the parts (keys, order, escaping, record shapes); each
 extractor's snapshot test is what holds the whole to core's bytes —
-`fixtures/ruby/expected/model.jsonl` for `extractors/ruby`. A change here is a
+`fixtures/ruby/expected/model.jsonl` for `extractors/ruby`,
+`fixtures/python/expected/model.jsonl` for `extractors/python`. A change here is a
 change to every Rust extractor's output: run each one's suite.
 
 A standalone package (its own `[workspace]`), depended on by path; it has no
