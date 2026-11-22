@@ -1,6 +1,6 @@
 //! The binding rules (PLAN.md §23.4): the scope a name read in a scope finds,
 //! as the compiler decides it — the scope itself, then the enclosing FUNCTION
-//! scopes (never a class body), then the module; `global` sends a name to the
+//! scopes, lambdas and comprehensions included (never a class body), then the module; `global` sends a name to the
 //! module and `nonlocal` past its own scope. `builtins` comes after all of
 //! them, and is the resolver's.
 
@@ -18,7 +18,11 @@ pub fn lookup<'a>(decls: &'a FileDecls, scope: usize, name: &str) -> Vec<&'a Bin
             return bound_in(decls, index, name);
         }
         // The scope the name is read in, whatever it is; above it, functions only.
-        if own || matches!(here.kind, ScopeKind::Function(_)) {
+        let encloses = matches!(
+            here.kind,
+            ScopeKind::Function(_) | ScopeKind::Lambda | ScopeKind::Comprehension
+        );
+        if own || encloses {
             if declares(&here.globals) {
                 return bound_in(decls, 0, name);
             }
@@ -73,6 +77,37 @@ mod tests {
         // In a method of Outer, the class body is not enclosing: the module's.
         assert_eq!(found(&decls, 5, "Mixin"), vec![(Bound::Class(0), 1)]);
         assert_eq!(found(&decls, 0, "Nothing"), vec![]);
+    }
+
+    #[test]
+    fn a_lambda_and_a_comprehension_enclose_like_a_function_and_a_walrus_binds_outside_them() {
+        let decls = read(
+            "def f(items):\n    total = 0\n    g = lambda x: [x + total for y in items if (last := y)]\n\
+             class C:\n    k = 1\n    vals = [k for _ in range(3)]\n",
+        );
+        let first = |kind: ScopeKind| decls.scopes.iter().position(|scope| scope.kind == kind).unwrap();
+        let (lambda, comprehension) = (first(ScopeKind::Lambda), first(ScopeKind::Comprehension));
+        let function = decls
+            .scopes
+            .iter()
+            .position(|s| s.kind == ScopeKind::Function(0))
+            .unwrap();
+        // The comprehension sees its own target, the lambda's parameter, and the function's locals…
+        assert_eq!(found(&decls, comprehension, "y").len(), 1);
+        assert_eq!(found(&decls, comprehension, "x"), vec![(Bound::Value, 3)]);
+        assert_eq!(found(&decls, comprehension, "total"), vec![(Bound::Assigned(0), 2)]);
+        assert_eq!(found(&decls, lambda, "total"), vec![(Bound::Assigned(0), 2)]);
+        // …and `last :=` binds in the scope that contains the comprehension — here the lambda.
+        assert!(bound_in(&decls, comprehension, "last").is_empty());
+        assert_eq!(bound_in(&decls, lambda, "last").len(), 1);
+        assert!(bound_in(&decls, function, "last").is_empty());
+        // A comprehension in a class body does not see the class's names (beyond its first iterable).
+        let in_class = decls
+            .scopes
+            .iter()
+            .rposition(|scope| scope.kind == ScopeKind::Comprehension)
+            .unwrap();
+        assert_eq!(found(&decls, in_class, "k"), vec![]);
     }
 
     #[test]
