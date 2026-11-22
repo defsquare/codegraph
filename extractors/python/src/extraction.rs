@@ -844,7 +844,17 @@ impl Extractor<'_> {
                     if resolved.rebound {
                         self.stats.rebound += 1;
                     }
-                    let to = match resolved.value {
+                    // A name bound once to a class: that class, by flow.
+                    let mut value = resolved.value;
+                    let mut alias = false;
+                    if let Value::Assigned { .. } = value
+                        && let Some(target) = crate::classes::through_aliases(files, resolver, value.clone())
+                        && crate::classes::class_of(&target).is_some()
+                    {
+                        value = target;
+                        alias = true;
+                    }
+                    let to = match value {
                         Value::Class { file: declared, class } => {
                             let body = self.files[declared].classes[class].body;
                             match self.scope_keys[declared][body].clone() {
@@ -908,13 +918,15 @@ impl Extractor<'_> {
                     };
                     let anchor = self.anchor(file, base.span);
                     // A name only a star import of an unknown module binds is attributed to it.
-                    let provenance = if resolved.star_attributed {
-                        self.stats.star_attributed += 1;
-                        "derived"
+                    let inferred = if alias {
+                        Some("alias-base")
                     } else {
-                        "declared"
+                        resolved.star_attributed.then_some("star-attributed")
                     };
-                    self.edge("inheritance", &from, to, provenance, anchor);
+                    let provenance = if inferred.is_some() { "derived" } else { "declared" };
+                    if self.edge("inheritance", &from, to, provenance, anchor) {
+                        self.count_inference(inferred);
+                    }
                 }
             }
         }

@@ -69,6 +69,8 @@ pub struct Stats {
     pub ancestor_attributed: u64,
     /// …from the one star import nothing here answers.
     pub star_attributed: u64,
+    /// …from a base that is a name bound once to a class (and what an ancestor it brings answers).
+    pub alias_base: u64,
     pub imports: ImportCounts,
     pub drops: Vec<Drop>,
     pub entities: usize,
@@ -166,6 +168,7 @@ impl Stats {
             ("annotation-typed", self.annotation_typed),
             ("ancestor-attributed", self.ancestor_attributed),
             ("star-attributed", self.star_attributed),
+            ("alias-base", self.alias_base),
             ("dotted-site-class", self.dotted_site_classes as u64),
         ] {
             if count > 0 {

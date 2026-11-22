@@ -5,8 +5,9 @@
 //! profile's notes give it: a corpus member, the library classes that could
 //! answer, the language, a class that decides its members at run time, nothing.
 
-use crate::declarations::{Bound, FileDecls, MethodBinding, Reference, ScopeKind, Synthetic, Target};
+use crate::declarations::{Bound, FileDecls, MethodBinding, Reference, ScopeKind, Synthetic, Target, ValueDecl};
 use crate::resolve::{ModuleRef, Resolver, Value};
+use crate::scopes;
 use crate::stdlib_table::{self, ClassRef, Kind};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -78,6 +79,8 @@ pub struct Classes {
     attributes: Vec<Vec<BTreeMap<String, AttributeSites>>>,
     /// The module and symbol a table class was first written as, as a base: the key its stub takes.
     written: HashMap<ClassRef, (ModuleRef, String)>,
+    /// Per file, per class: the classes of its order reached only through a base that is an alias.
+    aliased: Vec<Vec<Vec<ClassId>>>,
 }
 
 impl Classes {
@@ -85,15 +88,19 @@ impl Classes {
         let table = stdlib_table::table();
         let mut written = HashMap::new();
         let mut bases: Vec<Vec<Vec<ClassId>>> = Vec::with_capacity(files.len());
+        // Per file, per class: the bases no line names as a class, reached through an alias.
+        let mut through: Vec<Vec<Vec<ClassId>>> = Vec::with_capacity(files.len());
         let mut own_dynamic: Vec<Vec<bool>> = Vec::with_capacity(files.len());
         let mut members = Vec::with_capacity(files.len());
         let mut attributes = Vec::with_capacity(files.len());
         for (file, decls) in files.iter().enumerate() {
             let (file_members, file_attributes) = own_members(decls);
             let mut file_bases = Vec::with_capacity(decls.classes.len());
+            let mut file_through = Vec::with_capacity(decls.classes.len());
             let mut file_dynamic = Vec::with_capacity(decls.classes.len());
             for (index, class) in decls.classes.iter().enumerate() {
                 let mut resolved = Vec::with_capacity(class.bases.len());
+                let mut aliases = Vec::new();
                 // A base nothing resolves to a class may be anything: so may what the class holds.
                 let mut dynamic = class.metaclass
                     || ["__getattr__", "__getattribute__"]
@@ -117,9 +124,19 @@ impl Classes {
                         dynamic = true;
                         continue;
                     };
-                    let value = resolver.base(file, index, names).value;
+                    let mut value = resolver.base(file, index, names).value;
+                    let mut alias = false;
+                    if let Value::Assigned { .. } = value
+                        && let Some(target) = through_aliases(files, resolver, value.clone())
+                    {
+                        value = target;
+                        alias = true;
+                    }
                     match class_of(&value) {
                         Some(id) => {
+                            if alias {
+                                aliases.push(id.clone());
+                            }
                             if let (ClassId::Table(class), Value::External { module, symbol, .. }) = (&id, &value) {
                                 written
                                     .entry(*class)
@@ -131,9 +148,11 @@ impl Classes {
                     }
                 }
                 file_bases.push(resolved);
+                file_through.push(aliases);
                 file_dynamic.push(dynamic);
             }
             bases.push(file_bases);
+            through.push(file_through);
             own_dynamic.push(file_dynamic);
             members.push(file_members);
             attributes.push(file_attributes);
@@ -145,11 +164,34 @@ impl Classes {
         };
         let mut mro = Vec::with_capacity(files.len());
         let mut dynamic = Vec::with_capacity(files.len());
+        let mut aliased = Vec::with_capacity(files.len());
         for (file, decls) in files.iter().enumerate() {
             let mut file_mro = Vec::with_capacity(decls.classes.len());
             let mut file_dynamic = Vec::with_capacity(decls.classes.len());
+            let mut file_aliased = Vec::with_capacity(decls.classes.len());
             for class in 0..decls.classes.len() {
                 let order = linearizer.order(&ClassId::Corpus { file, class });
+                // What a written base leads to, transitively; the rest of the order an alias brought.
+                let mut reach: HashSet<ClassId> =
+                    HashSet::from([ClassId::Corpus { file, class }, ClassId::Table(OBJECT)]);
+                let mut pending = vec![ClassId::Corpus { file, class }];
+                while let Some(id) = pending.pop() {
+                    let next: Vec<ClassId> = match &id {
+                        ClassId::Corpus { file, class } => bases[*file][*class]
+                            .iter()
+                            .filter(|base| !through[*file][*class].contains(base))
+                            .cloned()
+                            .collect(),
+                        ClassId::Table(class) => table.bases(*class).into_iter().map(ClassId::Table).collect(),
+                        ClassId::Opaque { .. } => Vec::new(),
+                    };
+                    for base in next {
+                        if reach.insert(base.clone()) {
+                            pending.push(base);
+                        }
+                    }
+                }
+                file_aliased.push(order.iter().filter(|id| !reach.contains(id)).cloned().collect());
                 let runs = order.iter().any(|id| match id {
                     ClassId::Corpus { file, class } => own_dynamic[*file][*class],
                     ClassId::Table(class) => {
@@ -162,6 +204,7 @@ impl Classes {
             }
             mro.push(file_mro);
             dynamic.push(file_dynamic);
+            aliased.push(file_aliased);
         }
         Classes {
             mro,
@@ -169,6 +212,7 @@ impl Classes {
             members,
             attributes,
             written,
+            aliased,
         }
     }
 
@@ -182,6 +226,12 @@ impl Classes {
 
     pub fn member(&self, file: usize, class: usize, name: &str) -> Option<OwnMember> {
         self.members[file][class].get(name).copied()
+    }
+
+    /// Whether `ancestor` is in the class's order only because a base is an alias: what it
+    /// answers rests on that inference.
+    pub fn through_alias(&self, file: usize, class: usize, ancestor: &ClassId) -> bool {
+        self.aliased[file][class].contains(ancestor)
     }
 
     /// An enumeration: a class of the `enum` module stands in its order.
@@ -262,6 +312,37 @@ impl Classes {
             _ => Found::Library(could),
         }
     }
+}
+
+/// What a module- or class-level name bound EXACTLY ONCE to another name holds, aliases
+/// followed (cycle-guarded): `None` where a binding in the chain is a call, a literal, bound
+/// twice, or local. A value that is no assignment is itself.
+pub fn through_aliases(files: &[FileDecls], resolver: &Resolver<'_>, value: Value) -> Option<Value> {
+    let mut seen = HashSet::new();
+    let mut value = value;
+    while let Value::Assigned { file, assignment } = value {
+        if !seen.insert((file, assignment)) {
+            return None;
+        }
+        let decls = &files[file];
+        let decl = &decls.assignments[assignment];
+        let Target::Name(name) = &decl.target else {
+            return None;
+        };
+        if !matches!(decls.scopes[decl.scope].kind, ScopeKind::Module | ScopeKind::Class(_)) {
+            return None;
+        }
+        let once = matches!(scopes::bound_in(decls, decl.scope, name).as_slice(),
+            [only] if only.bound == Bound::Assigned(assignment));
+        let Some(ValueDecl::Name(chain, _)) = &decl.value else {
+            return None;
+        };
+        if !once || decl.augmented {
+            return None;
+        }
+        value = resolver.reference(file, decl.scope, &chain.dotted()?).value;
+    }
+    Some(value)
 }
 
 /// The class a resolved base is, when it is one.

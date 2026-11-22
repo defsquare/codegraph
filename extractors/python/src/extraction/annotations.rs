@@ -417,6 +417,7 @@ impl Extractor<'_> {
             Some("annotation-typed") => self.stats.annotation_typed += 1,
             Some("ancestor-attributed") => self.stats.ancestor_attributed += 1,
             Some("star-attributed") => self.stats.star_attributed += 1,
+            Some("alias-base") => self.stats.alias_base += 1,
             _ => {}
         }
     }

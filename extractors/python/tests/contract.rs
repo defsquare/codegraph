@@ -398,6 +398,7 @@ fn lists_every_dropped_site_on_stderr_when_asked_and_changes_no_byte_of_the_mode
         "dropped spread-argument: src/acme_order/services.py:45 @register(*settings.HOOKS, name=\"run\")\n",
         "dropped ambiguous-ancestor: src/acme_order/shipping.py:57 self.flush() (django.db.models.Model or sqlalchemy.orm.DeclarativeBase)\n",
         "dropped unbound-dynamic: src/acme_order/shipping.py:67 self.anything() (Proxy)\n",
+        "dropped computed-base: src/acme_order/aliases.py:30 Twice (bound to a value)\n",
         "dropped rebinding-of-a-declaration: src/acme_order/compat.py:23 JSONDecodeError (an import binds it)\n",
     ] {
         assert!(explained.stderr.contains(line), "{line}{}", explained.stderr);

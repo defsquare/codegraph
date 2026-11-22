@@ -258,6 +258,15 @@ describe("fixtures/python/expected/model.jsonl", () => {
     ]);
     expect(entity(model, `${services}/checkout`)["declaredType"]).toBe(ORDER);
     expect(entity(model, `${services}/checkout#param:repository`)["declaredType"]).toBe(`${PKG}repository.py/Repository`);
+    // A base read through a name bound once to a class is that class, by flow; so is what it answers.
+    const aliases = `${PKG}aliases.py`;
+    const auditable = `${PKG}orders%2Fbase.py/Auditable`;
+    expect(hasEdge(model, "inheritance", `${aliases}/Ledger`, auditable, "derived")).toBe(true);
+    expect(hasEdge(model, "inheritance", `${aliases}/Ledger`, auditable, "declared")).toBe(false);
+    expect(hasEdge(model, "invocation", `${aliases}/Ledger.close`, `${auditable}.audit`, "derived")).toBe(true);
+    expect(entity(model, `${aliases}/Trail`)["kind"]).toBe("variable");
+    expect(targets(model, "inheritance", `${aliases}/Made`)).toEqual([]);
+    expect(targets(model, "inheritance", `${aliases}/Doubled`)).toEqual([]);
     // A variable with its value and comment; `global counter` then `counter += 1` reads and writes it.
     const currency = entity(model, `${PKG}settings.py/DEFAULT_CURRENCY`);
     expect([currency["value"], currency["comments"]]).toEqual([

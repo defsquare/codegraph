@@ -524,3 +524,84 @@ fn a_site_class_reached_through_an_imported_name_keeps_its_dotted_symbol_and_is_
     assert_eq!(extraction.stats.dotted_site_classes, 1);
     assert!(extraction.stats.summary().contains("dotted-site-class"));
 }
+
+const ALIASES: &str = "\
+import unittest
+from django.db import models
+
+class Real:
+    def ping(self): pass
+
+Alias = Real
+Again = Alias
+TestCase = unittest.TestCase
+Model = models.Model
+Made = type(\"Made\", (), {})
+Twice = Real
+Twice = Alias
+
+class A(Again):
+    def go(self):
+        self.ping()
+
+class T(TestCase):
+    def test(self):
+        self.assertEqual(1, 1)
+
+class M(Model): pass
+
+class C(Made): pass
+
+class D(Twice): pass
+";
+
+#[test]
+fn a_base_bound_once_to_a_class_is_that_class_by_flow_and_anything_else_stays_computed() {
+    let extraction = extract_sources(&[("m.py", ALIASES)]);
+    let bases: Vec<(String, String, &str)> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "inheritance")
+        .map(|e| (e.from.render(ids::LANG), e.to.render(ids::LANG), e.provenance))
+        .collect();
+    let row = |from: &str, to: &str| (format!("python:m.py/{from}"), format!("python:{to}"), "derived");
+    assert_eq!(
+        bases,
+        vec![
+            row("A", "m.py/Real"),
+            row("T", "<stdlib>%2Funittest/TestCase"),
+            row("M", "<site>%2Fdjango.db/models.Model"),
+        ]
+    );
+    // What an ancestor reached only through an alias answers rests on the same inference.
+    let all = edges(&extraction);
+    assert_eq!(of(&all, "A.go"), vec![("invocation", "Real.ping", "derived", None)]);
+    assert_eq!(
+        of(&all, "T.test"),
+        vec![("invocation", "<stdlib>%2Funittest/TestCase", "derived", None)]
+    );
+    let drops: Vec<(&str, u32, &str)> = extraction
+        .stats
+        .drops
+        .iter()
+        .filter(|d| d.reason == "computed-base")
+        .map(|d| (d.reason, d.line, d.what.as_str()))
+        .collect();
+    assert_eq!(
+        drops,
+        vec![
+            ("computed-base", 25, "Made (bound to a value)"),
+            ("computed-base", 27, "Twice (bound to a value)"),
+        ]
+    );
+    // Three bases and the member reached through one; the aliases stay variables.
+    assert_eq!(extraction.stats.alias_base, 4);
+    for alias in ["Alias", "Again", "TestCase", "Model"] {
+        assert_eq!(
+            super::super::tests::entity(&extraction, &format!("python:m.py/{alias}")).kind,
+            "variable"
+        );
+    }
+    assert!(extraction.stats.summary().contains("alias-base"));
+}

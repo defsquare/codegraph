@@ -29,10 +29,11 @@ pub(super) enum Typed {
         object: bool,
         inferred: Inferred,
     },
-    /// `super()`: the order after the class it is written in.
+    /// `super()`: the order after the class it is written in, `of`.
     Super {
         order: Vec<ClassId>,
         dynamic: bool,
+        of: (usize, usize),
     },
     /// A corpus `def` as a value: a function, or a method looked up on a class or an instance.
     Function {
@@ -131,6 +132,13 @@ impl Extractor<'_> {
                 for base in &class.bases {
                     if let Reference::Dotted(names) = &base.reference {
                         let value = self.resolver.base(file, index, names).value;
+                        let value = match value {
+                            Value::Assigned { .. } => {
+                                crate::classes::through_aliases(self.files, self.resolver, value.clone())
+                                    .unwrap_or(value)
+                            }
+                            value => value,
+                        };
                         self.note_evidence(value);
                     }
                 }
@@ -362,17 +370,19 @@ impl Extractor<'_> {
             } => {
                 // `Order(…)` is `Order.__init__` where a corpus class of the order writes one.
                 let order = self.classes.mro(file, class).to_vec();
-                let to = match self.classes.find(&order, false, "__init__", false) {
+                let (to, init_inferred) = match self.classes.find(&order, false, "__init__", false) {
                     Found::Corpus {
-                        file,
+                        file: owner,
+                        class: owner_class,
                         member: OwnMember::Function(function),
-                        ..
-                    } => self.function_key(file, function),
-                    _ => None,
-                }
-                .or_else(|| self.class_key(file, class));
-                if let Some(to) = to {
-                    self.emit(ctx, "invocation", to, inferred, None);
+                    } => (
+                        self.function_key(owner, function),
+                        self.through_alias(Some((file, class)), owner, owner_class, inferred),
+                    ),
+                    _ => (None, inferred),
+                };
+                if let Some(to) = to.or_else(|| self.class_key(file, class)) {
+                    self.emit(ctx, "invocation", to, init_inferred, None);
                 }
                 let instance = Typed::Corpus {
                     file,
@@ -479,6 +489,7 @@ impl Extractor<'_> {
                             let to = self
                                 .setter(owner, owner_class, name)
                                 .or_else(|| self.function_key(owner, function));
+                            let inferred = self.through_alias(Some((file, class)), owner, owner_class, inferred);
                             if let Some(to) = to {
                                 self.emit(ctx, "access", to, inferred, access);
                             }
@@ -688,8 +699,8 @@ impl Extractor<'_> {
                 let dynamic = self.classes.is_dynamic(file, class);
                 self.member(ctx, &order, dynamic, name, object, inferred, self_receiver, file, class)
             }
-            Typed::Super { order, dynamic } => {
-                self.member_of_order(ctx, &order, dynamic, name, false, None, true, None)
+            Typed::Super { order, dynamic, of } => {
+                self.member_of_order(ctx, &order, dynamic, name, false, None, true, None, Some(of))
             }
             Typed::Folded { fold, inferred } => Ok(step(Typed::Folded { fold, inferred })),
             Typed::External {
@@ -741,6 +752,7 @@ impl Extractor<'_> {
             inferred,
             self_receiver,
             Some((file, class)),
+            Some((file, class)),
         )
     }
 
@@ -755,6 +767,7 @@ impl Extractor<'_> {
         inferred: Inferred,
         self_receiver: bool,
         receiver: Option<(usize, usize)>,
+        of: Option<(usize, usize)>,
     ) -> Result<Step, Dropped> {
         let class_name = || {
             receiver
@@ -765,7 +778,13 @@ impl Extractor<'_> {
                 .map(|(file, class)| self.files[file].classes[class].name.clone())
                 .unwrap_or_default()
         };
-        match self.classes.find(order, dynamic, name, object) {
+        let found = self.classes.find(order, dynamic, name, object);
+        // What an ancestor brought in only by an alias answers rests on that inference.
+        let inferred = match &found {
+            Found::Corpus { file, class, .. } => self.through_alias(of, *file, *class, inferred),
+            _ => inferred,
+        };
+        match found {
             Found::Corpus { file, class, member } => Ok(match member {
                 OwnMember::Function(function) if self.files[file].functions[function].property && !object => {
                     // A property is read as an attribute: an access of its getter.
@@ -821,6 +840,20 @@ impl Extractor<'_> {
                 };
                 Err(dropped(reason, format!("{} ({})", ctx.site.text, class_name())))
             }
+        }
+    }
+
+    /// The inference a member rests on: the receiver's, else the alias that brought its class in.
+    fn through_alias(&self, of: Option<(usize, usize)>, file: usize, class: usize, inferred: Inferred) -> Inferred {
+        match of {
+            Some((of_file, of_class))
+                if self
+                    .classes
+                    .through_alias(of_file, of_class, &ClassId::Corpus { file, class }) =>
+            {
+                inferred.or(Some("alias-base"))
+            }
+            _ => inferred,
         }
     }
 
@@ -896,6 +929,7 @@ impl Extractor<'_> {
             Some((file, class)) => Typed::Super {
                 order: self.classes.mro(file, class)[1..].to_vec(),
                 dynamic: self.classes.is_dynamic(file, class),
+                of: (file, class),
             },
             None => Typed::Untyped,
         }
