@@ -403,6 +403,23 @@ fn lists_every_dropped_site_on_stderr_when_asked_and_changes_no_byte_of_the_mode
     ] {
         assert!(explained.stderr.contains(line), "{line}{}", explained.stderr);
     }
+    // The scopes and the newer syntax bind what they bind: nothing in flows.py is dropped, and of
+    // records.py only the implementation's untyped parameter.
+    let flows: Vec<&str> = explained
+        .stderr
+        .lines()
+        .filter(|line| line.starts_with("dropped ") && line.contains("src/acme_order/flows.py"))
+        .collect();
+    assert_eq!(flows, Vec::<&str>::new());
+    let records: Vec<&str> = explained
+        .stderr
+        .lines()
+        .filter(|line| line.starts_with("dropped ") && line.contains("src/acme_order/records.py"))
+        .collect();
+    assert_eq!(
+        records,
+        vec!["dropped untyped-receiver: src/acme_order/records.py:35 order.total"]
+    );
     // Every drop the summary counts is listed once, in the order of the source.
     let listed: Vec<&str> = explained
         .stderr

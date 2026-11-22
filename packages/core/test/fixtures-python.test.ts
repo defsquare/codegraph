@@ -284,6 +284,45 @@ describe("fixtures/python/expected/model.jsonl", () => {
     expect([bump["to"], bump["isRead"], bump["isWrite"]]).toEqual([`${PKG}settings.py/counter`, true, true]);
   });
 
+  it("pins the rest of what PLAN §23.6 lists for M22b: the forms, the scopes, newer syntax, every raise", () => {
+    const model = loadSnapshot();
+    const kinds = new Map(model.entities.map((e) => [e.id, e.kind]));
+    const records = `${PKG}records.py`;
+    // A dataclass: its written fields are attributes (a string annotation read); its `__init__` is not.
+    expect(hasEdge(model, "annotationUse", `${records}/Receipt`, "python:<stdlib>%2Fdataclasses")).toBe(true);
+    expect(entity(model, `${records}/Receipt.order`)["declaredType"]).toBe(ORDER);
+    expect(entity(model, `${records}/Receipt.paid`)["value"]).toEqual({ k: "boolean", v: false });
+    expect(entity(model, `${records}/Receipt.lines`)["value"]).toBeUndefined();
+    expect(kinds.has(`${records}/Receipt.__init__`)).toBe(false);
+    // Both spellings of a named tuple, and a typed dict.
+    expect(hasEdge(model, "inheritance", `${records}/Point`, "python:<stdlib>%2Ftyping/NamedTuple")).toBe(true);
+    expect(entity(model, `${records}/Point.y`)["value"]).toEqual({ k: "number", v: "0" });
+    expect(hasEdge(model, "inheritance", `${records}/Pair`, "python:<builtins>/tuple", "generated")).toBe(true);
+    expect(kinds.get(`${records}/Pair.right`)).toBe("attribute");
+    expect(hasEdge(model, "inheritance", `${records}/Totals`, "python:<builtins>/dict", "generated")).toBe(true);
+    expect(kinds.get(`${records}/Totals.tax`)).toBe("attribute");
+    // Two `@overload` signatures and the implementation: one function, at the implementation.
+    const total = entity(model, `${records}/total`);
+    expect([total["signature"], SourceAnchor.parse(total["anchor"]).span]).toEqual(["total(order=…)", [33, 35]]);
+    expect(hasEdge(model, "reference", `${records}/total`, ORDER)).toBe(true);
+    // `nonlocal`, a lambda that is no entity — its call is its writer's — a comprehension, a walrus.
+    const flows = `${PKG}flows.py`;
+    const below = (parent: string) =>
+      model.entities.filter((e) => (e as unknown as Bag)["parent"] === parent && e.kind !== "parameter").map((e) => e.id);
+    expect(below(`${flows}/counter`)).toEqual([`${flows}/counter.bump`]);
+    expect(hasEdge(model, "invocation", `${flows}/counter`, `${ORDER}.__init__`)).toBe(true);
+    // `match`: a class pattern reads its class; a PEP 695 parameter is no attribute; `async def`.
+    expect(hasEdge(model, "reference", `${flows}/describe`, ORDER)).toBe(true);
+    expect(below(`${flows}/Box`)).toEqual([`${flows}/Box.put`]);
+    expect(kinds.get(`${flows}/first`)).toBe("function");
+    expect([entity(model, `${flows}/fetch`)["declaredType"], entity(model, `${flows}/fetch#param:order`)["declaredType"]]).toEqual([ORDER, ORDER]);
+    // `raise` as a class, and a call `from` a caught name.
+    const refund = `${PKG}refunds.py/refund`;
+    expect(hasEdge(model, "throws", refund, `${PKG}errors.py/OrderError`)).toBe(true);
+    expect(hasEdge(model, "throws", refund, `${PKG}errors.py/NotFound`)).toBe(true);
+    expect(hasEdge(model, "invocation", refund, `${PKG}errors.py/NotFound`)).toBe(true);
+  });
+
   it("makes a def written twice ONE entity anchored at the first, and an NFKC twin one name", () => {
     const model = loadSnapshot();
     const dataDir = model.entities.filter((e) => e.id === `${PKG}compat.py/data_dir`);
