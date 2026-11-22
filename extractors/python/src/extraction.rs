@@ -139,6 +139,16 @@ impl Stubs {
     }
 }
 
+/// What a string must be to name a module: dotted identifiers (`a.b`), nothing relative or
+/// stray (`__import__("zipimport\\x00junk")` names none).
+pub(crate) fn is_module_name(text: &str) -> bool {
+    text.split('.').all(|part| {
+        let mut chars = part.chars();
+        chars.next().is_some_and(|first| first.is_alphabetic() || first == '_')
+            && chars.all(|c| c.is_alphanumeric() || c == '_')
+    })
+}
+
 /// Per `def` of a file: whether it is the one an entity is made of — of those written in one
 /// scope under one name, the first that is no `@overload` signature, else the first.
 fn primaries(decls: &FileDecls) -> Vec<bool> {
@@ -780,7 +790,7 @@ impl Extractor<'_> {
                     continue;
                 }
                 let dotted = match &site.literal {
-                    Some(dotted) if !dotted.starts_with('.') && !dotted.is_empty() => dotted.clone(),
+                    Some(dotted) if is_module_name(dotted) => dotted.clone(),
                     _ => {
                         self.stats.drop(file, site.span.0, "computed-import", site.text.clone());
                         continue;

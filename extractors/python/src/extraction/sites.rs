@@ -978,11 +978,7 @@ impl Extractor<'_> {
                 _ => None,
             };
             if let Some(top) = imported {
-                let typed = match decl
-                    .literal
-                    .as_deref()
-                    .filter(|dotted| !dotted.is_empty() && !dotted.starts_with('.'))
-                {
+                let typed = match decl.literal.as_deref().filter(|dotted| super::is_module_name(dotted)) {
                     Some(dotted) => {
                         let dotted = if top {
                             dotted.split('.').next().unwrap_or(dotted)

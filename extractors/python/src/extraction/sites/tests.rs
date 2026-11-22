@@ -523,7 +523,7 @@ fn a_literal_import_module_or_dunder_import_is_an_import_and_a_computed_name_is_
         (
             "m.py",
             "import importlib\nmod = importlib.import_module(\"json\")\nplugin = importlib.import_module(name)\n\
-             legacy = __import__(\"pkg.sub\")\n",
+             legacy = __import__(\"pkg.sub\")\nbad = __import__(\"zipimport\\x00junk\")\n",
         ),
     ]);
     let imports: Vec<(String, u32)> = extraction
@@ -548,7 +548,14 @@ fn a_literal_import_module_or_dunder_import_is_an_import_and_a_computed_name_is_
         .filter(|d| d.reason == "computed-import")
         .map(|d| (d.reason, d.line, d.what.as_str()))
         .collect();
-    assert_eq!(drops, vec![("computed-import", 3, "importlib.import_module(name)")]);
+    // A literal that is no dotted name of identifiers names no module: counted, no stub.
+    assert_eq!(
+        drops,
+        vec![
+            ("computed-import", 3, "importlib.import_module(name)"),
+            ("computed-import", 5, "__import__(\"zipimport\\x00junk\")")
+        ]
+    );
     assert_eq!(extraction.stats.imports.stdlib, 2);
 }
 

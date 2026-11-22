@@ -840,6 +840,7 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).not.toMatch(/not yet measured/);
       expect(notes).toMatch(/106 148/);
       expect(notes).toMatch(/`computed-import`/);
+      expect(notes).toMatch(/a literal that names no module/);
       expect(notes).toMatch(/The extractor's own `generated` edges/);
       expect(notes).toMatch(/else `arg<i>`, zero-based/);
       expect(notes).toMatch(/`Optional\[Order\]` is `Order`/);
