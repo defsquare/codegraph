@@ -20,10 +20,31 @@ pub enum Kind {
     Module(&'static str),
 }
 
+/// A class of the table where its module declares it: `(module, name)`.
+pub type ClassRef = (&'static str, &'static str);
+
+/// What a class's body binds a name to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Member {
+    Attribute,
+    Class,
+    Method,
+    /// `@property` and its accessors: read and written as an attribute.
+    Property,
+}
+
 pub struct StdlibTable {
     commit: &'static str,
     modules: HashSet<&'static str>,
     names: HashMap<(&'static str, &'static str), Kind>,
+    /// Every class name → where it is declared: itself, or the module a re-export names.
+    declared: HashMap<(&'static str, &'static str), ClassRef>,
+    bases: HashMap<ClassRef, Vec<(u32, ClassRef)>>,
+    members: HashMap<(ClassRef, &'static str), Member>,
+    /// Module → its names in order, for a star import.
+    module_names: HashMap<&'static str, Vec<&'static str>>,
+    /// `__all__`, for the modules whose stub writes one.
+    all: HashMap<&'static str, Vec<&'static str>>,
 }
 
 impl StdlibTable {
@@ -45,6 +66,40 @@ impl StdlibTable {
     pub fn builtin(&self, name: &str) -> Option<Kind> {
         self.name("builtins", name)
     }
+
+    /// The class `module.name` is, where its own module declares it.
+    pub fn class(&self, module: &str, name: &str) -> Option<ClassRef> {
+        self.declared.get(&(module, name)).copied()
+    }
+
+    /// A class's bases, in the order its stub writes them; those no stub resolves are left out.
+    pub fn bases(&self, class: ClassRef) -> Vec<ClassRef> {
+        self.bases
+            .get(&class)
+            .map(|bases| bases.iter().map(|(_, base)| *base).collect())
+            .unwrap_or_default()
+    }
+
+    /// What the class itself — not an ancestor — binds `name` to.
+    pub fn member(&self, class: ClassRef, name: &str) -> Option<Member> {
+        self.members.get(&(class, name)).copied()
+    }
+
+    /// What `from module import *` binds: `__all__`, else every public name.
+    pub fn exports(&self, module: &str) -> Vec<&'static str> {
+        if let Some(all) = self.all.get(module) {
+            return all.clone();
+        }
+        self.module_names
+            .get(module)
+            .map(|names| names.iter().copied().filter(|name| !name.starts_with('_')).collect())
+            .unwrap_or_default()
+    }
+}
+
+/// `a.b.C` → (`a.b`, `C`).
+fn class_ref(dotted: &'static str) -> ClassRef {
+    dotted.rsplit_once('.').expect("a class is module.name")
 }
 
 pub fn table() -> &'static StdlibTable {
@@ -64,6 +119,11 @@ fn parse(text: &'static str) -> StdlibTable {
         commit,
         modules: HashSet::new(),
         names: HashMap::new(),
+        declared: HashMap::new(),
+        bases: HashMap::new(),
+        members: HashMap::new(),
+        module_names: HashMap::new(),
+        all: HashMap::new(),
     };
     for line in lines {
         let fields: Vec<&'static str> = line.split('\t').collect();
@@ -74,6 +134,12 @@ fn parse(text: &'static str) -> StdlibTable {
             }
             ["name", module, name, "module", target] => {
                 table.names.insert((module, name), Kind::Module(target));
+                table.module_names.entry(module).or_default().push(name);
+            }
+            ["name", module, name, "class", target] => {
+                table.names.insert((module, name), Kind::Class);
+                table.declared.insert((module, name), class_ref(target));
+                table.module_names.entry(module).or_default().push(name);
             }
             ["name", module, name, kind] => {
                 let kind = match *kind {
@@ -82,7 +148,32 @@ fn parse(text: &'static str) -> StdlibTable {
                     "value" => Kind::Value,
                     other => panic!("stdlib table: unknown kind {other:?}"),
                 };
+                if kind == Kind::Class {
+                    table.declared.insert((module, name), (module, name));
+                }
                 table.names.insert((module, name), kind);
+                table.module_names.entry(module).or_default().push(name);
+            }
+            ["base", class, index, base] => {
+                let index = index.parse().expect("a base's index is a number");
+                let bases = table.bases.entry(class_ref(class)).or_default();
+                bases.push((index, class_ref(base)));
+                bases.sort();
+            }
+            ["member", class, name, kind] => {
+                let member = match *kind {
+                    "attribute" => Member::Attribute,
+                    "class" => Member::Class,
+                    "method" => Member::Method,
+                    "property" => Member::Property,
+                    other => panic!("stdlib table: unknown member kind {other:?}"),
+                };
+                table.members.insert((class_ref(class), name), member);
+            }
+            ["all", module, names] => {
+                table
+                    .all
+                    .insert(module, names.split(' ').filter(|name| !name.is_empty()).collect());
             }
             _ => panic!("stdlib table: unknown record {line:?}"),
         }
@@ -139,5 +230,36 @@ mod tests {
         assert_eq!(stdlib.builtin("_T"), None);
         // Python 2's builtins are not Python 3's.
         assert_eq!(stdlib.builtin("StandardError"), None);
+    }
+
+    #[test]
+    fn knows_where_a_class_is_declared_what_it_inherits_and_what_it_holds() {
+        let stdlib = table();
+        // A re-export names the class where its module declares it.
+        assert_eq!(
+            stdlib.class("unittest", "TestCase"),
+            Some(("unittest.case", "TestCase"))
+        );
+        assert_eq!(stdlib.class("enum", "Enum"), Some(("enum", "Enum")));
+        assert_eq!(stdlib.class("collections.abc", "Mapping"), Some(("typing", "Mapping")));
+        assert_eq!(stdlib.class("os", "getcwd"), None);
+        assert_eq!(stdlib.bases(("collections", "OrderedDict")), [("builtins", "dict")]);
+        assert_eq!(stdlib.bases(("builtins", "ValueError")), [("builtins", "Exception")]);
+        assert!(stdlib.bases(("builtins", "object")).is_empty());
+        assert_eq!(
+            stdlib.member(("unittest.case", "TestCase"), "assertEqual"),
+            Some(Member::Method)
+        );
+        assert_eq!(stdlib.member(("builtins", "int"), "real"), Some(Member::Property));
+        assert_eq!(stdlib.member(("builtins", "object"), "__init__"), Some(Member::Method));
+        assert_eq!(
+            stdlib.member(("builtins", "BaseException"), "args"),
+            Some(Member::Attribute)
+        );
+        assert_eq!(stdlib.member(("unittest.case", "TestCase"), "assertNothing"), None);
+        // A star import binds `__all__` where the stub writes one, else the public names.
+        assert!(stdlib.exports("collections.abc").contains(&"Mapping"));
+        let string = stdlib.exports("string");
+        assert!(string.contains(&"Template") && !string.iter().any(|name| name.starts_with('_')));
     }
 }

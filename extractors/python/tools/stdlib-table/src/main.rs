@@ -12,6 +12,10 @@
 //! module  os.path  3.0-             a module, and the versions `VERSIONS` gives it (removed ones included)
 //! name    os.path  join  function   a name the module binds: class, function, value…
 //! name    os       sys   module sys …or module, with the module it is
+//! name    unittest TestCase class unittest.case.TestCase   …or a class declared elsewhere, with where
+//! base    collections.OrderedDict  0  builtins.dict        a class's bases, in order, where they resolve
+//! member  unittest.case.TestCase  assertEqual  method      what a class body binds: method, property, attribute, class
+//! all     string  Formatter Template …                     `__all__`, where the stub writes one: what `*` binds
 //! ```
 //!
 //! A name is what the module binds at run time as far as its stub says: a
@@ -72,10 +76,42 @@ enum Raw {
     },
 }
 
+/// What a class body binds a name to; declaration order is precedence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Member {
+    Attribute,
+    Class,
+    Method,
+    /// Read as an attribute, written as one: `@property` and its accessors.
+    Property,
+}
+
+impl Member {
+    fn word(self) -> &'static str {
+        match self {
+            Member::Attribute => "attribute",
+            Member::Class => "class",
+            Member::Method => "method",
+            Member::Property => "property",
+        }
+    }
+}
+
+/// A class the stub declares at its top level: its bases as written, its members.
+#[derive(Default, Debug)]
+struct ClassStub {
+    bases: Vec<Vec<String>>,
+    members: BTreeMap<String, Member>,
+}
+
+const PROPERTIES: &[&str] = &["property", "cached_property", "abstractproperty"];
+
 #[derive(Default, Debug)]
 struct Stub {
     /// Name → every binding the stub writes, in source order.
     names: BTreeMap<String, Vec<Raw>>,
+    /// Top-level classes by name; a class written in two branches keeps its first bases.
+    classes: BTreeMap<String, ClassStub>,
     /// What a plain import binds: readable by an alias (`path = _path`), exported never.
     imported: BTreeMap<String, Raw>,
     /// `from m import *`, resolved to `m`.
@@ -170,8 +206,27 @@ impl Reader<'_> {
 
     fn statement(&mut self, stmt: &Stmt) {
         match stmt {
-            Stmt::ClassDef(class) if !type_check_only(&class.decorator_list) => {
-                self.bind(class.name.as_str(), Raw::Class);
+            Stmt::ClassDef(class) => {
+                if !type_check_only(&class.decorator_list) {
+                    self.bind(class.name.as_str(), Raw::Class);
+                }
+                let entry = self
+                    .stub
+                    .classes
+                    .entry(class.name.to_string())
+                    .or_insert_with(|| ClassStub {
+                        bases: class
+                            .arguments
+                            .iter()
+                            .flat_map(|arguments| arguments.args.iter())
+                            .filter_map(|base| match base {
+                                Expr::Subscript(subscript) => dotted(&subscript.value),
+                                other => dotted(other),
+                            })
+                            .collect(),
+                        members: BTreeMap::new(),
+                    });
+                class_members(&class.body, entry);
             }
             Stmt::FunctionDef(function) if !type_check_only(&function.decorator_list) => {
                 self.bind(function.name.as_str(), Raw::Function);
@@ -292,6 +347,52 @@ impl Reader<'_> {
     }
 }
 
+/// What a class body binds, in every branch; a name bound two ways keeps the stronger.
+fn class_members(body: &[Stmt], class: &mut ClassStub) {
+    for stmt in body {
+        match stmt {
+            Stmt::FunctionDef(function) => {
+                let property = function.decorator_list.iter().any(|decorator| {
+                    let last = match &decorator.expression {
+                        Expr::Attribute(attribute) => Some(attribute.attr.to_string()),
+                        other => dotted(other).and_then(|names| names.last().cloned()),
+                    };
+                    last.is_some_and(|last| {
+                        PROPERTIES.contains(&last.as_str()) || ["setter", "deleter", "getter"].contains(&last.as_str())
+                    })
+                });
+                let member = if property { Member::Property } else { Member::Method };
+                bind_member(class, function.name.as_str(), member);
+            }
+            Stmt::ClassDef(nested) => bind_member(class, nested.name.as_str(), Member::Class),
+            Stmt::Assign(assign) => {
+                for target in &assign.targets {
+                    if let Expr::Name(name) = target {
+                        bind_member(class, name.id.as_str(), Member::Attribute);
+                    }
+                }
+            }
+            Stmt::AnnAssign(annotated) => {
+                if let Expr::Name(name) = annotated.target.as_ref() {
+                    bind_member(class, name.id.as_str(), Member::Attribute);
+                }
+            }
+            Stmt::If(branch) => {
+                class_members(&branch.body, class);
+                for clause in &branch.elif_else_clauses {
+                    class_members(&clause.body, class);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn bind_member(class: &mut ClassStub, name: &str, member: Member) {
+    let entry = class.members.entry(name.to_owned()).or_insert(member);
+    *entry = (*entry).max(member);
+}
+
 fn type_only_call(value: &Expr) -> bool {
     let Expr::Call(call) = value else { return false };
     dotted(&call.func)
@@ -343,7 +444,7 @@ impl Table {
         let stub = self.stubs.get(module)?;
         let mut best: Option<(Kind, Option<String>)> = None;
         for raw in stub.names.get(name).into_iter().flatten() {
-            let found = self.raw_kind(module, raw, visiting);
+            let found = self.raw_kind(module, name, raw, visiting);
             offer(&mut best, found);
         }
         if best.is_none() {
@@ -358,14 +459,16 @@ impl Table {
         best
     }
 
+    /// A class's target is where it is declared: `module.name`, whatever re-exports it.
     fn raw_kind(
         &self,
         module: &str,
+        name: &str,
         raw: &Raw,
         visiting: &mut BTreeSet<(String, String)>,
     ) -> Option<(Kind, Option<String>)> {
         match raw {
-            Raw::Class => Some((Kind::Class, None)),
+            Raw::Class => Some((Kind::Class, Some(format!("{module}.{name}")))),
             Raw::Function => Some((Kind::Function, None)),
             Raw::Value => Some((Kind::Value, None)),
             Raw::Module(target) => Some((Kind::Module, Some(target.clone()))),
@@ -400,7 +503,7 @@ impl Table {
         let imported = self.stubs.get(module).and_then(|stub| stub.imported.get(first));
         let mut current = self
             .kind(module, first, visiting)
-            .or_else(|| imported.and_then(|raw| self.raw_kind(module, raw, visiting)))
+            .or_else(|| imported.and_then(|raw| self.raw_kind(module, first, raw, visiting)))
             .or_else(|| self.kind("builtins", first, visiting))?;
         for attribute in rest {
             current = match current {
@@ -433,6 +536,33 @@ impl Table {
             Some(_) => stub.stars.iter().flat_map(|star| self.exports(star)).collect(),
             None => names.into_iter().filter(|name| !name.starts_with('_')).collect(),
         }
+    }
+
+    /// The `base` and `member` records of the classes `module` declares.
+    fn class_lines(&self, module: &str) -> Vec<String> {
+        let Some(stub) = self.stubs.get(module) else {
+            return Vec::new();
+        };
+        let mut lines = Vec::new();
+        for (name, class) in &stub.classes {
+            let declared = format!("{module}.{name}");
+            for (index, base) in class.bases.iter().enumerate() {
+                if let Some((Kind::Class, Some(target))) = self.alias(module, base, &mut BTreeSet::new()) {
+                    lines.push(format!("base\t{declared}\t{index}\t{target}"));
+                }
+            }
+            for (member, kind) in &class.members {
+                lines.push(format!("member\t{declared}\t{member}\t{}", kind.word()));
+            }
+        }
+        lines
+    }
+
+    /// `all <module> <names…>`, when the stub writes `__all__`: what a star import of it binds.
+    fn all_line(&self, module: &str) -> Option<String> {
+        self.stubs.get(module)?.all.as_ref()?;
+        let names: Vec<String> = self.exports(module).into_iter().collect();
+        Some(format!("all\t{module}\t{}", names.join(" ")))
     }
 
     /// Every name a module binds: its own, then what its star imports bring.
@@ -521,12 +651,17 @@ fn generate(stdlib: &Path, commit: &str) -> Result<String, String> {
             let Some((kind, target)) = table.kind(module, &name, &mut BTreeSet::new()) else {
                 continue;
             };
-            match target.filter(|_| kind == Kind::Module) {
-                Some(target) => lines.push(format!("name\t{module}\t{name}\tmodule\t{target}")),
+            // A class declared here needs no target: only a re-export says where it is from.
+            let here = format!("{module}.{name}");
+            match target.filter(|target| kind == Kind::Module || (kind == Kind::Class && *target != here)) {
+                Some(target) => lines.push(format!("name\t{module}\t{name}\t{}\t{target}", kind.word())),
                 None => lines.push(format!("name\t{module}\t{name}\t{}", kind.word())),
             }
         }
+        lines.extend(table.class_lines(module));
+        lines.extend(table.all_line(module));
     }
+    lines.sort();
     let mut out =
         format!("# typeshed {commit} stdlib/ — generated by extractors/python/tools/stdlib-table, never edited\n");
     for line in lines {
@@ -602,12 +737,12 @@ mod tests {
         for absent in ["sys", "Any", "TypeVar", "_T", "_Alias", "_Hidden"] {
             assert!(!names.contains(absent), "{absent}");
         }
-        assert_eq!(kind(&stubs, "m", "Shown"), Some((Kind::Class, None)));
+        assert_eq!(kind(&stubs, "m", "Shown"), Some((Kind::Class, Some("m.Shown".into()))));
         assert_eq!(kind(&stubs, "m", "run"), Some((Kind::Function, None)));
         assert_eq!(kind(&stubs, "m", "DEBUG"), Some((Kind::Value, None)));
         assert_eq!(kind(&stubs, "m", "Public"), Some((Kind::Value, None)));
         // Bound as a class in one branch and a function in the other: a class.
-        assert_eq!(kind(&stubs, "m", "New"), Some((Kind::Class, None)));
+        assert_eq!(kind(&stubs, "m", "New"), Some((Kind::Class, Some("m.New".into()))));
     }
 
     #[test]
@@ -638,12 +773,18 @@ mod tests {
             ("os.path", false, "def join(a: str) -> str: ...\n"),
             ("sys", false, "argv: list[str]\n"),
         ]);
-        assert_eq!(kind(&stubs, "collections.abc", "Mapping"), Some((Kind::Class, None)));
+        assert_eq!(
+            kind(&stubs, "collections.abc", "Mapping"),
+            Some((Kind::Class, Some("typing.Mapping".into())))
+        );
         assert!(stubs.names("collections.abc").contains("Mapping"));
         // A plain `from … import` in a stub binds nothing: `collections` does not bind `abc` either.
         assert_eq!(kind(&stubs, "collections", "Mapping"), None);
         assert_eq!(kind(&stubs, "collections", "abc"), None);
-        assert_eq!(kind(&stubs, "typing", "Text"), Some((Kind::Class, None)));
+        assert_eq!(
+            kind(&stubs, "typing", "Text"),
+            Some((Kind::Class, Some("builtins.str".into())))
+        );
         assert_eq!(kind(&stubs, "os", "sys"), Some((Kind::Module, Some("sys".to_owned()))));
         assert_eq!(kind(&stubs, "os", "join"), Some((Kind::Function, None)));
         // `path = _path` reads a plain import's binding, which is itself exported never.
@@ -661,6 +802,66 @@ mod tests {
             stubs.member("os", "path", &mut BTreeSet::new()),
             Some((Kind::Module, Some("os.path".to_owned())))
         );
+    }
+
+    #[test]
+    fn records_where_a_class_is_declared_its_bases_and_its_members() {
+        let stubs = table(&[
+            (
+                "builtins",
+                false,
+                "class object:\n    def __init__(self) -> None: ...\nclass dict(object): ...\n",
+            ),
+            (
+                "collections",
+                true,
+                "import sys\nfrom typing import Generic, TypeVar\n_T = TypeVar('_T')\n\
+                 class OrderedDict(dict[str, int]):\n    def move_to_end(self, key) -> None: ...\n    \
+                 @property\n    def size(self) -> int: ...\n    @size.setter\n    def size(self, v) -> None: ...\n    \
+                 maxlen: int\n    if sys.version_info >= (3, 12):\n        def popitem(self): ...\n    \
+                 class Inner: ...\n\
+                 class Generic_(Generic[_T]): ...\n",
+            ),
+            (
+                "unittest",
+                true,
+                "from .case import TestCase as TestCase\n__all__ = ['TestCase']\n",
+            ),
+            (
+                "unittest.case",
+                false,
+                "class TestCase:\n    def assertEqual(self, a, b) -> None: ...\n",
+            ),
+        ]);
+        // A class re-exported elsewhere is still the one its module declares.
+        assert_eq!(
+            kind(&stubs, "unittest", "TestCase"),
+            Some((Kind::Class, Some("unittest.case.TestCase".into())))
+        );
+        assert_eq!(
+            kind(&stubs, "collections", "OrderedDict"),
+            Some((Kind::Class, Some("collections.OrderedDict".into())))
+        );
+        let lines = stubs.class_lines("collections");
+        for expected in [
+            // A subscripted base is its subscripted name; `Generic[_T]` names no class.
+            "base\tcollections.OrderedDict\t0\tbuiltins.dict",
+            "member\tcollections.OrderedDict\tmove_to_end\tmethod",
+            // A property and its setter are one member, read as a property.
+            "member\tcollections.OrderedDict\tsize\tproperty",
+            "member\tcollections.OrderedDict\tmaxlen\tattribute",
+            "member\tcollections.OrderedDict\tpopitem\tmethod",
+            "member\tcollections.OrderedDict\tInner\tclass",
+        ] {
+            assert!(lines.contains(&expected.to_owned()), "{expected} in {lines:#?}");
+        }
+        assert!(
+            !lines.iter().any(|line| line.starts_with("base\tcollections.Generic_")),
+            "{lines:#?}"
+        );
+        // A literal __all__ is what a star import binds; none written, the public names.
+        assert_eq!(stubs.all_line("unittest").as_deref(), Some("all\tunittest\tTestCase"));
+        assert_eq!(stubs.all_line("collections"), None);
     }
 
     #[test]
