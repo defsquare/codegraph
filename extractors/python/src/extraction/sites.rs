@@ -1246,18 +1246,16 @@ impl Extractor<'_> {
             Fold::Written { module, symbol } | Fold::Class(ClassId::Opaque { module, symbol }) => {
                 (self.stub_class(module, symbol), landed(module))
             }
+            // Where the table declares it: the key every spelling of that class takes.
             Fold::Class(ClassId::Table(class)) => {
                 if class.0 == "builtins" {
                     let parent = self.stubs.builtins();
                     return (self.stubs.type_below(parent, class.1), Landed::Builtins);
                 }
-                let (module, symbol) = self
-                    .classes
-                    .written(*class)
-                    .cloned()
-                    .unwrap_or_else(|| (ModuleRef::Stdlib(class.0.to_owned()), class.1.to_owned()));
-                let parent = self.stubs.module(&module, &self.file_keys);
-                (self.stubs.type_below(parent, &symbol), Landed::Stdlib)
+                (
+                    self.stub_class(&ModuleRef::Stdlib(class.0.to_owned()), class.1),
+                    Landed::Stdlib,
+                )
             }
             Fold::Class(ClassId::Corpus { .. }) => unreachable!("a corpus class is never folded"),
         }

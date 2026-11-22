@@ -736,7 +736,21 @@ impl Extractor<'_> {
     /// `django.db`) is keyed at the dotted module (`django.db.models`), every segment before
     /// the last taken for module path — the key `from django.db.models import Model` gives. A
     /// guess (`models` could be a class or a value of `django.db`), counted `dotted-site-class`.
+    /// A standard-library class is keyed where typeshed declares it, the table's re-exports
+    /// followed (`unittest.TestCase` is `unittest.case`'s): one key per class, whatever the
+    /// import names. The Python 2 names carry no such data, and stay as written.
     pub(super) fn stub_class(&mut self, module: &ModuleRef, symbol: &str) -> Key {
+        if let ModuleRef::Stdlib(dotted) = module
+            && let Some((declared, name)) = stdlib_table::table().class(dotted, symbol)
+        {
+            let parent = if declared == "builtins" {
+                self.stubs.builtins()
+            } else {
+                self.stubs
+                    .module(&ModuleRef::Stdlib(declared.to_owned()), &self.file_keys)
+            };
+            return self.stubs.type_below(parent, name);
+        }
         if let (ModuleRef::Site(dotted), Some((path, name))) = (module, symbol.rsplit_once('.')) {
             let module = ModuleRef::Site(format!("{dotted}.{path}"));
             let parent = self.stubs.module(&module, &self.file_keys);
@@ -756,10 +770,7 @@ impl Extractor<'_> {
                 module: module @ ModuleRef::Stdlib(_),
                 symbol,
                 kind: Some(Kind::Class),
-            } => {
-                let module = self.stubs.module(module, &self.file_keys);
-                Some(self.stubs.type_below(module, &symbol.join(".")))
-            }
+            } => Some(self.stub_class(module, &symbol.join("."))),
             _ => None,
         }
     }

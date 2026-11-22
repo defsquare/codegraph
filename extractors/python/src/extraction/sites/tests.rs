@@ -167,7 +167,7 @@ fn every_receiver_shape_lands_in_the_tier_the_notes_give_it() {
     // The one library class that could answer: `self.assertEqual`, `M.objects.filter()`, `self.save()`.
     assert_eq!(
         of(&all, "T.test"),
-        vec![("invocation", "<stdlib>%2Funittest/TestCase", "derived", None)]
+        vec![("invocation", "<stdlib>%2Funittest.case/TestCase", "derived", None)]
     );
     assert_eq!(
         of(&all, "M.go"),
@@ -615,6 +615,48 @@ fn a_literal_import_module_or_dunder_import_is_an_import_and_a_computed_name_is_
 }
 
 #[test]
+fn a_standard_library_class_is_keyed_where_typeshed_declares_it_whatever_the_import_names() {
+    let extraction = extract_sources(&[(
+        "m.py",
+        "import json\nimport unittest\nfrom unittest import TestCase\nfrom unittest.case import TestCase as Case\n\
+         from collections import abc\nimport ConfigParser\n\
+         class A(unittest.TestCase): pass\nclass B(TestCase): pass\nclass C(Case): pass\nclass Z(abc.Mapping): pass\n\
+         class P(ConfigParser.RawConfigParser): pass\n\
+         def f(text):\n    try:\n        return json.loads(text)\n    except json.JSONDecodeError:\n        return None\n",
+    )]);
+    let stub_classes: Vec<String> = extraction
+        .model
+        .entities
+        .iter()
+        .filter(|e| e.is_stub == Some(true) && e.kind == "class")
+        .map(|e| e.key.render(ids::LANG))
+        .collect();
+    // One key per class: the module typeshed declares it in, the re-export followed. A Python 2
+    // module the 2.7 list names carries no such data: as written.
+    assert_eq!(
+        stub_classes,
+        vec![
+            "python:<stdlib>%2FConfigParser/RawConfigParser",
+            "python:<stdlib>%2Fjson.decoder/JSONDecodeError",
+            "python:<stdlib>%2Ftyping/Mapping",
+            "python:<stdlib>%2Funittest.case/TestCase",
+        ]
+    );
+    // The import still names the module written.
+    let imports: Vec<String> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "import")
+        .map(|e| e.to.render(ids::LANG))
+        .collect();
+    assert!(
+        imports.contains(&"python:<stdlib>%2Funittest".to_owned()),
+        "{imports:?}"
+    );
+}
+
+#[test]
 fn a_site_class_reached_through_an_imported_name_is_keyed_at_the_dotted_module_and_counted() {
     let extraction = extract_sources(&[
         (
@@ -708,7 +750,7 @@ fn a_base_bound_once_to_a_class_is_that_class_by_flow_and_anything_else_stays_co
         bases,
         vec![
             row("A", "m.py/Real"),
-            row("T", "<stdlib>%2Funittest/TestCase"),
+            row("T", "<stdlib>%2Funittest.case/TestCase"),
             row("M", "<site>%2Fdjango.db.models/Model"),
         ]
     );
@@ -717,7 +759,7 @@ fn a_base_bound_once_to_a_class_is_that_class_by_flow_and_anything_else_stays_co
     assert_eq!(of(&all, "A.go"), vec![("invocation", "Real.ping", "derived", None)]);
     assert_eq!(
         of(&all, "T.test"),
-        vec![("invocation", "<stdlib>%2Funittest/TestCase", "derived", None)]
+        vec![("invocation", "<stdlib>%2Funittest.case/TestCase", "derived", None)]
     );
     let drops: Vec<(&str, u32, &str)> = extraction
         .stats

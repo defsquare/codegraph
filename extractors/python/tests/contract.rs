@@ -591,3 +591,47 @@ fn a_module_of_one_100000_term_expression_extracts() {
     assert_eq!(run.code, EXIT_OK, "{}", run.stderr);
     assert!(fs::read_to_string(&out).unwrap().contains(r#""name":"After""#));
 }
+
+/// A field of one flat record line: `"key":value` up to the next `,` or `}` (a string unquoted).
+fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    let start = line.find(&format!("\"{key}\":"))? + key.len() + 3;
+    let rest = &line[start..];
+    if let Some(quoted) = rest.strip_prefix('"') {
+        return quoted.split('"').next();
+    }
+    rest.split([',', '}']).next()
+}
+
+/// One key per standard-library class: every `<stdlib>` stub class of the snapshot is keyed
+/// where the table declares it, so no re-export spelling of a class gives it a second key. A
+/// name the table does not declare (a Python 2 module's) is as written.
+#[test]
+fn no_standard_library_class_of_the_fixture_has_two_keys() {
+    let snapshot = fs::read_to_string(repository().join("fixtures/python/expected/model.jsonl")).unwrap();
+    let mut modules = std::collections::HashMap::new();
+    let mut classes = Vec::new();
+    for line in snapshot.lines().filter(|line| line.starts_with("{\"t\":\"e\"")) {
+        let (index, symbol) = (field(line, "i").unwrap(), field(line, "s").unwrap());
+        if field(line, "m") == Some(index) {
+            modules.insert(index, symbol);
+        } else if line.contains("\"isStub\":true") {
+            classes.push((field(line, "m").unwrap(), symbol));
+        }
+    }
+    let table = codegraph_python::stdlib_table::table();
+    let mut checked = 0;
+    for (module, symbol) in classes {
+        let Some(dotted) = modules[module].strip_prefix("<stdlib>%2F") else {
+            continue;
+        };
+        checked += 1;
+        if let Some(declared) = table.class(dotted, symbol) {
+            assert_eq!(
+                declared,
+                (dotted, symbol),
+                "{dotted}.{symbol} is keyed off its declaration"
+            );
+        }
+    }
+    assert!(checked >= 5, "the fixture names standard-library classes: {checked}");
+}

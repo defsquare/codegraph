@@ -218,7 +218,7 @@ describe("fixtures/python/expected/model.jsonl", () => {
     // A property is read as an attribute; `self.assertEqual` is the one library class that could answer.
     expect(hasEdge(model, "access", "python:bin%2Facme-report/main", `${ORDER}.total`)).toBe(true);
     const test = "python:tests%2Ftest_orders.py/TestOrder.test_total";
-    expect(hasEdge(model, "invocation", test, "python:<stdlib>%2Funittest/TestCase", "derived")).toBe(true);
+    expect(hasEdge(model, "invocation", test, "python:<stdlib>%2Funittest.case/TestCase", "derived")).toBe(true);
     // A module or a class whose own code calls says so.
     const sources = new Set(model.edges.filter((e) => e.edge === "invocation").map((e) => e.from));
     for (const e of model.entities.filter((candidate) => candidate.kind === "module" && sources.has(candidate.id))) {
@@ -362,7 +362,7 @@ describe("fixtures/python/expected/model.jsonl", () => {
     for (const [id, parent] of [
       ["python:<builtins>/Exception", "python:<builtins>"],
       ["python:<stdlib>%2Fenum/Enum", "python:<stdlib>%2Fenum"],
-      ["python:<stdlib>%2Fcollections.abc/Mapping", "python:<stdlib>%2Fcollections.abc"],
+      ["python:<stdlib>%2Ftyping/Mapping", "python:<stdlib>%2Ftyping"],
       ["python:<site>%2Fdjango.db.models/Model", "python:<site>%2Fdjango.db.models"],
       ["python:<site>%2Fsqlalchemy.orm/DeclarativeBase", "python:<site>%2Fsqlalchemy.orm"],
     ] as const) {

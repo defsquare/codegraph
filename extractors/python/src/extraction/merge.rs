@@ -105,8 +105,13 @@ impl Extractor<'_> {
                     }
                 },
                 (None, Some(None)) => ids::stub_type_key(&ids::builtins_key(), &base.name),
+                // Where the table declares it, as every site keys it.
                 (None, Some(Some(ModuleRef::Stdlib(dotted)))) => {
-                    ids::stub_type_key(&ids::stdlib_key(dotted), &base.name)
+                    match crate::stdlib_table::table().class(dotted, &base.name) {
+                        Some(("builtins", name)) => ids::stub_type_key(&ids::builtins_key(), name),
+                        Some((declared, name)) => ids::stub_type_key(&ids::stdlib_key(declared), name),
+                        None => ids::stub_type_key(&ids::stdlib_key(dotted), &base.name),
+                    }
                 }
                 (None, Some(Some(module))) => {
                     let dotted = match module {
@@ -135,6 +140,7 @@ impl Extractor<'_> {
                     let module = self.stubs.builtins();
                     self.stubs.type_below(module, &base.name)
                 }
+                Some(Some(module @ ModuleRef::Stdlib(_))) => self.stub_class(&module, &base.name),
                 Some(Some(module)) => {
                     let module = self.stubs.module(&module, &self.file_keys);
                     self.stubs.type_below(module, &base.name)

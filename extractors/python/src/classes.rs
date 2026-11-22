@@ -77,8 +77,6 @@ pub struct Classes {
     members: Vec<Vec<HashMap<String, OwnMember>>>,
     /// Per file, per class: its attributes and where each is bound.
     attributes: Vec<Vec<BTreeMap<String, AttributeSites>>>,
-    /// The module and symbol a table class was first written as, as a base: the key its stub takes.
-    written: HashMap<ClassRef, (ModuleRef, String)>,
     /// Per file, per class: the classes of its order reached only through a base that is an alias.
     aliased: Vec<Vec<Vec<ClassId>>>,
 }
@@ -86,7 +84,6 @@ pub struct Classes {
 impl Classes {
     pub fn new(files: &[FileDecls], resolver: &Resolver<'_>) -> Self {
         let table = stdlib_table::table();
-        let mut written = HashMap::new();
         let mut bases: Vec<Vec<Vec<ClassId>>> = Vec::with_capacity(files.len());
         // Per file, per class: the bases no line names as a class, reached through an alias.
         let mut through: Vec<Vec<Vec<ClassId>>> = Vec::with_capacity(files.len());
@@ -136,11 +133,6 @@ impl Classes {
                         Some(id) => {
                             if alias {
                                 aliases.push(id.clone());
-                            }
-                            if let (ClassId::Table(class), Value::External { module, symbol, .. }) = (&id, &value) {
-                                written
-                                    .entry(*class)
-                                    .or_insert_with(|| (module.clone(), symbol.join(".")));
                             }
                             resolved.push(id);
                         }
@@ -211,7 +203,6 @@ impl Classes {
             dynamic,
             members,
             attributes,
-            written,
             aliased,
         }
     }
@@ -246,10 +237,6 @@ impl Classes {
     }
 
     /// How a table class is keyed: as a base first wrote it, else below the module that declares it.
-    pub fn written(&self, class: ClassRef) -> Option<&(ModuleRef, String)> {
-        self.written.get(&class)
-    }
-
     /// `name` read along `order` (an MRO, or its tail after `super()`); `class_object` when
     /// the receiver is the class itself, so `type`'s members are the language too.
     pub fn find(&self, order: &[ClassId], dynamic: bool, name: &str, class_object: bool) -> Found {
@@ -682,10 +669,6 @@ mod tests {
             let (file, t) = at("m.py", "T");
             let test_case = ClassId::Table(("unittest.case", "TestCase"));
             assert_eq!(classes.mro(file, t)[1], test_case);
-            assert_eq!(
-                classes.written(("unittest.case", "TestCase")),
-                Some(&(ModuleRef::Stdlib("unittest".into()), "TestCase".into()))
-            );
             let find = |name: &str, member: &str| {
                 let (file, class) = at("m.py", name);
                 classes.find(classes.mro(file, class), classes.is_dynamic(file, class), member, false)
