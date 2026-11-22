@@ -8,7 +8,7 @@
 //        [--npm-sha256 HEX] [--release-base URL] [--out DIR]
 //
 // Exported for the tests; the CLI form writes Casks/codegraph.rb and
-// Formula/codegraph-{java,csharp,elixir,ruby,metrics,typescript}.rb under --out.
+// Formula/codegraph-{java,csharp,elixir,ruby,python,metrics,typescript}.rb under --out.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -109,6 +109,12 @@ export const BINARY_EXTRACTORS = {
     // The ruby-native job: the same four Unix runners as the metrics pass.
     platforms: { macos: { arm: "osx-arm64", intel: "osx-x64" }, linux: { arm: "linux-arm64", intel: "linux-x64" } },
     sample: { file: "hello.rb", text: "class Hello\\nend\\n" },
+  },
+  python: {
+    description: "Codegraph extractor for Python (Ruff's parser, a Rust binary that needs no Python)",
+    // The python-native job: the same four Unix runners as the Ruby one.
+    platforms: { macos: { arm: "osx-arm64", intel: "osx-x64" }, linux: { arm: "linux-arm64", intel: "linux-x64" } },
+    sample: { file: "hello.py", text: "class Hello:\\n    pass\\n" },
   },
 };
 
