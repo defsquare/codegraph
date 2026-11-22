@@ -150,8 +150,9 @@ export const pythonProfile: Profile = {
       "__reduce__", "__getstate__", "__setstate__", "__slots__", "__all__", "__name__", "__main__",
       "__doc__", "__dict__",
     ],
+    // `conftest`: pytest's fixture file, the Ruby lexicon's `rakefile` of this language.
     technical: [
-      "dict", "kwargs", "metaclass", "py", "tuple",
+      "conftest", "dict", "kwargs", "metaclass", "py", "tuple",
     ],
     // The module is the file: its name is a path whose extension is not a word.
     fileKinds: ["module"],

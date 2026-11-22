@@ -86,4 +86,10 @@ describe("the hand counts of the fixtures' READMEs", () => {
   it("csharp: the interface marker is no word", () => {
     expect(buildVocabulary(graphOf("csharp")).terms.map((entry) => entry.text)).not.toContain("i");
   });
+
+  // pytest's per-directory fixture file, in nearly every Python repository.
+  it("python: `conftest` is a technical word", () => {
+    const conftest = buildVocabulary(graphOf("python")).terms.filter((entry) => entry.text === "conftest");
+    expect(conftest.map((entry) => entry.class)).toEqual(["technical"]);
+  });
 });
