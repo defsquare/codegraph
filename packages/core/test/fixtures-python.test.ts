@@ -69,9 +69,13 @@ describe("fixtures/python/expected/model.jsonl", () => {
   it("has no self-referencing edges, and only provenances the profile's notes license", () => {
     const model = loadSnapshot();
     expect(selfReferences(model).map((s) => s.path)).toEqual([]);
-    // M22a writes facts only: an import is written, a base is a name the scoping rules bind.
-    expect(new Set(model.edges.map((e) => e.provenance))).toEqual(new Set(["declared"]));
-    expect(new Set(model.edges.map((e) => e.edge))).toEqual(new Set(["import", "inheritance"]));
+    // The extractor writes facts and its own counted inferences: a `dynamic-candidate` comes
+    // only from a run-time trace, and Protocol conformance is the analyzer's.
+    for (const e of model.edges) {
+      expect(["declared", "derived", "generated"], `${e.edge} ${e.from}`).toContain(e.provenance);
+      expect(e.edge, e.from).not.toBe("interfaceImplementation");
+      expect(pythonProfile.edges, e.edge).toContain(e.edge);
+    }
   });
 
   it("names the extractor, the parser's tag and the typeshed commit the stubs were decided by", () => {
@@ -259,6 +263,17 @@ describe("fixtures/python/expected/model.jsonl", () => {
     );
     const edge = model.edges.find((e) => e.edge === "inheritance" && e.from === `${PKG}shipping.py/Zones`);
     expect(edge?.anchor).toEqual({ file: "src/acme_order/shipping.py", span: [22, 22] });
+    // A star import binds `__all__`; a name only an unknown module's star could bind is attributed
+    // to it — derived, since no line names its module — and with two such modules, no guess.
+    const packing = `${PKG}packing.py`;
+    expect(hasEdge(model, "inheritance", `${packing}/Parcel`, `${PKG}shapes.py/Box`)).toBe(true);
+    expect(hasEdge(model, "inheritance", `${packing}/Pallet`, "python:<site>%2Fpallets.lib/Crate", "derived")).toBe(true);
+    expect(hasEdge(model, "inheritance", `${packing}/Pallet`, "python:<site>%2Fpallets.lib/Crate", "declared")).toBe(false);
+    expect(targets(model, "inheritance", `${PKG}two_stars.py/Mixed`)).toEqual([]);
+    // A package importing its own submodule: the name is that module, not the package.
+    const pricing = `${PKG}pricing%2F`;
+    expect(hasEdge(model, "import", `${pricing}__init__.py`, `${pricing}discounts.py`)).toBe(true);
+    expect(hasEdge(model, "inheritance", `${pricing}__init__.py/DefaultDiscount`, `${pricing}discounts.py/Discount`)).toBe(true);
     // A computed base, a parameter, a base nothing binds, a loop and a tie leave no edge.
     for (const from of [
       `${PKG}shipping.py/Dynamic`,

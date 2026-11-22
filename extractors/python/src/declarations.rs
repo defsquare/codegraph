@@ -62,7 +62,10 @@ pub enum Bound {
         alias: usize,
     },
     /// The owning function's parameter of that index: bound before its body runs.
-    Parameter(usize),
+    Parameter {
+        function: usize,
+        index: usize,
+    },
     /// `assignments[i]`: `x = …`, `x: T = …`, `x += …`, `(x := …)`.
     Assigned(usize),
     /// A loop or `with` target, an unpacking, an `except … as`, a capture, a
@@ -1106,7 +1109,10 @@ impl Reader<'_> {
             .enumerate()
             .map(|(at, parameter)| Binding {
                 name: parameter.name.clone(),
-                bound: Bound::Parameter(at),
+                bound: Bound::Parameter {
+                    function: index,
+                    index: at,
+                },
                 line: parameter.span.0,
             })
             .collect();

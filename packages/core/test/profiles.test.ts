@@ -811,6 +811,8 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/untyped-receiver/);
       expect(notes).toMatch(/annotation-typed/);
       expect(notes).toMatch(/star-attributed/);
+      expect(notes).toMatch(/`ambiguous-star`/);
+      expect(notes).toMatch(/A builtin name stays the builtin/);
       expect(notes).toMatch(/type-checking-only/);
       expect(notes).toMatch(/Python 2/);
       // Python 2's standard library and builtins are stubs of their own roots, never `<site>` or unbound.

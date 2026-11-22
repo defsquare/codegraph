@@ -165,7 +165,7 @@ impl Extractor<'_> {
     }
 
     /// Writes the edge unless it repeats one or points at its own source; `true` when written.
-    fn edge(&mut self, kind: &'static str, from: &Key, to: Key, anchor: Anchor) -> bool {
+    fn edge(&mut self, kind: &'static str, from: &Key, to: Key, provenance: &'static str, anchor: Anchor) -> bool {
         if *from == to {
             self.stats.self_edges += 1;
             return false;
@@ -174,7 +174,7 @@ impl Extractor<'_> {
             kind,
             from: from.clone(),
             to,
-            provenance: "declared",
+            provenance,
             anchor,
             access: None,
             candidates: None,
@@ -306,7 +306,7 @@ impl Extractor<'_> {
                             let to = self.stubs.module(to, &self.file_keys);
                             let from = self.file_keys[file].clone();
                             let anchor = self.anchor(file, import.span);
-                            if self.edge("import", &from, to, anchor) {
+                            if self.edge("import", &from, to, "declared", anchor) {
                                 let counts = &mut self.stats.imports;
                                 match how {
                                     How::Relative => counts.relative += 1,
@@ -389,7 +389,12 @@ impl Extractor<'_> {
                             let module = self.stubs.module(&module, &self.file_keys);
                             self.stubs.type_below(module, &symbol.join("."))
                         }
-                        Value::Opaque => {
+                        Value::AmbiguousStar(modules) => {
+                            let what = format!("{} ({})", base.text, modules.join(" or "));
+                            self.stats.drop(file, line, "ambiguous-star", what);
+                            continue;
+                        }
+                        Value::Opaque | Value::Assigned { .. } | Value::Parameter { .. } => {
                             let what = format!("{} (bound to a value)", base.text);
                             self.stats.drop(file, line, "computed-base", what);
                             continue;
@@ -405,7 +410,14 @@ impl Extractor<'_> {
                         }
                     };
                     let anchor = self.anchor(file, base.span);
-                    self.edge("inheritance", &from, to, anchor);
+                    // A name only a star import of an unknown module binds is attributed to it.
+                    let provenance = if resolved.star_attributed {
+                        self.stats.star_attributed += 1;
+                        "derived"
+                    } else {
+                        "declared"
+                    };
+                    self.edge("inheritance", &from, to, provenance, anchor);
                 }
             }
         }
@@ -583,18 +595,22 @@ mod tests {
              def make(Base):\n    class Local(Base): pass\n    return Local\n\
              class Events(Events): pass\n",
         )]);
-        // The parameter, not the module's class: a value no line types.
-        let inheritance: Vec<&Edge> = extraction
+        // The parameter, not the module's class: a value no line types. And `Events` is the star
+        // import's, never the class being written — an inference, since no line names its module.
+        let inheritance: Vec<(String, &str)> = extraction
             .model
             .edges
             .iter()
             .filter(|e| e.kind == "inheritance")
+            .map(|e| (e.to.render(ids::LANG), e.provenance))
             .collect();
-        assert!(inheritance.is_empty(), "{inheritance:?}");
-        assert_eq!(extraction.stats.self_edges, 0);
+        assert_eq!(
+            inheritance,
+            vec![("python:<site>%2Fsomewhere/Events".to_owned(), "derived")]
+        );
+        assert_eq!((extraction.stats.self_edges, extraction.stats.star_attributed), (0, 1));
         let drops: Vec<(&str, u32)> = extraction.stats.drops.iter().map(|d| (d.reason, d.line)).collect();
-        // `Events` is the star import's (M22b): unbound here, never the class being written.
-        assert_eq!(drops, vec![("computed-base", 4), ("unbound-name", 6)]);
+        assert_eq!(drops, vec![("computed-base", 4)]);
     }
 
     #[test]

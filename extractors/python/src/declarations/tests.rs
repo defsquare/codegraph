@@ -234,9 +234,9 @@ fn a_parameter_binds_in_its_function_before_anything_the_body_writes() {
     assert_eq!(
         bound,
         vec![
-            ("Base", Bound::Parameter(0), 1),
-            ("rest", Bound::Parameter(1), 1),
-            ("key", Bound::Parameter(2), 1),
+            ("Base", Bound::Parameter { function: 0, index: 0 }, 1),
+            ("rest", Bound::Parameter { function: 0, index: 1 }, 1),
+            ("key", Bound::Parameter { function: 0, index: 2 }, 1),
             ("Local", Bound::Class(0), 2),
         ]
     );

@@ -11,7 +11,7 @@
 //! re-export of a class — to what it is, cycle-guarded.
 
 use crate::corpus::{Corpus, Root, parent_dir};
-use crate::declarations::{Bound, FileDecls, ImportKind};
+use crate::declarations::{Bound, FileDecls, ImportKind, ValueDecl};
 use crate::scopes;
 use crate::stdlib_table::{self, Kind, StdlibTable};
 use std::collections::{HashMap, HashSet};
@@ -349,6 +349,8 @@ enum Binds {
     Module(ModuleRef),
     /// `from m import n` binds `n` of `m`.
     NameOf(ModuleRef, String),
+    /// `from m import *` binds what `m` exports.
+    Star(ModuleRef),
     Nothing,
 }
 
@@ -382,18 +384,38 @@ pub enum Value {
         name: String,
         kind: Kind,
     },
-    /// Bound by what no line types: an assignment, a loop target.
+    /// Bound by an assignment: `files[file].assignments[assignment]`, which the receiver types.
+    Assigned {
+        file: usize,
+        assignment: usize,
+    },
+    /// A parameter of `files[file].functions[function]`.
+    Parameter {
+        file: usize,
+        function: usize,
+        index: usize,
+    },
+    /// Bound by what no line types: a loop target, an unpacking.
     Opaque,
     /// Bound by nothing — or by a chain of re-exports that loops.
     Unbound {
         cycle: bool,
     },
+    /// Bound only by star imports of several modules nothing here answers: which, no line says.
+    AmbiguousStar(Vec<String>),
 }
 
 impl Value {
     /// A binding that names a declaration, stub or not — the one a rebound name keeps.
     fn names_a_declaration(&self) -> bool {
-        !matches!(self, Value::Opaque | Value::Unbound { .. })
+        !matches!(
+            self,
+            Value::Opaque
+                | Value::Unbound { .. }
+                | Value::Assigned { .. }
+                | Value::Parameter { .. }
+                | Value::AmbiguousStar(_)
+        )
     }
 }
 
@@ -402,6 +424,74 @@ pub struct Resolved {
     pub value: Value,
     /// The name is bound more than one way where it was found: the first that names a declaration won.
     pub rebound: bool,
+    /// Bound only by the star import of one module nothing here answers: attributed to it.
+    pub star_attributed: bool,
+}
+
+/// What star imports bind, file by file.
+struct Stars<'a> {
+    modules: &'a Modules<'a>,
+    files: &'a [FileDecls],
+    /// Per file: the module each `from m import *` names, in source order.
+    of: Vec<Vec<ModuleRef>>,
+}
+
+impl Stars<'_> {
+    /// A corpus module's `__all__`, when it assigns one a literal list of strings.
+    fn all(&self, file: usize) -> Option<Vec<&str>> {
+        let decls = &self.files[file];
+        scopes::bound_in(decls, 0, "__all__")
+            .iter()
+            .find_map(|binding| match binding.bound {
+                Bound::Assigned(index) => match &decls.assignments[index].value {
+                    Some(ValueDecl::Array(items)) => items
+                        .iter()
+                        .map(|item| match item {
+                            ValueDecl::Str(name) => Some(name.as_str()),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => None,
+                },
+                _ => None,
+            })
+    }
+
+    /// Whether `from <module> import *` binds `name`.
+    fn exports(&self, module: &ModuleRef, name: &str, seen: &mut HashSet<usize>) -> bool {
+        match module {
+            ModuleRef::File(file) => {
+                if !seen.insert(*file) {
+                    return false;
+                }
+                match self.all(*file) {
+                    Some(all) => all.contains(&name),
+                    None => {
+                        !name.starts_with('_')
+                            && (!scopes::bound_in(&self.files[*file], 0, name).is_empty()
+                                || self.of[*file].iter().any(|star| self.exports(star, name, seen)))
+                    }
+                }
+            }
+            ModuleRef::Stdlib(dotted) => self.modules.table.exports(dotted).contains(&name),
+            _ => false,
+        }
+    }
+
+    /// Whether a star import written in `file` binds `name` there.
+    fn binds(&self, file: usize, name: &str) -> bool {
+        self.of[file]
+            .iter()
+            .any(|star| self.exports(star, name, &mut HashSet::from([file])))
+    }
+}
+
+fn written_name(module: &ModuleRef) -> String {
+    match module {
+        ModuleRef::Stdlib(dotted) | ModuleRef::Site(dotted) => dotted.clone(),
+        ModuleRef::Missing(path) | ModuleRef::Namespace(path) => path.clone(),
+        ModuleRef::File(file) => format!("file {file}"),
+    }
 }
 
 pub struct Resolver<'a> {
@@ -411,12 +501,23 @@ pub struct Resolver<'a> {
     aliases: Vec<Vec<Vec<AliasResolution>>>,
     /// Per file: every dotted name an `import` statement writes, and each prefix — modules all.
     imported: Vec<HashSet<String>>,
+    stars: Stars<'a>,
 }
 
 fn dropped(reason: &'static str, what: String) -> AliasResolution {
     AliasResolution {
         target: ImportTarget::Dropped { reason, what },
         binds: Binds::Nothing,
+    }
+}
+
+/// The module `from <level dots>[module] import …` in `file` imports from.
+fn from_lookup(modules: &Modules<'_>, file: usize, level: u32, module: Option<&str>) -> Lookup {
+    match (level, module) {
+        (0, Some(module)) => modules.absolute(file, module),
+        // `from import x`: what recovery leaves of a statement that names no module.
+        (0, None) => Lookup::BeyondRoot,
+        (level, module) => modules.relative(file, level, module),
     }
 }
 
@@ -432,20 +533,20 @@ fn binds_at_top(file: &FileDecls, name: &str, except: Option<usize>) -> bool {
 /// `from <from> import <name>` in statement `import` of `importing`: the
 /// module the name is bound in, else the submodule it is — the order Python tries.
 fn from_target(
-    modules: &Modules<'_>,
-    files: &[FileDecls],
+    stars: &Stars<'_>,
     (importing, import): (usize, usize),
     from: &ModuleRef,
     how: How,
     name: &str,
     written: &str,
 ) -> ImportTarget {
+    let (modules, files) = (stars.modules, stars.files);
     let edge = |to: ModuleRef| ImportTarget::Edge { to, how };
     let star = name == "*";
     match from {
         ModuleRef::File(file) => {
             let this_statement = (*file == importing).then_some(import);
-            if star || binds_at_top(&files[*file], name, this_statement) {
+            if star || binds_at_top(&files[*file], name, this_statement) || stars.binds(*file, name) {
                 return edge(from.clone());
             }
             match modules.submodule(from, name) {
@@ -478,6 +579,27 @@ fn from_target(
 
 impl<'a> Resolver<'a> {
     pub fn new(modules: &'a Modules<'a>, files: &'a [FileDecls]) -> Self {
+        // Star imports first: whether a module binds a name may depend on one.
+        let of = files
+            .iter()
+            .enumerate()
+            .map(|(file, decls)| {
+                decls
+                    .imports
+                    .iter()
+                    .filter_map(|import| match &import.kind {
+                        ImportKind::From { level, module, names } if names.iter().any(|alias| alias.name == "*") => {
+                            match from_lookup(modules, file, *level, module.as_deref()) {
+                                Lookup::Found { module, .. } => Some(module),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .collect();
+        let stars = Stars { modules, files, of };
         let mut aliases = Vec::with_capacity(files.len());
         let mut imported = Vec::with_capacity(files.len());
         for (file, decls) in files.iter().enumerate() {
@@ -520,19 +642,13 @@ impl<'a> Resolver<'a> {
                         names: list,
                     } => {
                         let written = format!("{}{}", ".".repeat(*level as usize), module.as_deref().unwrap_or(""));
-                        let lookup = match (level, module) {
-                            (0, Some(module)) => modules.absolute(file, module),
-                            // `from import x`: what recovery leaves of a statement that names no module.
-                            (0, None) => Lookup::BeyondRoot,
-                            (level, module) => modules.relative(file, *level, module.as_deref()),
-                        };
+                        let lookup = from_lookup(modules, file, *level, module.as_deref());
                         list.iter()
                             .map(|alias| match &lookup {
                                 Lookup::Found { module: from, how, .. } => {
-                                    let target =
-                                        from_target(modules, files, (file, index), from, *how, &alias.name, &written);
+                                    let target = from_target(&stars, (file, index), from, *how, &alias.name, &written);
                                     let binds = match &target {
-                                        _ if alias.name == "*" => Binds::Nothing,
+                                        _ if alias.name == "*" => Binds::Star(from.clone()),
                                         // A package importing its own submodule binds that module, not itself.
                                         ImportTarget::Edge { to, .. }
                                             if *from == ModuleRef::File(file) && *to != *from =>
@@ -561,6 +677,7 @@ impl<'a> Resolver<'a> {
             files,
             aliases,
             imported,
+            stars,
         }
     }
 
@@ -586,13 +703,59 @@ impl<'a> Resolver<'a> {
             return Resolved {
                 value: Value::Unbound { cycle: false },
                 rebound: false,
+                star_attributed: false,
             };
         };
-        let (mut value, rebound) = self.name(file, scope, first, unbound, &mut visiting);
+        let (mut value, rebound, star_attributed) = self.name(file, scope, first, unbound, &mut visiting);
         for attribute in rest {
             value = self.attribute(file, value, attribute, &mut visiting);
         }
-        Resolved { value, rebound }
+        Resolved {
+            value,
+            rebound,
+            star_attributed,
+        }
+    }
+
+    /// What a star import of `file` binds `name` to: a module that exports it; else,
+    /// unless it is a builtin, the one module nothing answers (attributed); else nothing.
+    fn star_value(&self, file: usize, name: &str, visiting: &mut HashSet<(usize, String)>) -> Option<(Value, bool)> {
+        let mut unknown: Vec<&ModuleRef> = Vec::new();
+        for module in &self.stars.of[file] {
+            match module {
+                ModuleRef::File(_) => {
+                    if self.stars.exports(module, name, &mut HashSet::from([file])) {
+                        return Some((self.module_attribute(file, module, name, visiting), false));
+                    }
+                }
+                ModuleRef::Stdlib(dotted) if !self.modules.table.exports(dotted).is_empty() => {
+                    if self.stars.exports(module, name, &mut HashSet::new()) {
+                        return Some((self.module_attribute(file, module, name, visiting), false));
+                    }
+                }
+                ModuleRef::Namespace(_) => {}
+                // A module whose names no table lists: it could bind anything.
+                other => unknown.push(other),
+            }
+        }
+        if self.modules.table.builtin(name).is_some() {
+            return None;
+        }
+        match unknown.as_slice() {
+            [] => None,
+            [only] => Some((
+                Value::External {
+                    module: (*only).clone(),
+                    symbol: vec![name.to_owned()],
+                    kind: None,
+                },
+                true,
+            )),
+            several => Some((
+                Value::AmbiguousStar(several.iter().map(|m| written_name(m)).collect()),
+                false,
+            )),
+        }
     }
 
     fn name(
@@ -602,10 +765,13 @@ impl<'a> Resolver<'a> {
         name: &str,
         unbound: Option<Bound>,
         visiting: &mut HashSet<(usize, String)>,
-    ) -> (Value, bool) {
+    ) -> (Value, bool, bool) {
         let mut found = scopes::lookup(&self.files[file], scope, name);
         found.retain(|binding| Some(binding.bound) != unbound);
         if found.is_empty() {
+            if let Some((value, attributed)) = self.star_value(file, name, visiting) {
+                return (value, false, attributed);
+            }
             let value = match self.modules.table.builtin(name) {
                 Some(kind) => Value::Builtin {
                     name: name.to_owned(),
@@ -613,9 +779,10 @@ impl<'a> Resolver<'a> {
                 },
                 None => Value::Unbound { cycle: false },
             };
-            return (value, false);
+            return (value, false, false);
         }
-        self.choose(file, &found, visiting)
+        let (value, rebound) = self.choose(file, &found, visiting);
+        (value, rebound, false)
     }
 
     /// A name bound more than one way: the first binding, in source order, that names a declaration.
@@ -641,12 +808,13 @@ impl<'a> Resolver<'a> {
         match bound {
             Bound::Class(class) => Value::Class { file, class },
             Bound::Function(function) => Value::Function { file, function },
-            // What a caller passes: no line here types it (M22b reads annotations and `self`).
-            Bound::Value | Bound::Parameter(_) | Bound::Assigned(_) => Value::Opaque,
+            Bound::Value => Value::Opaque,
+            Bound::Assigned(assignment) => Value::Assigned { file, assignment },
+            Bound::Parameter { function, index } => Value::Parameter { file, function, index },
             Bound::Import { import, alias } => match &self.aliases[file][import][alias].binds {
                 Binds::Module(module) => Value::Module(module.clone()),
                 Binds::NameOf(module, name) => self.module_attribute(file, module, name, visiting),
-                Binds::Nothing => Value::Unbound { cycle: false },
+                Binds::Star(_) | Binds::Nothing => Value::Unbound { cycle: false },
             },
         }
     }
@@ -673,9 +841,15 @@ impl<'a> Resolver<'a> {
                 }
                 let bound = scopes::bound_in(&self.files[*file], 0, name);
                 let value = if bound.is_empty() {
-                    match self.modules.submodule(module, name) {
-                        Some(submodule) => Value::Module(submodule),
-                        None => Value::Unbound { cycle: false },
+                    match self
+                        .star_value(*file, name, visiting)
+                        .filter(|_| self.stars.binds(*file, name))
+                    {
+                        Some((value, _)) => value,
+                        None => match self.modules.submodule(module, name) {
+                            Some(submodule) => Value::Module(submodule),
+                            None => Value::Unbound { cycle: false },
+                        },
                     }
                 } else {
                     self.choose(*file, &bound, visiting).0
@@ -730,8 +904,9 @@ impl<'a> Resolver<'a> {
                 }
             }
             Value::Builtin { .. } => Value::Unbound { cycle: false },
-            Value::Function { .. } | Value::Opaque => Value::Opaque,
-            unbound @ Value::Unbound { .. } => unbound,
+            // What an assignment or a parameter holds is the receiver's to type.
+            Value::Function { .. } | Value::Opaque | Value::Assigned { .. } | Value::Parameter { .. } => Value::Opaque,
+            unbound @ (Value::Unbound { .. } | Value::AmbiguousStar(_)) => unbound,
         }
     }
 }
@@ -1075,6 +1250,106 @@ mod tests {
                 symbol: names("JSONDecodeError"),
                 kind: None
             }
+        );
+    }
+
+    #[test]
+    fn a_name_an_assignment_or_a_parameter_binds_is_left_for_the_receiver_to_type() {
+        let corpus = corpus(&[(
+            "app.py",
+            "DEBUG = False\ndef f(repo):\n    local = Repo()\n    for item in repo: pass\n",
+        )]);
+        let files = decls(&corpus);
+        let modules = Modules::new(&corpus);
+        let resolver = Resolver::new(&modules, &files);
+        let names = |text: &str| vec![text.to_owned()];
+        assert_eq!(
+            resolver.reference(0, 0, &names("DEBUG")).value,
+            Value::Assigned { file: 0, assignment: 0 }
+        );
+        assert_eq!(
+            resolver.reference(0, 1, &names("repo")).value,
+            Value::Parameter {
+                file: 0,
+                function: 0,
+                index: 0
+            }
+        );
+        assert_eq!(
+            resolver.reference(0, 1, &names("local")).value,
+            Value::Assigned { file: 0, assignment: 1 }
+        );
+        assert_eq!(resolver.reference(0, 1, &names("item")).value, Value::Opaque);
+    }
+
+    #[test]
+    fn binds_what_a_star_import_brings_and_attributes_a_name_only_one_unknown_one_could() {
+        let corpus = corpus(&[
+            ("pkg/__init__.py", ""),
+            (
+                "pkg/shapes.py",
+                "__all__ = [\"Circle\"]\nclass Circle: pass\nclass Square: pass\n",
+            ),
+            ("pkg/plain.py", "class Public: pass\nclass _Private: pass\n"),
+            ("pkg/reexport.py", "from .shapes import *\n"),
+            (
+                "one.py",
+                "from pkg.shapes import *\nfrom pkg.plain import *\nfrom string import *\nfrom unknown.lib import *\n",
+            ),
+            ("two.py", "from unknown.a import *\nfrom unknown.b import *\n"),
+            ("chained.py", "from pkg.reexport import Circle\n"),
+        ]);
+        let files = decls(&corpus);
+        let modules = Modules::new(&corpus);
+        let resolver = Resolver::new(&modules, &files);
+        let one = index(&corpus, "one.py");
+        let names = |text: &str| vec![text.to_owned()];
+        let shapes = index(&corpus, "pkg/shapes.py");
+        let plain = index(&corpus, "pkg/plain.py");
+        // `__all__` where it is literal, else the public names; a table module's exports.
+        assert_eq!(
+            resolver.reference(one, 0, &names("Circle")).value,
+            Value::Class { file: shapes, class: 0 }
+        );
+        assert_eq!(
+            resolver.reference(one, 0, &names("Public")).value,
+            Value::Class { file: plain, class: 0 }
+        );
+        assert!(matches!(
+            resolver.reference(one, 0, &names("Template")).value,
+            Value::External { module: ModuleRef::Stdlib(ref m), .. } if m == "string"
+        ));
+        // `Square` is not in `__all__`, `_Private` not public: only the unknown module could bind them.
+        let square = resolver.reference(one, 0, &names("Square"));
+        assert!(square.star_attributed);
+        assert_eq!(
+            square.value,
+            Value::External {
+                module: ModuleRef::Site("unknown.lib".into()),
+                symbol: names("Square"),
+                kind: None
+            }
+        );
+        // A builtin is the builtin: an unknown module is not presumed to shadow it.
+        assert_eq!(
+            resolver.reference(one, 0, &names("Exception")).value,
+            Value::Builtin {
+                name: "Exception".into(),
+                kind: Kind::Class
+            }
+        );
+        // Two unknown modules could: no guess.
+        let two = index(&corpus, "two.py");
+        assert_eq!(
+            resolver.reference(two, 0, &names("Anything")).value,
+            Value::AmbiguousStar(vec!["unknown.a".into(), "unknown.b".into()])
+        );
+        // A star re-export is followed like any other.
+        assert_eq!(
+            resolver
+                .reference(index(&corpus, "chained.py"), 0, &names("Circle"))
+                .value,
+            Value::Class { file: shapes, class: 0 }
         );
     }
 

@@ -382,6 +382,7 @@ fn lists_every_dropped_site_on_stderr_when_asked_and_changes_no_byte_of_the_mode
         "dropped computed-base: src/acme_order/shipping.py:38 make_base()\n",
         "dropped unbound-name: src/acme_order/shipping.py:42 NothingBindsThis\n",
         "dropped unbound-name: src/acme_order/cycle_a.py:5 Token (an import cycle)\n",
+        "dropped ambiguous-star: src/acme_order/two_stars.py:6 Widget (vendor_a or vendor_b)\n",
         // The parameter `Base`, never the class of that name the module imports.
         "dropped computed-base: src/acme_order/factory.py:24 Base (bound to a value)\n",
         "dropped unnamed-declaration: src/acme_order/legacy/broken.py:12 def\n",

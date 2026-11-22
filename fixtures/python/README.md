@@ -39,8 +39,11 @@ the hazard. The last three are `-text` in `.gitattributes`.
 | `orders/order.py` | a nested class (`Order.Line`); a property and its `@total.setter` / `@total.deleter` (`Order.total#setter`, `#deleter`); every parameter shape (`quote`: positional-only, defaults, `*extra`, keyword-only, `**flags`; `merge`: a bare `*`) |
 | `orders/base.py` | two corpus bases of one class, in a sibling module |
 | `errors.py` | a built-in exception base (`<builtins>/Exception`) and a corpus base beside a built-in one |
+| `pricing/__init__.py` | `from . import discounts` in a package's own `__init__.py`: the name is the submodule, so `DefaultDiscount(discounts.Discount)` reads the class through it |
 | `pricing/discounts.py` | a diamond: `Combo(Percent, Fixed)`, both of `Discount` |
 | `pricing/rules.py` | relative imports one dot and two dots up; `from . import discounts`, a submodule; `from .missing import Seasonal`, a file that is not there — a stub module keyed by the path it would have, and a stub class below it |
+| `shapes.py` + `packing.py` | bases read through star imports: `Box` is in `shapes.__all__`, a declared edge; `Crate` is not, and only `from pallets.lib import *`, which nothing here answers, could bind it — `<site>%2Fpallets.lib/Crate`, `derived`, counted `star-attributed` |
+| `two_stars.py` | two star imports of unknown modules: which binds `Widget`, no line says — dropped `ambiguous-star`, naming both |
 | `shipping.py` | `<stdlib>` bases: `enum.Enum`, `abc.ABC`, `from collections import abc` → `<stdlib>%2Fcollections.abc/Mapping` (the submodule: `collections` does not bind `abc`), the subscripted `Generic[T]`; `<site>` bases: `from django.db import models` → `<site>%2Fdjango.db/models.Model` (nothing says `models` is a module), `import sqlalchemy.orm` → `<site>%2Fsqlalchemy.orm/DeclarativeBase` (the import says it is); a computed base and a base nothing binds, both dropped |
 | `compat.py` | a `def` written twice under a platform `if` — one entity, anchored at the first; `try: import simplejson as json` / `except ImportError: import json`; an `if TYPE_CHECKING:` import, counted `type-checking-only`; a name bound twice (`JSONDecodeError`), the first that names a declaration kept, counted `rebound-name` |
 | `factory.py` | a class in a function (`make.Local`), a function in its method, a nested function (`outer.inner`); a base that is the function's parameter (`wrap(Base)`), never the module's `Base`: dropped `computed-base` |
@@ -64,10 +67,9 @@ the hazard. The last three are `-text` in `.gitattributes`.
 
 ## What the numbers are
 
-39 files, 200 entities (27 of them stubs), 74 edges: 38 `import`, 36
-`inheritance`, all `declared`. Of 41 sites — every base is one — 36 resolve
-(87.8 %): 21 to the corpus, 6 to `<builtins>`, 5 to `<stdlib>`, 3 to `<site>`,
-1 below a missing module; 5 are dropped (a computed base, a parameter, three
-bases nothing binds). Of the 38 imports, 12 are relative, 7 found by a package root, 2
-through the namespace package, 1 implicit-relative, 10 in the standard library,
-5 third parties', 1 a missing file; one is for a type checker only.
+42 files; 213 entities (31 of them stubs): 72 class, 17 function, 17 method, 59 module, 48 parameter.
+82 edges: 43 `import` declared, 38 `inheritance` declared, 1 `inheritance` derived.
+
+Sites: 45; resolved 39 (corpus 23, <builtins> 6, <stdlib> 5, <site> 4, missing modules 1, the language 0); unresolved 6; rate 86.7%.
+Imports: 43 (relative 14; by package root 7, by namespace package 2, implicit-relative 1; <stdlib> 10, <site> 8; missing 1; type-checking-only 1).
+Counted: ambiguous-root (dropped): 1; ambiguous-star (dropped): 1; computed-base (dropped): 2; unbound-name (dropped): 3; unnamed-declaration (dropped): 1; rebound-name: 1; star-attributed: 1.

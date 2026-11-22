@@ -61,6 +61,14 @@ pub struct Stats {
     pub language: u64,
     /// Names bound more than one way, where the first naming a declaration won.
     pub rebound: u64,
+    /// Edges `derived` from flow: a local or an attribute assigned one class.
+    pub flow_typed: u64,
+    /// …from an annotation the interpreter never checks.
+    pub annotation_typed: u64,
+    /// …from the one library class of an MRO that could answer.
+    pub ancestor_attributed: u64,
+    /// …from the one star import nothing here answers.
+    pub star_attributed: u64,
     pub imports: ImportCounts,
     pub drops: Vec<Drop>,
     pub entities: usize,
@@ -71,7 +79,7 @@ pub struct Stats {
 
 /// Drop reasons that are SITES — something written that named nothing the
 /// model can point at. The others are declarations and imports no key or edge can carry.
-const UNRESOLVED_SITES: &[&str] = &["computed-base", "not-a-class", "unbound-name"];
+const UNRESOLVED_SITES: &[&str] = &["ambiguous-star", "computed-base", "not-a-class", "unbound-name"];
 
 impl Stats {
     pub fn drop(&mut self, file: usize, line: u32, reason: &'static str, what: impl Into<String>) {
@@ -139,8 +147,16 @@ impl Stats {
         for (reason, count) in &dropped {
             out.push_str(&format!("  {:<36}: {count}\n", format!("{reason} (dropped)")));
         }
-        if self.rebound > 0 {
-            out.push_str(&format!("  {:<36}: {}\n", "rebound-name", self.rebound));
+        for (label, count) in [
+            ("rebound-name", self.rebound),
+            ("flow-typed", self.flow_typed),
+            ("annotation-typed", self.annotation_typed),
+            ("ancestor-attributed", self.ancestor_attributed),
+            ("star-attributed", self.star_attributed),
+        ] {
+            if count > 0 {
+                out.push_str(&format!("  {label:<36}: {count}\n"));
+            }
         }
         let imports = &self.imports;
         out.push_str(&format!(
