@@ -49,6 +49,11 @@ export * from "./views.js";
 // Stage 4: folding to type/module level, with aggregated weighted edges.
 export * from "./fold.js";
 
+// Selectors (PLAN §22.3): which entities a filter names, in core's vocabulary.
+// One AST, a text term and a JSON form; compiled over a graph and a view, and
+// matching the entity itself — nothing is folded.
+export * from "./selectors.js";
+
 // Stage 5: the two comparable layers — module imports and type dependencies —
 // plus the neighbourhood of one entity (METAMODEL.md §9).
 export * from "./queries.js";

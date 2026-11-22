@@ -30,6 +30,8 @@ const PUBLIC_API = {
   graph: ["buildGraph", "hasTrait", "entityName", "entityParent"],
   views: ["projectView", "composeViews", "makeView", "provenanceOnly", "includesEntity", "includesEdge"],
   fold: ["foldGraph", "createFolder", "folderFor", "containingType", "containingModule"],
+  // PLAN §22.3: the selector vocabulary — one AST, a text and a JSON surface.
+  selectors: ["parseTerm", "parseSelector", "formatTerm", "selectorToJson", "compileSelector", "SelectorError"],
   queries: [
     "importGraph",
     "typeDependencyGraph",
@@ -85,6 +87,8 @@ const PUBLIC_VALUES = [
   "identityView",
   "internalOnly",
   "declaredOnly",
+  "SELECTOR_TERMS",
+  "SELECTOR_ERROR_CODES",
   "FOLDED_GRAPH_ARTEFACT_KIND",
   "ARTEFACT_GENERATOR",
   "DB_VERSION",
