@@ -11,7 +11,7 @@
 //! re-export of a class — to what it is, cycle-guarded.
 
 use crate::corpus::{Corpus, Root, parent_dir};
-use crate::declarations::{Bound, FileDecls, ImportKind, ScopeKind, ValueDecl};
+use crate::declarations::{Bound, Chain, FileDecls, ImportKind, ScopeKind, ValueDecl};
 use crate::scopes;
 use crate::stdlib_table::{self, Kind, StdlibTable};
 use std::collections::{HashMap, HashSet};
@@ -445,27 +445,43 @@ struct Stars<'a> {
     files: &'a [FileDecls],
     /// Per file: the module each `from m import *` names, in source order.
     of: Vec<Vec<ModuleRef>>,
+    /// Per file: its `__all__` where that is the export list (`literal_all`).
+    alls: Vec<Option<Vec<String>>>,
+}
+
+/// A corpus module's `__all__`, when one literal list of strings is all it is: bound once,
+/// and never grown — `token.py` writes four names, then `__all__.extend(…)` every token's.
+fn literal_all(decls: &FileDecls) -> Option<Vec<String>> {
+    let bindings = scopes::bound_in(decls, 0, "__all__");
+    let [binding] = bindings.as_slice() else {
+        return None;
+    };
+    let grown = decls.sites.iter().any(|site| {
+        decls.owner(site.scope) == 0
+            && matches!(&site.chain, Chain::Call(callee)
+                if matches!(callee.as_ref(), Chain::Attribute(inner, _)
+                    if matches!(inner.as_ref(), Chain::Name(name) if name == "__all__")))
+    });
+    let Bound::Assigned(index) = binding.bound else {
+        return None;
+    };
+    match &decls.assignments[index].value {
+        Some(ValueDecl::Array(items)) if !grown => items
+            .iter()
+            .map(|item| match item {
+                ValueDecl::Str(name) => Some(name.clone()),
+                _ => None,
+            })
+            .collect(),
+        _ => None,
+    }
 }
 
 impl Stars<'_> {
-    /// A corpus module's `__all__`, when it assigns one a literal list of strings.
     fn all(&self, file: usize) -> Option<Vec<&str>> {
-        let decls = &self.files[file];
-        scopes::bound_in(decls, 0, "__all__")
-            .iter()
-            .find_map(|binding| match binding.bound {
-                Bound::Assigned(index) => match &decls.assignments[index].value {
-                    Some(ValueDecl::Array(items)) => items
-                        .iter()
-                        .map(|item| match item {
-                            ValueDecl::Str(name) => Some(name.as_str()),
-                            _ => None,
-                        })
-                        .collect(),
-                    _ => None,
-                },
-                _ => None,
-            })
+        self.alls[file]
+            .as_ref()
+            .map(|all| all.iter().map(String::as_str).collect())
     }
 
     /// Whether `from <module> import *` binds `name`.
@@ -494,6 +510,14 @@ impl Stars<'_> {
         self.of[file]
             .iter()
             .any(|star| self.exports(star, name, &mut HashSet::from([file])))
+    }
+
+    /// The package's submodule `name`, where only a star import binds that name: importing a
+    /// submodule binds it in its package, and a star import that binds the name binds that module.
+    fn submodule_over_star(&self, file: usize, name: &str) -> Option<ModuleRef> {
+        self.modules
+            .submodule(&ModuleRef::File(file), name)
+            .filter(|_| self.binds(file, name))
     }
 }
 
@@ -558,7 +582,8 @@ fn binds_at_top(file: &FileDecls, name: &str, except: Option<usize>) -> bool {
 }
 
 /// `from <from> import <name>` in statement `import` of `importing`: the
-/// module the name is bound in, else the submodule it is — the order Python tries.
+/// module a line binds the name in, else the submodule it is (a star import binding it binds
+/// that module), else the module.
 fn from_target(
     stars: &Stars<'_>,
     (importing, import): (usize, usize),
@@ -573,7 +598,7 @@ fn from_target(
     match from {
         ModuleRef::File(file) => {
             let this_statement = (*file == importing).then_some(import);
-            if star || binds_at_top(&files[*file], name, this_statement) || stars.binds(*file, name) {
+            if star || binds_at_top(&files[*file], name, this_statement) {
                 return edge(from.clone());
             }
             match modules.submodule(from, name) {
@@ -626,7 +651,13 @@ impl<'a> Resolver<'a> {
                     .collect()
             })
             .collect();
-        let stars = Stars { modules, files, of };
+        let alls = files.iter().map(literal_all).collect();
+        let stars = Stars {
+            modules,
+            files,
+            of,
+            alls,
+        };
         let mut aliases = Vec::with_capacity(files.len());
         let mut imported = Vec::with_capacity(files.len());
         for (file, decls) in files.iter().enumerate() {
@@ -820,6 +851,9 @@ impl<'a> Resolver<'a> {
         let mut found = scopes::lookup(&self.files[file], scope, name);
         found.retain(|binding| Some(binding.bound) != unbound);
         if found.is_empty() {
+            if let Some(submodule) = self.stars.submodule_over_star(file, name) {
+                return (Value::Module(submodule), false, false);
+            }
             if let Some((value, attributed)) = self.star_value(file, name, visiting) {
                 return (value, false, attributed);
             }
@@ -897,7 +931,13 @@ impl<'a> Resolver<'a> {
                     return Value::Unbound { cycle: true };
                 }
                 let bound = scopes::bound_in(&self.files[*file], 0, name);
-                let value = if bound.is_empty() {
+                let value = if let Some(submodule) = bound
+                    .is_empty()
+                    .then(|| self.stars.submodule_over_star(*file, name))
+                    .flatten()
+                {
+                    Value::Module(submodule)
+                } else if bound.is_empty() {
                     match self
                         .star_value(*file, name, visiting)
                         .filter(|_| self.stars.binds(*file, name))
@@ -1388,6 +1428,35 @@ mod tests {
     }
 
     #[test]
+    fn a_submodule_answers_before_a_star_import_that_binds_its_name() {
+        // asyncio's shape: the package star-imports a module whose grown `__all__` exports
+        // `events`, itself the package's submodule; `from . import events` is that submodule.
+        let corpus = corpus(&[
+            ("asyncio/__init__.py", "from .streams import *\nfrom .events import *\n"),
+            ("asyncio/events.py", "__all__ = [\"get_loop\"]\ndef get_loop(): pass\n"),
+            (
+                "asyncio/streams.py",
+                "from . import events\n__all__ = [\"open\"]\n__all__ += [\"x\"]\n",
+            ),
+            ("asyncio/tasks.py", "from . import events\n"),
+        ]);
+        let files = decls(&corpus);
+        let modules = Modules::new(&corpus);
+        let resolver = Resolver::new(&modules, &files);
+        let events = ModuleRef::File(index(&corpus, "asyncio/events.py"));
+        let tasks = index(&corpus, "asyncio/tasks.py");
+        assert_eq!(
+            resolver.reference(tasks, 0, &["events".to_owned()]).value,
+            Value::Module(events.clone())
+        );
+        let package = index(&corpus, "asyncio/__init__.py");
+        assert_eq!(
+            resolver.reference(package, 0, &["events".to_owned()]).value,
+            Value::Module(events)
+        );
+    }
+
+    #[test]
     fn a_method_reads_its_implicit_class_cell_and_a_module_does_not_have_one() {
         let corpus = corpus(&[(
             "m.py",
@@ -1443,6 +1512,16 @@ mod tests {
             ),
             ("two.py", "from unknown.a import *\nfrom unknown.b import *\n"),
             ("chained.py", "from pkg.reexport import Circle\n"),
+            // `token.py`'s shape: a literal `__all__`, then grown — the literal is no export list.
+            (
+                "pkg/grown.py",
+                "__all__ = [\"A\"]\nclass A: pass\nclass NUMBER: pass\n__all__.extend(names)\n",
+            ),
+            (
+                "pkg/added.py",
+                "__all__ = [\"A\"]\n__all__ += [\"B\"]\nclass A: pass\nclass B: pass\n",
+            ),
+            ("growing.py", "from pkg.grown import *\nfrom pkg.added import *\n"),
         ]);
         let files = decls(&corpus);
         let modules = Modules::new(&corpus);
@@ -1495,6 +1574,21 @@ mod tests {
                 .reference(index(&corpus, "chained.py"), 0, &names("Circle"))
                 .value,
             Value::Class { file: shapes, class: 0 }
+        );
+        let growing = index(&corpus, "growing.py");
+        assert_eq!(
+            resolver.reference(growing, 0, &names("NUMBER")).value,
+            Value::Class {
+                file: index(&corpus, "pkg/grown.py"),
+                class: 1
+            }
+        );
+        assert_eq!(
+            resolver.reference(growing, 0, &names("B")).value,
+            Value::Class {
+                file: index(&corpus, "pkg/added.py"),
+                class: 1
+            }
         );
     }
 
