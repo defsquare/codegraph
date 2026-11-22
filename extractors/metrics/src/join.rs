@@ -214,6 +214,7 @@ pub fn language(lang: &str, path: &str) -> Option<LANG> {
         "csharp" => Some(LANG::Csharp),
         "ex" => Some(LANG::Elixir),
         "rb" => Some(LANG::Ruby),
+        "python" => Some(LANG::Python),
         "ts" if path.ends_with(".tsx") => Some(LANG::Tsx),
         "ts" => Some(LANG::Typescript),
         _ => None,
@@ -222,11 +223,34 @@ pub fn language(lang: &str, path: &str) -> Option<LANG> {
 
 /// Parses `code` and measures `targets`, all anchored in this file.
 pub fn measure_file(lang: LANG, code: &[u8], targets: &[Measurable]) -> Result<Vec<Measured>, String> {
+    let universal;
+    let code = if lang == LANG::Python {
+        universal = universal_newlines(code);
+        &universal[..]
+    } else {
+        code
+    };
     let root = analyze(Source::new(lang, code), MetricsOptions::default()).map_err(|e| e.to_string())?;
     let spaces = flatten(&root);
     let text = String::from_utf8_lossy(code);
     let lines: Vec<&str> = text.lines().collect();
     Ok(join(&spaces, &lines, targets))
+}
+
+/// Python ends a line at `\n`, `\r\n` or a lone `\r` (universal newlines), and
+/// the extractor's lines are the parser's; tree-sitter counts rows on `\n`
+/// alone. A lone `\r` becomes `\n` — byte for byte, so no offset moves.
+fn universal_newlines(code: &[u8]) -> Vec<u8> {
+    code.iter()
+        .enumerate()
+        .map(|(i, &b)| {
+            if b == b'\r' && code.get(i + 1) != Some(&b'\n') {
+                b'\n'
+            } else {
+                b
+            }
+        })
+        .collect()
 }
 
 fn join(spaces: &[Flat<'_>], lines: &[&str], targets: &[Measurable]) -> Vec<Measured> {
@@ -631,6 +655,57 @@ export class R {
         let measured = measure_file(LANG::Typescript, code.as_bytes(), &targets).unwrap();
         let joins: Vec<Join> = (0..3).map(|e| outcome(&measured, e).join).collect();
         assert_eq!(joins, [Join::Exact, Join::Leading, Join::Exact]);
+    }
+
+    #[test]
+    fn a_python_model_is_measured_whatever_its_files_are_called() {
+        // A `.pyi` stub is Python, and so is a script Python by its shebang alone.
+        for path in ["src/a/b.py", "src/a/b.pyi", "bin/acme-report"] {
+            assert_eq!(super::language("python", path), Some(LANG::Python), "{path}");
+        }
+    }
+
+    #[test]
+    fn a_decorated_python_def_joins_the_space_that_starts_at_its_def() {
+        // The extractor anchors a `def` at its `def` line, as CPython's `ast`
+        // does; tree-sitter's `function_definition` excludes the decorator too.
+        let code = "\
+@register
+class A:
+    @property
+    def f(self):
+        g = lambda x: x if x else 0
+        if self.y:
+            return g(1)
+        return 0
+";
+        let targets = [
+            target(0, Category::Unit, 1, 8, 0),
+            target(1, Category::Type, 2, 8, 1),
+            target(2, Category::Invocable, 4, 8, 2),
+        ];
+        let measured = measure_file(LANG::Python, code.as_bytes(), &targets).unwrap();
+        let joins: Vec<Join> = (0..3).map(|e| outcome(&measured, e).join).collect();
+        assert_eq!(joins, [Join::Exact, Join::Exact, Join::Exact]);
+        assert_eq!(value(&measured, 2, "nexits"), Some("2"));
+        assert_eq!(outcome(&measured, 2).ploc, Some(5));
+    }
+
+    #[test]
+    fn a_python_file_ended_by_lone_carriage_returns_joins_on_the_lines_python_reads() {
+        // Python reads a lone `\r` as a line end (universal newlines) and so
+        // does the extractor; tree-sitter counts rows on `\n` alone.
+        let code = "class A:\r    def f(self):\r        return 1\r\r    def g(self):\r        return 2\r";
+        let targets = [
+            target(0, Category::Unit, 1, 6, 0),
+            target(1, Category::Type, 1, 6, 1),
+            target(2, Category::Invocable, 2, 3, 2),
+            target(3, Category::Invocable, 5, 6, 2),
+        ];
+        let measured = measure_file(LANG::Python, code.as_bytes(), &targets).unwrap();
+        let joins: Vec<Join> = (0..4).map(|e| outcome(&measured, e).join).collect();
+        assert_eq!(joins, [Join::Exact, Join::Exact, Join::Exact, Join::Exact]);
+        assert_eq!(outcome(&measured, 2).ploc, Some(2));
     }
 
     #[test]

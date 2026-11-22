@@ -1,4 +1,4 @@
-//! The five fixture models, enriched: the binary must reproduce each committed
+//! The six fixture models, enriched: the binary must reproduce each committed
 //! `fixtures/<lang>/expected/model.metrics.jsonl` byte for byte — the gate
 //! `test.sh` holds every extractor to, replayed for this pass — and a second
 //! run over its own output must change nothing.
@@ -90,6 +90,11 @@ fn elixir() {
 #[test]
 fn ruby() {
     enrich("ruby");
+}
+
+#[test]
+fn python() {
+    enrich("python");
 }
 
 /// The notice must name every crate the lockfile resolves: a dependency added

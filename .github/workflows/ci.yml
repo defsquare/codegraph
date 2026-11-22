@@ -24,7 +24,7 @@
 #                   release binary re-extracting the fixture snapshot byte for byte
 #   metrics         the metrics pass's own suite (PLAN.md §18): join, snapshots, history
 #   metrics-native  its binary built on each of the four Unix runners, re-measuring
-#                   the five fixtures byte for byte; the tap's formula ships these
+#                   the six fixtures byte for byte; the tap's formula ships these
 #   release         on a v* tag, every binary attached to a GitHub Release,
 #                   and the TypeScript extractor published to npm when NPM_TOKEN is set
 #
@@ -165,7 +165,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # The metrics pass (PLAN.md §18): the join's unit tests, the five enriched
+  # The metrics pass (PLAN.md §18): the join's unit tests, the six enriched
   # fixtures byte for byte, and the history side-car over a repository the test
   # builds itself — so a shallow checkout is all it needs.
   metrics:
@@ -185,7 +185,7 @@ jobs:
 
   # One binary per RID, each built on a runner of its own OS: the tree-sitter
   # grammars are C, compiled by the host's compiler, and a native build needs
-  # no cross toolchain. Each binary then re-measures the five fixture models and
+  # no cross toolchain. Each binary then re-measures the six fixture models and
   # must reproduce the committed `model.metrics.jsonl` byte for byte — the
   # cross-OS proof of the four-decimal number spelling (PLAN.md §18, principle 4).
   metrics-native:
@@ -209,11 +209,11 @@ jobs:
         run: |
           bin=extractors/metrics/target/release/codegraph-metrics
           "$bin" --version
-          for lang in java csharp typescript elixir ruby; do
+          for lang in java csharp typescript elixir ruby python; do
             "$bin" "fixtures/$lang/expected/model.jsonl" --src "fixtures/$lang/src" --out "out-$lang.jsonl"
             cmp "out-$lang.jsonl" "fixtures/$lang/expected/model.metrics.jsonl"
           done
-          echo "the binary reproduces the five enriched snapshots on ${{ matrix.os }}"
+          echo "the binary reproduces the six enriched snapshots on ${{ matrix.os }}"
       - uses: actions/upload-artifact@v4
         with:
           name: codegraph-metrics-${{ matrix.rid }}

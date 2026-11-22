@@ -65,7 +65,7 @@ Options:
                        only extractors/python, its table generator and the writer it
                        shares (cargo test + built-binary smoke test)
   --metrics, --metrics-only
-                       only extractors/metrics (cargo test: the join + the five enriched snapshots)
+                       only extractors/metrics (cargo test: the join + the six enriched snapshots)
   --all                everything (default)
   --lint               also run eslint (not part of CI's gate)
   --no-typecheck       skip pnpm -r typecheck
@@ -381,7 +381,7 @@ fi
 
 if wants_metrics && [ "$SKIP_METRICS" = "no" ]; then
   # The unit tests pin the join; tests/fixtures.rs holds the binary to the
-  # five committed `model.metrics.jsonl`, byte for byte, and a re-run over its
+  # six committed `model.metrics.jsonl`, byte for byte, and a re-run over its
   # own output to the identity. The core side (fixtures-metrics.test.ts)
   # checks the same files against the profiles in the TypeScript phase.
   phase "metrics pass tests (cargo test)" \
