@@ -18,3 +18,6 @@ class LegacyError(StandardError):
 
 def unpack(a, (b, c)):
     return a
+
+
+MODE = 0660

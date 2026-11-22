@@ -380,8 +380,10 @@ impl Extractor<'_> {
                     name
                 }
             };
-            let value = self.argument_literal(file, scope, &argument.value);
-            out.push(NamedArgument { name, value });
+            // An argument recovery made up has no text to be: it is not written.
+            if let Some(value) = self.argument_literal(file, scope, &argument.value) {
+                out.push(NamedArgument { name, value });
+            }
         }
         if spread {
             self.stats.drop(file, line, "spread-argument", what.to_owned());
@@ -389,22 +391,23 @@ impl Extractor<'_> {
         out
     }
 
-    /// An argument's value: its literal, else its source text.
-    fn argument_literal(&mut self, file: usize, scope: usize, value: &ValueDecl) -> Literal {
+    /// An argument's value: its literal, else its source text; none where it has no text.
+    fn argument_literal(&mut self, file: usize, scope: usize, value: &ValueDecl) -> Option<Literal> {
         if let ValueDecl::Array(items) = value {
-            return Literal::Array(
-                items
-                    .iter()
-                    .map(|item| self.argument_literal(file, scope, item))
-                    .collect(),
-            );
+            return items
+                .iter()
+                .map(|item| self.argument_literal(file, scope, item))
+                .collect::<Option<Vec<_>>>()
+                .map(Literal::Array);
         }
         if let Some(literal) = self.literal(file, scope, value) {
-            return literal;
+            return Some(literal);
         }
         match value {
-            ValueDecl::Code(text) | ValueDecl::Name(_, text) => Literal::Unevaluated(text.clone()),
-            _ => Literal::Unevaluated(String::new()),
+            ValueDecl::Code(text) | ValueDecl::Name(_, text) if !text.is_empty() => {
+                Some(Literal::Unevaluated(text.clone()))
+            }
+            _ => None,
         }
     }
 

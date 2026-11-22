@@ -557,6 +557,12 @@ impl Extractor<'_> {
 
     /// A written value in core's tags (METAMODEL §1.6); code has none.
     fn literal(&mut self, file: usize, scope: usize, value: &ValueDecl) -> Option<Literal> {
+        // A literal's source is never empty (core refuses it).
+        if let ValueDecl::Pairs(_, text) | ValueDecl::Unevaluated(text) | ValueDecl::Name(_, text) = value
+            && text.is_empty()
+        {
+            return None;
+        }
         Some(match value {
             ValueDecl::Str(text) => Literal::String(text.clone()),
             ValueDecl::Number(text) => Literal::Number(text.clone()),

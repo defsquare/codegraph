@@ -57,7 +57,7 @@ the hazard. The last three are `-text` in `.gitattributes`.
 | `unicode_names.py` | a non-ASCII identifier (`Café`) and an NFKC twin: `def ﬁnd` (U+FB01) and `def find` are one name, one entity |
 | `promo#2024.py` | a `#` in a file name: escaped in the key, kept in the name |
 | `_vendor/` | vendored code is written in the repository: corpus |
-| `legacy/report.py` | a Python 2 file (`print` statement, backticks, `except E, e`, a tuple parameter), read from the recovered tree; `import helpers` answered only by its sibling (`implicit-relative`); `import ConfigParser`, a module Python 3 dropped, still `<stdlib>` by the 2.7 Library Reference's index; `LegacyError(StandardError)`, a Python 2 builtin, `<builtins>/StandardError` |
+| `legacy/report.py` | a Python 2 file (`print` statement, backticks, `except E, e`, a tuple parameter), read from the recovered tree; `import helpers` answered only by its sibling (`implicit-relative`); `import ConfigParser`, a module Python 3 dropped, still `<stdlib>` by the 2.7 Library Reference's index; `LegacyError(StandardError)`, a Python 2 builtin, `<builtins>/StandardError`; `MODE = 0660`, a Python 2 octal the parser replaces with an empty expression: the variable, with no value |
 | `legacy/broken.py` | a Python 3 file with real syntax errors: the class and its methods survive; `def 1():` has no name, dropped `unnamed-declaration` |
 | `legacy/latin.py` | Latin-1 with its PEP 263 cookie: the method is `réduire`, decoded |
 | `legacy/bom.py` | UTF-8 behind a byte-order mark: the mark is not text |
@@ -71,7 +71,7 @@ the hazard. The last three are `-text` in `.gitattributes`.
 
 ## What the numbers are
 
-47 files; 303 entities (40 of them stubs): 18 attribute, 87 class, 23 function, 29 method, 67 module, 72 parameter, 7 variable.
+47 files; 304 entities (40 of them stubs): 18 attribute, 87 class, 23 function, 29 method, 67 module, 72 parameter, 8 variable.
 178 edges: 22 `access` declared, 3 `access` derived, 2 `annotationUse` declared, 56 `import` declared, 42 `inheritance` declared, 1 `inheritance` derived, 3 `inheritance` generated, 26 `invocation` declared, 5 `invocation` derived, 15 `reference` declared, 3 `throws` declared.
 
 Sites: 162; resolved 135 (corpus 77, <builtins> 14, <stdlib> 18, <site> 7, missing modules 1, the language 18); unresolved 27; rate 83.3%.

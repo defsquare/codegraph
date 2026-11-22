@@ -786,6 +786,10 @@ impl Reader<'_> {
 
     fn value_here(&self, expr: &Expr) -> ValueDecl {
         let source = || self.one_line(expr.range());
+        // An expression recovery made up (a Python 2 `0660`): no text, so no value.
+        if expr.range().is_empty() {
+            return ValueDecl::Code(String::new());
+        }
         match expr {
             Expr::StringLiteral(text) => ValueDecl::Str(text.value.to_str().to_owned()),
             Expr::NumberLiteral(number) => match &number.value {

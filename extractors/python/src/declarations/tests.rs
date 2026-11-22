@@ -609,3 +609,11 @@ fn a_named_tuple_a_typed_dict_or_an_enum_a_call_makes_at_module_level_is_a_class
     assert!(matches!(module("N"), Some(Bound::Assigned(_))));
     assert_eq!(decls.classes[0].span, (1, 1));
 }
+
+#[test]
+fn a_literal_recovery_replaced_with_an_empty_expression_is_no_value() {
+    // Python 2 octal and long literals: the parser recovers with an empty expression, no text.
+    let decls = read("mode = 0660\nflags = 0777L\n");
+    let values: Vec<Option<ValueDecl>> = decls.assignments.iter().map(|a| a.value.clone()).collect();
+    assert_eq!(values, vec![Some(ValueDecl::Code(String::new())); 2]);
+}

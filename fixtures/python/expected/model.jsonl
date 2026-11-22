@@ -105,7 +105,7 @@
 {"t":"e","i":56,"k":4,"tr":[5,4,11,6,1,3],"m":56,"s":"src%2Facme_order%2Fcompat.py","name":"src/acme_order/compat.py","isStub":false,"definedIn":[8],"comments":["What differs between platforms and versions, written more than once."],"metrics":{"sloc":23},"anchor":[8,1,31]}
 {"t":"e","i":57,"k":1,"tr":[5,8,12,11,0,6,3],"m":56,"s":"DecodeError","name":"DecodeError","isStub":false,"parent":56,"metrics":{"sloc":2},"anchor":[8,26,27]}
 {"t":"e","i":58,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":56,"s":"data_dir","name":"data_dir","signature":"data_dir()","parent":56,"parameters":[],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[8,14,15]}
-{"t":"e","i":59,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":56,"s":"loads","name":"loads","signature":"loads(text)","declaredType":132,"parent":56,"parameters":[60],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[8,30,31]}
+{"t":"e","i":59,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":56,"s":"loads","name":"loads","signature":"loads(text)","declaredType":133,"parent":56,"parameters":[60],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[8,30,31]}
 {"t":"e","i":60,"k":5,"tr":[5,7,9,0,6],"m":56,"s":"loads","d":"param:text","name":"text","parent":59,"anchor":[8,30,30]}
 {"t":"e","i":61,"k":4,"tr":[5,4,11,6,1,3],"m":61,"s":"src%2Facme_order%2Fcycle_a.py","name":"src/acme_order/cycle_a.py","isStub":false,"definedIn":[9],"comments":["One half of a re-export loop: cycle_b imports the name back from here."],"metrics":{"sloc":4},"anchor":[9,1,6]}
 {"t":"e","i":62,"k":1,"tr":[5,8,12,11,0,6,3],"m":61,"s":"Spent","name":"Spent","isStub":false,"parent":61,"metrics":{"sloc":2},"anchor":[9,5,6]}
@@ -150,215 +150,216 @@
 {"t":"e","i":101,"k":5,"tr":[5,7,9,0,6],"m":98,"s":"Classic.first","d":"param:self","name":"self","parent":100,"anchor":[18,3,3]}
 {"t":"e","i":102,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":98,"s":"Classic.second","name":"second","signature":"second(self)","parent":99,"parameters":[103],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[18,6,7]}
 {"t":"e","i":103,"k":5,"tr":[5,7,9,0,6],"m":98,"s":"Classic.second","d":"param:self","name":"self","parent":102,"anchor":[18,6,6]}
-{"t":"e","i":104,"k":4,"tr":[5,4,11,6,3],"m":104,"s":"src%2Facme_order%2Flegacy%2Freport.py","name":"src/acme_order/legacy/report.py","isStub":false,"definedIn":[19],"metrics":{"sloc":13},"anchor":[19,1,20]}
+{"t":"e","i":104,"k":4,"tr":[5,4,11,6,3],"m":104,"s":"src%2Facme_order%2Flegacy%2Freport.py","name":"src/acme_order/legacy/report.py","isStub":false,"definedIn":[19],"metrics":{"sloc":14},"anchor":[19,1,23]}
 {"t":"e","i":105,"k":1,"tr":[5,8,12,11,0,6,3],"m":104,"s":"LegacyError","name":"LegacyError","isStub":false,"parent":104,"metrics":{"sloc":2},"anchor":[19,15,16]}
-{"t":"e","i":106,"k":1,"tr":[5,8,12,11,0,6,3],"m":104,"s":"Report","name":"Report","isStub":false,"parent":104,"metrics":{"sloc":7},"anchor":[19,6,12]}
-{"t":"e","i":107,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":104,"s":"Report.render","name":"render","signature":"render(self, order)","parent":106,"parameters":[109,108],"metrics":{"cyclomatic":2,"sloc":6},"anchor":[19,7,12]}
-{"t":"e","i":108,"k":5,"tr":[5,7,9,0,6],"m":104,"s":"Report.render","d":"param:order","name":"order","parent":107,"anchor":[19,7,7]}
-{"t":"e","i":109,"k":5,"tr":[5,7,9,0,6],"m":104,"s":"Report.render","d":"param:self","name":"self","parent":107,"anchor":[19,7,7]}
-{"t":"e","i":110,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":104,"s":"unpack","name":"unpack","signature":"unpack(a)","parent":104,"parameters":[111],"metrics":{"cyclomatic":1,"sloc":1},"anchor":[19,19,19]}
-{"t":"e","i":111,"k":5,"tr":[5,7,9,0,6],"m":104,"s":"unpack","d":"param:a","name":"a","parent":110,"anchor":[19,19,19]}
-{"t":"e","i":112,"k":4,"tr":[5,4,11,6,1,3,13],"m":112,"s":"src%2Facme_order%2Fmoney.py","name":"src/acme_order/money.py","isStub":false,"definedIn":[20],"comments":["Money: classes a call makes."],"metrics":{"sloc":11},"anchor":[20,1,17]}
-{"t":"e","i":113,"k":1,"tr":[5,8,12,11,0,6,3],"m":112,"s":"Amount","name":"Amount","isStub":false,"parent":112,"metrics":{"sloc":1},"anchor":[20,5,5]}
-{"t":"e","i":114,"k":0,"tr":[5,7,9,0,6],"m":112,"s":"Amount.currency","name":"currency","parent":113,"anchor":[20,5,5]}
-{"t":"e","i":115,"k":0,"tr":[5,7,9,0,6],"m":112,"s":"Amount.value","name":"value","parent":113,"anchor":[20,5,5]}
-{"t":"e","i":116,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":112,"s":"Price","name":"Price","isStub":false,"parent":112,"comments":["A named tuple's fields are the class's attributes."],"metrics":{"sloc":4},"anchor":[20,9,13]}
-{"t":"e","i":117,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":112,"s":"Price.gross","name":"gross","signature":"gross(self)","parent":116,"parameters":[118],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[20,12,13]}
-{"t":"e","i":118,"k":5,"tr":[5,7,9,0,6],"m":112,"s":"Price.gross","d":"param:self","name":"self","parent":117,"anchor":[20,12,12]}
-{"t":"e","i":119,"k":0,"tr":[5,7,9,0,6],"m":112,"s":"Price.net","name":"net","parent":116,"anchor":[20,9,9]}
-{"t":"e","i":120,"k":0,"tr":[5,7,9,0,6],"m":112,"s":"Price.tax","name":"tax","parent":116,"anchor":[20,9,9]}
-{"t":"e","i":121,"k":1,"tr":[5,8,12,11,0,6,3],"m":112,"s":"Rounding","name":"Rounding","isStub":false,"parent":112,"metrics":{"sloc":1},"anchor":[20,6,6]}
-{"t":"e","i":122,"k":0,"tr":[5,7,9,0,6],"m":112,"s":"Rounding.DOWN","name":"DOWN","parent":121,"anchor":[20,6,6]}
-{"t":"e","i":123,"k":0,"tr":[5,7,9,0,6],"m":112,"s":"Rounding.UP","name":"UP","parent":121,"anchor":[20,6,6]}
-{"t":"e","i":124,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":112,"s":"default_rounding","name":"default_rounding","signature":"default_rounding()","parent":112,"parameters":[],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[20,16,17]}
-{"t":"e","i":125,"k":4,"tr":[5,4,11,6,1,3],"m":125,"s":"src%2Facme_order%2Forders%2F__init__.py","name":"src/acme_order/orders/__init__.py","isStub":false,"definedIn":[21],"comments":["The second package on the way to `Order`."],"metrics":{"sloc":2},"anchor":[21,1,2]}
-{"t":"e","i":126,"k":4,"tr":[5,4,11,6,1,3],"m":126,"s":"src%2Facme_order%2Forders%2Fbase.py","name":"src/acme_order/orders/base.py","isStub":false,"definedIn":[22],"comments":["What every persisted thing is."],"metrics":{"sloc":6},"anchor":[22,1,10]}
-{"t":"e","i":127,"k":1,"tr":[5,8,12,11,0,6,3],"m":126,"s":"Auditable","name":"Auditable","isStub":false,"parent":126,"metrics":{"sloc":3},"anchor":[22,8,10]}
-{"t":"e","i":128,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":126,"s":"Auditable.audit","name":"audit","signature":"audit(self)","parent":127,"parameters":[129],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[22,9,10]}
-{"t":"e","i":129,"k":5,"tr":[5,7,9,0,6],"m":126,"s":"Auditable.audit","d":"param:self","name":"self","parent":128,"anchor":[22,9,9]}
-{"t":"e","i":130,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":126,"s":"Base","name":"Base","isStub":false,"parent":126,"comments":["A record with an identity."],"metrics":{"sloc":2},"anchor":[22,4,5]}
-{"t":"e","i":131,"k":4,"tr":[5,4,11,6,1,3],"m":131,"s":"src%2Facme_order%2Forders%2Forder.py","name":"src/acme_order/orders/order.py","isStub":false,"definedIn":[23],"comments":["An order, its lines, and what they add up to."],"metrics":{"sloc":24},"anchor":[23,1,34]}
-{"t":"e","i":132,"k":1,"tr":[5,8,12,11,0,6,3],"m":131,"s":"Order","name":"Order","isStub":false,"parent":131,"metrics":{"sloc":18},"anchor":[23,5,26]}
-{"t":"e","i":133,"k":1,"tr":[5,8,12,11,0,6,3],"m":131,"s":"Order.Line","name":"Line","isStub":false,"parent":132,"metrics":{"sloc":4},"anchor":[23,6,9]}
-{"t":"e","i":134,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":131,"s":"Order.Line.__init__","name":"__init__","signature":"__init__(self, sku, quantity=…)","parent":133,"parameters":[136,137,135],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[23,7,9]}
-{"t":"e","i":135,"k":5,"tr":[5,7,9,0,6,15],"m":131,"s":"Order.Line.__init__","d":"param:quantity","name":"quantity","parent":134,"value":{"k":"number","v":"1"},"anchor":[23,7,7]}
-{"t":"e","i":136,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"Order.Line.__init__","d":"param:self","name":"self","parent":134,"anchor":[23,7,7]}
-{"t":"e","i":137,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"Order.Line.__init__","d":"param:sku","name":"sku","parent":134,"anchor":[23,7,7]}
-{"t":"e","i":138,"k":0,"tr":[5,7,9,0,6],"m":131,"s":"Order.Line.quantity","name":"quantity","parent":133,"anchor":[23,9,9]}
-{"t":"e","i":139,"k":0,"tr":[5,7,9,0,6],"m":131,"s":"Order.Line.sku","name":"sku","parent":133,"anchor":[23,8,8]}
-{"t":"e","i":140,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":131,"s":"Order.__init__","name":"__init__","signature":"__init__(self, reference, *lines, currency=…, **options)","parent":132,"parameters":[145,144,142,141,143],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[23,11,14]}
-{"t":"e","i":141,"k":5,"tr":[5,7,9,0,6,15],"m":131,"s":"Order.__init__","d":"param:currency","name":"currency","parent":140,"value":{"k":"string","v":"EUR"},"anchor":[23,11,11]}
-{"t":"e","i":142,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"Order.__init__","d":"param:lines","name":"lines","parent":140,"anchor":[23,11,11]}
-{"t":"e","i":143,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"Order.__init__","d":"param:options","name":"options","parent":140,"anchor":[23,11,11]}
-{"t":"e","i":144,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"Order.__init__","d":"param:reference","name":"reference","parent":140,"anchor":[23,11,11]}
-{"t":"e","i":145,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"Order.__init__","d":"param:self","name":"self","parent":140,"anchor":[23,11,11]}
-{"t":"e","i":146,"k":0,"tr":[5,7,9,0,6],"m":131,"s":"Order.currency","name":"currency","parent":132,"anchor":[23,14,14]}
-{"t":"e","i":147,"k":0,"tr":[5,7,9,0,6],"m":131,"s":"Order.lines","name":"lines","parent":132,"anchor":[23,13,13]}
-{"t":"e","i":148,"k":0,"tr":[5,7,9,0,6],"m":131,"s":"Order.reference","name":"reference","parent":132,"anchor":[23,12,12]}
-{"t":"e","i":149,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":131,"s":"Order.total","name":"total","signature":"total(self)","parent":132,"parameters":[152],"metrics":{"cyclomatic":2,"sloc":2},"anchor":[23,17,18]}
-{"t":"e","i":150,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":131,"s":"Order.total","d":"deleter","name":"total","signature":"total(self)","parent":132,"parameters":[151],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[23,25,26]}
-{"t":"e","i":151,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"Order.total","d":"deleter#param:self","name":"self","parent":150,"anchor":[23,25,25]}
-{"t":"e","i":152,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"Order.total","d":"param:self","name":"self","parent":149,"anchor":[23,17,17]}
-{"t":"e","i":153,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":131,"s":"Order.total","d":"setter","name":"total","signature":"total(self, value)","parent":132,"parameters":[154,155],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[23,21,22]}
-{"t":"e","i":154,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"Order.total","d":"setter#param:self","name":"self","parent":153,"anchor":[23,21,21]}
-{"t":"e","i":155,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"Order.total","d":"setter#param:value","name":"value","parent":153,"anchor":[23,21,21]}
-{"t":"e","i":156,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":131,"s":"merge","name":"merge","signature":"merge(*, first, second)","parent":131,"parameters":[157,158],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[23,33,34]}
-{"t":"e","i":157,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"merge","d":"param:first","name":"first","parent":156,"anchor":[23,33,33]}
-{"t":"e","i":158,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"merge","d":"param:second","name":"second","parent":156,"anchor":[23,33,33]}
-{"t":"e","i":159,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":131,"s":"quote","name":"quote","signature":"quote(order, rate=…, /, rounding=…, *extra, exact, mode=…, **flags)","parent":131,"parameters":[164,165,166,161,160,163,162],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[23,29,30]}
-{"t":"e","i":160,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"quote","d":"param:exact","name":"exact","parent":159,"anchor":[23,29,29]}
-{"t":"e","i":161,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"quote","d":"param:extra","name":"extra","parent":159,"anchor":[23,29,29]}
-{"t":"e","i":162,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"quote","d":"param:flags","name":"flags","parent":159,"anchor":[23,29,29]}
-{"t":"e","i":163,"k":5,"tr":[5,7,9,0,6,15],"m":131,"s":"quote","d":"param:mode","name":"mode","parent":159,"value":{"k":"string","v":"half"},"anchor":[23,29,29]}
-{"t":"e","i":164,"k":5,"tr":[5,7,9,0,6],"m":131,"s":"quote","d":"param:order","name":"order","parent":159,"anchor":[23,29,29]}
-{"t":"e","i":165,"k":5,"tr":[5,7,9,0,6,15],"m":131,"s":"quote","d":"param:rate","name":"rate","parent":159,"value":{"k":"number","v":"1"},"anchor":[23,29,29]}
-{"t":"e","i":166,"k":5,"tr":[5,7,9,0,6,15],"m":131,"s":"quote","d":"param:rounding","name":"rounding","parent":159,"value":{"k":"number","v":"2"},"anchor":[23,29,29]}
-{"t":"e","i":167,"k":4,"tr":[5,4,11,6,1,3],"m":167,"s":"src%2Facme_order%2Fpacking.py","name":"src/acme_order/packing.py","isStub":false,"definedIn":[24],"comments":["Bases read through star imports."],"metrics":{"sloc":7},"anchor":[24,1,11]}
-{"t":"e","i":168,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":167,"s":"Pallet","name":"Pallet","isStub":false,"parent":167,"comments":["`Crate` is not: only pallets.lib, which nothing here answers, could bind it."],"metrics":{"sloc":2},"anchor":[24,10,11]}
-{"t":"e","i":169,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":167,"s":"Parcel","name":"Parcel","isStub":false,"parent":167,"comments":["`Box` is in shapes.__all__: the star binds it."],"metrics":{"sloc":2},"anchor":[24,6,7]}
-{"t":"e","i":170,"k":4,"tr":[5,4,11,6,1,3],"m":170,"s":"src%2Facme_order%2Fpayments.py","name":"src/acme_order/payments.py","isStub":false,"definedIn":[25],"comments":["Payments, through a plugin package that has no __init__.py."],"metrics":{"sloc":8},"anchor":[25,1,13]}
-{"t":"e","i":171,"k":1,"tr":[5,8,12,11,0,6,3],"m":170,"s":"Refund","name":"Refund","isStub":false,"parent":170,"metrics":{"sloc":2},"anchor":[25,12,13]}
-{"t":"e","i":172,"k":1,"tr":[5,8,12,11,0,6,3],"m":170,"s":"StripeCharge","name":"StripeCharge","isStub":false,"parent":170,"metrics":{"sloc":2},"anchor":[25,8,9]}
-{"t":"e","i":173,"k":4,"tr":[5,4,11,6,1,3],"m":173,"s":"src%2Facme_order%2Fpricing%2F__init__.py","name":"src/acme_order/pricing/__init__.py","isStub":false,"definedIn":[26],"comments":["Pricing: discounts and the rules that pick one."],"metrics":{"sloc":4},"anchor":[26,1,6]}
-{"t":"e","i":174,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":173,"s":"DefaultDiscount","name":"DefaultDiscount","isStub":false,"parent":173,"comments":["`discounts` is the submodule this package imports, not a name of the package."],"metrics":{"sloc":2},"anchor":[26,5,6]}
-{"t":"e","i":175,"k":4,"tr":[5,4,11,6,1,3],"m":175,"s":"src%2Facme_order%2Fpricing%2Fdiscounts.py","name":"src/acme_order/pricing/discounts.py","isStub":false,"definedIn":[27],"comments":["Discounts, inherited in a diamond."],"metrics":{"sloc":10},"anchor":[27,1,18]}
-{"t":"e","i":176,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":175,"s":"Combo","name":"Combo","isStub":false,"parent":175,"comments":["Both sides of the diamond, one base each."],"metrics":{"sloc":2},"anchor":[27,17,18]}
-{"t":"e","i":177,"k":1,"tr":[5,8,12,11,0,6,3],"m":175,"s":"Discount","name":"Discount","isStub":false,"parent":175,"metrics":{"sloc":3},"anchor":[27,4,6]}
-{"t":"e","i":178,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":175,"s":"Discount.apply","name":"apply","signature":"apply(self, amount)","parent":177,"parameters":[180,179],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[27,5,6]}
-{"t":"e","i":179,"k":5,"tr":[5,7,9,0,6],"m":175,"s":"Discount.apply","d":"param:amount","name":"amount","parent":178,"anchor":[27,5,5]}
-{"t":"e","i":180,"k":5,"tr":[5,7,9,0,6],"m":175,"s":"Discount.apply","d":"param:self","name":"self","parent":178,"anchor":[27,5,5]}
-{"t":"e","i":181,"k":1,"tr":[5,8,12,11,0,6,3],"m":175,"s":"Fixed","name":"Fixed","isStub":false,"parent":175,"metrics":{"sloc":2},"anchor":[27,13,14]}
-{"t":"e","i":182,"k":1,"tr":[5,8,12,11,0,6,3],"m":175,"s":"Percent","name":"Percent","isStub":false,"parent":175,"metrics":{"sloc":2},"anchor":[27,9,10]}
-{"t":"e","i":183,"k":4,"tr":[5,4,11,6,1,3],"m":183,"s":"src%2Facme_order%2Fpricing%2Fdiscounts.pyi","name":"src/acme_order/pricing/discounts.pyi","isStub":false,"definedIn":[28],"comments":["The stub beside discounts.py: a module of its own, which no import names."],"metrics":{"sloc":6},"anchor":[28,1,8]}
-{"t":"e","i":184,"k":1,"tr":[5,8,12,11,0,6,3],"m":183,"s":"Combo","name":"Combo","isStub":false,"parent":183,"metrics":{"sloc":1},"anchor":[28,8,8]}
-{"t":"e","i":185,"k":1,"tr":[5,8,12,11,0,6,3],"m":183,"s":"Discount","name":"Discount","isStub":false,"parent":183,"metrics":{"sloc":2},"anchor":[28,3,4]}
-{"t":"e","i":186,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":183,"s":"Discount.apply","name":"apply","signature":"apply(self, amount)","parent":185,"parameters":[188,187],"metrics":{"cyclomatic":1,"sloc":1},"anchor":[28,4,4]}
-{"t":"e","i":187,"k":5,"tr":[5,7,9,0,6],"m":183,"s":"Discount.apply","d":"param:amount","name":"amount","parent":186,"anchor":[28,4,4]}
-{"t":"e","i":188,"k":5,"tr":[5,7,9,0,6],"m":183,"s":"Discount.apply","d":"param:self","name":"self","parent":186,"anchor":[28,4,4]}
-{"t":"e","i":189,"k":1,"tr":[5,8,12,11,0,6,3],"m":183,"s":"Fixed","name":"Fixed","isStub":false,"parent":183,"metrics":{"sloc":1},"anchor":[28,7,7]}
-{"t":"e","i":190,"k":1,"tr":[5,8,12,11,0,6,3],"m":183,"s":"Percent","name":"Percent","isStub":false,"parent":183,"metrics":{"sloc":1},"anchor":[28,6,6]}
-{"t":"e","i":191,"k":4,"tr":[5,4,11],"m":191,"s":"src%2Facme_order%2Fpricing%2Fmissing.py","name":"src/acme_order/pricing/missing.py","isStub":true,"definedIn":[]}
-{"t":"e","i":192,"k":1,"tr":[5,8,0],"m":191,"s":"Seasonal","name":"Seasonal","isStub":true,"parent":191}
-{"t":"e","i":193,"k":4,"tr":[5,4,11,6,1,3],"m":193,"s":"src%2Facme_order%2Fpricing%2Frules.py","name":"src/acme_order/pricing/rules.py","isStub":false,"definedIn":[29],"comments":["Rules: relative imports one dot and two dots up, a submodule, a module that is not there."],"metrics":{"sloc":12},"anchor":[29,1,18]}
-{"t":"e","i":194,"k":1,"tr":[5,8,12,11,0,6,3],"m":193,"s":"ComboRule","name":"ComboRule","isStub":false,"parent":193,"metrics":{"sloc":2},"anchor":[29,17,18]}
-{"t":"e","i":195,"k":1,"tr":[5,8,12,11,0,6,3],"m":193,"s":"Rule","name":"Rule","isStub":false,"parent":193,"metrics":{"sloc":3},"anchor":[29,8,10]}
-{"t":"e","i":196,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":193,"s":"Rule.applies_to","name":"applies_to","signature":"applies_to(self, order)","parent":195,"parameters":[198,197],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[29,9,10]}
-{"t":"e","i":197,"k":5,"tr":[5,7,9,0,6],"m":193,"s":"Rule.applies_to","d":"param:order","name":"order","declaredType":132,"parent":196,"anchor":[29,9,9]}
-{"t":"e","i":198,"k":5,"tr":[5,7,9,0,6],"m":193,"s":"Rule.applies_to","d":"param:self","name":"self","parent":196,"anchor":[29,9,9]}
-{"t":"e","i":199,"k":1,"tr":[5,8,12,11,0,6,3],"m":193,"s":"SeasonalRule","name":"SeasonalRule","isStub":false,"parent":193,"metrics":{"sloc":2},"anchor":[29,13,14]}
-{"t":"e","i":200,"k":4,"tr":[5,4,11,6,1,3],"m":200,"s":"src%2Facme_order%2Fpromo%232024.py","name":"src/acme_order/promo#2024.py","isStub":false,"definedIn":[30],"comments":["A file whose name holds a `#`: the key escapes it, the name keeps it."],"metrics":{"sloc":3},"anchor":[30,1,5]}
-{"t":"e","i":201,"k":1,"tr":[5,8,12,11,0,6,3],"m":200,"s":"Promo","name":"Promo","isStub":false,"parent":200,"metrics":{"sloc":2},"anchor":[30,4,5]}
-{"t":"e","i":202,"k":4,"tr":[5,4,11,6,1,3],"m":202,"s":"src%2Facme_order%2Frepository.py","name":"src/acme_order/repository.py","isStub":false,"definedIn":[31],"comments":["A repository: the class the services type by flow and by annotation."],"metrics":{"sloc":6},"anchor":[31,1,9]}
-{"t":"e","i":203,"k":1,"tr":[5,8,12,11,0,6,3],"m":202,"s":"Repository","name":"Repository","isStub":false,"parent":202,"metrics":{"sloc":5},"anchor":[31,4,9]}
-{"t":"e","i":204,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":202,"s":"Repository.load","name":"load","signature":"load(self, order)","parent":203,"parameters":[206,205],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[31,8,9]}
-{"t":"e","i":205,"k":5,"tr":[5,7,9,0,6],"m":202,"s":"Repository.load","d":"param:order","name":"order","parent":204,"anchor":[31,8,8]}
-{"t":"e","i":206,"k":5,"tr":[5,7,9,0,6],"m":202,"s":"Repository.load","d":"param:self","name":"self","parent":204,"anchor":[31,8,8]}
-{"t":"e","i":207,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":202,"s":"Repository.save","name":"save","signature":"save(self, order)","parent":203,"parameters":[209,208],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[31,5,6]}
-{"t":"e","i":208,"k":5,"tr":[5,7,9,0,6],"m":202,"s":"Repository.save","d":"param:order","name":"order","parent":207,"anchor":[31,5,5]}
-{"t":"e","i":209,"k":5,"tr":[5,7,9,0,6],"m":202,"s":"Repository.save","d":"param:self","name":"self","parent":207,"anchor":[31,5,5]}
-{"t":"e","i":210,"k":4,"tr":[5,4,11,6,1,3],"m":210,"s":"src%2Facme_order%2Fretry.py","name":"src/acme_order/retry.py","isStub":false,"definedIn":[32],"comments":["A decorator the corpus writes: its parameters name a use's positional arguments."],"metrics":{"sloc":5},"anchor":[32,1,8]}
-{"t":"e","i":211,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":210,"s":"retry","name":"retry","signature":"retry(times, backoff=…)","parent":210,"parameters":[213,212],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[32,4,8]}
-{"t":"e","i":212,"k":5,"tr":[5,7,9,0,6,15],"m":210,"s":"retry","d":"param:backoff","name":"backoff","parent":211,"value":{"k":"number","v":"1"},"anchor":[32,4,4]}
-{"t":"e","i":213,"k":5,"tr":[5,7,9,0,6],"m":210,"s":"retry","d":"param:times","name":"times","parent":211,"anchor":[32,4,4]}
-{"t":"e","i":214,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":210,"s":"retry.wrap","name":"wrap","signature":"wrap(function)","parent":211,"parameters":[215],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[32,5,6]}
-{"t":"e","i":215,"k":5,"tr":[5,7,9,0,6],"m":210,"s":"retry.wrap","d":"param:function","name":"function","parent":214,"anchor":[32,5,5]}
-{"t":"e","i":216,"k":4,"tr":[5,4,11,6,1,3],"m":216,"s":"src%2Facme_order%2Fservices.py","name":"src/acme_order/services.py","isStub":false,"definedIn":[33],"comments":["Services: every receiver shape the extractor types, and each it cannot."],"metrics":{"sloc":62},"anchor":[33,1,77]}
-{"t":"e","i":217,"k":1,"tr":[5,8,12,11,0,6,3],"m":216,"s":"AuditedService","name":"AuditedService","isStub":false,"parent":216,"metrics":{"sloc":4},"anchor":[33,74,77]}
-{"t":"e","i":218,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":216,"s":"AuditedService.__init__","name":"__init__","signature":"__init__(self, handler)","parent":217,"parameters":[220,219],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[33,75,77]}
-{"t":"e","i":219,"k":5,"tr":[5,7,9,0,6],"m":216,"s":"AuditedService.__init__","d":"param:handler","name":"handler","parent":218,"anchor":[33,75,75]}
-{"t":"e","i":220,"k":5,"tr":[5,7,9,0,6],"m":216,"s":"AuditedService.__init__","d":"param:self","name":"self","parent":218,"anchor":[33,75,75]}
-{"t":"e","i":221,"k":0,"tr":[5,7,9,0,6,15],"m":216,"s":"AuditedService.audits","name":"audits","parent":217,"value":{"k":"array","items":[]},"anchor":[33,77,77]}
-{"t":"e","i":222,"k":1,"tr":[5,8,12,11,0,6,1,3,10],"m":216,"s":"Service","name":"Service","isStub":false,"parent":216,"comments":["Reads through `self`, `cls` and `super()`, and what no reader can type."],"metrics":{"sloc":36},"anchor":[33,31,71]}
-{"t":"e","i":223,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":216,"s":"Service.__init__","name":"__init__","signature":"__init__(self, handler)","parent":222,"parameters":[225,224],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[33,36,39]}
-{"t":"e","i":224,"k":5,"tr":[5,7,9,0,6],"m":216,"s":"Service.__init__","d":"param:handler","name":"handler","parent":223,"anchor":[33,36,36]}
-{"t":"e","i":225,"k":5,"tr":[5,7,9,0,6],"m":216,"s":"Service.__init__","d":"param:self","name":"self","parent":223,"anchor":[33,36,36]}
-{"t":"e","i":226,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":216,"s":"Service.audit","name":"audit","signature":"audit(self)","parent":222,"parameters":[227],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[33,70,71]}
-{"t":"e","i":227,"k":5,"tr":[5,7,9,0,6],"m":216,"s":"Service.audit","d":"param:self","name":"self","parent":226,"anchor":[33,70,70]}
-{"t":"e","i":228,"k":0,"tr":[5,7,9,0,6,15],"m":216,"s":"Service.cache","name":"cache","parent":222,"value":{"k":"unevaluated","source":"{}"},"anchor":[33,38,38]}
-{"t":"e","i":229,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":216,"s":"Service.create","name":"create","signature":"create(cls)","parent":222,"parameters":[230],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[33,42,43]}
-{"t":"e","i":230,"k":5,"tr":[5,7,9,0,6],"m":216,"s":"Service.create","d":"param:cls","name":"cls","parent":229,"anchor":[33,42,42]}
-{"t":"e","i":231,"k":0,"tr":[5,7,9,0,6],"m":216,"s":"Service.handler","name":"handler","parent":222,"anchor":[33,39,39]}
-{"t":"e","i":232,"k":0,"tr":[5,7,9,0,6],"m":216,"s":"Service.repository","name":"repository","parent":222,"anchor":[33,37,37]}
-{"t":"e","i":233,"k":0,"tr":[5,7,9,0,6,15],"m":216,"s":"Service.retries","name":"retries","parent":222,"value":{"k":"number","v":"3"},"anchor":[33,34,34]}
-{"t":"e","i":234,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":216,"s":"Service.run","name":"run","signature":"run(self, order)","parent":222,"parameters":[236,235],"metrics":{"cyclomatic":4,"sloc":23},"anchor":[33,46,68]}
-{"t":"e","i":235,"k":5,"tr":[5,7,9,0,6],"m":216,"s":"Service.run","d":"param:order","name":"order","parent":234,"anchor":[33,46,46]}
-{"t":"e","i":236,"k":5,"tr":[5,7,9,0,6],"m":216,"s":"Service.run","d":"param:self","name":"self","parent":234,"anchor":[33,46,46]}
-{"t":"e","i":237,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":216,"s":"build_error","name":"build_error","signature":"build_error(order)","parent":216,"parameters":[238],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[33,27,28]}
-{"t":"e","i":238,"k":5,"tr":[5,7,9,0,6],"m":216,"s":"build_error","d":"param:order","name":"order","parent":237,"anchor":[33,27,27]}
-{"t":"e","i":239,"k":2,"tr":[5,2,11,14,13,10,9,0,6,1,3],"m":216,"s":"checkout","name":"checkout","signature":"checkout(order, repository=…)","declaredType":132,"parent":216,"parameters":[240,241],"comments":["An annotation types a parameter; `Optional` is unwrapped."],"metrics":{"cyclomatic":2,"sloc":8},"anchor":[33,17,24]}
-{"t":"e","i":240,"k":5,"tr":[5,7,9,0,6],"m":216,"s":"checkout","d":"param:order","name":"order","declaredType":132,"parent":239,"anchor":[33,17,17]}
-{"t":"e","i":241,"k":5,"tr":[5,7,9,0,6,15],"m":216,"s":"checkout","d":"param:repository","name":"repository","declaredType":203,"parent":239,"value":{"k":"null"},"anchor":[33,17,17]}
-{"t":"e","i":242,"k":4,"tr":[5,4,11,6,1,3],"m":242,"s":"src%2Facme_order%2Fsettings.py","name":"src/acme_order/settings.py","isStub":false,"definedIn":[34],"comments":["Settings: module variables other files read and write."],"metrics":{"sloc":8},"anchor":[34,1,11]}
-{"t":"e","i":243,"k":6,"tr":[5,7,9,0,6,15],"m":242,"s":"DEBUG","name":"DEBUG","parent":242,"value":{"k":"boolean","v":false},"anchor":[34,2,2]}
-{"t":"e","i":244,"k":6,"tr":[5,7,9,0,6,1,15],"m":242,"s":"DEFAULT_CURRENCY","name":"DEFAULT_CURRENCY","parent":242,"comments":["The currency an order takes when none is given."],"value":{"k":"string","v":"EUR"},"anchor":[34,4,4]}
-{"t":"e","i":245,"k":6,"tr":[5,7,9,0,6,15],"m":242,"s":"HOOKS","name":"HOOKS","parent":242,"value":{"k":"array","items":[{"k":"string","v":"audit"},{"k":"string","v":"notify"}]},"anchor":[34,5,5]}
-{"t":"e","i":246,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":242,"s":"bump","name":"bump","signature":"bump()","parent":242,"parameters":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[34,9,11]}
-{"t":"e","i":247,"k":6,"tr":[5,7,9,0,6,15],"m":242,"s":"counter","name":"counter","parent":242,"value":{"k":"number","v":"0"},"anchor":[34,6,6]}
-{"t":"e","i":248,"k":4,"tr":[5,4,11,6,1,3],"m":248,"s":"src%2Facme_order%2Fshapes.py","name":"src/acme_order/shapes.py","isStub":false,"definedIn":[35],"comments":["Shapes: `__all__` says what a star import of this module binds."],"metrics":{"sloc":6},"anchor":[35,1,12]}
-{"t":"e","i":249,"k":1,"tr":[5,8,12,11,0,6,3],"m":248,"s":"Box","name":"Box","isStub":false,"parent":248,"metrics":{"sloc":2},"anchor":[35,5,6]}
-{"t":"e","i":250,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":248,"s":"Crate","name":"Crate","isStub":false,"parent":248,"comments":["A crate: not in `__all__`."],"metrics":{"sloc":2},"anchor":[35,11,12]}
-{"t":"e","i":251,"k":6,"tr":[5,7,9,0,6,15],"m":248,"s":"__all__","name":"__all__","parent":248,"value":{"k":"array","items":[{"k":"string","v":"Box"}]},"anchor":[35,2,2]}
-{"t":"e","i":252,"k":4,"tr":[5,4,11,6,1,3,13,10],"m":252,"s":"src%2Facme_order%2Fshipping.py","name":"src/acme_order/shipping.py","isStub":false,"definedIn":[36],"comments":["Shipping: what the standard library and third parties give a class."],"metrics":{"sloc":39},"anchor":[36,1,67]}
-{"t":"e","i":253,"k":1,"tr":[5,8,12,11,0,6,3],"m":252,"s":"Carrier","name":"Carrier","isStub":false,"parent":252,"metrics":{"sloc":3},"anchor":[36,13,15]}
-{"t":"e","i":254,"k":0,"tr":[5,7,9,0,6,15],"m":252,"s":"Carrier.COURIER","name":"COURIER","parent":253,"value":{"k":"string","v":"courier"},"anchor":[36,15,15]}
-{"t":"e","i":255,"k":0,"tr":[5,7,9,0,6,15],"m":252,"s":"Carrier.POST","name":"POST","parent":253,"value":{"k":"string","v":"post"},"anchor":[36,14,14]}
-{"t":"e","i":256,"k":1,"tr":[5,8,12,11,0,6,3],"m":252,"s":"Dynamic","name":"Dynamic","isStub":false,"parent":252,"metrics":{"sloc":2},"anchor":[36,38,39]}
-{"t":"e","i":257,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":252,"s":"Ledger","name":"Ledger","isStub":false,"parent":252,"comments":["Two library classes could answer: no guess."],"metrics":{"sloc":4},"anchor":[36,53,57]}
-{"t":"e","i":258,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":252,"s":"Ledger.close","name":"close","signature":"close(self)","parent":257,"parameters":[259],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[36,56,57]}
-{"t":"e","i":259,"k":5,"tr":[5,7,9,0,6],"m":252,"s":"Ledger.close","d":"param:self","name":"self","parent":258,"anchor":[36,56,56]}
-{"t":"e","i":260,"k":1,"tr":[5,8,12,11,0,6,3],"m":252,"s":"Orphan","name":"Orphan","isStub":false,"parent":252,"metrics":{"sloc":2},"anchor":[36,42,43]}
-{"t":"e","i":261,"k":1,"tr":[5,8,12,11,0,6,3],"m":252,"s":"Parcel","name":"Parcel","isStub":false,"parent":252,"metrics":{"sloc":2},"anchor":[36,26,27]}
-{"t":"e","i":262,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":252,"s":"Proxy","name":"Proxy","isStub":false,"parent":252,"comments":["A class that answers any name at run time: nothing declaring one is no evidence."],"metrics":{"sloc":6},"anchor":[36,60,67]}
-{"t":"e","i":263,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":252,"s":"Proxy.__getattr__","name":"__getattr__","signature":"__getattr__(self, name)","parent":262,"parameters":[265,264],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[36,63,64]}
-{"t":"e","i":264,"k":5,"tr":[5,7,9,0,6],"m":252,"s":"Proxy.__getattr__","d":"param:name","name":"name","parent":263,"anchor":[36,63,63]}
-{"t":"e","i":265,"k":5,"tr":[5,7,9,0,6],"m":252,"s":"Proxy.__getattr__","d":"param:self","name":"self","parent":263,"anchor":[36,63,63]}
-{"t":"e","i":266,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":252,"s":"Proxy.forward","name":"forward","signature":"forward(self)","parent":262,"parameters":[267],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[36,66,67]}
-{"t":"e","i":267,"k":5,"tr":[5,7,9,0,6],"m":252,"s":"Proxy.forward","d":"param:self","name":"self","parent":266,"anchor":[36,66,66]}
-{"t":"e","i":268,"k":1,"tr":[5,8,12,11,0,6,3],"m":252,"s":"Rate","name":"Rate","isStub":false,"parent":252,"metrics":{"sloc":2},"anchor":[36,18,19]}
-{"t":"e","i":269,"k":1,"tr":[5,8,12,11,0,6,3],"m":252,"s":"Row","name":"Row","isStub":false,"parent":252,"metrics":{"sloc":2},"anchor":[36,34,35]}
-{"t":"e","i":270,"k":1,"tr":[5,8,12,11,0,6,3],"m":252,"s":"Shipment","name":"Shipment","isStub":false,"parent":252,"metrics":{"sloc":2},"anchor":[36,30,31]}
-{"t":"e","i":271,"k":6,"tr":[5,7,9,0,6],"m":252,"s":"T","name":"T","parent":252,"anchor":[36,10,10]}
-{"t":"e","i":272,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":252,"s":"Tracked","name":"Tracked","isStub":false,"parent":252,"comments":["`objects` is no corpus member: the one library class of the order answers it."],"metrics":{"sloc":4},"anchor":[36,46,50]}
-{"t":"e","i":273,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":252,"s":"Tracked.recent","name":"recent","signature":"recent(self)","parent":272,"parameters":[274],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[36,49,50]}
-{"t":"e","i":274,"k":5,"tr":[5,7,9,0,6],"m":252,"s":"Tracked.recent","d":"param:self","name":"self","parent":273,"anchor":[36,49,49]}
-{"t":"e","i":275,"k":1,"tr":[5,8,12,11,0,6,3],"m":252,"s":"Zones","name":"Zones","isStub":false,"parent":252,"metrics":{"sloc":2},"anchor":[36,22,23]}
-{"t":"e","i":276,"k":4,"tr":[5,4,11,6,1,3],"m":276,"s":"src%2Facme_order%2Ftwo_stars.py","name":"src/acme_order/two_stars.py","isStub":false,"definedIn":[37],"comments":["Two star imports nothing here answers: which binds `Widget`, no line says."],"metrics":{"sloc":5},"anchor":[37,1,7]}
-{"t":"e","i":277,"k":1,"tr":[5,8,12,11,0,6,3],"m":276,"s":"Mixed","name":"Mixed","isStub":false,"parent":276,"metrics":{"sloc":2},"anchor":[37,6,7]}
-{"t":"e","i":278,"k":4,"tr":[5,4,11,6,1,3],"m":278,"s":"src%2Facme_order%2Funicode_names.py","name":"src/acme_order/unicode_names.py","isStub":false,"definedIn":[38],"comments":["Identifiers beyond ASCII: the language reads them NFKC-normalized."],"metrics":{"sloc":7},"anchor":[38,1,13]}
-{"t":"e","i":279,"k":1,"tr":[5,8,12,11,0,6,3],"m":278,"s":"Café","name":"Café","isStub":false,"parent":278,"metrics":{"sloc":2},"anchor":[38,12,13]}
-{"t":"e","i":280,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":278,"s":"find","name":"find","signature":"find(order)","parent":278,"parameters":[281],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[38,4,5]}
-{"t":"e","i":281,"k":5,"tr":[5,7,9,0,6],"m":278,"s":"find","d":"param:order","name":"order","parent":280,"anchor":[38,4,4]}
-{"t":"e","i":282,"k":4,"tr":[5,4,11,6,1,3],"m":282,"s":"src%2Facme_plugins%2Fstripe.py","name":"src/acme_plugins/stripe.py","isStub":false,"definedIn":[39],"comments":["A plugin in a directory with no __init__.py: a namespace package (PEP 420)."],"metrics":{"sloc":3},"anchor":[39,1,5]}
-{"t":"e","i":283,"k":1,"tr":[5,8,12,11,0,6,3],"m":282,"s":"Gateway","name":"Gateway","isStub":false,"parent":282,"metrics":{"sloc":2},"anchor":[39,4,5]}
-{"t":"e","i":284,"k":4,"tr":[5,4,11,6,1,3],"m":284,"s":"tests%2Fconftest.py","name":"tests/conftest.py","isStub":false,"definedIn":[40],"comments":["The tests' conftest: the nearer of the two for every test below."],"metrics":{"sloc":4},"anchor":[40,1,6]}
-{"t":"e","i":285,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":284,"s":"make_order","name":"make_order","signature":"make_order()","parent":284,"parameters":[],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[40,5,6]}
-{"t":"e","i":286,"k":4,"tr":[5,4,11,6,3],"m":286,"s":"tests%2Fintegration%2Ffakes.py","name":"tests/integration/fakes.py","isStub":false,"definedIn":[41],"metrics":{"sloc":2},"anchor":[41,1,2]}
-{"t":"e","i":287,"k":1,"tr":[5,8,12,11,0,6,3],"m":286,"s":"Fake","name":"Fake","isStub":false,"parent":286,"metrics":{"sloc":2},"anchor":[41,1,2]}
-{"t":"e","i":288,"k":4,"tr":[5,4,11,6,1,3],"m":288,"s":"tests%2Fqueue.py","name":"tests/queue.py","isStub":false,"definedIn":[42],"comments":["A test helper named like a standard module: the corpus answers first."],"metrics":{"sloc":3},"anchor":[42,1,5]}
-{"t":"e","i":289,"k":1,"tr":[5,8,12,11,0,6,3],"m":288,"s":"FakeQueue","name":"FakeQueue","isStub":false,"parent":288,"metrics":{"sloc":2},"anchor":[42,4,5]}
-{"t":"e","i":290,"k":4,"tr":[5,4,11,6,3],"m":290,"s":"tests%2Ftest_orders.py","name":"tests/test_orders.py","isStub":false,"definedIn":[43],"metrics":{"sloc":13},"anchor":[43,1,22]}
-{"t":"e","i":291,"k":1,"tr":[5,8,12,11,0,6,3],"m":290,"s":"SpecialOrder","name":"SpecialOrder","isStub":false,"parent":290,"metrics":{"sloc":2},"anchor":[43,8,9]}
-{"t":"e","i":292,"k":1,"tr":[5,8,12,11,0,6,3],"m":290,"s":"TestAcme","name":"TestAcme","isStub":false,"parent":290,"metrics":{"sloc":2},"anchor":[43,21,22]}
-{"t":"e","i":293,"k":1,"tr":[5,8,12,11,0,6,3],"m":290,"s":"TestMissing","name":"TestMissing","isStub":false,"parent":290,"metrics":{"sloc":2},"anchor":[43,17,18]}
-{"t":"e","i":294,"k":1,"tr":[5,8,12,11,0,6,3],"m":290,"s":"TestOrder","name":"TestOrder","isStub":false,"parent":290,"metrics":{"sloc":3},"anchor":[43,12,14]}
-{"t":"e","i":295,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":290,"s":"TestOrder.test_total","name":"test_total","signature":"test_total(self)","parent":294,"parameters":[296],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[43,13,14]}
-{"t":"e","i":296,"k":5,"tr":[5,7,9,0,6],"m":290,"s":"TestOrder.test_total","d":"param:self","name":"self","parent":295,"anchor":[43,13,13]}
-{"t":"e","i":297,"k":4,"tr":[5,4,11,6,3],"m":297,"s":"tests%2Ftest_queue.py","name":"tests/test_queue.py","isStub":false,"definedIn":[44],"metrics":{"sloc":3},"anchor":[44,1,5]}
-{"t":"e","i":298,"k":1,"tr":[5,8,12,11,0,6,3],"m":297,"s":"TestQueue","name":"TestQueue","isStub":false,"parent":297,"metrics":{"sloc":2},"anchor":[44,4,5]}
-{"t":"e","i":299,"k":4,"tr":[5,4,11,6,1,3],"m":299,"s":"tests%2Ftest_tie.py","name":"tests/test_tie.py","isStub":false,"definedIn":[45],"comments":["`fakes` is answered by two roots at the same distance: dropped, never chosen."],"metrics":{"sloc":4},"anchor":[45,1,6]}
-{"t":"e","i":300,"k":1,"tr":[5,8,12,11,0,6,3],"m":299,"s":"Tied","name":"Tied","isStub":false,"parent":299,"metrics":{"sloc":2},"anchor":[45,5,6]}
-{"t":"e","i":301,"k":4,"tr":[5,4,11,6,3],"m":301,"s":"tests%2Funit%2Ffakes.py","name":"tests/unit/fakes.py","isStub":false,"definedIn":[46],"metrics":{"sloc":2},"anchor":[46,1,2]}
-{"t":"e","i":302,"k":1,"tr":[5,8,12,11,0,6,3],"m":301,"s":"Fake","name":"Fake","isStub":false,"parent":301,"metrics":{"sloc":2},"anchor":[46,1,2]}
+{"t":"e","i":106,"k":6,"tr":[5,7,9,0,6],"m":104,"s":"MODE","name":"MODE","parent":104,"anchor":[19,23,23]}
+{"t":"e","i":107,"k":1,"tr":[5,8,12,11,0,6,3],"m":104,"s":"Report","name":"Report","isStub":false,"parent":104,"metrics":{"sloc":7},"anchor":[19,6,12]}
+{"t":"e","i":108,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":104,"s":"Report.render","name":"render","signature":"render(self, order)","parent":107,"parameters":[110,109],"metrics":{"cyclomatic":2,"sloc":6},"anchor":[19,7,12]}
+{"t":"e","i":109,"k":5,"tr":[5,7,9,0,6],"m":104,"s":"Report.render","d":"param:order","name":"order","parent":108,"anchor":[19,7,7]}
+{"t":"e","i":110,"k":5,"tr":[5,7,9,0,6],"m":104,"s":"Report.render","d":"param:self","name":"self","parent":108,"anchor":[19,7,7]}
+{"t":"e","i":111,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":104,"s":"unpack","name":"unpack","signature":"unpack(a)","parent":104,"parameters":[112],"metrics":{"cyclomatic":1,"sloc":1},"anchor":[19,19,19]}
+{"t":"e","i":112,"k":5,"tr":[5,7,9,0,6],"m":104,"s":"unpack","d":"param:a","name":"a","parent":111,"anchor":[19,19,19]}
+{"t":"e","i":113,"k":4,"tr":[5,4,11,6,1,3,13],"m":113,"s":"src%2Facme_order%2Fmoney.py","name":"src/acme_order/money.py","isStub":false,"definedIn":[20],"comments":["Money: classes a call makes."],"metrics":{"sloc":11},"anchor":[20,1,17]}
+{"t":"e","i":114,"k":1,"tr":[5,8,12,11,0,6,3],"m":113,"s":"Amount","name":"Amount","isStub":false,"parent":113,"metrics":{"sloc":1},"anchor":[20,5,5]}
+{"t":"e","i":115,"k":0,"tr":[5,7,9,0,6],"m":113,"s":"Amount.currency","name":"currency","parent":114,"anchor":[20,5,5]}
+{"t":"e","i":116,"k":0,"tr":[5,7,9,0,6],"m":113,"s":"Amount.value","name":"value","parent":114,"anchor":[20,5,5]}
+{"t":"e","i":117,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":113,"s":"Price","name":"Price","isStub":false,"parent":113,"comments":["A named tuple's fields are the class's attributes."],"metrics":{"sloc":4},"anchor":[20,9,13]}
+{"t":"e","i":118,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":113,"s":"Price.gross","name":"gross","signature":"gross(self)","parent":117,"parameters":[119],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[20,12,13]}
+{"t":"e","i":119,"k":5,"tr":[5,7,9,0,6],"m":113,"s":"Price.gross","d":"param:self","name":"self","parent":118,"anchor":[20,12,12]}
+{"t":"e","i":120,"k":0,"tr":[5,7,9,0,6],"m":113,"s":"Price.net","name":"net","parent":117,"anchor":[20,9,9]}
+{"t":"e","i":121,"k":0,"tr":[5,7,9,0,6],"m":113,"s":"Price.tax","name":"tax","parent":117,"anchor":[20,9,9]}
+{"t":"e","i":122,"k":1,"tr":[5,8,12,11,0,6,3],"m":113,"s":"Rounding","name":"Rounding","isStub":false,"parent":113,"metrics":{"sloc":1},"anchor":[20,6,6]}
+{"t":"e","i":123,"k":0,"tr":[5,7,9,0,6],"m":113,"s":"Rounding.DOWN","name":"DOWN","parent":122,"anchor":[20,6,6]}
+{"t":"e","i":124,"k":0,"tr":[5,7,9,0,6],"m":113,"s":"Rounding.UP","name":"UP","parent":122,"anchor":[20,6,6]}
+{"t":"e","i":125,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":113,"s":"default_rounding","name":"default_rounding","signature":"default_rounding()","parent":113,"parameters":[],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[20,16,17]}
+{"t":"e","i":126,"k":4,"tr":[5,4,11,6,1,3],"m":126,"s":"src%2Facme_order%2Forders%2F__init__.py","name":"src/acme_order/orders/__init__.py","isStub":false,"definedIn":[21],"comments":["The second package on the way to `Order`."],"metrics":{"sloc":2},"anchor":[21,1,2]}
+{"t":"e","i":127,"k":4,"tr":[5,4,11,6,1,3],"m":127,"s":"src%2Facme_order%2Forders%2Fbase.py","name":"src/acme_order/orders/base.py","isStub":false,"definedIn":[22],"comments":["What every persisted thing is."],"metrics":{"sloc":6},"anchor":[22,1,10]}
+{"t":"e","i":128,"k":1,"tr":[5,8,12,11,0,6,3],"m":127,"s":"Auditable","name":"Auditable","isStub":false,"parent":127,"metrics":{"sloc":3},"anchor":[22,8,10]}
+{"t":"e","i":129,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":127,"s":"Auditable.audit","name":"audit","signature":"audit(self)","parent":128,"parameters":[130],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[22,9,10]}
+{"t":"e","i":130,"k":5,"tr":[5,7,9,0,6],"m":127,"s":"Auditable.audit","d":"param:self","name":"self","parent":129,"anchor":[22,9,9]}
+{"t":"e","i":131,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":127,"s":"Base","name":"Base","isStub":false,"parent":127,"comments":["A record with an identity."],"metrics":{"sloc":2},"anchor":[22,4,5]}
+{"t":"e","i":132,"k":4,"tr":[5,4,11,6,1,3],"m":132,"s":"src%2Facme_order%2Forders%2Forder.py","name":"src/acme_order/orders/order.py","isStub":false,"definedIn":[23],"comments":["An order, its lines, and what they add up to."],"metrics":{"sloc":24},"anchor":[23,1,34]}
+{"t":"e","i":133,"k":1,"tr":[5,8,12,11,0,6,3],"m":132,"s":"Order","name":"Order","isStub":false,"parent":132,"metrics":{"sloc":18},"anchor":[23,5,26]}
+{"t":"e","i":134,"k":1,"tr":[5,8,12,11,0,6,3],"m":132,"s":"Order.Line","name":"Line","isStub":false,"parent":133,"metrics":{"sloc":4},"anchor":[23,6,9]}
+{"t":"e","i":135,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":132,"s":"Order.Line.__init__","name":"__init__","signature":"__init__(self, sku, quantity=…)","parent":134,"parameters":[137,138,136],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[23,7,9]}
+{"t":"e","i":136,"k":5,"tr":[5,7,9,0,6,15],"m":132,"s":"Order.Line.__init__","d":"param:quantity","name":"quantity","parent":135,"value":{"k":"number","v":"1"},"anchor":[23,7,7]}
+{"t":"e","i":137,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"Order.Line.__init__","d":"param:self","name":"self","parent":135,"anchor":[23,7,7]}
+{"t":"e","i":138,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"Order.Line.__init__","d":"param:sku","name":"sku","parent":135,"anchor":[23,7,7]}
+{"t":"e","i":139,"k":0,"tr":[5,7,9,0,6],"m":132,"s":"Order.Line.quantity","name":"quantity","parent":134,"anchor":[23,9,9]}
+{"t":"e","i":140,"k":0,"tr":[5,7,9,0,6],"m":132,"s":"Order.Line.sku","name":"sku","parent":134,"anchor":[23,8,8]}
+{"t":"e","i":141,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":132,"s":"Order.__init__","name":"__init__","signature":"__init__(self, reference, *lines, currency=…, **options)","parent":133,"parameters":[146,145,143,142,144],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[23,11,14]}
+{"t":"e","i":142,"k":5,"tr":[5,7,9,0,6,15],"m":132,"s":"Order.__init__","d":"param:currency","name":"currency","parent":141,"value":{"k":"string","v":"EUR"},"anchor":[23,11,11]}
+{"t":"e","i":143,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"Order.__init__","d":"param:lines","name":"lines","parent":141,"anchor":[23,11,11]}
+{"t":"e","i":144,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"Order.__init__","d":"param:options","name":"options","parent":141,"anchor":[23,11,11]}
+{"t":"e","i":145,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"Order.__init__","d":"param:reference","name":"reference","parent":141,"anchor":[23,11,11]}
+{"t":"e","i":146,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"Order.__init__","d":"param:self","name":"self","parent":141,"anchor":[23,11,11]}
+{"t":"e","i":147,"k":0,"tr":[5,7,9,0,6],"m":132,"s":"Order.currency","name":"currency","parent":133,"anchor":[23,14,14]}
+{"t":"e","i":148,"k":0,"tr":[5,7,9,0,6],"m":132,"s":"Order.lines","name":"lines","parent":133,"anchor":[23,13,13]}
+{"t":"e","i":149,"k":0,"tr":[5,7,9,0,6],"m":132,"s":"Order.reference","name":"reference","parent":133,"anchor":[23,12,12]}
+{"t":"e","i":150,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":132,"s":"Order.total","name":"total","signature":"total(self)","parent":133,"parameters":[153],"metrics":{"cyclomatic":2,"sloc":2},"anchor":[23,17,18]}
+{"t":"e","i":151,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":132,"s":"Order.total","d":"deleter","name":"total","signature":"total(self)","parent":133,"parameters":[152],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[23,25,26]}
+{"t":"e","i":152,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"Order.total","d":"deleter#param:self","name":"self","parent":151,"anchor":[23,25,25]}
+{"t":"e","i":153,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"Order.total","d":"param:self","name":"self","parent":150,"anchor":[23,17,17]}
+{"t":"e","i":154,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":132,"s":"Order.total","d":"setter","name":"total","signature":"total(self, value)","parent":133,"parameters":[155,156],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[23,21,22]}
+{"t":"e","i":155,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"Order.total","d":"setter#param:self","name":"self","parent":154,"anchor":[23,21,21]}
+{"t":"e","i":156,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"Order.total","d":"setter#param:value","name":"value","parent":154,"anchor":[23,21,21]}
+{"t":"e","i":157,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":132,"s":"merge","name":"merge","signature":"merge(*, first, second)","parent":132,"parameters":[158,159],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[23,33,34]}
+{"t":"e","i":158,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"merge","d":"param:first","name":"first","parent":157,"anchor":[23,33,33]}
+{"t":"e","i":159,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"merge","d":"param:second","name":"second","parent":157,"anchor":[23,33,33]}
+{"t":"e","i":160,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":132,"s":"quote","name":"quote","signature":"quote(order, rate=…, /, rounding=…, *extra, exact, mode=…, **flags)","parent":132,"parameters":[165,166,167,162,161,164,163],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[23,29,30]}
+{"t":"e","i":161,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"quote","d":"param:exact","name":"exact","parent":160,"anchor":[23,29,29]}
+{"t":"e","i":162,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"quote","d":"param:extra","name":"extra","parent":160,"anchor":[23,29,29]}
+{"t":"e","i":163,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"quote","d":"param:flags","name":"flags","parent":160,"anchor":[23,29,29]}
+{"t":"e","i":164,"k":5,"tr":[5,7,9,0,6,15],"m":132,"s":"quote","d":"param:mode","name":"mode","parent":160,"value":{"k":"string","v":"half"},"anchor":[23,29,29]}
+{"t":"e","i":165,"k":5,"tr":[5,7,9,0,6],"m":132,"s":"quote","d":"param:order","name":"order","parent":160,"anchor":[23,29,29]}
+{"t":"e","i":166,"k":5,"tr":[5,7,9,0,6,15],"m":132,"s":"quote","d":"param:rate","name":"rate","parent":160,"value":{"k":"number","v":"1"},"anchor":[23,29,29]}
+{"t":"e","i":167,"k":5,"tr":[5,7,9,0,6,15],"m":132,"s":"quote","d":"param:rounding","name":"rounding","parent":160,"value":{"k":"number","v":"2"},"anchor":[23,29,29]}
+{"t":"e","i":168,"k":4,"tr":[5,4,11,6,1,3],"m":168,"s":"src%2Facme_order%2Fpacking.py","name":"src/acme_order/packing.py","isStub":false,"definedIn":[24],"comments":["Bases read through star imports."],"metrics":{"sloc":7},"anchor":[24,1,11]}
+{"t":"e","i":169,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":168,"s":"Pallet","name":"Pallet","isStub":false,"parent":168,"comments":["`Crate` is not: only pallets.lib, which nothing here answers, could bind it."],"metrics":{"sloc":2},"anchor":[24,10,11]}
+{"t":"e","i":170,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":168,"s":"Parcel","name":"Parcel","isStub":false,"parent":168,"comments":["`Box` is in shapes.__all__: the star binds it."],"metrics":{"sloc":2},"anchor":[24,6,7]}
+{"t":"e","i":171,"k":4,"tr":[5,4,11,6,1,3],"m":171,"s":"src%2Facme_order%2Fpayments.py","name":"src/acme_order/payments.py","isStub":false,"definedIn":[25],"comments":["Payments, through a plugin package that has no __init__.py."],"metrics":{"sloc":8},"anchor":[25,1,13]}
+{"t":"e","i":172,"k":1,"tr":[5,8,12,11,0,6,3],"m":171,"s":"Refund","name":"Refund","isStub":false,"parent":171,"metrics":{"sloc":2},"anchor":[25,12,13]}
+{"t":"e","i":173,"k":1,"tr":[5,8,12,11,0,6,3],"m":171,"s":"StripeCharge","name":"StripeCharge","isStub":false,"parent":171,"metrics":{"sloc":2},"anchor":[25,8,9]}
+{"t":"e","i":174,"k":4,"tr":[5,4,11,6,1,3],"m":174,"s":"src%2Facme_order%2Fpricing%2F__init__.py","name":"src/acme_order/pricing/__init__.py","isStub":false,"definedIn":[26],"comments":["Pricing: discounts and the rules that pick one."],"metrics":{"sloc":4},"anchor":[26,1,6]}
+{"t":"e","i":175,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":174,"s":"DefaultDiscount","name":"DefaultDiscount","isStub":false,"parent":174,"comments":["`discounts` is the submodule this package imports, not a name of the package."],"metrics":{"sloc":2},"anchor":[26,5,6]}
+{"t":"e","i":176,"k":4,"tr":[5,4,11,6,1,3],"m":176,"s":"src%2Facme_order%2Fpricing%2Fdiscounts.py","name":"src/acme_order/pricing/discounts.py","isStub":false,"definedIn":[27],"comments":["Discounts, inherited in a diamond."],"metrics":{"sloc":10},"anchor":[27,1,18]}
+{"t":"e","i":177,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":176,"s":"Combo","name":"Combo","isStub":false,"parent":176,"comments":["Both sides of the diamond, one base each."],"metrics":{"sloc":2},"anchor":[27,17,18]}
+{"t":"e","i":178,"k":1,"tr":[5,8,12,11,0,6,3],"m":176,"s":"Discount","name":"Discount","isStub":false,"parent":176,"metrics":{"sloc":3},"anchor":[27,4,6]}
+{"t":"e","i":179,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":176,"s":"Discount.apply","name":"apply","signature":"apply(self, amount)","parent":178,"parameters":[181,180],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[27,5,6]}
+{"t":"e","i":180,"k":5,"tr":[5,7,9,0,6],"m":176,"s":"Discount.apply","d":"param:amount","name":"amount","parent":179,"anchor":[27,5,5]}
+{"t":"e","i":181,"k":5,"tr":[5,7,9,0,6],"m":176,"s":"Discount.apply","d":"param:self","name":"self","parent":179,"anchor":[27,5,5]}
+{"t":"e","i":182,"k":1,"tr":[5,8,12,11,0,6,3],"m":176,"s":"Fixed","name":"Fixed","isStub":false,"parent":176,"metrics":{"sloc":2},"anchor":[27,13,14]}
+{"t":"e","i":183,"k":1,"tr":[5,8,12,11,0,6,3],"m":176,"s":"Percent","name":"Percent","isStub":false,"parent":176,"metrics":{"sloc":2},"anchor":[27,9,10]}
+{"t":"e","i":184,"k":4,"tr":[5,4,11,6,1,3],"m":184,"s":"src%2Facme_order%2Fpricing%2Fdiscounts.pyi","name":"src/acme_order/pricing/discounts.pyi","isStub":false,"definedIn":[28],"comments":["The stub beside discounts.py: a module of its own, which no import names."],"metrics":{"sloc":6},"anchor":[28,1,8]}
+{"t":"e","i":185,"k":1,"tr":[5,8,12,11,0,6,3],"m":184,"s":"Combo","name":"Combo","isStub":false,"parent":184,"metrics":{"sloc":1},"anchor":[28,8,8]}
+{"t":"e","i":186,"k":1,"tr":[5,8,12,11,0,6,3],"m":184,"s":"Discount","name":"Discount","isStub":false,"parent":184,"metrics":{"sloc":2},"anchor":[28,3,4]}
+{"t":"e","i":187,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":184,"s":"Discount.apply","name":"apply","signature":"apply(self, amount)","parent":186,"parameters":[189,188],"metrics":{"cyclomatic":1,"sloc":1},"anchor":[28,4,4]}
+{"t":"e","i":188,"k":5,"tr":[5,7,9,0,6],"m":184,"s":"Discount.apply","d":"param:amount","name":"amount","parent":187,"anchor":[28,4,4]}
+{"t":"e","i":189,"k":5,"tr":[5,7,9,0,6],"m":184,"s":"Discount.apply","d":"param:self","name":"self","parent":187,"anchor":[28,4,4]}
+{"t":"e","i":190,"k":1,"tr":[5,8,12,11,0,6,3],"m":184,"s":"Fixed","name":"Fixed","isStub":false,"parent":184,"metrics":{"sloc":1},"anchor":[28,7,7]}
+{"t":"e","i":191,"k":1,"tr":[5,8,12,11,0,6,3],"m":184,"s":"Percent","name":"Percent","isStub":false,"parent":184,"metrics":{"sloc":1},"anchor":[28,6,6]}
+{"t":"e","i":192,"k":4,"tr":[5,4,11],"m":192,"s":"src%2Facme_order%2Fpricing%2Fmissing.py","name":"src/acme_order/pricing/missing.py","isStub":true,"definedIn":[]}
+{"t":"e","i":193,"k":1,"tr":[5,8,0],"m":192,"s":"Seasonal","name":"Seasonal","isStub":true,"parent":192}
+{"t":"e","i":194,"k":4,"tr":[5,4,11,6,1,3],"m":194,"s":"src%2Facme_order%2Fpricing%2Frules.py","name":"src/acme_order/pricing/rules.py","isStub":false,"definedIn":[29],"comments":["Rules: relative imports one dot and two dots up, a submodule, a module that is not there."],"metrics":{"sloc":12},"anchor":[29,1,18]}
+{"t":"e","i":195,"k":1,"tr":[5,8,12,11,0,6,3],"m":194,"s":"ComboRule","name":"ComboRule","isStub":false,"parent":194,"metrics":{"sloc":2},"anchor":[29,17,18]}
+{"t":"e","i":196,"k":1,"tr":[5,8,12,11,0,6,3],"m":194,"s":"Rule","name":"Rule","isStub":false,"parent":194,"metrics":{"sloc":3},"anchor":[29,8,10]}
+{"t":"e","i":197,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":194,"s":"Rule.applies_to","name":"applies_to","signature":"applies_to(self, order)","parent":196,"parameters":[199,198],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[29,9,10]}
+{"t":"e","i":198,"k":5,"tr":[5,7,9,0,6],"m":194,"s":"Rule.applies_to","d":"param:order","name":"order","declaredType":133,"parent":197,"anchor":[29,9,9]}
+{"t":"e","i":199,"k":5,"tr":[5,7,9,0,6],"m":194,"s":"Rule.applies_to","d":"param:self","name":"self","parent":197,"anchor":[29,9,9]}
+{"t":"e","i":200,"k":1,"tr":[5,8,12,11,0,6,3],"m":194,"s":"SeasonalRule","name":"SeasonalRule","isStub":false,"parent":194,"metrics":{"sloc":2},"anchor":[29,13,14]}
+{"t":"e","i":201,"k":4,"tr":[5,4,11,6,1,3],"m":201,"s":"src%2Facme_order%2Fpromo%232024.py","name":"src/acme_order/promo#2024.py","isStub":false,"definedIn":[30],"comments":["A file whose name holds a `#`: the key escapes it, the name keeps it."],"metrics":{"sloc":3},"anchor":[30,1,5]}
+{"t":"e","i":202,"k":1,"tr":[5,8,12,11,0,6,3],"m":201,"s":"Promo","name":"Promo","isStub":false,"parent":201,"metrics":{"sloc":2},"anchor":[30,4,5]}
+{"t":"e","i":203,"k":4,"tr":[5,4,11,6,1,3],"m":203,"s":"src%2Facme_order%2Frepository.py","name":"src/acme_order/repository.py","isStub":false,"definedIn":[31],"comments":["A repository: the class the services type by flow and by annotation."],"metrics":{"sloc":6},"anchor":[31,1,9]}
+{"t":"e","i":204,"k":1,"tr":[5,8,12,11,0,6,3],"m":203,"s":"Repository","name":"Repository","isStub":false,"parent":203,"metrics":{"sloc":5},"anchor":[31,4,9]}
+{"t":"e","i":205,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":203,"s":"Repository.load","name":"load","signature":"load(self, order)","parent":204,"parameters":[207,206],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[31,8,9]}
+{"t":"e","i":206,"k":5,"tr":[5,7,9,0,6],"m":203,"s":"Repository.load","d":"param:order","name":"order","parent":205,"anchor":[31,8,8]}
+{"t":"e","i":207,"k":5,"tr":[5,7,9,0,6],"m":203,"s":"Repository.load","d":"param:self","name":"self","parent":205,"anchor":[31,8,8]}
+{"t":"e","i":208,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":203,"s":"Repository.save","name":"save","signature":"save(self, order)","parent":204,"parameters":[210,209],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[31,5,6]}
+{"t":"e","i":209,"k":5,"tr":[5,7,9,0,6],"m":203,"s":"Repository.save","d":"param:order","name":"order","parent":208,"anchor":[31,5,5]}
+{"t":"e","i":210,"k":5,"tr":[5,7,9,0,6],"m":203,"s":"Repository.save","d":"param:self","name":"self","parent":208,"anchor":[31,5,5]}
+{"t":"e","i":211,"k":4,"tr":[5,4,11,6,1,3],"m":211,"s":"src%2Facme_order%2Fretry.py","name":"src/acme_order/retry.py","isStub":false,"definedIn":[32],"comments":["A decorator the corpus writes: its parameters name a use's positional arguments."],"metrics":{"sloc":5},"anchor":[32,1,8]}
+{"t":"e","i":212,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":211,"s":"retry","name":"retry","signature":"retry(times, backoff=…)","parent":211,"parameters":[214,213],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[32,4,8]}
+{"t":"e","i":213,"k":5,"tr":[5,7,9,0,6,15],"m":211,"s":"retry","d":"param:backoff","name":"backoff","parent":212,"value":{"k":"number","v":"1"},"anchor":[32,4,4]}
+{"t":"e","i":214,"k":5,"tr":[5,7,9,0,6],"m":211,"s":"retry","d":"param:times","name":"times","parent":212,"anchor":[32,4,4]}
+{"t":"e","i":215,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":211,"s":"retry.wrap","name":"wrap","signature":"wrap(function)","parent":212,"parameters":[216],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[32,5,6]}
+{"t":"e","i":216,"k":5,"tr":[5,7,9,0,6],"m":211,"s":"retry.wrap","d":"param:function","name":"function","parent":215,"anchor":[32,5,5]}
+{"t":"e","i":217,"k":4,"tr":[5,4,11,6,1,3],"m":217,"s":"src%2Facme_order%2Fservices.py","name":"src/acme_order/services.py","isStub":false,"definedIn":[33],"comments":["Services: every receiver shape the extractor types, and each it cannot."],"metrics":{"sloc":62},"anchor":[33,1,77]}
+{"t":"e","i":218,"k":1,"tr":[5,8,12,11,0,6,3],"m":217,"s":"AuditedService","name":"AuditedService","isStub":false,"parent":217,"metrics":{"sloc":4},"anchor":[33,74,77]}
+{"t":"e","i":219,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":217,"s":"AuditedService.__init__","name":"__init__","signature":"__init__(self, handler)","parent":218,"parameters":[221,220],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[33,75,77]}
+{"t":"e","i":220,"k":5,"tr":[5,7,9,0,6],"m":217,"s":"AuditedService.__init__","d":"param:handler","name":"handler","parent":219,"anchor":[33,75,75]}
+{"t":"e","i":221,"k":5,"tr":[5,7,9,0,6],"m":217,"s":"AuditedService.__init__","d":"param:self","name":"self","parent":219,"anchor":[33,75,75]}
+{"t":"e","i":222,"k":0,"tr":[5,7,9,0,6,15],"m":217,"s":"AuditedService.audits","name":"audits","parent":218,"value":{"k":"array","items":[]},"anchor":[33,77,77]}
+{"t":"e","i":223,"k":1,"tr":[5,8,12,11,0,6,1,3,10],"m":217,"s":"Service","name":"Service","isStub":false,"parent":217,"comments":["Reads through `self`, `cls` and `super()`, and what no reader can type."],"metrics":{"sloc":36},"anchor":[33,31,71]}
+{"t":"e","i":224,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":217,"s":"Service.__init__","name":"__init__","signature":"__init__(self, handler)","parent":223,"parameters":[226,225],"metrics":{"cyclomatic":1,"sloc":4},"anchor":[33,36,39]}
+{"t":"e","i":225,"k":5,"tr":[5,7,9,0,6],"m":217,"s":"Service.__init__","d":"param:handler","name":"handler","parent":224,"anchor":[33,36,36]}
+{"t":"e","i":226,"k":5,"tr":[5,7,9,0,6],"m":217,"s":"Service.__init__","d":"param:self","name":"self","parent":224,"anchor":[33,36,36]}
+{"t":"e","i":227,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":217,"s":"Service.audit","name":"audit","signature":"audit(self)","parent":223,"parameters":[228],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[33,70,71]}
+{"t":"e","i":228,"k":5,"tr":[5,7,9,0,6],"m":217,"s":"Service.audit","d":"param:self","name":"self","parent":227,"anchor":[33,70,70]}
+{"t":"e","i":229,"k":0,"tr":[5,7,9,0,6,15],"m":217,"s":"Service.cache","name":"cache","parent":223,"value":{"k":"unevaluated","source":"{}"},"anchor":[33,38,38]}
+{"t":"e","i":230,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":217,"s":"Service.create","name":"create","signature":"create(cls)","parent":223,"parameters":[231],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[33,42,43]}
+{"t":"e","i":231,"k":5,"tr":[5,7,9,0,6],"m":217,"s":"Service.create","d":"param:cls","name":"cls","parent":230,"anchor":[33,42,42]}
+{"t":"e","i":232,"k":0,"tr":[5,7,9,0,6],"m":217,"s":"Service.handler","name":"handler","parent":223,"anchor":[33,39,39]}
+{"t":"e","i":233,"k":0,"tr":[5,7,9,0,6],"m":217,"s":"Service.repository","name":"repository","parent":223,"anchor":[33,37,37]}
+{"t":"e","i":234,"k":0,"tr":[5,7,9,0,6,15],"m":217,"s":"Service.retries","name":"retries","parent":223,"value":{"k":"number","v":"3"},"anchor":[33,34,34]}
+{"t":"e","i":235,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":217,"s":"Service.run","name":"run","signature":"run(self, order)","parent":223,"parameters":[237,236],"metrics":{"cyclomatic":4,"sloc":23},"anchor":[33,46,68]}
+{"t":"e","i":236,"k":5,"tr":[5,7,9,0,6],"m":217,"s":"Service.run","d":"param:order","name":"order","parent":235,"anchor":[33,46,46]}
+{"t":"e","i":237,"k":5,"tr":[5,7,9,0,6],"m":217,"s":"Service.run","d":"param:self","name":"self","parent":235,"anchor":[33,46,46]}
+{"t":"e","i":238,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":217,"s":"build_error","name":"build_error","signature":"build_error(order)","parent":217,"parameters":[239],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[33,27,28]}
+{"t":"e","i":239,"k":5,"tr":[5,7,9,0,6],"m":217,"s":"build_error","d":"param:order","name":"order","parent":238,"anchor":[33,27,27]}
+{"t":"e","i":240,"k":2,"tr":[5,2,11,14,13,10,9,0,6,1,3],"m":217,"s":"checkout","name":"checkout","signature":"checkout(order, repository=…)","declaredType":133,"parent":217,"parameters":[241,242],"comments":["An annotation types a parameter; `Optional` is unwrapped."],"metrics":{"cyclomatic":2,"sloc":8},"anchor":[33,17,24]}
+{"t":"e","i":241,"k":5,"tr":[5,7,9,0,6],"m":217,"s":"checkout","d":"param:order","name":"order","declaredType":133,"parent":240,"anchor":[33,17,17]}
+{"t":"e","i":242,"k":5,"tr":[5,7,9,0,6,15],"m":217,"s":"checkout","d":"param:repository","name":"repository","declaredType":204,"parent":240,"value":{"k":"null"},"anchor":[33,17,17]}
+{"t":"e","i":243,"k":4,"tr":[5,4,11,6,1,3],"m":243,"s":"src%2Facme_order%2Fsettings.py","name":"src/acme_order/settings.py","isStub":false,"definedIn":[34],"comments":["Settings: module variables other files read and write."],"metrics":{"sloc":8},"anchor":[34,1,11]}
+{"t":"e","i":244,"k":6,"tr":[5,7,9,0,6,15],"m":243,"s":"DEBUG","name":"DEBUG","parent":243,"value":{"k":"boolean","v":false},"anchor":[34,2,2]}
+{"t":"e","i":245,"k":6,"tr":[5,7,9,0,6,1,15],"m":243,"s":"DEFAULT_CURRENCY","name":"DEFAULT_CURRENCY","parent":243,"comments":["The currency an order takes when none is given."],"value":{"k":"string","v":"EUR"},"anchor":[34,4,4]}
+{"t":"e","i":246,"k":6,"tr":[5,7,9,0,6,15],"m":243,"s":"HOOKS","name":"HOOKS","parent":243,"value":{"k":"array","items":[{"k":"string","v":"audit"},{"k":"string","v":"notify"}]},"anchor":[34,5,5]}
+{"t":"e","i":247,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":243,"s":"bump","name":"bump","signature":"bump()","parent":243,"parameters":[],"metrics":{"cyclomatic":1,"sloc":3},"anchor":[34,9,11]}
+{"t":"e","i":248,"k":6,"tr":[5,7,9,0,6,15],"m":243,"s":"counter","name":"counter","parent":243,"value":{"k":"number","v":"0"},"anchor":[34,6,6]}
+{"t":"e","i":249,"k":4,"tr":[5,4,11,6,1,3],"m":249,"s":"src%2Facme_order%2Fshapes.py","name":"src/acme_order/shapes.py","isStub":false,"definedIn":[35],"comments":["Shapes: `__all__` says what a star import of this module binds."],"metrics":{"sloc":6},"anchor":[35,1,12]}
+{"t":"e","i":250,"k":1,"tr":[5,8,12,11,0,6,3],"m":249,"s":"Box","name":"Box","isStub":false,"parent":249,"metrics":{"sloc":2},"anchor":[35,5,6]}
+{"t":"e","i":251,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":249,"s":"Crate","name":"Crate","isStub":false,"parent":249,"comments":["A crate: not in `__all__`."],"metrics":{"sloc":2},"anchor":[35,11,12]}
+{"t":"e","i":252,"k":6,"tr":[5,7,9,0,6,15],"m":249,"s":"__all__","name":"__all__","parent":249,"value":{"k":"array","items":[{"k":"string","v":"Box"}]},"anchor":[35,2,2]}
+{"t":"e","i":253,"k":4,"tr":[5,4,11,6,1,3,13,10],"m":253,"s":"src%2Facme_order%2Fshipping.py","name":"src/acme_order/shipping.py","isStub":false,"definedIn":[36],"comments":["Shipping: what the standard library and third parties give a class."],"metrics":{"sloc":39},"anchor":[36,1,67]}
+{"t":"e","i":254,"k":1,"tr":[5,8,12,11,0,6,3],"m":253,"s":"Carrier","name":"Carrier","isStub":false,"parent":253,"metrics":{"sloc":3},"anchor":[36,13,15]}
+{"t":"e","i":255,"k":0,"tr":[5,7,9,0,6,15],"m":253,"s":"Carrier.COURIER","name":"COURIER","parent":254,"value":{"k":"string","v":"courier"},"anchor":[36,15,15]}
+{"t":"e","i":256,"k":0,"tr":[5,7,9,0,6,15],"m":253,"s":"Carrier.POST","name":"POST","parent":254,"value":{"k":"string","v":"post"},"anchor":[36,14,14]}
+{"t":"e","i":257,"k":1,"tr":[5,8,12,11,0,6,3],"m":253,"s":"Dynamic","name":"Dynamic","isStub":false,"parent":253,"metrics":{"sloc":2},"anchor":[36,38,39]}
+{"t":"e","i":258,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":253,"s":"Ledger","name":"Ledger","isStub":false,"parent":253,"comments":["Two library classes could answer: no guess."],"metrics":{"sloc":4},"anchor":[36,53,57]}
+{"t":"e","i":259,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":253,"s":"Ledger.close","name":"close","signature":"close(self)","parent":258,"parameters":[260],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[36,56,57]}
+{"t":"e","i":260,"k":5,"tr":[5,7,9,0,6],"m":253,"s":"Ledger.close","d":"param:self","name":"self","parent":259,"anchor":[36,56,56]}
+{"t":"e","i":261,"k":1,"tr":[5,8,12,11,0,6,3],"m":253,"s":"Orphan","name":"Orphan","isStub":false,"parent":253,"metrics":{"sloc":2},"anchor":[36,42,43]}
+{"t":"e","i":262,"k":1,"tr":[5,8,12,11,0,6,3],"m":253,"s":"Parcel","name":"Parcel","isStub":false,"parent":253,"metrics":{"sloc":2},"anchor":[36,26,27]}
+{"t":"e","i":263,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":253,"s":"Proxy","name":"Proxy","isStub":false,"parent":253,"comments":["A class that answers any name at run time: nothing declaring one is no evidence."],"metrics":{"sloc":6},"anchor":[36,60,67]}
+{"t":"e","i":264,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":253,"s":"Proxy.__getattr__","name":"__getattr__","signature":"__getattr__(self, name)","parent":263,"parameters":[266,265],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[36,63,64]}
+{"t":"e","i":265,"k":5,"tr":[5,7,9,0,6],"m":253,"s":"Proxy.__getattr__","d":"param:name","name":"name","parent":264,"anchor":[36,63,63]}
+{"t":"e","i":266,"k":5,"tr":[5,7,9,0,6],"m":253,"s":"Proxy.__getattr__","d":"param:self","name":"self","parent":264,"anchor":[36,63,63]}
+{"t":"e","i":267,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":253,"s":"Proxy.forward","name":"forward","signature":"forward(self)","parent":263,"parameters":[268],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[36,66,67]}
+{"t":"e","i":268,"k":5,"tr":[5,7,9,0,6],"m":253,"s":"Proxy.forward","d":"param:self","name":"self","parent":267,"anchor":[36,66,66]}
+{"t":"e","i":269,"k":1,"tr":[5,8,12,11,0,6,3],"m":253,"s":"Rate","name":"Rate","isStub":false,"parent":253,"metrics":{"sloc":2},"anchor":[36,18,19]}
+{"t":"e","i":270,"k":1,"tr":[5,8,12,11,0,6,3],"m":253,"s":"Row","name":"Row","isStub":false,"parent":253,"metrics":{"sloc":2},"anchor":[36,34,35]}
+{"t":"e","i":271,"k":1,"tr":[5,8,12,11,0,6,3],"m":253,"s":"Shipment","name":"Shipment","isStub":false,"parent":253,"metrics":{"sloc":2},"anchor":[36,30,31]}
+{"t":"e","i":272,"k":6,"tr":[5,7,9,0,6],"m":253,"s":"T","name":"T","parent":253,"anchor":[36,10,10]}
+{"t":"e","i":273,"k":1,"tr":[5,8,12,11,0,6,1,3],"m":253,"s":"Tracked","name":"Tracked","isStub":false,"parent":253,"comments":["`objects` is no corpus member: the one library class of the order answers it."],"metrics":{"sloc":4},"anchor":[36,46,50]}
+{"t":"e","i":274,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":253,"s":"Tracked.recent","name":"recent","signature":"recent(self)","parent":273,"parameters":[275],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[36,49,50]}
+{"t":"e","i":275,"k":5,"tr":[5,7,9,0,6],"m":253,"s":"Tracked.recent","d":"param:self","name":"self","parent":274,"anchor":[36,49,49]}
+{"t":"e","i":276,"k":1,"tr":[5,8,12,11,0,6,3],"m":253,"s":"Zones","name":"Zones","isStub":false,"parent":253,"metrics":{"sloc":2},"anchor":[36,22,23]}
+{"t":"e","i":277,"k":4,"tr":[5,4,11,6,1,3],"m":277,"s":"src%2Facme_order%2Ftwo_stars.py","name":"src/acme_order/two_stars.py","isStub":false,"definedIn":[37],"comments":["Two star imports nothing here answers: which binds `Widget`, no line says."],"metrics":{"sloc":5},"anchor":[37,1,7]}
+{"t":"e","i":278,"k":1,"tr":[5,8,12,11,0,6,3],"m":277,"s":"Mixed","name":"Mixed","isStub":false,"parent":277,"metrics":{"sloc":2},"anchor":[37,6,7]}
+{"t":"e","i":279,"k":4,"tr":[5,4,11,6,1,3],"m":279,"s":"src%2Facme_order%2Funicode_names.py","name":"src/acme_order/unicode_names.py","isStub":false,"definedIn":[38],"comments":["Identifiers beyond ASCII: the language reads them NFKC-normalized."],"metrics":{"sloc":7},"anchor":[38,1,13]}
+{"t":"e","i":280,"k":1,"tr":[5,8,12,11,0,6,3],"m":279,"s":"Café","name":"Café","isStub":false,"parent":279,"metrics":{"sloc":2},"anchor":[38,12,13]}
+{"t":"e","i":281,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":279,"s":"find","name":"find","signature":"find(order)","parent":279,"parameters":[282],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[38,4,5]}
+{"t":"e","i":282,"k":5,"tr":[5,7,9,0,6],"m":279,"s":"find","d":"param:order","name":"order","parent":281,"anchor":[38,4,4]}
+{"t":"e","i":283,"k":4,"tr":[5,4,11,6,1,3],"m":283,"s":"src%2Facme_plugins%2Fstripe.py","name":"src/acme_plugins/stripe.py","isStub":false,"definedIn":[39],"comments":["A plugin in a directory with no __init__.py: a namespace package (PEP 420)."],"metrics":{"sloc":3},"anchor":[39,1,5]}
+{"t":"e","i":284,"k":1,"tr":[5,8,12,11,0,6,3],"m":283,"s":"Gateway","name":"Gateway","isStub":false,"parent":283,"metrics":{"sloc":2},"anchor":[39,4,5]}
+{"t":"e","i":285,"k":4,"tr":[5,4,11,6,1,3],"m":285,"s":"tests%2Fconftest.py","name":"tests/conftest.py","isStub":false,"definedIn":[40],"comments":["The tests' conftest: the nearer of the two for every test below."],"metrics":{"sloc":4},"anchor":[40,1,6]}
+{"t":"e","i":286,"k":2,"tr":[5,2,11,14,13,10,9,0,6,3],"m":285,"s":"make_order","name":"make_order","signature":"make_order()","parent":285,"parameters":[],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[40,5,6]}
+{"t":"e","i":287,"k":4,"tr":[5,4,11,6,3],"m":287,"s":"tests%2Fintegration%2Ffakes.py","name":"tests/integration/fakes.py","isStub":false,"definedIn":[41],"metrics":{"sloc":2},"anchor":[41,1,2]}
+{"t":"e","i":288,"k":1,"tr":[5,8,12,11,0,6,3],"m":287,"s":"Fake","name":"Fake","isStub":false,"parent":287,"metrics":{"sloc":2},"anchor":[41,1,2]}
+{"t":"e","i":289,"k":4,"tr":[5,4,11,6,1,3],"m":289,"s":"tests%2Fqueue.py","name":"tests/queue.py","isStub":false,"definedIn":[42],"comments":["A test helper named like a standard module: the corpus answers first."],"metrics":{"sloc":3},"anchor":[42,1,5]}
+{"t":"e","i":290,"k":1,"tr":[5,8,12,11,0,6,3],"m":289,"s":"FakeQueue","name":"FakeQueue","isStub":false,"parent":289,"metrics":{"sloc":2},"anchor":[42,4,5]}
+{"t":"e","i":291,"k":4,"tr":[5,4,11,6,3],"m":291,"s":"tests%2Ftest_orders.py","name":"tests/test_orders.py","isStub":false,"definedIn":[43],"metrics":{"sloc":13},"anchor":[43,1,22]}
+{"t":"e","i":292,"k":1,"tr":[5,8,12,11,0,6,3],"m":291,"s":"SpecialOrder","name":"SpecialOrder","isStub":false,"parent":291,"metrics":{"sloc":2},"anchor":[43,8,9]}
+{"t":"e","i":293,"k":1,"tr":[5,8,12,11,0,6,3],"m":291,"s":"TestAcme","name":"TestAcme","isStub":false,"parent":291,"metrics":{"sloc":2},"anchor":[43,21,22]}
+{"t":"e","i":294,"k":1,"tr":[5,8,12,11,0,6,3],"m":291,"s":"TestMissing","name":"TestMissing","isStub":false,"parent":291,"metrics":{"sloc":2},"anchor":[43,17,18]}
+{"t":"e","i":295,"k":1,"tr":[5,8,12,11,0,6,3],"m":291,"s":"TestOrder","name":"TestOrder","isStub":false,"parent":291,"metrics":{"sloc":3},"anchor":[43,12,14]}
+{"t":"e","i":296,"k":3,"tr":[5,2,11,14,13,10,9,0,6,3],"m":291,"s":"TestOrder.test_total","name":"test_total","signature":"test_total(self)","parent":295,"parameters":[297],"metrics":{"cyclomatic":1,"sloc":2},"anchor":[43,13,14]}
+{"t":"e","i":297,"k":5,"tr":[5,7,9,0,6],"m":291,"s":"TestOrder.test_total","d":"param:self","name":"self","parent":296,"anchor":[43,13,13]}
+{"t":"e","i":298,"k":4,"tr":[5,4,11,6,3],"m":298,"s":"tests%2Ftest_queue.py","name":"tests/test_queue.py","isStub":false,"definedIn":[44],"metrics":{"sloc":3},"anchor":[44,1,5]}
+{"t":"e","i":299,"k":1,"tr":[5,8,12,11,0,6,3],"m":298,"s":"TestQueue","name":"TestQueue","isStub":false,"parent":298,"metrics":{"sloc":2},"anchor":[44,4,5]}
+{"t":"e","i":300,"k":4,"tr":[5,4,11,6,1,3],"m":300,"s":"tests%2Ftest_tie.py","name":"tests/test_tie.py","isStub":false,"definedIn":[45],"comments":["`fakes` is answered by two roots at the same distance: dropped, never chosen."],"metrics":{"sloc":4},"anchor":[45,1,6]}
+{"t":"e","i":301,"k":1,"tr":[5,8,12,11,0,6,3],"m":300,"s":"Tied","name":"Tied","isStub":false,"parent":300,"metrics":{"sloc":2},"anchor":[45,5,6]}
+{"t":"e","i":302,"k":4,"tr":[5,4,11,6,3],"m":302,"s":"tests%2Funit%2Ffakes.py","name":"tests/unit/fakes.py","isStub":false,"definedIn":[46],"metrics":{"sloc":2},"anchor":[46,1,2]}
+{"t":"e","i":303,"k":1,"tr":[5,8,12,11,0,6,3],"m":302,"s":"Fake","name":"Fake","isStub":false,"parent":302,"metrics":{"sloc":2},"anchor":[46,1,2]}
 {"t":"x","k":2,"f":38,"o":32,"p":0,"anchor":[0,3,3]}
 {"t":"x","k":4,"f":38,"o":32,"p":0,"anchor":[0,13,13]}
 {"t":"x","k":5,"f":38,"o":32,"p":0,"anchor":[0,13,13]}
 {"t":"x","k":4,"f":38,"o":39,"p":0,"anchor":[0,13,13]}
 {"t":"x","k":2,"f":38,"o":48,"p":0,"anchor":[0,5,5]}
-{"t":"x","k":4,"f":39,"o":140,"p":0,"anchor":[0,9,9]}
-{"t":"x","k":0,"f":39,"o":149,"p":0,"isRead":true,"isWrite":false,"anchor":[0,9,9]}
+{"t":"x","k":4,"f":39,"o":141,"p":0,"anchor":[0,9,9]}
+{"t":"x","k":0,"f":39,"o":150,"p":0,"isRead":true,"isWrite":false,"anchor":[0,9,9]}
 {"t":"x","k":2,"f":41,"o":15,"p":0,"anchor":[1,2,2]}
 {"t":"x","k":2,"f":48,"o":64,"p":0,"anchor":[4,2,2]}
-{"t":"x","k":2,"f":48,"o":125,"p":0,"anchor":[4,3,3]}
+{"t":"x","k":2,"f":48,"o":126,"p":0,"anchor":[4,3,3]}
 {"t":"x","k":5,"f":56,"o":3,"p":0,"anchor":[8,7,7]}
 {"t":"x","k":5,"f":56,"o":3,"p":0,"anchor":[8,22,22]}
 {"t":"x","k":2,"f":56,"o":16,"p":0,"anchor":[8,6,6]}
@@ -368,18 +369,18 @@
 {"t":"x","k":5,"f":56,"o":32,"p":0,"anchor":[8,13,13]}
 {"t":"x","k":2,"f":56,"o":33,"p":0,"anchor":[8,3,3]}
 {"t":"x","k":5,"f":56,"o":33,"p":0,"anchor":[8,10,10]}
-{"t":"x","k":2,"f":56,"o":125,"p":0,"anchor":[8,11,11]}
+{"t":"x","k":2,"f":56,"o":126,"p":0,"anchor":[8,11,11]}
 {"t":"x","k":3,"f":57,"o":17,"p":0,"anchor":[8,26,26]}
 {"t":"x","k":4,"f":59,"o":16,"p":0,"anchor":[8,31,31]}
-{"t":"x","k":5,"f":59,"o":132,"p":0,"anchor":[8,30,30]}
+{"t":"x","k":5,"f":59,"o":133,"p":0,"anchor":[8,30,30]}
 {"t":"x","k":2,"f":61,"o":63,"p":0,"anchor":[9,2,2]}
 {"t":"x","k":2,"f":63,"o":61,"p":0,"anchor":[10,2,2]}
 {"t":"x","k":3,"f":65,"o":5,"p":0,"anchor":[11,8,8]}
 {"t":"x","k":3,"f":65,"o":66,"p":0,"anchor":[11,8,8]}
 {"t":"x","k":3,"f":66,"o":2,"p":0,"anchor":[11,4,4]}
-{"t":"x","k":2,"f":67,"o":126,"p":0,"anchor":[12,2,2]}
+{"t":"x","k":2,"f":67,"o":127,"p":0,"anchor":[12,2,2]}
 {"t":"x","k":5,"f":68,"o":70,"p":0,"anchor":[12,13,13]}
-{"t":"x","k":3,"f":70,"o":130,"p":0,"anchor":[12,6,6]}
+{"t":"x","k":3,"f":70,"o":131,"p":0,"anchor":[12,6,6]}
 {"t":"x","k":4,"f":71,"o":73,"p":0,"anchor":[12,11,11]}
 {"t":"x","k":4,"f":74,"o":75,"p":0,"anchor":[12,20,20]}
 {"t":"x","k":5,"f":76,"o":78,"p":0,"anchor":[12,27,27]}
@@ -388,143 +389,143 @@
 {"t":"x","k":2,"f":104,"o":22,"p":0,"anchor":[19,3,3]}
 {"t":"x","k":2,"f":104,"o":90,"p":0,"anchor":[19,2,2]}
 {"t":"x","k":3,"f":105,"o":6,"p":0,"anchor":[19,15,15]}
-{"t":"x","k":3,"f":106,"o":8,"p":0,"anchor":[19,6,6]}
-{"t":"x","k":5,"f":107,"o":7,"p":0,"anchor":[19,11,11]}
-{"t":"x","k":4,"f":107,"o":91,"p":0,"anchor":[19,10,10]}
-{"t":"x","k":2,"f":112,"o":25,"p":0,"anchor":[20,2,2]}
-{"t":"x","k":4,"f":112,"o":25,"p":0,"anchor":[20,5,5]}
-{"t":"x","k":4,"f":112,"o":25,"p":0,"anchor":[20,9,9]}
-{"t":"x","k":2,"f":112,"o":28,"p":0,"anchor":[20,3,3]}
-{"t":"x","k":4,"f":112,"o":29,"p":0,"anchor":[20,6,6]}
-{"t":"x","k":3,"f":113,"o":9,"p":2,"anchor":[20,5,5]}
-{"t":"x","k":3,"f":116,"o":9,"p":2,"anchor":[20,9,9]}
-{"t":"x","k":0,"f":117,"o":119,"p":0,"isRead":true,"isWrite":false,"anchor":[20,13,13]}
-{"t":"x","k":0,"f":117,"o":120,"p":0,"isRead":true,"isWrite":false,"anchor":[20,13,13]}
-{"t":"x","k":3,"f":121,"o":29,"p":2,"anchor":[20,6,6]}
-{"t":"x","k":0,"f":124,"o":123,"p":0,"isRead":true,"isWrite":false,"anchor":[20,17,17]}
-{"t":"x","k":2,"f":125,"o":131,"p":0,"anchor":[21,2,2]}
-{"t":"x","k":2,"f":131,"o":126,"p":0,"anchor":[23,2,2]}
-{"t":"x","k":3,"f":132,"o":127,"p":0,"anchor":[23,5,5]}
-{"t":"x","k":3,"f":132,"o":130,"p":0,"anchor":[23,5,5]}
-{"t":"x","k":0,"f":134,"o":138,"p":0,"isRead":false,"isWrite":true,"anchor":[23,9,9]}
-{"t":"x","k":0,"f":134,"o":139,"p":0,"isRead":false,"isWrite":true,"anchor":[23,8,8]}
-{"t":"x","k":0,"f":140,"o":146,"p":0,"isRead":false,"isWrite":true,"anchor":[23,14,14]}
-{"t":"x","k":0,"f":140,"o":147,"p":0,"isRead":false,"isWrite":true,"anchor":[23,13,13]}
-{"t":"x","k":0,"f":140,"o":148,"p":0,"isRead":false,"isWrite":true,"anchor":[23,12,12]}
-{"t":"x","k":0,"f":149,"o":147,"p":0,"isRead":true,"isWrite":false,"anchor":[23,18,18]}
-{"t":"x","k":0,"f":150,"o":147,"p":0,"isRead":false,"isWrite":true,"anchor":[23,26,26]}
-{"t":"x","k":6,"f":153,"o":1,"p":0,"anchor":[23,22,22]}
-{"t":"x","k":2,"f":167,"o":13,"p":0,"anchor":[24,3,3]}
-{"t":"x","k":2,"f":167,"o":248,"p":0,"anchor":[24,2,2]}
-{"t":"x","k":3,"f":168,"o":14,"p":1,"anchor":[24,10,10]}
-{"t":"x","k":3,"f":169,"o":249,"p":0,"anchor":[24,6,6]}
-{"t":"x","k":2,"f":170,"o":50,"p":0,"anchor":[25,5,5]}
-{"t":"x","k":2,"f":170,"o":282,"p":0,"anchor":[25,2,2]}
-{"t":"x","k":2,"f":170,"o":282,"p":0,"anchor":[25,3,3]}
-{"t":"x","k":3,"f":171,"o":283,"p":0,"anchor":[25,12,12]}
-{"t":"x","k":3,"f":172,"o":283,"p":0,"anchor":[25,8,8]}
-{"t":"x","k":2,"f":173,"o":175,"p":0,"anchor":[26,2,2]}
-{"t":"x","k":3,"f":174,"o":177,"p":0,"anchor":[26,5,5]}
-{"t":"x","k":3,"f":176,"o":181,"p":0,"anchor":[27,17,17]}
-{"t":"x","k":3,"f":176,"o":182,"p":0,"anchor":[27,17,17]}
-{"t":"x","k":3,"f":181,"o":177,"p":0,"anchor":[27,13,13]}
-{"t":"x","k":3,"f":182,"o":177,"p":0,"anchor":[27,9,9]}
-{"t":"x","k":3,"f":184,"o":189,"p":0,"anchor":[28,8,8]}
-{"t":"x","k":3,"f":184,"o":190,"p":0,"anchor":[28,8,8]}
-{"t":"x","k":3,"f":189,"o":185,"p":0,"anchor":[28,7,7]}
-{"t":"x","k":3,"f":190,"o":185,"p":0,"anchor":[28,6,6]}
-{"t":"x","k":2,"f":193,"o":125,"p":0,"anchor":[29,4,4]}
-{"t":"x","k":2,"f":193,"o":173,"p":0,"anchor":[29,2,2]}
-{"t":"x","k":2,"f":193,"o":175,"p":0,"anchor":[29,3,3]}
-{"t":"x","k":2,"f":193,"o":191,"p":0,"anchor":[29,5,5]}
-{"t":"x","k":3,"f":194,"o":176,"p":0,"anchor":[29,17,17]}
-{"t":"x","k":3,"f":194,"o":195,"p":0,"anchor":[29,17,17]}
-{"t":"x","k":3,"f":195,"o":177,"p":0,"anchor":[29,8,8]}
-{"t":"x","k":5,"f":196,"o":132,"p":0,"anchor":[29,9,9]}
-{"t":"x","k":3,"f":199,"o":192,"p":0,"anchor":[29,13,13]}
-{"t":"x","k":5,"f":211,"o":214,"p":0,"anchor":[32,8,8]}
-{"t":"x","k":2,"f":216,"o":12,"p":0,"anchor":[33,6,6]}
-{"t":"x","k":2,"f":216,"o":30,"p":0,"anchor":[33,2,2]}
-{"t":"x","k":2,"f":216,"o":31,"p":0,"anchor":[33,3,3]}
-{"t":"x","k":2,"f":216,"o":33,"p":0,"anchor":[33,4,4]}
-{"t":"x","k":2,"f":216,"o":64,"p":0,"anchor":[33,9,9]}
-{"t":"x","k":2,"f":216,"o":131,"p":0,"anchor":[33,10,10]}
-{"t":"x","k":2,"f":216,"o":173,"p":0,"anchor":[33,11,11]}
-{"t":"x","k":2,"f":216,"o":202,"p":0,"anchor":[33,12,12]}
-{"t":"x","k":2,"f":216,"o":210,"p":0,"anchor":[33,13,13]}
-{"t":"x","k":2,"f":216,"o":242,"p":0,"anchor":[33,8,8]}
-{"t":"x","k":2,"f":216,"o":252,"p":0,"anchor":[33,57,57]}
-{"t":"x","k":3,"f":217,"o":222,"p":0,"anchor":[33,74,74]}
-{"t":"x","k":0,"f":218,"o":221,"p":0,"isRead":false,"isWrite":true,"anchor":[33,77,77]}
-{"t":"x","k":4,"f":218,"o":223,"p":0,"anchor":[33,76,76]}
-{"t":"x","k":0,"f":222,"o":245,"p":0,"isRead":true,"isWrite":false,"anchor":[33,45,45]}
-{"t":"x","k":4,"f":223,"o":203,"p":0,"anchor":[33,37,37]}
-{"t":"x","k":0,"f":223,"o":228,"p":0,"isRead":false,"isWrite":true,"anchor":[33,38,38]}
-{"t":"x","k":0,"f":223,"o":231,"p":0,"isRead":false,"isWrite":true,"anchor":[33,39,39]}
-{"t":"x","k":0,"f":223,"o":232,"p":0,"isRead":false,"isWrite":true,"anchor":[33,37,37]}
-{"t":"x","k":4,"f":229,"o":223,"p":0,"anchor":[33,43,43]}
-{"t":"x","k":5,"f":234,"o":4,"p":0,"anchor":[33,62,62]}
-{"t":"x","k":6,"f":234,"o":4,"p":0,"anchor":[33,63,63]}
-{"t":"x","k":1,"f":234,"o":12,"p":0,"arguments":[{"name":"name","value":{"k":"string","v":"run"}}],"anchor":[33,45,45]}
-{"t":"x","k":4,"f":234,"o":30,"p":0,"anchor":[33,57,57]}
-{"t":"x","k":4,"f":234,"o":30,"p":0,"anchor":[33,58,58]}
-{"t":"x","k":4,"f":234,"o":66,"p":0,"anchor":[33,67,67]}
-{"t":"x","k":5,"f":234,"o":66,"p":0,"anchor":[33,64,64]}
-{"t":"x","k":6,"f":234,"o":66,"p":0,"anchor":[33,67,67]}
-{"t":"x","k":4,"f":234,"o":140,"p":0,"anchor":[33,49,49]}
-{"t":"x","k":0,"f":234,"o":149,"p":1,"isRead":true,"isWrite":false,"anchor":[33,50,50]}
-{"t":"x","k":4,"f":234,"o":182,"p":0,"anchor":[33,51,51]}
-{"t":"x","k":4,"f":234,"o":204,"p":1,"anchor":[33,61,61]}
-{"t":"x","k":4,"f":234,"o":207,"p":1,"anchor":[33,47,47]}
-{"t":"x","k":4,"f":234,"o":226,"p":0,"anchor":[33,48,48]}
-{"t":"x","k":4,"f":234,"o":229,"p":0,"anchor":[33,52,52]}
-{"t":"x","k":0,"f":234,"o":231,"p":0,"isRead":true,"isWrite":false,"anchor":[33,54,54]}
-{"t":"x","k":0,"f":234,"o":232,"p":0,"isRead":true,"isWrite":false,"anchor":[33,47,47]}
-{"t":"x","k":0,"f":234,"o":232,"p":0,"isRead":true,"isWrite":false,"anchor":[33,61,61]}
-{"t":"x","k":4,"f":234,"o":246,"p":0,"anchor":[33,59,59]}
-{"t":"x","k":4,"f":237,"o":66,"p":0,"anchor":[33,28,28]}
-{"t":"x","k":4,"f":239,"o":31,"p":0,"anchor":[33,22,22]}
-{"t":"x","k":5,"f":239,"o":132,"p":0,"anchor":[33,17,17]}
-{"t":"x","k":0,"f":239,"o":147,"p":1,"isRead":true,"isWrite":false,"anchor":[33,23,23]}
-{"t":"x","k":0,"f":239,"o":149,"p":1,"isRead":true,"isWrite":false,"anchor":[33,19,19]}
-{"t":"x","k":5,"f":239,"o":203,"p":0,"anchor":[33,17,17]}
-{"t":"x","k":4,"f":239,"o":207,"p":1,"anchor":[33,21,21]}
-{"t":"x","k":1,"f":239,"o":211,"p":0,"arguments":[{"name":"times","value":{"k":"number","v":"3"}},{"name":"backoff","value":{"k":"number","v":"2"}}],"anchor":[33,16,16]}
-{"t":"x","k":0,"f":239,"o":244,"p":0,"isRead":true,"isWrite":false,"anchor":[33,22,22]}
-{"t":"x","k":0,"f":246,"o":247,"p":0,"isRead":true,"isWrite":true,"anchor":[34,11,11]}
-{"t":"x","k":2,"f":252,"o":10,"p":0,"anchor":[36,8,8]}
-{"t":"x","k":2,"f":252,"o":18,"p":0,"anchor":[36,7,7]}
-{"t":"x","k":2,"f":252,"o":23,"p":0,"anchor":[36,3,3]}
-{"t":"x","k":2,"f":252,"o":26,"p":0,"anchor":[36,4,4]}
-{"t":"x","k":2,"f":252,"o":28,"p":0,"anchor":[36,2,2]}
-{"t":"x","k":2,"f":252,"o":33,"p":0,"anchor":[36,5,5]}
-{"t":"x","k":4,"f":252,"o":35,"p":0,"anchor":[36,10,10]}
-{"t":"x","k":0,"f":252,"o":271,"p":0,"isRead":true,"isWrite":false,"anchor":[36,26,26]}
-{"t":"x","k":3,"f":253,"o":29,"p":0,"anchor":[36,13,13]}
-{"t":"x","k":3,"f":257,"o":269,"p":0,"anchor":[36,53,53]}
-{"t":"x","k":3,"f":257,"o":270,"p":0,"anchor":[36,53,53]}
-{"t":"x","k":3,"f":261,"o":34,"p":0,"anchor":[36,26,26]}
-{"t":"x","k":3,"f":268,"o":24,"p":0,"anchor":[36,18,18]}
-{"t":"x","k":3,"f":269,"o":19,"p":0,"anchor":[36,34,34]}
-{"t":"x","k":3,"f":270,"o":11,"p":0,"anchor":[36,30,30]}
-{"t":"x","k":3,"f":272,"o":270,"p":0,"anchor":[36,46,46]}
-{"t":"x","k":4,"f":273,"o":11,"p":1,"anchor":[36,50,50]}
-{"t":"x","k":3,"f":275,"o":27,"p":0,"anchor":[36,22,22]}
-{"t":"x","k":2,"f":276,"o":20,"p":0,"anchor":[37,2,2]}
-{"t":"x","k":2,"f":276,"o":21,"p":0,"anchor":[37,3,3]}
-{"t":"x","k":2,"f":284,"o":48,"p":0,"anchor":[40,2,2]}
-{"t":"x","k":4,"f":285,"o":140,"p":0,"anchor":[40,6,6]}
-{"t":"x","k":2,"f":290,"o":36,"p":0,"anchor":[43,1,1]}
-{"t":"x","k":2,"f":290,"o":44,"p":0,"anchor":[43,3,3]}
-{"t":"x","k":2,"f":290,"o":48,"p":0,"anchor":[43,4,4]}
-{"t":"x","k":2,"f":290,"o":64,"p":0,"anchor":[43,4,4]}
-{"t":"x","k":2,"f":290,"o":284,"p":0,"anchor":[43,5,5]}
-{"t":"x","k":3,"f":291,"o":132,"p":0,"anchor":[43,8,8]}
-{"t":"x","k":3,"f":292,"o":45,"p":0,"anchor":[43,21,21]}
-{"t":"x","k":3,"f":293,"o":65,"p":0,"anchor":[43,17,17]}
-{"t":"x","k":3,"f":294,"o":37,"p":0,"anchor":[43,12,12]}
-{"t":"x","k":4,"f":295,"o":37,"p":1,"anchor":[43,14,14]}
-{"t":"x","k":4,"f":295,"o":285,"p":0,"anchor":[43,14,14]}
-{"t":"x","k":2,"f":297,"o":288,"p":0,"anchor":[44,1,1]}
-{"t":"x","k":3,"f":298,"o":289,"p":0,"anchor":[44,4,4]}
-{"t":"eof","counts":{"files":47,"entities":303,"edges":178}}
+{"t":"x","k":3,"f":107,"o":8,"p":0,"anchor":[19,6,6]}
+{"t":"x","k":5,"f":108,"o":7,"p":0,"anchor":[19,11,11]}
+{"t":"x","k":4,"f":108,"o":91,"p":0,"anchor":[19,10,10]}
+{"t":"x","k":2,"f":113,"o":25,"p":0,"anchor":[20,2,2]}
+{"t":"x","k":4,"f":113,"o":25,"p":0,"anchor":[20,5,5]}
+{"t":"x","k":4,"f":113,"o":25,"p":0,"anchor":[20,9,9]}
+{"t":"x","k":2,"f":113,"o":28,"p":0,"anchor":[20,3,3]}
+{"t":"x","k":4,"f":113,"o":29,"p":0,"anchor":[20,6,6]}
+{"t":"x","k":3,"f":114,"o":9,"p":2,"anchor":[20,5,5]}
+{"t":"x","k":3,"f":117,"o":9,"p":2,"anchor":[20,9,9]}
+{"t":"x","k":0,"f":118,"o":120,"p":0,"isRead":true,"isWrite":false,"anchor":[20,13,13]}
+{"t":"x","k":0,"f":118,"o":121,"p":0,"isRead":true,"isWrite":false,"anchor":[20,13,13]}
+{"t":"x","k":3,"f":122,"o":29,"p":2,"anchor":[20,6,6]}
+{"t":"x","k":0,"f":125,"o":124,"p":0,"isRead":true,"isWrite":false,"anchor":[20,17,17]}
+{"t":"x","k":2,"f":126,"o":132,"p":0,"anchor":[21,2,2]}
+{"t":"x","k":2,"f":132,"o":127,"p":0,"anchor":[23,2,2]}
+{"t":"x","k":3,"f":133,"o":128,"p":0,"anchor":[23,5,5]}
+{"t":"x","k":3,"f":133,"o":131,"p":0,"anchor":[23,5,5]}
+{"t":"x","k":0,"f":135,"o":139,"p":0,"isRead":false,"isWrite":true,"anchor":[23,9,9]}
+{"t":"x","k":0,"f":135,"o":140,"p":0,"isRead":false,"isWrite":true,"anchor":[23,8,8]}
+{"t":"x","k":0,"f":141,"o":147,"p":0,"isRead":false,"isWrite":true,"anchor":[23,14,14]}
+{"t":"x","k":0,"f":141,"o":148,"p":0,"isRead":false,"isWrite":true,"anchor":[23,13,13]}
+{"t":"x","k":0,"f":141,"o":149,"p":0,"isRead":false,"isWrite":true,"anchor":[23,12,12]}
+{"t":"x","k":0,"f":150,"o":148,"p":0,"isRead":true,"isWrite":false,"anchor":[23,18,18]}
+{"t":"x","k":0,"f":151,"o":148,"p":0,"isRead":false,"isWrite":true,"anchor":[23,26,26]}
+{"t":"x","k":6,"f":154,"o":1,"p":0,"anchor":[23,22,22]}
+{"t":"x","k":2,"f":168,"o":13,"p":0,"anchor":[24,3,3]}
+{"t":"x","k":2,"f":168,"o":249,"p":0,"anchor":[24,2,2]}
+{"t":"x","k":3,"f":169,"o":14,"p":1,"anchor":[24,10,10]}
+{"t":"x","k":3,"f":170,"o":250,"p":0,"anchor":[24,6,6]}
+{"t":"x","k":2,"f":171,"o":50,"p":0,"anchor":[25,5,5]}
+{"t":"x","k":2,"f":171,"o":283,"p":0,"anchor":[25,2,2]}
+{"t":"x","k":2,"f":171,"o":283,"p":0,"anchor":[25,3,3]}
+{"t":"x","k":3,"f":172,"o":284,"p":0,"anchor":[25,12,12]}
+{"t":"x","k":3,"f":173,"o":284,"p":0,"anchor":[25,8,8]}
+{"t":"x","k":2,"f":174,"o":176,"p":0,"anchor":[26,2,2]}
+{"t":"x","k":3,"f":175,"o":178,"p":0,"anchor":[26,5,5]}
+{"t":"x","k":3,"f":177,"o":182,"p":0,"anchor":[27,17,17]}
+{"t":"x","k":3,"f":177,"o":183,"p":0,"anchor":[27,17,17]}
+{"t":"x","k":3,"f":182,"o":178,"p":0,"anchor":[27,13,13]}
+{"t":"x","k":3,"f":183,"o":178,"p":0,"anchor":[27,9,9]}
+{"t":"x","k":3,"f":185,"o":190,"p":0,"anchor":[28,8,8]}
+{"t":"x","k":3,"f":185,"o":191,"p":0,"anchor":[28,8,8]}
+{"t":"x","k":3,"f":190,"o":186,"p":0,"anchor":[28,7,7]}
+{"t":"x","k":3,"f":191,"o":186,"p":0,"anchor":[28,6,6]}
+{"t":"x","k":2,"f":194,"o":126,"p":0,"anchor":[29,4,4]}
+{"t":"x","k":2,"f":194,"o":174,"p":0,"anchor":[29,2,2]}
+{"t":"x","k":2,"f":194,"o":176,"p":0,"anchor":[29,3,3]}
+{"t":"x","k":2,"f":194,"o":192,"p":0,"anchor":[29,5,5]}
+{"t":"x","k":3,"f":195,"o":177,"p":0,"anchor":[29,17,17]}
+{"t":"x","k":3,"f":195,"o":196,"p":0,"anchor":[29,17,17]}
+{"t":"x","k":3,"f":196,"o":178,"p":0,"anchor":[29,8,8]}
+{"t":"x","k":5,"f":197,"o":133,"p":0,"anchor":[29,9,9]}
+{"t":"x","k":3,"f":200,"o":193,"p":0,"anchor":[29,13,13]}
+{"t":"x","k":5,"f":212,"o":215,"p":0,"anchor":[32,8,8]}
+{"t":"x","k":2,"f":217,"o":12,"p":0,"anchor":[33,6,6]}
+{"t":"x","k":2,"f":217,"o":30,"p":0,"anchor":[33,2,2]}
+{"t":"x","k":2,"f":217,"o":31,"p":0,"anchor":[33,3,3]}
+{"t":"x","k":2,"f":217,"o":33,"p":0,"anchor":[33,4,4]}
+{"t":"x","k":2,"f":217,"o":64,"p":0,"anchor":[33,9,9]}
+{"t":"x","k":2,"f":217,"o":132,"p":0,"anchor":[33,10,10]}
+{"t":"x","k":2,"f":217,"o":174,"p":0,"anchor":[33,11,11]}
+{"t":"x","k":2,"f":217,"o":203,"p":0,"anchor":[33,12,12]}
+{"t":"x","k":2,"f":217,"o":211,"p":0,"anchor":[33,13,13]}
+{"t":"x","k":2,"f":217,"o":243,"p":0,"anchor":[33,8,8]}
+{"t":"x","k":2,"f":217,"o":253,"p":0,"anchor":[33,57,57]}
+{"t":"x","k":3,"f":218,"o":223,"p":0,"anchor":[33,74,74]}
+{"t":"x","k":0,"f":219,"o":222,"p":0,"isRead":false,"isWrite":true,"anchor":[33,77,77]}
+{"t":"x","k":4,"f":219,"o":224,"p":0,"anchor":[33,76,76]}
+{"t":"x","k":0,"f":223,"o":246,"p":0,"isRead":true,"isWrite":false,"anchor":[33,45,45]}
+{"t":"x","k":4,"f":224,"o":204,"p":0,"anchor":[33,37,37]}
+{"t":"x","k":0,"f":224,"o":229,"p":0,"isRead":false,"isWrite":true,"anchor":[33,38,38]}
+{"t":"x","k":0,"f":224,"o":232,"p":0,"isRead":false,"isWrite":true,"anchor":[33,39,39]}
+{"t":"x","k":0,"f":224,"o":233,"p":0,"isRead":false,"isWrite":true,"anchor":[33,37,37]}
+{"t":"x","k":4,"f":230,"o":224,"p":0,"anchor":[33,43,43]}
+{"t":"x","k":5,"f":235,"o":4,"p":0,"anchor":[33,62,62]}
+{"t":"x","k":6,"f":235,"o":4,"p":0,"anchor":[33,63,63]}
+{"t":"x","k":1,"f":235,"o":12,"p":0,"arguments":[{"name":"name","value":{"k":"string","v":"run"}}],"anchor":[33,45,45]}
+{"t":"x","k":4,"f":235,"o":30,"p":0,"anchor":[33,57,57]}
+{"t":"x","k":4,"f":235,"o":30,"p":0,"anchor":[33,58,58]}
+{"t":"x","k":4,"f":235,"o":66,"p":0,"anchor":[33,67,67]}
+{"t":"x","k":5,"f":235,"o":66,"p":0,"anchor":[33,64,64]}
+{"t":"x","k":6,"f":235,"o":66,"p":0,"anchor":[33,67,67]}
+{"t":"x","k":4,"f":235,"o":141,"p":0,"anchor":[33,49,49]}
+{"t":"x","k":0,"f":235,"o":150,"p":1,"isRead":true,"isWrite":false,"anchor":[33,50,50]}
+{"t":"x","k":4,"f":235,"o":183,"p":0,"anchor":[33,51,51]}
+{"t":"x","k":4,"f":235,"o":205,"p":1,"anchor":[33,61,61]}
+{"t":"x","k":4,"f":235,"o":208,"p":1,"anchor":[33,47,47]}
+{"t":"x","k":4,"f":235,"o":227,"p":0,"anchor":[33,48,48]}
+{"t":"x","k":4,"f":235,"o":230,"p":0,"anchor":[33,52,52]}
+{"t":"x","k":0,"f":235,"o":232,"p":0,"isRead":true,"isWrite":false,"anchor":[33,54,54]}
+{"t":"x","k":0,"f":235,"o":233,"p":0,"isRead":true,"isWrite":false,"anchor":[33,47,47]}
+{"t":"x","k":0,"f":235,"o":233,"p":0,"isRead":true,"isWrite":false,"anchor":[33,61,61]}
+{"t":"x","k":4,"f":235,"o":247,"p":0,"anchor":[33,59,59]}
+{"t":"x","k":4,"f":238,"o":66,"p":0,"anchor":[33,28,28]}
+{"t":"x","k":4,"f":240,"o":31,"p":0,"anchor":[33,22,22]}
+{"t":"x","k":5,"f":240,"o":133,"p":0,"anchor":[33,17,17]}
+{"t":"x","k":0,"f":240,"o":148,"p":1,"isRead":true,"isWrite":false,"anchor":[33,23,23]}
+{"t":"x","k":0,"f":240,"o":150,"p":1,"isRead":true,"isWrite":false,"anchor":[33,19,19]}
+{"t":"x","k":5,"f":240,"o":204,"p":0,"anchor":[33,17,17]}
+{"t":"x","k":4,"f":240,"o":208,"p":1,"anchor":[33,21,21]}
+{"t":"x","k":1,"f":240,"o":212,"p":0,"arguments":[{"name":"times","value":{"k":"number","v":"3"}},{"name":"backoff","value":{"k":"number","v":"2"}}],"anchor":[33,16,16]}
+{"t":"x","k":0,"f":240,"o":245,"p":0,"isRead":true,"isWrite":false,"anchor":[33,22,22]}
+{"t":"x","k":0,"f":247,"o":248,"p":0,"isRead":true,"isWrite":true,"anchor":[34,11,11]}
+{"t":"x","k":2,"f":253,"o":10,"p":0,"anchor":[36,8,8]}
+{"t":"x","k":2,"f":253,"o":18,"p":0,"anchor":[36,7,7]}
+{"t":"x","k":2,"f":253,"o":23,"p":0,"anchor":[36,3,3]}
+{"t":"x","k":2,"f":253,"o":26,"p":0,"anchor":[36,4,4]}
+{"t":"x","k":2,"f":253,"o":28,"p":0,"anchor":[36,2,2]}
+{"t":"x","k":2,"f":253,"o":33,"p":0,"anchor":[36,5,5]}
+{"t":"x","k":4,"f":253,"o":35,"p":0,"anchor":[36,10,10]}
+{"t":"x","k":0,"f":253,"o":272,"p":0,"isRead":true,"isWrite":false,"anchor":[36,26,26]}
+{"t":"x","k":3,"f":254,"o":29,"p":0,"anchor":[36,13,13]}
+{"t":"x","k":3,"f":258,"o":270,"p":0,"anchor":[36,53,53]}
+{"t":"x","k":3,"f":258,"o":271,"p":0,"anchor":[36,53,53]}
+{"t":"x","k":3,"f":262,"o":34,"p":0,"anchor":[36,26,26]}
+{"t":"x","k":3,"f":269,"o":24,"p":0,"anchor":[36,18,18]}
+{"t":"x","k":3,"f":270,"o":19,"p":0,"anchor":[36,34,34]}
+{"t":"x","k":3,"f":271,"o":11,"p":0,"anchor":[36,30,30]}
+{"t":"x","k":3,"f":273,"o":271,"p":0,"anchor":[36,46,46]}
+{"t":"x","k":4,"f":274,"o":11,"p":1,"anchor":[36,50,50]}
+{"t":"x","k":3,"f":276,"o":27,"p":0,"anchor":[36,22,22]}
+{"t":"x","k":2,"f":277,"o":20,"p":0,"anchor":[37,2,2]}
+{"t":"x","k":2,"f":277,"o":21,"p":0,"anchor":[37,3,3]}
+{"t":"x","k":2,"f":285,"o":48,"p":0,"anchor":[40,2,2]}
+{"t":"x","k":4,"f":286,"o":141,"p":0,"anchor":[40,6,6]}
+{"t":"x","k":2,"f":291,"o":36,"p":0,"anchor":[43,1,1]}
+{"t":"x","k":2,"f":291,"o":44,"p":0,"anchor":[43,3,3]}
+{"t":"x","k":2,"f":291,"o":48,"p":0,"anchor":[43,4,4]}
+{"t":"x","k":2,"f":291,"o":64,"p":0,"anchor":[43,4,4]}
+{"t":"x","k":2,"f":291,"o":285,"p":0,"anchor":[43,5,5]}
+{"t":"x","k":3,"f":292,"o":133,"p":0,"anchor":[43,8,8]}
+{"t":"x","k":3,"f":293,"o":45,"p":0,"anchor":[43,21,21]}
+{"t":"x","k":3,"f":294,"o":65,"p":0,"anchor":[43,17,17]}
+{"t":"x","k":3,"f":295,"o":37,"p":0,"anchor":[43,12,12]}
+{"t":"x","k":4,"f":296,"o":37,"p":1,"anchor":[43,14,14]}
+{"t":"x","k":4,"f":296,"o":286,"p":0,"anchor":[43,14,14]}
+{"t":"x","k":2,"f":298,"o":289,"p":0,"anchor":[44,1,1]}
+{"t":"x","k":3,"f":299,"o":290,"p":0,"anchor":[44,4,4]}
+{"t":"eof","counts":{"files":47,"entities":304,"edges":178}}
