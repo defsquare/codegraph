@@ -1,0 +1,1 @@
+"""Saved on a Mac in 2003: lone carriage returns end its lines."""class Classic(object):    def first(self):        return 1    def second(self):        return 2

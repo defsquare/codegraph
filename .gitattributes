@@ -6,6 +6,12 @@
 # model; DeterminismTest pins it), so this is about the committed bytes only.
 * text=auto eol=lf
 
+# The Python fixture's byte hazards (PLAN.md §23.8): a Latin-1 file with its
+# cookie, a UTF-8 BOM, a Mac's lone carriage returns. Their bytes ARE the test.
+fixtures/python/src/src/acme_order/legacy/latin.py -text
+fixtures/python/src/src/acme_order/legacy/bom.py -text
+fixtures/python/src/src/acme_order/legacy/mac.py -text
+
 # Never normalized, never diffed as text by accident.
 *.jsonl -text
 *.png binary
