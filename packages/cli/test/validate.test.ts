@@ -126,6 +126,18 @@ describe("codegraph validate on clean output", () => {
     expect(result.stdout).not.toContain("FAILED");
   });
 
+  it("exits 0 with a clean verdict on the committed Python snapshot, and after the metrics pass", () => {
+    for (const file of ["model.jsonl", "model.metrics.jsonl"]) {
+      const python = fileURLToPath(new URL(`../../../fixtures/python/expected/${file}`, import.meta.url));
+      const result = invoke(["validate", python]);
+
+      expect(result.code, file).toBe(EXIT.OK);
+      expect(result.stdout).toContain("OK — every model conforms");
+      expect(result.stdout).toContain("lang python");
+      expect(result.stdout).not.toContain("FAILED");
+    }
+  });
+
   it("puts the report on stdout and leaves stderr empty (decision 3)", () => {
     const result = invoke(["validate", FIXTURE]);
     expect(result.stderr).toBe("");

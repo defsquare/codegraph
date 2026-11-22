@@ -81,3 +81,27 @@ the hazard. The last three are `-text` in `.gitattributes`.
 Sites: 216; resolved 186 (corpus 97, <builtins> 17, <stdlib> 27, <site> 7, missing modules 1, the language 37); unresolved 30; rate 86.1%.
 Imports: 64 (relative 24; by package root 9, by namespace package 2, implicit-relative 1; <stdlib> 18, <site> 9; missing 1; type-checking-only 1).
 Counted: ambiguous-ancestor (dropped): 1; ambiguous-root (dropped): 1; ambiguous-star (dropped): 1; computed-base (dropped): 4; computed-import (dropped): 1; raise-of-a-value (dropped): 1; rebinding-of-a-declaration (dropped): 1; spread-argument (dropped): 1; unbound-attribute (dropped): 1; unbound-dynamic (dropped): 1; unbound-name (dropped): 10; unbound-self-call (dropped): 1; unnamed-declaration (dropped): 1; untyped-receiver (dropped): 10; rebound-name: 2; flow-typed: 4; annotation-typed: 3; ancestor-attributed: 3; star-attributed: 1; alias-base: 3; dotted-site-class: 1.
+
+## The vocabulary: `currency`, counted by hand
+
+`expected/vocabulary.json` is the words of this model's names
+(`@codegraph/vocabulary`, PLAN.md §20), rebuilt byte for byte by
+`pnpm --filter @codegraph/vocabulary test` (`CODEGRAPH_UPDATE_SNAPSHOTS=1`
+rewrites it). A word weighs the role of the entity whose name carries it —
+module and type 8, attribute 4, operation 3, parameter 1 — except a word of a
+module path's directories, before its last `/`, which weighs 1. One word,
+counted by hand from the model and pinned by the vocabulary's tests:
+
+| name | kind | role | weight |
+|---|---|---|---|
+| `Order.currency` (`self.currency = currency` in `orders/order.py`) | attribute | attribute | 4 |
+| `Amount.currency` (a field of `namedtuple("Amount", "value currency")`) | attribute | attribute | 4 |
+| `DEFAULT_CURRENCY` (`settings.py`) | variable | attribute | 4 |
+| `currency`, the keyword-only parameter of `Order.__init__` | parameter | parameter | 1 |
+
+**`currency`: weight 13, 4 occurrences, 4 carriers** — a module variable
+weighs as an attribute; the keyword argument `currency="EUR"` and the dict key
+`"currency"` are not names. A package is its `__init__.py`, so its file's own
+word is `init` (a technical word) and the package's directory a qualifier like
+any other: `pricing` is said only as the qualifier of the four modules below
+`pricing/` — weight 4 — and the stub `pricing/missing.py` not at all.

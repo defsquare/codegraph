@@ -117,7 +117,7 @@ describe("the shipped profiles", () => {
 });
 
 describe("the fixtures", () => {
-  const FIXTURES = ["java", "csharp", "typescript", "elixir", "ruby"] as const;
+  const FIXTURES = ["java", "csharp", "typescript", "elixir", "ruby", "python"] as const;
 
   it.each(FIXTURES)("%s: every parameter and local variable is found by its parent's list", (fixture) => {
     const model = readModelFileSync(

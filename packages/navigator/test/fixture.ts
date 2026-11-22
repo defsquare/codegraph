@@ -53,6 +53,16 @@ export function rubyGraph(): CodeGraph {
   return buildGraph(loadModels(model, { sources: ["fixtures/ruby"] }).union);
 }
 
+/** The committed M22 snapshot: real Ruff-parser output over `fixtures/python/src`. */
+const PYTHON_FIXTURE = fileURLToPath(
+  new URL("../../../fixtures/python/expected/model.jsonl", import.meta.url),
+);
+
+export function pythonGraph(): CodeGraph {
+  const model = readModelFileSync(PYTHON_FIXTURE);
+  return buildGraph(loadModels(model, { sources: ["fixtures/python"] }).union);
+}
+
 export function graphOf(entities: readonly Entity[], edges: readonly Edge[] = []): CodeGraph {
   const model: Model = {
     schemaVersion: "1.0.0",

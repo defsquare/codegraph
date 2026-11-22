@@ -170,7 +170,7 @@ const fixture = (name: string): VocabularyArtifact => {
   return buildVocabulary(buildGraph(loadModels(readModelFileSync(path), { sources: [name] }).union));
 };
 
-describe.each(["java", "ruby"])("vocabularyDrift's properties on fixtures/%s", (name) => {
+describe.each(["java", "ruby", "python"])("vocabularyDrift's properties on fixtures/%s", (name) => {
   const artifact = fixture(name);
   const root = new Set(artifact.scopes[0]?.terms.map(([term]) => artifact.terms[term]?.text ?? ""));
   const spoken = [...root].sort();
