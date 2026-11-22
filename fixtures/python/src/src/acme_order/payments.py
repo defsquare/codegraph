@@ -2,6 +2,8 @@
 import acme_plugins.stripe
 from acme_plugins import stripe as gateway
 
+from ._speedups import checksum
+
 
 class StripeCharge(acme_plugins.stripe.Gateway):
     pass

@@ -106,6 +106,13 @@ describe("fixtures/python/expected/model.jsonl", () => {
       expect(model.entities.some((e) => (e as unknown as Bag)["name"] === absent), absent).toBe(false);
     }
     expect(entity(model, `${PKG}_vendor%2Ftinyjson.py/TinyJson`)["kind"]).toBe("class");
+    // A stub is a module of its own: beside its source no import names it, alone it answers one.
+    expect(entity(model, `${PKG}pricing%2Fdiscounts.pyi/Discount`)["kind"]).toBe("class");
+    expect(model.edges.some((e) => e.edge === "import" && e.to === `${PKG}pricing%2Fdiscounts.pyi`)).toBe(false);
+    expect(hasEdge(model, "import", `${PKG}payments.py`, `${PKG}_speedups.pyi`)).toBe(true);
+    // A script with no extension is Python by its shebang; a shell script beside it is not.
+    expect(hasEdge(model, "import", "python:bin%2Facme-report", `${PKG}__init__.py`)).toBe(true);
+    expect(model.entities.some((e) => e.id.includes("setup"))).toBe(false);
   });
 
   it("keys classes, functions and methods by their nesting, and accessors by the word after the dot", () => {

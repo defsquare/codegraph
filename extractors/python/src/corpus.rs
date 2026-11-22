@@ -12,8 +12,8 @@ use std::path::{Component, Path, PathBuf};
 /// Skipped by name: bytecode caches, an installed environment's packages, a
 /// JavaScript tree. A virtual environment is skipped by what it IS (`pyvenv.cfg`).
 const SKIPPED_DIRECTORIES: &[&str] = &["__pycache__", "site-packages", "node_modules"];
-/// `.pyi` stubs and extensionless scripts are M22b's.
-const EXTENSIONS: &[&str] = &["py", "pyw"];
+/// A source, a Windows script, a stub. An extensionless script says so in its shebang.
+const EXTENSIONS: &[&str] = &["py", "pyw", "pyi"];
 
 /// How a file's bytes became text.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -90,7 +90,7 @@ impl Corpus {
     pub fn packages(&self) -> HashSet<String> {
         self.files
             .iter()
-            .filter(|file| file.rel == "__init__.py" || file.rel.ends_with("/__init__.py"))
+            .filter(|file| is_package_init(&file.rel))
             .map(|file| parent_dir(&file.rel).to_owned())
             .collect()
     }
@@ -170,6 +170,28 @@ fn display(typed: &str) -> String {
 /// The directory part of a root-relative path; `""` at the root.
 pub fn parent_dir(path: &str) -> &str {
     path.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("")
+}
+
+/// A package's own file: its `__init__.py`, or the stub of one.
+pub fn is_package_init(rel: &str) -> bool {
+    let name = rel.rsplit_once('/').map_or(rel, |(_, name)| name);
+    name == "__init__.py" || name == "__init__.pyi"
+}
+
+/// `#!/usr/bin/env python3`: a script that says it is Python.
+fn python_shebang(head: &[u8]) -> bool {
+    let line = head.split(|byte| *byte == b'\n').next().unwrap_or(&[]);
+    line.starts_with(b"#!") && line.windows(6).any(|window| window == b"python")
+}
+
+/// The first bytes of a file with no extension: enough for its shebang.
+fn has_python_shebang(path: &Path) -> bool {
+    use std::io::Read;
+    let mut head = [0u8; 128];
+    let Ok(read) = fs::File::open(path).and_then(|mut file| file.read(&mut head)) else {
+        return false;
+    };
+    python_shebang(&head[..read])
 }
 
 fn is_python_file(name: &str) -> bool {
@@ -527,7 +549,7 @@ fn walk(directory: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
             if !skipped_directory(&name) && !path.join("pyvenv.cfg").is_file() {
                 walk(&path, out)?;
             }
-        } else if is_python_file(&name) {
+        } else if is_python_file(&name) || (!name.contains('.') && has_python_shebang(&path)) {
             // A symlinked FILE is read; a symlinked directory is not followed (no cycles).
             if file_type.is_file() || fs::metadata(&path).map(|m| m.is_file()).unwrap_or(false) {
                 out.push(path);
@@ -612,17 +634,11 @@ mod tests {
 
     #[test]
     fn walks_python_sources_and_skips_what_is_installed_or_generated() {
-        for name in ["order.py", "gui.pyw", "promo#2024.py", "__init__.py"] {
+        // A stub is Python as much as its module is.
+        for name in ["order.py", "gui.pyw", "order.pyi", "promo#2024.py", "__init__.py"] {
             assert!(is_python_file(name), "{name}");
         }
-        for name in [
-            "order.pyi",
-            "order.pyc",
-            ".py",
-            "README.md",
-            "order.py.bak",
-            "setup.cfg",
-        ] {
+        for name in ["order.pyc", ".py", "README.md", "order.py.bak", "setup.cfg"] {
             assert!(!is_python_file(name), "{name}");
         }
         for name in [".venv", ".git", ".tox", "__pycache__", "site-packages", "node_modules"] {
@@ -631,6 +647,20 @@ mod tests {
         // Vendored code is written in the repository: corpus.
         for name in ["_vendor", "vendor", "build", "env", "lib"] {
             assert!(!skipped_directory(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn tells_a_python_script_without_an_extension_by_its_shebang() {
+        for line in [
+            "#!/usr/bin/env python",
+            "#!/usr/bin/python3.12 -u",
+            "#! /usr/bin/env python2\n",
+        ] {
+            assert!(python_shebang(line.as_bytes()), "{line}");
+        }
+        for line in ["#!/bin/sh", "#!/usr/bin/env ruby", "python", "# python"] {
+            assert!(!python_shebang(line.as_bytes()), "{line}");
         }
     }
 

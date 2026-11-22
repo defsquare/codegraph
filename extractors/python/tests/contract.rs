@@ -353,12 +353,18 @@ fn walks_python_by_extension_and_nothing_installed_cached_or_hidden() {
     .unwrap();
     fs::write(dir.join("kept.py"), "").unwrap();
     fs::write(dir.join("stub.pyi"), "").unwrap();
+    fs::create_dir_all(dir.join("bin")).unwrap();
+    fs::write(dir.join("bin/acme-report"), "#!/usr/bin/env python3\nimport kept\n").unwrap();
+    fs::write(dir.join("bin/setup"), "#!/bin/sh\necho python\n").unwrap();
     let out = dir.join("model.jsonl");
     let walked = run(&["--src", ".", "--out", out.to_str().unwrap()], &dir);
     assert_eq!(walked.code, EXIT_OK, "{}", walked.stderr);
     let model = fs::read_to_string(&out).unwrap();
     assert!(model.contains(r#""path":"kept.py""#));
-    assert!(!model.contains("node_modules") && !model.contains("stub.pyi"));
+    // A stub is walked; a script is, by its own account — a shell script beside it is not.
+    assert!(model.contains(r#""path":"stub.pyi""#));
+    assert!(model.contains(r#""path":"bin/acme-report""#));
+    assert!(!model.contains("node_modules") && !model.contains("bin/setup"));
 }
 
 #[test]

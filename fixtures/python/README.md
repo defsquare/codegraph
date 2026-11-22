@@ -44,7 +44,8 @@ the hazard. The last three are `-text` in `.gitattributes`.
 | `shipping.py` | `<stdlib>` bases: `enum.Enum`, `abc.ABC`, `from collections import abc` → `<stdlib>%2Fcollections.abc/Mapping` (the submodule: `collections` does not bind `abc`), the subscripted `Generic[T]`; `<site>` bases: `from django.db import models` → `<site>%2Fdjango.db/models.Model` (nothing says `models` is a module), `import sqlalchemy.orm` → `<site>%2Fsqlalchemy.orm/DeclarativeBase` (the import says it is); a computed base and a base nothing binds, both dropped |
 | `compat.py` | a `def` written twice under a platform `if` — one entity, anchored at the first; `try: import simplejson as json` / `except ImportError: import json`; an `if TYPE_CHECKING:` import, counted `type-checking-only`; a name bound twice (`JSONDecodeError`), the first that names a declaration kept, counted `rebound-name` |
 | `factory.py` | a class in a function (`make.Local`), a function in its method, a nested function (`outer.inner`); a base that is the function's parameter (`wrap(Base)`), never the module's `Base`: dropped `computed-base` |
-| `payments.py` + `src/acme_plugins/stripe.py` | a namespace package (no `__init__.py`): `import acme_plugins.stripe` and `from acme_plugins import stripe`, counted on their own |
+| `payments.py` + `src/acme_plugins/stripe.py` | a namespace package (no `__init__.py`): `import acme_plugins.stripe` and `from acme_plugins import stripe`, counted on their own; `from ._speedups import checksum`, answered by a stub alone (`_speedups.pyi`, a compiled extension's) |
+| `pricing/discounts.pyi` | a stub beside its source: a module of its own, which no import names — the program imports `discounts.py` |
 | `cycle_a.py`, `cycle_b.py` | a re-export loop: `Spent(Token)` is dropped `unbound-name (an import cycle)`, and the walk ends |
 | `unicode_names.py` | a non-ASCII identifier (`Café`) and an NFKC twin: `def ﬁnd` (U+FB01) and `def find` are one name, one entity |
 | `promo#2024.py` | a `#` in a file name: escaped in the key, kept in the name |
@@ -55,6 +56,7 @@ the hazard. The last three are `-text` in `.gitattributes`.
 | `legacy/bom.py` | UTF-8 behind a byte-order mark: the mark is not text |
 | `legacy/mac.py` | lone `\r` line endings: lines are the parser's, not a count of `\n` |
 | `src/acme.py` + `src/acme/__init__.py` | a module beside a package of its name: `import acme` finds the package |
+| `bin/acme-report`, `bin/setup` | a script with no extension, Python by its shebang; the shell script beside it is not walked |
 | `conftest.py`, `tests/conftest.py` | two `conftest.py`: `from conftest import make_order` in `tests/` takes the nearer root's |
 | `tests/queue.py` + `tests/test_queue.py` | a corpus module named like a standard one, at a root: the corpus answers first |
 | `tests/unit/fakes.py`, `tests/integration/fakes.py`, `tests/test_tie.py` | two roots at one distance answer `import fakes`: dropped `ambiguous-root`, never chosen |
@@ -62,10 +64,10 @@ the hazard. The last three are `-text` in `.gitattributes`.
 
 ## What the numbers are
 
-36 files, 186 entities (27 of them stubs), 67 edges: 35 `import`, 32
-`inheritance`, all `declared`. Of 37 sites — every base is one — 32 resolve
-(86.5 %): 17 to the corpus, 6 to `<builtins>`, 5 to `<stdlib>`, 3 to `<site>`,
+39 files, 200 entities (27 of them stubs), 74 edges: 38 `import`, 36
+`inheritance`, all `declared`. Of 41 sites — every base is one — 36 resolve
+(87.8 %): 21 to the corpus, 6 to `<builtins>`, 5 to `<stdlib>`, 3 to `<site>`,
 1 below a missing module; 5 are dropped (a computed base, a parameter, three
-bases nothing binds). Of the 35 imports, 11 are relative, 6 found by a package root, 2
-through the namespace package, 1 implicit-relative, 9 in the standard library,
+bases nothing binds). Of the 38 imports, 12 are relative, 7 found by a package root, 2
+through the namespace package, 1 implicit-relative, 10 in the standard library,
 5 third parties', 1 a missing file; one is for a type checker only.

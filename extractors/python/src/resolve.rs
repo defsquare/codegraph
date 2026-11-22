@@ -114,6 +114,13 @@ impl<'a> Modules<'a> {
         }
     }
 
+    /// A package directory's own file: `__init__.py`, else its stub.
+    fn init_of(&self, dir: &str) -> Option<usize> {
+        ["__init__.py", "__init__.pyi"]
+            .iter()
+            .find_map(|name| self.by_path.get(join(dir, name).as_str()).copied())
+    }
+
     fn rel(&self, file: usize) -> &str {
         &self.corpus.files[file].rel
     }
@@ -129,13 +136,13 @@ impl<'a> Modules<'a> {
             let last = at + 1 == names.len();
             if self.packages.contains(&path) {
                 if last {
-                    let init = self.by_path[join(&path, "__init__.py").as_str()];
+                    let init = self.init_of(&path).expect("a package holds its own file");
                     return Some((ModuleRef::File(init), namespace));
                 }
                 current = path;
                 continue;
             }
-            let module = ["py", "pyw"]
+            let module = ["py", "pyw", "pyi"]
                 .iter()
                 .find_map(|extension| self.by_path.get(format!("{path}.{extension}").as_str()));
             if let Some(&module) = module {
@@ -162,10 +169,7 @@ impl<'a> Modules<'a> {
                     return None;
                 }
                 if rest.is_empty() {
-                    return self
-                        .by_path
-                        .get("__init__.py")
-                        .map(|&init| (ModuleRef::File(init), false));
+                    return self.init_of("").map(|init| (ModuleRef::File(init), false));
                 }
                 self.below("", rest)
             }
@@ -221,7 +225,7 @@ impl<'a> Modules<'a> {
                 .enumerate()
                 .filter(|(_, root)| root.prefix.is_none())
                 .filter_map(|(index, root)| match self.in_root(root, &names[..1]) {
-                    Some((ModuleRef::File(init), _)) if self.rel(init).ends_with("__init__.py") => {
+                    Some((ModuleRef::File(init), _)) if crate::corpus::is_package_init(self.rel(init)) => {
                         Some((distance(from, root), index))
                     }
                     _ => None,
@@ -275,7 +279,9 @@ impl<'a> Modules<'a> {
             base = parent_dir(&base).to_owned();
         }
         let module = match module {
-            None if self.packages.contains(&base) => ModuleRef::File(self.by_path[join(&base, "__init__.py").as_str()]),
+            None if self.packages.contains(&base) => {
+                ModuleRef::File(self.init_of(&base).expect("a package holds its own file"))
+            }
             None => ModuleRef::Namespace(base),
             Some(dotted) => {
                 let names: Vec<&str> = dotted.split('.').collect();
@@ -301,7 +307,7 @@ impl<'a> Modules<'a> {
         match module {
             ModuleRef::File(file) => {
                 let rel = self.rel(*file);
-                let package = rel == "__init__.py" || rel.ends_with("/__init__.py");
+                let package = crate::corpus::is_package_init(rel);
                 package
                     .then(|| self.below(parent_dir(rel), &[name]))
                     .flatten()
@@ -838,6 +844,29 @@ mod tests {
             tie,
             Lookup::Ambiguous(vec!["tests/integration".into(), "tests/unit".into()])
         );
+    }
+
+    #[test]
+    fn a_stub_answers_an_import_only_where_its_module_is_not_there() {
+        let corpus = corpus(&[
+            ("pkg/__init__.py", ""),
+            ("pkg/fast.py", ""),
+            ("pkg/fast.pyi", ""),
+            ("pkg/native.pyi", ""),
+            ("typed/__init__.pyi", ""),
+            ("app.py", ""),
+        ]);
+        let modules = Modules::new(&corpus);
+        let app = index(&corpus, "app.py");
+        let found = |dotted: &str| match modules.absolute(app, dotted) {
+            Lookup::Found { module, .. } => module,
+            other => panic!("{dotted}: {other:?}"),
+        };
+        let file = |rel: &str| ModuleRef::File(index(&corpus, rel));
+        // The program imports the module; its stub describes it, and answers only alone.
+        assert_eq!(found("pkg.fast"), file("pkg/fast.py"));
+        assert_eq!(found("pkg.native"), file("pkg/native.pyi"));
+        assert_eq!(found("typed"), file("typed/__init__.pyi"));
     }
 
     #[test]
