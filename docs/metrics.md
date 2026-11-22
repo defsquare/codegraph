@@ -95,8 +95,8 @@ codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 le
   holding code, so they must agree; a disagreement points at a parser (a file
   the extractor could not parse) or a definition (JSX text lines in `.tsx`; a
   Python docstring, which the profile counts as code and big-code-analysis as
-  comment lines — `cloc` — so on Python `sloc` is `ploc` plus the docstring
-  lines in the span).
+  comment lines — `cloc` — so on Python `sloc` is `ploc` plus the non-blank
+  lines of the docstrings in the span).
 
 `--audit` lists every entity not joined exactly, with its outcome, category
 and span, and marks the ones anchored on their parent.
