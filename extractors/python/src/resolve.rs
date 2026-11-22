@@ -636,7 +636,7 @@ impl<'a> Resolver<'a> {
             Bound::Class(class) => Value::Class { file, class },
             Bound::Function(function) => Value::Function { file, function },
             // What a caller passes: no line here types it (M22b reads annotations and `self`).
-            Bound::Value | Bound::Parameter(_) => Value::Opaque,
+            Bound::Value | Bound::Parameter(_) | Bound::Assigned(_) => Value::Opaque,
             Bound::Import { import, alias } => match &self.aliases[file][import][alias].binds {
                 Binds::Module(module) => Value::Module(module.clone()),
                 Binds::NameOf(module, name) => self.module_attribute(file, module, name, visiting),

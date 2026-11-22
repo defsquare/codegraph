@@ -1,17 +1,22 @@
 //! Pass 1 — what one file WRITES, as the extractor's own records: scopes and
-//! the names each binds, classes and their bases, `def`s and their
-//! parameters, imports wherever written. THE ONLY FILE THAT NAMES A TYPE OF
-//! THE PARSER: its API is internal and unversioned, so a bump of the pinned tag
-//! breaks the build here or nowhere (a boundary test holds the line).
+//! the names each binds, classes, `def`s and parameters, imports, assignments,
+//! and every SITE a body holds (a name read, an attribute and the shape of its
+//! receiver, a call, a write, a raise, an `except` type), with decorators,
+//! annotations, docstrings, comments and branches. THE ONLY FILE THAT NAMES A
+//! TYPE OF THE PARSER: its API is internal and unversioned, so a bump of the
+//! pinned tag breaks the build here or nowhere (a boundary test holds the line).
 
-use ruff_python_ast::{self as ast, Expr, Mod, Stmt};
-use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
+use ruff_python_ast::token::TokenKind;
+use ruff_python_ast::visitor::{self, Visitor};
+use ruff_python_ast::{self as ast, Expr, ExprContext, Mod, Number, Stmt};
+use ruff_python_parser::{Mode, ParseOptions, parse_string_annotation, parse_unchecked};
 use ruff_text_size::{Ranged, TextRange};
+use std::collections::BTreeMap;
 
 /// `(startLine, endLine)`, 1-based and inclusive.
 pub type Span = (u32, u32);
 
-/// Where names are bound: the module, a class body, a function body.
+/// Where names are bound.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScopeKind {
     Module,
@@ -19,13 +24,20 @@ pub enum ScopeKind {
     Class(usize),
     /// The body of `functions[i]`.
     Function(usize),
+    /// A lambda's: its parameters. Its code belongs to the invocable that writes it.
+    Lambda,
+    /// A comprehension's: its targets.
+    Comprehension,
 }
 
 #[derive(Debug)]
 pub struct Scope {
     pub kind: ScopeKind,
-    /// The scope the declaration owning this one is written in; `None` for the module.
+    /// The scope the construct owning this one is written in; `None` for the module.
     pub parent: Option<usize>,
+    /// The scope whose ENTITY runs this one's code: itself for a module, a class
+    /// or a function; the nearest of those for a lambda or a comprehension.
+    pub owner: usize,
     /// Every name the scope binds, in source order — a name bound twice is listed twice.
     pub bindings: Vec<Binding>,
     pub globals: Vec<String>,
@@ -51,8 +63,109 @@ pub enum Bound {
     },
     /// The owning function's parameter of that index: bound before its body runs.
     Parameter(usize),
-    /// An assignment, a loop or `with` target, an `except … as`, a capture: a value no line types.
+    /// `assignments[i]`: `x = …`, `x: T = …`, `x += …`, `(x := …)`.
+    Assigned(usize),
+    /// A loop or `with` target, an unpacking, an `except … as`, a capture, a
+    /// lambda's parameter: a value no line types.
     Value,
+}
+
+/// An expression as a lookup reads it: a head, then steps.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Chain {
+    Name(String),
+    Attribute(Box<Chain>, String),
+    /// The result of calling the inner chain.
+    Call(Box<Chain>),
+    /// `super()` — or `super(Class, …)`, the class written.
+    Super(Option<String>),
+    /// A literal: the builtin class it is an instance of.
+    Literal(&'static str),
+    /// A subscript, an operator, anything no name types.
+    Other,
+}
+
+impl Chain {
+    /// `a.b.c` → `["a", "b", "c"]`; `None` when the chain is not a dotted name.
+    pub fn dotted(&self) -> Option<Vec<String>> {
+        match self {
+            Chain::Name(name) => Some(vec![name.clone()]),
+            Chain::Attribute(inner, name) => {
+                let mut out = inner.dotted()?;
+                out.push(name.clone());
+                Some(out)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// A written value, before any name in it is resolved (METAMODEL §1.6).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ValueDecl {
+    Str(String),
+    /// Canonical decimal text.
+    Number(String),
+    Bool(bool),
+    None,
+    /// A dotted name: a class, an enum member, a constant — the resolver decides.
+    Name(Chain, String),
+    Array(Vec<ValueDecl>),
+    /// A dict display: keys and values, written order.
+    Pairs(Vec<(ValueDecl, ValueDecl)>),
+    /// Constant-shaped, not folded (`-x`, `1 << 4`, an f-string): the source text.
+    Unevaluated(String),
+    /// Code — a call, a lambda, a comprehension: no value; the source text for an argument.
+    Code(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArgumentDecl {
+    /// The keyword written; `None` for a positional argument.
+    pub keyword: Option<String>,
+    pub value: ValueDecl,
+    /// `*args` or `**kwargs` at the site: no argument a line can name.
+    pub spread: bool,
+}
+
+/// An annotation, as the resolver needs it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TypeExpr {
+    /// `Order`, `models.Model`.
+    Named(Chain, Span),
+    /// `Optional[Order]`, `list[Order]`, `Repo[int]`: the subscripted name and its arguments.
+    Generic(Chain, Span, Vec<TypeExpr>),
+    /// `A | B`.
+    Union(Vec<TypeExpr>),
+    None,
+    Other,
+}
+
+/// What a site does with the chain it names.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SiteKind {
+    /// Read — and, when the chain ends in a call, called.
+    Load,
+    /// `chain = …`; `augmented` when it is also read (`+=`).
+    Store { augmented: bool },
+    /// `raise chain`; `handler` the types of the `except … as name` clause
+    /// whose name the chain is, when it is one.
+    Raise { handler: Vec<Chain> },
+    /// A type an `except` clause names.
+    Except,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Site {
+    /// Where its names are looked up.
+    pub scope: usize,
+    pub chain: Chain,
+    pub kind: SiteKind,
+    /// The arguments of the chain's outermost call, when it ends in one.
+    pub arguments: Vec<ArgumentDecl>,
+    pub span: Span,
+    /// The source text, on one line, for `--explain-dropped`.
+    pub text: String,
 }
 
 /// A base as the header writes it.
@@ -60,7 +173,9 @@ pub enum Bound {
 pub enum Reference {
     /// `Base`, `models.Model`, `Generic[T]` (the subscripted name).
     Dotted(Vec<String>),
-    /// A call, a starred list, any other expression: what it is is known only when it runs.
+    /// A call (`namedtuple("P", "x y")`, `make_base()`): the callee and its arguments.
+    Call(Chain, Vec<ArgumentDecl>),
+    /// A starred list, any other expression: what it is is known only when it runs.
     Computed,
 }
 
@@ -72,6 +187,17 @@ pub struct BaseDecl {
     pub text: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DecoratorDecl {
+    /// What the decorator names: the callee of `@dec(…)`, or `dec` itself.
+    pub chain: Chain,
+    /// `@dec(…)`: written with a call.
+    pub called: bool,
+    pub arguments: Vec<ArgumentDecl>,
+    pub span: Span,
+    pub text: String,
+}
+
 #[derive(Debug)]
 pub struct ClassDecl {
     pub name: String,
@@ -80,7 +206,13 @@ pub struct ClassDecl {
     /// Its own body's scope.
     pub body: usize,
     pub span: Span,
+    /// The first line of the declaration, decorators included: a comment is above it.
+    pub head: u32,
     pub bases: Vec<BaseDecl>,
+    pub decorators: Vec<DecoratorDecl>,
+    /// `metaclass=` is written: what the class holds is decided when it runs.
+    pub metaclass: bool,
+    pub docstring: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -97,7 +229,17 @@ pub struct ParameterDecl {
     pub name: String,
     pub kind: ParameterKind,
     pub has_default: bool,
+    pub default: Option<ValueDecl>,
+    pub annotation: Option<TypeExpr>,
     pub span: Span,
+}
+
+/// How a `def` in a class body is bound: what its first parameter is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MethodBinding {
+    Instance,
+    Class,
+    Static,
 }
 
 #[derive(Debug)]
@@ -106,9 +248,44 @@ pub struct FunctionDecl {
     pub scope: usize,
     pub body: usize,
     pub span: Span,
+    /// The first line of the declaration, decorators included.
+    pub head: u32,
     /// `@<name>.setter` / `.deleter` / `.getter` directly in a class body: the word after the dot.
     pub accessor: Option<&'static str>,
+    /// `@property` (or `cached_property`) directly in a class body.
+    pub property: bool,
+    pub binding: MethodBinding,
+    /// `@overload`: a signature, not the implementation.
+    pub overload: bool,
     pub parameters: Vec<ParameterDecl>,
+    pub returns: Option<TypeExpr>,
+    pub decorators: Vec<DecoratorDecl>,
+    pub docstring: Option<String>,
+    /// 1 + the decision points of its own body (nested `def`s count for themselves).
+    pub cyclomatic: u32,
+}
+
+/// What an assignment writes into.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Target {
+    Name(String),
+    /// `receiver.name = …` with a bare name for receiver (`self.x`, `cls.x`).
+    Attribute {
+        receiver: String,
+        name: String,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AssignDecl {
+    pub scope: usize,
+    pub target: Target,
+    pub value: Option<ValueDecl>,
+    /// The value is a call: its callee, and its arguments.
+    pub constructed: Option<(Chain, Vec<ArgumentDecl>)>,
+    pub annotation: Option<TypeExpr>,
+    pub augmented: bool,
+    pub span: Span,
 }
 
 /// `import a.b.c as m` → name `a.b.c`, asname `m`; `from m import n` → name `n`; a star is `*`.
@@ -155,7 +332,36 @@ pub struct FileDecls {
     pub classes: Vec<ClassDecl>,
     pub functions: Vec<FunctionDecl>,
     pub imports: Vec<ImportDecl>,
+    pub assignments: Vec<AssignDecl>,
+    pub sites: Vec<Site>,
     pub drops: Vec<Dropped>,
+    pub docstring: Option<String>,
+    /// Per line (0-based): neither blank nor comment-only.
+    pub code_lines: Vec<bool>,
+    /// A block of `#` lines, by its last line; directives left out.
+    pub comments: BTreeMap<u32, String>,
+}
+
+impl FileDecls {
+    /// Source lines of code in a span (METAMODEL §3.8).
+    pub fn sloc(&self, span: Span) -> u32 {
+        let from = (span.0.max(1) - 1) as usize;
+        let to = (span.1 as usize).min(self.code_lines.len());
+        self.code_lines
+            .get(from..to)
+            .map(|lines| lines.iter().filter(|code| **code).count() as u32)
+            .unwrap_or(0)
+    }
+
+    /// The `#` block directly above `line`.
+    pub fn comment_above(&self, line: u32) -> Option<&String> {
+        line.checked_sub(1).and_then(|last| self.comments.get(&last))
+    }
+
+    /// The scope whose entity runs the code of `scope`.
+    pub fn owner(&self, scope: usize) -> usize {
+        self.scopes[scope].owner
+    }
 }
 
 /// Reads one decoded file.
@@ -168,15 +374,28 @@ pub fn declarations(text: &str, line_starts: &[u32]) -> FileDecls {
             errors: parsed.errors().len(),
             ..FileDecls::default()
         },
+        scope: 0,
+        type_checking: false,
+        function: None,
+        handlers: Vec::new(),
     };
     reader.scope(ScopeKind::Module, None);
+    reader.comments(&parsed);
     if let Mod::Module(module) = parsed.syntax() {
-        reader.body(0, &module.body, false);
+        reader.out.docstring = docstring(&module.body);
+        reader.visit_body(&module.body);
     }
     reader.out
 }
 
+/// When less than this much stack is left, a recursive walk moves to a fresh segment of `GROWTH`.
+const RED_ZONE: usize = 128 * 1024;
+const GROWTH: usize = 4 * 1024 * 1024;
+
 const ACCESSORS: &[&str] = &["setter", "deleter", "getter"];
+const PROPERTIES: &[&str] = &["property", "cached_property", "abstractproperty"];
+/// Comment lines that are instructions to a tool, not prose (PLAN §23.2).
+const DIRECTIVES: &[&str] = &["type:", "noqa", "pylint:", "pragma:"];
 
 /// `a.b.c` as its names; `None` for anything else, or a name recovery left empty.
 fn dotted(expr: &Expr) -> Option<Vec<String>> {
@@ -191,11 +410,12 @@ fn dotted(expr: &Expr) -> Option<Vec<String>> {
     }
 }
 
-/// What a base names: the subscripted name of `Generic[T]`, else the dotted name itself.
-fn reference(expr: &Expr) -> Reference {
+fn last_name(expr: &Expr) -> Option<String> {
     match expr {
-        Expr::Subscript(subscript) => reference(&subscript.value),
-        other => dotted(other).map_or(Reference::Computed, Reference::Dotted),
+        Expr::Name(name) => Some(name.id.to_string()),
+        Expr::Attribute(attribute) => Some(attribute.attr.to_string()),
+        Expr::Call(call) => last_name(&call.func),
+        _ => None,
     }
 }
 
@@ -204,10 +424,119 @@ fn is_type_checking(test: &Expr) -> bool {
     dotted(test).is_some_and(|names| names.last().is_some_and(|last| last == "TYPE_CHECKING"))
 }
 
+/// The builtin class a literal is an instance of.
+fn literal_class(expr: &Expr) -> Option<&'static str> {
+    Some(match expr {
+        Expr::StringLiteral(_) | Expr::FString(_) => "str",
+        Expr::BytesLiteral(_) => "bytes",
+        Expr::NumberLiteral(number) => match number.value {
+            Number::Int(_) => "int",
+            Number::Float(_) => "float",
+            Number::Complex { .. } => "complex",
+        },
+        Expr::BooleanLiteral(_) => "bool",
+        Expr::NoneLiteral(_) => "NoneType",
+        Expr::List(_) | Expr::ListComp(_) => "list",
+        Expr::Dict(_) | Expr::DictComp(_) => "dict",
+        Expr::Set(_) | Expr::SetComp(_) => "set",
+        Expr::Tuple(_) => "tuple",
+        _ => return None,
+    })
+}
+
+/// A float as canonical decimal text; the specials as core spells them.
+fn float_text(value: f64) -> String {
+    if value.is_nan() {
+        "NaN".to_owned()
+    } else if value.is_infinite() {
+        if value > 0.0 { "Infinity" } else { "-Infinity" }.to_owned()
+    } else {
+        format!("{value}")
+    }
+}
+
+/// `inspect.cleandoc`: the first line trimmed, the common indent of the rest removed, blank ends dropped.
+fn cleandoc(text: &str) -> String {
+    let lines: Vec<String> = text.replace('\t', "        ").lines().map(str::to_owned).collect();
+    let indent = lines
+        .iter()
+        .skip(1)
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.len() - line.trim_start().len())
+        .min()
+        .unwrap_or(0);
+    let mut out: Vec<String> = Vec::with_capacity(lines.len());
+    for (at, line) in lines.iter().enumerate() {
+        let line = if at == 0 {
+            line.trim_start().to_owned()
+        } else {
+            line.get(indent..).unwrap_or("").to_owned()
+        };
+        out.push(line.trim_end().to_owned());
+    }
+    while out.first().is_some_and(String::is_empty) {
+        out.remove(0);
+    }
+    while out.last().is_some_and(String::is_empty) {
+        out.pop();
+    }
+    out.join("\n")
+}
+
+/// A body's docstring: its first statement, when that is a string.
+fn docstring(body: &[Stmt]) -> Option<String> {
+    match body.first()? {
+        Stmt::Expr(statement) => match statement.value.as_ref() {
+            Expr::StringLiteral(text) => Some(cleandoc(text.value.to_str())).filter(|text| !text.is_empty()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Whether the expression is a value a declaration can carry (the TypeScript
+/// rule): literals, names, and operators over them — never code.
+fn constant_shaped(expr: &Expr) -> bool {
+    stacker::maybe_grow(RED_ZONE, GROWTH, || constant_shaped_here(expr))
+}
+
+fn constant_shaped_here(expr: &Expr) -> bool {
+    match expr {
+        Expr::StringLiteral(_)
+        | Expr::BytesLiteral(_)
+        | Expr::NumberLiteral(_)
+        | Expr::BooleanLiteral(_)
+        | Expr::NoneLiteral(_)
+        | Expr::EllipsisLiteral(_)
+        | Expr::Name(_)
+        | Expr::Attribute(_) => true,
+        Expr::UnaryOp(unary) => constant_shaped(&unary.operand),
+        Expr::BinOp(binary) => constant_shaped(&binary.left) && constant_shaped(&binary.right),
+        Expr::BoolOp(boolean) => boolean.values.iter().all(constant_shaped),
+        Expr::Compare(compare) => compare.operands.iter().all(constant_shaped),
+        Expr::If(branch) => {
+            constant_shaped(&branch.test) && constant_shaped(&branch.body) && constant_shaped(&branch.orelse)
+        }
+        Expr::List(ast::ExprList { elts, .. })
+        | Expr::Tuple(ast::ExprTuple { elts, .. })
+        | Expr::Set(ast::ExprSet { elts, .. }) => {
+            elts.iter().all(|item| !item.is_starred_expr() && constant_shaped(item))
+        }
+        _ => false,
+    }
+}
+
 struct Reader<'a> {
     text: &'a str,
     line_starts: &'a [u32],
     out: FileDecls,
+    /// The scope statements and expressions are being read in.
+    scope: usize,
+    type_checking: bool,
+    /// The innermost `def` being read, whose branches the walk counts.
+    function: Option<usize>,
+    /// The `except … as name` clauses around the walk: name, types.
+    handlers: Vec<(String, Vec<Chain>)>,
 }
 
 impl Reader<'_> {
@@ -230,14 +559,20 @@ impl Reader<'_> {
     }
 
     fn scope(&mut self, kind: ScopeKind, parent: Option<usize>) -> usize {
+        let index = self.out.scopes.len();
+        let owner = match kind {
+            ScopeKind::Lambda | ScopeKind::Comprehension => parent.map_or(0, |parent| self.out.scopes[parent].owner),
+            _ => index,
+        };
         self.out.scopes.push(Scope {
             kind,
             parent,
+            owner,
             bindings: Vec::new(),
             globals: Vec::new(),
             nonlocals: Vec::new(),
         });
-        self.out.scopes.len() - 1
+        index
     }
 
     fn bind(&mut self, scope: usize, name: &str, bound: Bound, offset: u32) {
@@ -261,169 +596,421 @@ impl Reader<'_> {
         });
     }
 
-    fn body(&mut self, scope: usize, body: &[Stmt], type_checking: bool) {
-        for stmt in body {
-            self.statement(scope, stmt, type_checking);
+    fn branch(&mut self, count: u32) {
+        if let Some(function) = self.function {
+            self.out.functions[function].cyclomatic += count;
         }
     }
 
-    fn statement(&mut self, scope: usize, stmt: &Stmt, type_checking: bool) {
-        match stmt {
-            Stmt::ClassDef(class) => self.class(scope, class),
-            Stmt::FunctionDef(function) => self.function(scope, function),
-            Stmt::Import(import) => self.import(scope, import, type_checking),
-            Stmt::ImportFrom(import) => self.import_from(scope, import, type_checking),
-            Stmt::Assign(assign) => {
-                for target in &assign.targets {
-                    self.targets(scope, target);
-                }
+    /// The scope a walrus binds in: the nearest that is not a comprehension's.
+    fn named_scope(&self) -> usize {
+        let mut scope = self.scope;
+        while self.out.scopes[scope].kind == ScopeKind::Comprehension {
+            scope = self.out.scopes[scope].parent.unwrap_or(0);
+        }
+        scope
+    }
+
+    /// Code lines and `#` blocks from the tokens: a comment-only line is no code.
+    fn comments(&mut self, parsed: &ruff_python_parser::Parsed<Mod>) {
+        let text = self.text;
+        let starts = self.line_starts;
+        let mut code: Vec<bool> = (0..starts.len())
+            .map(|line| {
+                let from = starts[line] as usize;
+                let to = starts.get(line + 1).map_or(text.len(), |&next| next as usize);
+                !text[from..to].trim().is_empty()
+            })
+            .collect();
+        let mut only: BTreeMap<u32, String> = BTreeMap::new();
+        for token in parsed.tokens().iter() {
+            if token.kind() != TokenKind::Comment {
+                continue;
             }
-            Stmt::AugAssign(assign) => self.targets(scope, &assign.target),
-            Stmt::AnnAssign(assign) => self.targets(scope, &assign.target),
-            Stmt::Delete(delete) => {
-                for target in &delete.targets {
-                    self.targets(scope, target);
-                }
+            let start = token.range().start().to_u32();
+            let line = self.line(start);
+            let line_start = starts[(line - 1) as usize] as usize;
+            if text[line_start..start as usize].trim().is_empty() {
+                code[(line - 1) as usize] = false;
+                only.insert(line, text[token.range()].trim_end().to_owned());
             }
-            Stmt::TypeAlias(alias) => self.targets(scope, &alias.name),
-            Stmt::Global(global) => {
-                let names = global.names.iter().map(|name| name.to_string());
-                self.out.scopes[scope].globals.extend(names);
+        }
+        let directive = |line: u32, comment: &str| {
+            let body = comment.trim_start_matches('#').trim_start();
+            (line == 1 && comment.starts_with("#!"))
+                || (line <= 2 && (comment.contains("coding:") || comment.contains("coding=")))
+                || DIRECTIVES.iter().any(|directive| body.starts_with(directive))
+        };
+        let mut blocks: BTreeMap<u32, String> = BTreeMap::new();
+        let mut current: Vec<String> = Vec::new();
+        let mut previous = 0u32;
+        let flush = |current: &mut Vec<String>, last: u32, blocks: &mut BTreeMap<u32, String>| {
+            while current.first().is_some_and(String::is_empty) {
+                current.remove(0);
             }
-            Stmt::Nonlocal(nonlocal) => {
-                let names = nonlocal.names.iter().map(|name| name.to_string());
-                self.out.scopes[scope].nonlocals.extend(names);
+            while current.last().is_some_and(String::is_empty) {
+                current.pop();
             }
-            Stmt::For(each) => {
-                self.targets(scope, &each.target);
-                self.body(scope, &each.body, type_checking);
-                self.body(scope, &each.orelse, type_checking);
+            if !current.is_empty() {
+                blocks.insert(last, current.join("\n"));
             }
-            Stmt::While(each) => {
-                self.body(scope, &each.body, type_checking);
-                self.body(scope, &each.orelse, type_checking);
+            current.clear();
+        };
+        for (line, comment) in &only {
+            if previous != 0 && *line != previous + 1 {
+                flush(&mut current, previous, &mut blocks);
             }
-            Stmt::If(branch) => {
-                self.body(scope, &branch.body, type_checking || is_type_checking(&branch.test));
-                for clause in &branch.elif_else_clauses {
-                    self.body(scope, &clause.body, type_checking);
-                }
+            if !directive(*line, comment) {
+                let body = comment.trim_start_matches('#');
+                current.push(body.strip_prefix(' ').unwrap_or(body).to_owned());
             }
-            Stmt::With(with) => {
-                for item in &with.items {
-                    if let Some(target) = &item.optional_vars {
-                        self.targets(scope, target);
+            previous = *line;
+        }
+        if previous != 0 {
+            flush(&mut current, previous, &mut blocks);
+        }
+        self.out.code_lines = code;
+        self.out.comments = blocks;
+    }
+
+    // ----------------------------------------------------------- values ----
+
+    /// What an expression writes as a value: a literal, a name, or its source.
+    fn value(&self, expr: &Expr) -> ValueDecl {
+        stacker::maybe_grow(RED_ZONE, GROWTH, || self.value_here(expr))
+    }
+
+    fn value_here(&self, expr: &Expr) -> ValueDecl {
+        let source = || self.one_line(expr.range());
+        match expr {
+            Expr::StringLiteral(text) => ValueDecl::Str(text.value.to_str().to_owned()),
+            Expr::NumberLiteral(number) => match &number.value {
+                Number::Int(int) => {
+                    let text = int.to_string();
+                    if text.bytes().all(|b| b.is_ascii_digit()) {
+                        ValueDecl::Number(text)
+                    } else {
+                        ValueDecl::Unevaluated(source())
                     }
                 }
-                self.body(scope, &with.body, type_checking);
-            }
-            Stmt::Try(attempt) => {
-                self.body(scope, &attempt.body, type_checking);
-                for ast::ExceptHandler::ExceptHandler(handler) in &attempt.handlers {
-                    if let Some(name) = &handler.name {
-                        self.bind(scope, name.as_str(), Bound::Value, name.start().to_u32());
-                    }
-                    self.body(scope, &handler.body, type_checking);
+                Number::Float(value) => ValueDecl::Number(float_text(*value)),
+                Number::Complex { .. } => ValueDecl::Unevaluated(source()),
+            },
+            Expr::UnaryOp(unary) if unary.op == ast::UnaryOp::USub => match self.value(&unary.operand) {
+                ValueDecl::Number(text) if text == "0" => ValueDecl::Number(text),
+                ValueDecl::Number(text) => ValueDecl::Number(format!("-{text}")),
+                _ => ValueDecl::Unevaluated(source()),
+            },
+            Expr::BooleanLiteral(boolean) => ValueDecl::Bool(boolean.value),
+            Expr::NoneLiteral(_) => ValueDecl::None,
+            Expr::Name(_) | Expr::Attribute(_) => match dotted(expr) {
+                Some(_) => ValueDecl::Name(self.chain(expr, &mut Vec::new()), source()),
+                None => ValueDecl::Unevaluated(source()),
+            },
+            Expr::List(ast::ExprList { elts, .. })
+            | Expr::Tuple(ast::ExprTuple { elts, .. })
+            | Expr::Set(ast::ExprSet { elts, .. }) => {
+                if elts.iter().all(|item| !item.is_starred_expr()) {
+                    ValueDecl::Array(elts.iter().map(|item| self.value(item)).collect())
+                } else {
+                    ValueDecl::Code(source())
                 }
-                self.body(scope, &attempt.orelse, type_checking);
-                self.body(scope, &attempt.finalbody, type_checking);
             }
-            Stmt::Match(matching) => {
-                for case in &matching.cases {
-                    self.pattern(scope, &case.pattern);
-                    self.body(scope, &case.body, type_checking);
-                }
+            Expr::Dict(dict) => {
+                let pairs: Option<Vec<(ValueDecl, ValueDecl)>> = dict
+                    .items
+                    .iter()
+                    .map(|item| item.key.as_ref().map(|key| (self.value(key), self.value(&item.value))))
+                    .collect();
+                pairs.map_or_else(|| ValueDecl::Code(source()), ValueDecl::Pairs)
             }
-            _ => {}
+            other if constant_shaped(other) => ValueDecl::Unevaluated(source()),
+            _ => ValueDecl::Code(source()),
         }
     }
 
-    /// The names an assignment target binds: a name, and the names of an unpacking.
-    fn targets(&mut self, scope: usize, target: &Expr) {
+    fn arguments(&self, arguments: &ast::Arguments) -> Vec<ArgumentDecl> {
+        let mut out = Vec::with_capacity(arguments.args.len() + arguments.keywords.len());
+        for argument in &arguments.args {
+            out.push(ArgumentDecl {
+                keyword: None,
+                value: self.value(argument),
+                spread: argument.is_starred_expr(),
+            });
+        }
+        for keyword in &arguments.keywords {
+            out.push(ArgumentDecl {
+                keyword: keyword.arg.as_ref().map(|arg| arg.to_string()),
+                value: self.value(&keyword.value),
+                spread: keyword.arg.is_none(),
+            });
+        }
+        out
+    }
+
+    // ------------------------------------------------------- annotations ----
+
+    fn type_expr(&self, expr: &Expr) -> TypeExpr {
+        stacker::maybe_grow(RED_ZONE, GROWTH, || self.type_expr_here(expr))
+    }
+
+    fn type_expr_here(&self, expr: &Expr) -> TypeExpr {
+        match expr {
+            Expr::NoneLiteral(_) => TypeExpr::None,
+            Expr::Name(_) | Expr::Attribute(_) if dotted(expr).is_some() => {
+                TypeExpr::Named(self.chain(expr, &mut Vec::new()), self.span(expr.range()))
+            }
+            Expr::Subscript(subscript) if dotted(&subscript.value).is_some() => {
+                let arguments = match subscript.slice.as_ref() {
+                    Expr::Tuple(tuple) => tuple.elts.iter().map(|item| self.type_expr(item)).collect(),
+                    other => vec![self.type_expr(other)],
+                };
+                TypeExpr::Generic(
+                    self.chain(&subscript.value, &mut Vec::new()),
+                    self.span(subscript.value.range()),
+                    arguments,
+                )
+            }
+            Expr::BinOp(binary) if binary.op == ast::Operator::BitOr => {
+                let mut members = Vec::new();
+                for side in [binary.left.as_ref(), binary.right.as_ref()] {
+                    match self.type_expr(side) {
+                        TypeExpr::Union(inner) => members.extend(inner),
+                        other => members.push(other),
+                    }
+                }
+                TypeExpr::Union(members)
+            }
+            // A string annotation is an expression written in a string (PEP 563).
+            Expr::StringLiteral(text) => match text.value.as_slice() {
+                [single] => match parse_string_annotation(self.text, single) {
+                    Ok(parsed) => self.type_expr(parsed.expr()),
+                    Err(_) => TypeExpr::Other,
+                },
+                _ => TypeExpr::Other,
+            },
+            Expr::List(list) => TypeExpr::Union(list.elts.iter().map(|item| self.type_expr(item)).collect()),
+            _ => TypeExpr::Other,
+        }
+    }
+
+    // ------------------------------------------------------------ chains ----
+
+    /// The chain an expression is; what lies beside it (call arguments, the
+    /// operands of a head no name types) is left in `beside` for the walk.
+    fn chain<'e>(&self, expr: &'e Expr, beside: &mut Vec<&'e Expr>) -> Chain {
+        match expr {
+            Expr::Name(name) if !name.id.is_empty() => Chain::Name(name.id.to_string()),
+            Expr::Attribute(attribute) if attribute.attr.is_valid() => Chain::Attribute(
+                Box::new(self.chain(&attribute.value, beside)),
+                attribute.attr.to_string(),
+            ),
+            Expr::Call(call) => {
+                beside.extend(call.arguments.args.iter());
+                beside.extend(call.arguments.keywords.iter().map(|keyword| &keyword.value));
+                if let Expr::Name(name) = call.func.as_ref()
+                    && name.id.as_str() == "super"
+                {
+                    let class = call
+                        .arguments
+                        .args
+                        .first()
+                        .and_then(dotted)
+                        .and_then(|names| names.last().cloned());
+                    return Chain::Super(class);
+                }
+                Chain::Call(Box::new(self.chain(&call.func, beside)))
+            }
+            other => {
+                beside.push(other);
+                literal_class(other).map_or(Chain::Other, Chain::Literal)
+            }
+        }
+    }
+
+    fn site(&mut self, expr: &Expr, kind: SiteKind) {
+        let mut beside = Vec::new();
+        let chain = self.chain(expr, &mut beside);
+        let arguments = match expr {
+            Expr::Call(call) => self.arguments(&call.arguments),
+            _ => Vec::new(),
+        };
+        self.out.sites.push(Site {
+            scope: self.scope,
+            chain,
+            kind,
+            arguments,
+            span: self.span(expr.range()),
+            text: self.one_line(expr.range()),
+        });
+        for inner in beside {
+            if matches!(inner, Expr::Name(_) | Expr::Attribute(_) | Expr::Call(_)) {
+                self.visit_expr(inner);
+            } else {
+                // A head no name types: what is inside it is read.
+                visitor::walk_expr(self, inner);
+            }
+        }
+    }
+
+    // --------------------------------------------------------- statements ----
+
+    fn targets(&mut self, target: &Expr, assignment: Option<AssignDecl>) {
         match target {
-            Expr::Name(name) => self.bind(scope, name.id.as_str(), Bound::Value, name.start().to_u32()),
+            Expr::Name(name) => {
+                let scope = self.scope;
+                let bound = match assignment {
+                    Some(assignment) => {
+                        self.out.assignments.push(AssignDecl {
+                            target: Target::Name(name.id.to_string()),
+                            ..assignment
+                        });
+                        Bound::Assigned(self.out.assignments.len() - 1)
+                    }
+                    None => Bound::Value,
+                };
+                self.bind(scope, name.id.as_str(), bound, name.start().to_u32());
+                // A module global written from a function is an access to it.
+                let global = self.out.scopes[scope]
+                    .globals
+                    .iter()
+                    .any(|global| global == name.id.as_str());
+                if global && self.out.scopes[scope].kind != ScopeKind::Module {
+                    self.site(target, SiteKind::Store { augmented: false });
+                }
+            }
             Expr::Tuple(tuple) => {
                 for item in &tuple.elts {
-                    self.targets(scope, item);
+                    self.targets(item, None);
                 }
             }
             Expr::List(list) => {
                 for item in &list.elts {
-                    self.targets(scope, item);
+                    self.targets(item, None);
                 }
             }
-            Expr::Starred(starred) => self.targets(scope, &starred.value),
-            // An attribute or a subscript binds no name of this scope.
-            _ => {}
+            Expr::Starred(starred) => self.targets(&starred.value, None),
+            Expr::Attribute(attribute) => {
+                if let (Some(assignment), Expr::Name(receiver)) = (assignment, attribute.value.as_ref()) {
+                    self.out.assignments.push(AssignDecl {
+                        target: Target::Attribute {
+                            receiver: receiver.id.to_string(),
+                            name: attribute.attr.to_string(),
+                        },
+                        ..assignment
+                    });
+                }
+                self.site(target, SiteKind::Store { augmented: false });
+            }
+            // `a[0] = …` reads `a`.
+            other => self.visit_expr(other),
         }
     }
 
-    fn pattern(&mut self, scope: usize, pattern: &ast::Pattern) {
-        let capture = |reader: &mut Self, name: &Option<ast::Identifier>| {
-            if let Some(name) = name {
-                reader.bind(scope, name.as_str(), Bound::Value, name.start().to_u32());
-            }
+    fn assignment(&self, value: Option<&Expr>, annotation: Option<&Expr>, augmented: bool, span: Span) -> AssignDecl {
+        let constructed = match value {
+            Some(Expr::Call(call)) => Some((self.chain(&call.func, &mut Vec::new()), self.arguments(&call.arguments))),
+            _ => None,
         };
-        match pattern {
-            ast::Pattern::MatchAs(matched) => {
-                if let Some(inner) = &matched.pattern {
-                    self.pattern(scope, inner);
-                }
-                capture(self, &matched.name);
-            }
-            ast::Pattern::MatchStar(star) => capture(self, &star.name),
-            ast::Pattern::MatchMapping(mapping) => {
-                for inner in &mapping.patterns {
-                    self.pattern(scope, inner);
-                }
-                capture(self, &mapping.rest);
-            }
-            ast::Pattern::MatchSequence(sequence) => {
-                for inner in &sequence.patterns {
-                    self.pattern(scope, inner);
-                }
-            }
-            ast::Pattern::MatchOr(alternatives) => {
-                for inner in &alternatives.patterns {
-                    self.pattern(scope, inner);
-                }
-            }
-            ast::Pattern::MatchClass(class) => {
-                for inner in &class.arguments.patterns {
-                    self.pattern(scope, inner);
-                }
-                for keyword in &class.arguments.keywords {
-                    self.pattern(scope, &keyword.pattern);
-                }
-            }
-            ast::Pattern::MatchValue(_) | ast::Pattern::MatchSingleton(_) => {}
+        AssignDecl {
+            scope: self.scope,
+            target: Target::Name(String::new()),
+            value: value.filter(|_| !augmented).map(|value| self.value(value)),
+            constructed,
+            annotation: annotation.map(|annotation| self.type_expr(annotation)),
+            augmented,
+            span,
         }
     }
 
-    fn class(&mut self, scope: usize, class: &ast::StmtClassDef) {
+    fn decorators(&mut self, decorators: &[ast::Decorator]) -> Vec<DecoratorDecl> {
+        let mut out = Vec::with_capacity(decorators.len());
+        for decorator in decorators {
+            let expression = &decorator.expression;
+            let (chain, called, arguments) = match expression {
+                Expr::Call(call) => {
+                    let chain = self.chain(&call.func, &mut Vec::new());
+                    for argument in call
+                        .arguments
+                        .args
+                        .iter()
+                        .chain(call.arguments.keywords.iter().map(|k| &k.value))
+                    {
+                        self.visit_expr(argument);
+                    }
+                    (chain, true, self.arguments(&call.arguments))
+                }
+                other => (self.chain(other, &mut Vec::new()), false, Vec::new()),
+            };
+            out.push(DecoratorDecl {
+                chain,
+                called,
+                arguments,
+                span: self.span(decorator.range()),
+                text: self.one_line(expression.range()),
+            });
+        }
+        out
+    }
+
+    fn class(&mut self, class: &ast::StmtClassDef) {
         if !class.name.is_valid() {
             self.drop("unnamed-declaration", class.start().to_u32(), "class");
             return;
         }
-        let bases = class
-            .arguments
-            .iter()
-            .flat_map(|arguments| arguments.args.iter())
-            .map(|base| BaseDecl {
-                reference: reference(base),
-                span: self.span(base.range()),
-                text: self.one_line(base.range()),
-            })
-            .collect();
+        let decorators = self.decorators(&class.decorator_list);
+        let mut bases = Vec::new();
+        let mut metaclass = false;
+        if let Some(arguments) = &class.arguments {
+            for base in &arguments.args {
+                let reference = match base {
+                    Expr::Subscript(subscript) => {
+                        // The arguments of `Generic[T]` are read where the class is written.
+                        self.visit_expr(&subscript.slice);
+                        dotted(&subscript.value).map_or(Reference::Computed, Reference::Dotted)
+                    }
+                    Expr::Call(call) => {
+                        let callee = self.chain(&call.func, &mut Vec::new());
+                        self.visit_expr(base);
+                        Reference::Call(callee, self.arguments(&call.arguments))
+                    }
+                    other => match dotted(other) {
+                        Some(names) => Reference::Dotted(names),
+                        None => {
+                            self.visit_expr(other);
+                            Reference::Computed
+                        }
+                    },
+                };
+                bases.push(BaseDecl {
+                    reference,
+                    span: self.span(base.range()),
+                    text: self.one_line(base.range()),
+                });
+            }
+            for keyword in &arguments.keywords {
+                metaclass |= keyword.arg.as_ref().is_some_and(|arg| arg.as_str() == "metaclass");
+                self.visit_expr(&keyword.value);
+            }
+        }
         let index = self.out.classes.len();
         let body = self.out.scopes.len();
+        let head = class
+            .decorator_list
+            .first()
+            .map_or(class.name.start().to_u32(), |decorator| decorator.start().to_u32());
         self.out.classes.push(ClassDecl {
             name: class.name.to_string(),
-            scope,
+            scope: self.scope,
             body,
             span: self.span_from(class.name.start().to_u32(), class.range()),
+            head: self.line(head),
             bases,
+            decorators,
+            metaclass,
+            docstring: docstring(&class.body),
         });
+        let scope = self.scope;
         self.bind(
             scope,
             class.name.as_str(),
@@ -431,16 +1018,35 @@ impl Reader<'_> {
             class.name.start().to_u32(),
         );
         self.scope(ScopeKind::Class(index), Some(scope));
-        self.body(body, &class.body, false);
+        if let Some(parameters) = &class.type_params {
+            for parameter in &parameters.type_params {
+                self.bind(
+                    body,
+                    parameter.name().as_str(),
+                    Bound::Value,
+                    parameter.start().to_u32(),
+                );
+            }
+        }
+        let saved = std::mem::replace(&mut self.scope, body);
+        let checking = std::mem::replace(&mut self.type_checking, false);
+        self.visit_body(&class.body);
+        self.scope = saved;
+        self.type_checking = checking;
     }
 
-    fn function(&mut self, scope: usize, function: &ast::StmtFunctionDef) {
+    fn function(&mut self, function: &ast::StmtFunctionDef) {
         if !function.name.is_valid() {
             self.drop("unnamed-declaration", function.start().to_u32(), "def");
             return;
         }
         let name = function.name.as_str();
-        let in_class = matches!(self.out.scopes[scope].kind, ScopeKind::Class(_));
+        let in_class = matches!(self.out.scopes[self.scope].kind, ScopeKind::Class(_));
+        let names: Vec<String> = function
+            .decorator_list
+            .iter()
+            .filter_map(|decorator| last_name(&decorator.expression))
+            .collect();
         let accessor = function
             .decorator_list
             .iter()
@@ -454,17 +1060,44 @@ impl Reader<'_> {
                 },
                 _ => None,
             });
+        let binding = if names.iter().any(|n| n == "staticmethod") {
+            MethodBinding::Static
+        } else if names.iter().any(|n| n == "classmethod") {
+            MethodBinding::Class
+        } else {
+            MethodBinding::Instance
+        };
+        let decorators = self.decorators(&function.decorator_list);
+        // Defaults are evaluated where the `def` is written.
+        for parameter in function.parameters.iter_non_variadic_params() {
+            if let Some(default) = &parameter.default {
+                self.visit_expr(default);
+            }
+        }
         let parameters = self.parameters(&function.parameters);
         let index = self.out.functions.len();
         let body = self.out.scopes.len();
+        let head = function
+            .decorator_list
+            .first()
+            .map_or(function.name.start().to_u32(), |decorator| decorator.start().to_u32());
         self.out.functions.push(FunctionDecl {
             name: name.to_owned(),
-            scope,
+            scope: self.scope,
             body,
             span: self.span_from(function.name.start().to_u32(), function.range()),
+            head: self.line(head),
             accessor,
+            property: in_class && names.iter().any(|n| PROPERTIES.contains(&n.as_str())),
+            binding,
+            overload: names.iter().any(|n| n == "overload"),
             parameters,
+            returns: function.returns.as_deref().map(|returns| self.type_expr(returns)),
+            decorators,
+            docstring: docstring(&function.body),
+            cyclomatic: 1,
         });
+        let scope = self.scope;
         self.bind(scope, name, Bound::Function(index), function.name.start().to_u32());
         self.scope(ScopeKind::Function(index), Some(scope));
         let parameters: Vec<Binding> = self.out.functions[index]
@@ -478,13 +1111,31 @@ impl Reader<'_> {
             })
             .collect();
         self.out.scopes[body].bindings.extend(parameters);
-        self.body(body, &function.body, false);
+        if let Some(type_params) = &function.type_params {
+            for parameter in &type_params.type_params {
+                self.bind(
+                    body,
+                    parameter.name().as_str(),
+                    Bound::Value,
+                    parameter.start().to_u32(),
+                );
+            }
+        }
+        let saved = std::mem::replace(&mut self.scope, body);
+        let checking = std::mem::replace(&mut self.type_checking, false);
+        let outer = self.function.replace(index);
+        let handlers = std::mem::take(&mut self.handlers);
+        self.visit_body(&function.body);
+        self.scope = saved;
+        self.type_checking = checking;
+        self.function = outer;
+        self.handlers = handlers;
     }
 
     fn parameters(&mut self, parameters: &ast::Parameters) -> Vec<ParameterDecl> {
-        let mut written: Vec<(&ast::Parameter, TextRange, ParameterKind, bool)> = Vec::new();
+        let mut written: Vec<(&ast::Parameter, TextRange, ParameterKind, Option<&Expr>)> = Vec::new();
         for parameter in &parameters.posonlyargs {
-            let default = parameter.default.is_some();
+            let default = parameter.default.as_deref();
             written.push((
                 &parameter.parameter,
                 parameter.range(),
@@ -493,7 +1144,7 @@ impl Reader<'_> {
             ));
         }
         for parameter in &parameters.args {
-            let default = parameter.default.is_some();
+            let default = parameter.default.as_deref();
             written.push((
                 &parameter.parameter,
                 parameter.range(),
@@ -502,10 +1153,10 @@ impl Reader<'_> {
             ));
         }
         if let Some(parameter) = &parameters.vararg {
-            written.push((parameter, parameter.range(), ParameterKind::VarArgs, false));
+            written.push((parameter, parameter.range(), ParameterKind::VarArgs, None));
         }
         for parameter in &parameters.kwonlyargs {
-            let default = parameter.default.is_some();
+            let default = parameter.default.as_deref();
             written.push((
                 &parameter.parameter,
                 parameter.range(),
@@ -514,10 +1165,10 @@ impl Reader<'_> {
             ));
         }
         if let Some(parameter) = &parameters.kwarg {
-            written.push((parameter, parameter.range(), ParameterKind::VarKeywords, false));
+            written.push((parameter, parameter.range(), ParameterKind::VarKeywords, None));
         }
         let mut out: Vec<ParameterDecl> = Vec::with_capacity(written.len());
-        for (parameter, range, kind, has_default) in written {
+        for (parameter, range, kind, default) in written {
             let name = parameter.name.as_str();
             if !parameter.name.is_valid() {
                 self.drop("unnamed-declaration", range.start().to_u32(), "parameter");
@@ -527,7 +1178,12 @@ impl Reader<'_> {
                 out.push(ParameterDecl {
                     name: name.to_owned(),
                     kind,
-                    has_default,
+                    has_default: default.is_some(),
+                    default: default.map(|default| self.value(default)),
+                    annotation: parameter
+                        .annotation
+                        .as_deref()
+                        .map(|annotation| self.type_expr(annotation)),
                     span: self.span(range),
                 });
             }
@@ -535,8 +1191,9 @@ impl Reader<'_> {
         out
     }
 
-    fn import(&mut self, scope: usize, import: &ast::StmtImport, type_checking: bool) {
+    fn import(&mut self, import: &ast::StmtImport) {
         let index = self.out.imports.len();
+        let scope = self.scope;
         let mut aliases = Vec::with_capacity(import.names.len());
         for alias in &import.names {
             if !alias.name.is_valid() {
@@ -561,13 +1218,14 @@ impl Reader<'_> {
         }
         self.out.imports.push(ImportDecl {
             span: self.span(import.range()),
-            type_checking,
+            type_checking: self.type_checking,
             kind: ImportKind::Modules(aliases),
         });
     }
 
-    fn import_from(&mut self, scope: usize, import: &ast::StmtImportFrom, type_checking: bool) {
+    fn import_from(&mut self, import: &ast::StmtImportFrom) {
         let index = self.out.imports.len();
+        let scope = self.scope;
         let mut names = Vec::with_capacity(import.names.len());
         for alias in &import.names {
             if !alias.name.is_valid() {
@@ -596,7 +1254,7 @@ impl Reader<'_> {
             .map(|module| module.to_string());
         self.out.imports.push(ImportDecl {
             span: self.span(import.range()),
-            type_checking,
+            type_checking: self.type_checking,
             kind: ImportKind::From {
                 level: import.level,
                 module,
@@ -604,293 +1262,309 @@ impl Reader<'_> {
             },
         });
     }
+
+    fn pattern_bindings(&mut self, pattern: &ast::Pattern) {
+        let scope = self.scope;
+        let capture = |reader: &mut Self, name: &Option<ast::Identifier>| {
+            if let Some(name) = name {
+                reader.bind(scope, name.as_str(), Bound::Value, name.start().to_u32());
+            }
+        };
+        match pattern {
+            ast::Pattern::MatchAs(matched) => {
+                if let Some(inner) = &matched.pattern {
+                    self.pattern_bindings(inner);
+                }
+                capture(self, &matched.name);
+            }
+            ast::Pattern::MatchStar(star) => capture(self, &star.name),
+            ast::Pattern::MatchMapping(mapping) => {
+                for inner in &mapping.patterns {
+                    self.pattern_bindings(inner);
+                }
+                capture(self, &mapping.rest);
+            }
+            ast::Pattern::MatchSequence(sequence) => {
+                for inner in &sequence.patterns {
+                    self.pattern_bindings(inner);
+                }
+            }
+            ast::Pattern::MatchOr(alternatives) => {
+                for inner in &alternatives.patterns {
+                    self.pattern_bindings(inner);
+                }
+            }
+            ast::Pattern::MatchClass(class) => {
+                for inner in &class.arguments.patterns {
+                    self.pattern_bindings(inner);
+                }
+                for keyword in &class.arguments.keywords {
+                    self.pattern_bindings(&keyword.pattern);
+                }
+            }
+            ast::Pattern::MatchValue(_) | ast::Pattern::MatchSingleton(_) => {}
+        }
+    }
+
+    fn comprehension(&mut self, generators: &[ast::Comprehension], inside: &mut dyn FnMut(&mut Self)) {
+        // The first iterable is evaluated where the comprehension is written.
+        if let Some(first) = generators.first() {
+            self.visit_expr(&first.iter);
+        }
+        let parent = self.scope;
+        let scope = self.scope(ScopeKind::Comprehension, Some(parent));
+        let saved = std::mem::replace(&mut self.scope, scope);
+        for (at, generator) in generators.iter().enumerate() {
+            if at > 0 {
+                self.visit_expr(&generator.iter);
+            }
+            self.targets(&generator.target, None);
+            self.branch(1 + generator.ifs.len() as u32);
+            for condition in &generator.ifs {
+                self.visit_expr(condition);
+            }
+        }
+        inside(self);
+        self.scope = saved;
+    }
+}
+
+impl<'a> Visitor<'a> for Reader<'_> {
+    fn visit_stmt(&mut self, stmt: &'a Stmt) {
+        match stmt {
+            Stmt::ClassDef(class) => self.class(class),
+            Stmt::FunctionDef(function) => self.function(function),
+            Stmt::Import(import) => self.import(import),
+            Stmt::ImportFrom(import) => self.import_from(import),
+            Stmt::Assign(assign) => {
+                self.visit_expr(&assign.value);
+                let span = self.span(stmt.range());
+                for target in &assign.targets {
+                    let assignment = self.assignment(Some(&assign.value), None, false, span);
+                    self.targets(target, Some(assignment));
+                }
+            }
+            Stmt::AugAssign(assign) => {
+                self.visit_expr(&assign.value);
+                let span = self.span(stmt.range());
+                match assign.target.as_ref() {
+                    Expr::Attribute(_) => self.site(&assign.target, SiteKind::Store { augmented: true }),
+                    Expr::Name(_) => {
+                        let assignment = self.assignment(Some(&assign.value), None, true, span);
+                        self.targets(&assign.target, Some(assignment));
+                    }
+                    other => self.visit_expr(other),
+                }
+            }
+            Stmt::AnnAssign(assign) => {
+                if let Some(value) = &assign.value {
+                    self.visit_expr(value);
+                }
+                let span = self.span(stmt.range());
+                let assignment = self.assignment(assign.value.as_deref(), Some(&assign.annotation), false, span);
+                self.targets(&assign.target, Some(assignment));
+            }
+            Stmt::Delete(delete) => {
+                for target in &delete.targets {
+                    match target {
+                        Expr::Attribute(_) => self.site(target, SiteKind::Store { augmented: false }),
+                        other => self.targets(other, None),
+                    }
+                }
+            }
+            Stmt::TypeAlias(alias) => {
+                if let Expr::Name(name) = alias.name.as_ref() {
+                    let scope = self.scope;
+                    self.bind(scope, name.id.as_str(), Bound::Value, name.start().to_u32());
+                }
+            }
+            Stmt::Global(global) => {
+                let names = global.names.iter().map(|name| name.to_string());
+                self.out.scopes[self.scope].globals.extend(names);
+            }
+            Stmt::Nonlocal(nonlocal) => {
+                let names = nonlocal.names.iter().map(|name| name.to_string());
+                self.out.scopes[self.scope].nonlocals.extend(names);
+            }
+            Stmt::For(each) => {
+                self.branch(1);
+                self.visit_expr(&each.iter);
+                self.targets(&each.target, None);
+                self.visit_body(&each.body);
+                self.visit_body(&each.orelse);
+            }
+            Stmt::While(each) => {
+                self.branch(1);
+                self.visit_expr(&each.test);
+                self.visit_body(&each.body);
+                self.visit_body(&each.orelse);
+            }
+            Stmt::If(branch) => {
+                self.branch(1);
+                self.visit_expr(&branch.test);
+                let checking = self.type_checking;
+                self.type_checking = checking || is_type_checking(&branch.test);
+                self.visit_body(&branch.body);
+                self.type_checking = checking;
+                for clause in &branch.elif_else_clauses {
+                    if let Some(test) = &clause.test {
+                        self.branch(1);
+                        self.visit_expr(test);
+                    }
+                    self.visit_body(&clause.body);
+                }
+            }
+            Stmt::With(with) => {
+                for item in &with.items {
+                    self.visit_expr(&item.context_expr);
+                    if let Some(target) = &item.optional_vars {
+                        self.targets(target, None);
+                    }
+                }
+                self.visit_body(&with.body);
+            }
+            Stmt::Try(attempt) => {
+                self.visit_body(&attempt.body);
+                for ast::ExceptHandler::ExceptHandler(handler) in &attempt.handlers {
+                    self.branch(1);
+                    let types: Vec<&Expr> = match handler.type_.as_deref() {
+                        None => Vec::new(),
+                        Some(Expr::Tuple(tuple)) => tuple.elts.iter().collect(),
+                        Some(other) => vec![other],
+                    };
+                    let mut chains = Vec::with_capacity(types.len());
+                    for type_ in types {
+                        chains.push(self.chain(type_, &mut Vec::new()));
+                        self.site(type_, SiteKind::Except);
+                    }
+                    let scope = self.scope;
+                    match &handler.name {
+                        Some(name) => {
+                            self.bind(scope, name.as_str(), Bound::Value, name.start().to_u32());
+                            self.handlers.push((name.to_string(), chains));
+                            self.visit_body(&handler.body);
+                            self.handlers.pop();
+                        }
+                        None => self.visit_body(&handler.body),
+                    }
+                }
+                self.visit_body(&attempt.orelse);
+                self.visit_body(&attempt.finalbody);
+            }
+            Stmt::Raise(raise) => {
+                if let Some(exception) = &raise.exc {
+                    let handler = match exception.as_ref() {
+                        Expr::Name(name) => self
+                            .handlers
+                            .iter()
+                            .rev()
+                            .find(|(bound, _)| bound == name.id.as_str())
+                            .map(|(_, types)| types.clone())
+                            .unwrap_or_default(),
+                        _ => Vec::new(),
+                    };
+                    self.site(exception, SiteKind::Raise { handler });
+                }
+                if let Some(cause) = &raise.cause {
+                    self.visit_expr(cause);
+                }
+            }
+            Stmt::Match(matching) => {
+                self.visit_expr(&matching.subject);
+                for case in &matching.cases {
+                    let irrefutable = matches!(&case.pattern, ast::Pattern::MatchAs(matched) if matched.pattern.is_none())
+                        && case.guard.is_none();
+                    if !irrefutable {
+                        self.branch(1);
+                    }
+                    self.pattern_bindings(&case.pattern);
+                    visitor::walk_pattern(self, &case.pattern);
+                    if let Some(guard) = &case.guard {
+                        self.branch(1);
+                        self.visit_expr(guard);
+                    }
+                    self.visit_body(&case.body);
+                }
+            }
+            other => visitor::walk_stmt(self, other),
+        }
+    }
+
+    fn visit_expr(&mut self, expr: &'a Expr) {
+        stacker::maybe_grow(RED_ZONE, GROWTH, || self.expression(expr));
+    }
+}
+
+impl Reader<'_> {
+    fn expression(&mut self, expr: &Expr) {
+        match expr {
+            Expr::Name(name) if name.ctx == ExprContext::Load => self.site(expr, SiteKind::Load),
+            Expr::Attribute(attribute) if attribute.ctx == ExprContext::Load => self.site(expr, SiteKind::Load),
+            Expr::Call(_) => self.site(expr, SiteKind::Load),
+            Expr::Named(named) => {
+                self.visit_expr(&named.value);
+                let scope = self.named_scope();
+                let saved = std::mem::replace(&mut self.scope, scope);
+                let span = self.span(expr.range());
+                let assignment = self.assignment(Some(&named.value), None, false, span);
+                self.targets(&named.target, Some(assignment));
+                self.scope = saved;
+            }
+            Expr::Lambda(lambda) => {
+                if let Some(parameters) = &lambda.parameters {
+                    for parameter in parameters.iter_non_variadic_params() {
+                        if let Some(default) = &parameter.default {
+                            self.visit_expr(default);
+                        }
+                    }
+                }
+                let parent = self.scope;
+                let scope = self.scope(ScopeKind::Lambda, Some(parent));
+                if let Some(parameters) = &lambda.parameters {
+                    for parameter in parameters.iter() {
+                        let name = parameter.name();
+                        self.bind(scope, name.as_str(), Bound::Value, name.start().to_u32());
+                    }
+                }
+                let saved = std::mem::replace(&mut self.scope, scope);
+                self.visit_expr(&lambda.body);
+                self.scope = saved;
+            }
+            Expr::ListComp(comprehension) => {
+                self.comprehension(&comprehension.generators, &mut |reader| {
+                    reader.visit_expr(&comprehension.elt)
+                });
+            }
+            Expr::SetComp(comprehension) => {
+                self.comprehension(&comprehension.generators, &mut |reader| {
+                    reader.visit_expr(&comprehension.elt)
+                });
+            }
+            Expr::Generator(comprehension) => {
+                self.comprehension(&comprehension.generators, &mut |reader| {
+                    reader.visit_expr(&comprehension.elt)
+                });
+            }
+            Expr::DictComp(comprehension) => {
+                self.comprehension(&comprehension.generators, &mut |reader| {
+                    if let Some(key) = &comprehension.key {
+                        reader.visit_expr(key);
+                    }
+                    reader.visit_expr(&comprehension.value);
+                });
+            }
+            Expr::BoolOp(boolean) => {
+                self.branch(boolean.values.len().saturating_sub(1) as u32);
+                visitor::walk_expr(self, expr);
+            }
+            Expr::If(_) => {
+                self.branch(1);
+                visitor::walk_expr(self, expr);
+            }
+            _ => visitor::walk_expr(self, expr),
+        }
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::corpus;
-
-    fn read(source: &str) -> FileDecls {
-        declarations(source, &corpus::line_starts(source))
-    }
-
-    fn names(bindings: &[Binding]) -> Vec<&str> {
-        bindings.iter().map(|binding| binding.name.as_str()).collect()
-    }
-
-    #[test]
-    fn records_classes_and_defs_at_every_nesting_with_the_scope_each_is_written_in() {
-        let decls = read(
-            "import os\n\
-             class Order(Base, metaclass=Meta):\n    class Line:\n        pass\n    def total(self):\n        def helper():\n            pass\n        return helper()\n\
-             def make():\n    class Local(Order.Line):\n        pass\n    return Local\n",
-        );
-        assert_eq!(decls.errors, 0);
-        let classes: Vec<(&str, usize, Span)> = decls
-            .classes
-            .iter()
-            .map(|c| (c.name.as_str(), c.scope, c.span))
-            .collect();
-        let functions: Vec<(&str, usize, Span)> = decls
-            .functions
-            .iter()
-            .map(|f| (f.name.as_str(), f.scope, f.span))
-            .collect();
-        // Scopes follow the source: Order's body 1, Line's 2, total's 3, helper's 4, make's 5, Local's 6.
-        assert_eq!(
-            classes,
-            vec![("Order", 0, (2, 8)), ("Line", 1, (3, 4)), ("Local", 5, (10, 11))]
-        );
-        assert_eq!(
-            functions,
-            vec![("total", 1, (5, 8)), ("helper", 3, (6, 7)), ("make", 0, (9, 12))]
-        );
-        let kinds: Vec<ScopeKind> = decls.scopes.iter().map(|scope| scope.kind).collect();
-        assert_eq!(
-            kinds,
-            vec![
-                ScopeKind::Module,
-                ScopeKind::Class(0),
-                ScopeKind::Class(1),
-                ScopeKind::Function(0),
-                ScopeKind::Function(1),
-                ScopeKind::Function(2),
-                ScopeKind::Class(2),
-            ]
-        );
-        assert_eq!(decls.scopes[4].parent, Some(3));
-        assert_eq!(names(&decls.scopes[0].bindings), vec!["os", "Order", "make"]);
-        assert_eq!(decls.scopes[0].bindings[1].bound, Bound::Class(0));
-        assert_eq!(names(&decls.scopes[1].bindings), vec!["Line", "total"]);
-        assert_eq!(names(&decls.scopes[5].bindings), vec!["Local"]);
-        // A keyword of the header is no base.
-        assert_eq!(decls.classes[0].bases.len(), 1);
-        assert_eq!(
-            decls.classes[0].bases[0].reference,
-            Reference::Dotted(vec!["Base".into()])
-        );
-        assert_eq!(
-            decls.classes[2].bases[0],
-            BaseDecl {
-                reference: Reference::Dotted(vec!["Order".into(), "Line".into()]),
-                span: (10, 10),
-                text: "Order.Line".into(),
-            }
-        );
-    }
-
-    #[test]
-    fn reads_a_base_as_the_header_writes_it() {
-        let decls = read(
-            "class A(Generic[T]): pass\nclass B(typing.Generic[T], Base[int]): pass\nclass C(make_base()): pass\n\
-             class D(*bases): pass\nclass E(\n    six.with_metaclass(\n        Meta, Base)\n): pass\n",
-        );
-        let bases: Vec<Vec<(Reference, &str)>> = decls
-            .classes
-            .iter()
-            .map(|class| {
-                class
-                    .bases
-                    .iter()
-                    .map(|base| (base.reference.clone(), base.text.as_str()))
-                    .collect()
-            })
-            .collect();
-        let dotted = |parts: &[&str]| Reference::Dotted(parts.iter().map(|part| (*part).to_owned()).collect());
-        assert_eq!(bases[0], vec![(dotted(&["Generic"]), "Generic[T]")]);
-        assert_eq!(
-            bases[1],
-            vec![
-                (dotted(&["typing", "Generic"]), "typing.Generic[T]"),
-                (dotted(&["Base"]), "Base[int]")
-            ]
-        );
-        assert_eq!(bases[2], vec![(Reference::Computed, "make_base()")]);
-        assert_eq!(bases[3], vec![(Reference::Computed, "*bases")]);
-        // A base over several lines is anchored on all of them, and explained on one.
-        assert_eq!(bases[4], vec![(Reference::Computed, "six.with_metaclass( Meta, Base)")]);
-        assert_eq!(decls.classes[4].bases[0].span, (6, 7));
-    }
-
-    #[test]
-    fn records_every_parameter_shape() {
-        let decls = read("def every(a, b=1, /, c=2, *args, d, e=3, **kwargs): pass\ndef keywords(*, key): pass\n");
-        let shapes: Vec<(&str, ParameterKind, bool)> = decls.functions[0]
-            .parameters
-            .iter()
-            .map(|p| (p.name.as_str(), p.kind, p.has_default))
-            .collect();
-        assert_eq!(
-            shapes,
-            vec![
-                ("a", ParameterKind::PositionalOnly, false),
-                ("b", ParameterKind::PositionalOnly, true),
-                ("c", ParameterKind::Positional, true),
-                ("args", ParameterKind::VarArgs, false),
-                ("d", ParameterKind::KeywordOnly, false),
-                ("e", ParameterKind::KeywordOnly, true),
-                ("kwargs", ParameterKind::VarKeywords, false),
-            ]
-        );
-        assert_eq!(decls.functions[1].parameters[0].kind, ParameterKind::KeywordOnly);
-        assert_eq!(decls.functions[0].parameters[0].span, (1, 1));
-    }
-
-    #[test]
-    fn tells_a_property_accessor_by_the_word_after_the_dot() {
-        let decls = read(
-            "class Order:\n    @property\n    def total(self): ...\n    @total.setter\n    def total(self, value): ...\n\
-             \x20   @total.deleter\n    def total(self): ...\n    @total.setter\n    def other(self, value): ...\n\
-             @total.setter\ndef total(value): ...\n",
-        );
-        let accessors: Vec<(&str, Option<&str>)> =
-            decls.functions.iter().map(|f| (f.name.as_str(), f.accessor)).collect();
-        assert_eq!(
-            accessors,
-            vec![
-                ("total", None),
-                ("total", Some("setter")),
-                ("total", Some("deleter")),
-                // Another name binds another property; outside a class, nothing is an accessor.
-                ("other", None),
-                ("total", None),
-            ]
-        );
-    }
-
-    #[test]
-    fn records_every_import_wherever_written_and_marks_the_type_checking_ones() {
-        let decls = read(
-            "import a.b.c, d as e\nfrom . import x\nfrom ..pkg.mod import y as z, *\n\
-             def f():\n    import inner\n\
-             if TYPE_CHECKING:\n    from .order import Order\nelse:\n    import runtime\n\
-             if typing.TYPE_CHECKING:\n    import checked\n",
-        );
-        let alias = |name: &str, asname: Option<&str>| Alias {
-            name: name.into(),
-            asname: asname.map(str::to_owned),
-        };
-        let kinds: Vec<(&ImportKind, Span, bool)> = decls
-            .imports
-            .iter()
-            .map(|i| (&i.kind, i.span, i.type_checking))
-            .collect();
-        assert_eq!(
-            kinds,
-            vec![
-                (
-                    &ImportKind::Modules(vec![alias("a.b.c", None), alias("d", Some("e"))]),
-                    (1, 1),
-                    false
-                ),
-                (
-                    &ImportKind::From {
-                        level: 1,
-                        module: None,
-                        names: vec![alias("x", None)]
-                    },
-                    (2, 2),
-                    false
-                ),
-                (
-                    &ImportKind::From {
-                        level: 2,
-                        module: Some("pkg.mod".into()),
-                        names: vec![alias("y", Some("z")), alias("*", None)],
-                    },
-                    (3, 3),
-                    false
-                ),
-                (&ImportKind::Modules(vec![alias("inner", None)]), (5, 5), false),
-                (
-                    &ImportKind::From {
-                        level: 1,
-                        module: Some("order".into()),
-                        names: vec![alias("Order", None)]
-                    },
-                    (7, 7),
-                    true
-                ),
-                (&ImportKind::Modules(vec![alias("runtime", None)]), (9, 9), false),
-                (&ImportKind::Modules(vec![alias("checked", None)]), (11, 11), true),
-            ]
-        );
-        // `import a.b.c` binds `a`; a star binds nothing a line names; an import in a function binds there.
-        assert_eq!(
-            names(&decls.scopes[0].bindings),
-            vec!["a", "e", "x", "z", "f", "Order", "runtime", "checked"]
-        );
-        assert_eq!(decls.scopes[0].bindings[1].bound, Bound::Import { import: 0, alias: 1 });
-        assert_eq!(names(&decls.scopes[1].bindings), vec!["inner"]);
-    }
-
-    #[test]
-    fn a_parameter_binds_in_its_function_before_anything_the_body_writes() {
-        let decls = read("def make(Base, *rest, key=1):\n    class Local(Base): pass\n");
-        let bound: Vec<(&str, Bound, u32)> = decls.scopes[1]
-            .bindings
-            .iter()
-            .map(|binding| (binding.name.as_str(), binding.bound, binding.line))
-            .collect();
-        assert_eq!(
-            bound,
-            vec![
-                ("Base", Bound::Parameter(0), 1),
-                ("rest", Bound::Parameter(1), 1),
-                ("key", Bound::Parameter(2), 1),
-                ("Local", Bound::Class(0), 2),
-            ]
-        );
-    }
-
-    #[test]
-    fn binds_what_every_statement_binds_and_hears_global_and_nonlocal() {
-        let decls = read(
-            "x = y = 1\na, (b, *c) = t\nn: int = 0\nfor i, j in pairs: pass\nwith open() as (f, g): pass\n\
-             try:\n    pass\nexcept E as err:\n    pass\ndel gone\nobj.attr = 1\nitems[0] = 2\n\
-             match v:\n    case {\"k\": captured, **rest}: pass\n    case [first, *others]: pass\n\
-             type Alias = int\n\
-             def f():\n    global x\n    nonlocal_free = 1\n    def g():\n        nonlocal nonlocal_free\n",
-        );
-        assert_eq!(
-            names(&decls.scopes[0].bindings),
-            vec![
-                "x", "y", "a", "b", "c", "n", "i", "j", "f", "g", "err", "gone", "captured", "rest", "first", "others",
-                "Alias", "f"
-            ]
-        );
-        assert!(
-            decls.scopes[0]
-                .bindings
-                .iter()
-                .take(17)
-                .all(|binding| binding.bound == Bound::Value)
-        );
-        assert_eq!(decls.scopes[1].globals, vec!["x"]);
-        assert_eq!(names(&decls.scopes[1].bindings), vec!["nonlocal_free", "g"]);
-        assert_eq!(decls.scopes[2].nonlocals, vec!["nonlocal_free"]);
-    }
-
-    #[test]
-    fn reads_a_recovered_tree_and_drops_what_no_key_can_carry() {
-        let decls = read(
-            "class Report(object):\n    def render(self, order):\n        print \"Order\", `order`\n\
-             def 1():\n    pass\n\
-             def \u{fb01}nd(order): pass\ndef find(order): pass\n",
-        );
-        assert!(decls.errors > 0);
-        assert_eq!(decls.classes[0].name, "Report");
-        assert_eq!(
-            decls.drops,
-            vec![Dropped {
-                reason: "unnamed-declaration",
-                line: 4,
-                what: "def".into(),
-            }]
-        );
-        // The parser NFKC-normalizes identifiers, as the language does: one name.
-        let defs: Vec<&str> = decls.functions.iter().map(|f| f.name.as_str()).collect();
-        assert_eq!(defs, vec!["render", "find", "find"]);
-    }
-}
+mod tests;

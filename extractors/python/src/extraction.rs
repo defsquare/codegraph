@@ -234,7 +234,7 @@ impl Extractor<'_> {
                         let kind = if in_class { "method" } else { "function" };
                         (key, kind, &function.name, function.span)
                     }
-                    ScopeKind::Module => continue,
+                    ScopeKind::Module | ScopeKind::Lambda | ScopeKind::Comprehension => continue,
                 };
                 match self.kinds.get(&key) {
                     // Written twice under one name (a platform `if`, a redefinition): the first.

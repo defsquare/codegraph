@@ -86,14 +86,14 @@ mod tests {
         // A class in a function sees the function's locals…
         assert_eq!(found(&decls, 3, "Base"), vec![(Bound::Class(0), 4)]);
         // …a `global` name is the module's, whatever the function assigns…
-        assert_eq!(found(&decls, 1, "value"), vec![(Bound::Value, 2)]);
+        assert_eq!(found(&decls, 1, "value"), vec![(Bound::Assigned(1), 2)]);
         // …and `nonlocal` skips the scope that says it.
-        assert_eq!(found(&decls, 5, "Base"), vec![(Bound::Value, 9)]);
+        assert_eq!(found(&decls, 5, "Base"), vec![(Bound::Assigned(3), 9)]);
         // Every binding of the scope that binds it, in source order.
         let twice = read("try:\n    from x import Y\nexcept ImportError:\n    Y = None\n");
         assert_eq!(
             found(&twice, 0, "Y"),
-            vec![(Bound::Import { import: 0, alias: 0 }, 2), (Bound::Value, 4)]
+            vec![(Bound::Import { import: 0, alias: 0 }, 2), (Bound::Assigned(0), 4)]
         );
     }
 }
