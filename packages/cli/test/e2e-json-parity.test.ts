@@ -189,6 +189,25 @@ describe("analyze says the same thing in both forms", () => {
   });
 });
 
+describe("walk says the same thing in both forms", () => {
+  /** The plan's statuses as the text form prints them: `statuses: llm 2, template 0, …`. */
+  const statuses = (stdout: string): Record<string, number> =>
+    Object.fromEntries([...(/^ {2}statuses: (.+)$/mu.exec(stdout)?.[1] ?? "").matchAll(/([a-z-]+) (\d+)/gu)].map((m) => [m[1] ?? "", Number(m[2])]));
+
+  it.each([
+    [["--prompt", "Why?"]],
+    [["--prompt", "Why?", "--include", "edge:annotationUse>name:Audited", "--closure", "containers"]],
+  ])("plans the same units, statuses and calls: %s", (flags) => {
+    const { text, json } = bothForms(["walk", FIXTURE, "--no-cache", ...flags, "--dry-run"]);
+    expect(text.code, describeResult(text)).toBe(EXIT.OK);
+    expect(json.code).toBe(text.code);
+    const parsed = parseJsonArtifact(json.stdout, "walk --dry-run --json") as { estimates: { calls: number; byStatus: Record<string, number> }; steps: { id: string; status: string }[] };
+    expect(statuses(text.stdout)).toEqual(parsed.estimates.byStatus);
+    expect(text.stdout).toContain(`total: ${parsed.estimates.calls} calls`);
+    for (const step of parsed.steps) expect(text.stdout).toMatch(new RegExp(`^${step.status} +L\\d+ \\w+ +${step.id.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`, "mu"));
+  });
+});
+
 describe("profiles says the same thing in both forms", () => {
   it("lists the same languages either way", () => {
     const { text, json } = bothForms(["profiles"]);

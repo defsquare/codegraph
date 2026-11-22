@@ -171,10 +171,11 @@ if wants_ts; then
   fi
 
   # The single-executable image (if build.sh --sea made one) must pass its
-  # three gates: --version from the embedded package.json, `analyze`
-  # byte-identical to the ESM build, and `serve --app` answering the page
-  # from the image's own assets — the paths vitest cannot see, because under
-  # vitest node:sea says "not an image" and every asset comes from a directory.
+  # gates: --version from the embedded package.json, `analyze` byte-identical
+  # to the ESM build, `serve --app` answering the page from the image's own
+  # assets, `walk` (definitions, a plan) and `insights --walk` answering as the
+  # ESM build does — the paths vitest cannot see, because under vitest
+  # node:sea says "not an image" and every asset comes from a directory.
   image="$ROOT/packages/cli/dist-sea/$(host_rid)/codegraph"
   [ -x "$image" ] || image="$image.exe"
   if [ -x "$image" ]; then

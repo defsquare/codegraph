@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { EXIT } from "../src/exit.js";
 import { createBrokenModels } from "./broken-models.js";
@@ -22,6 +23,8 @@ import { describeArgv, describeResult, ensureCliBinary, javaFixture, runCli } fr
 
 const models = createBrokenModels();
 const FIXTURE = javaFixture();
+// A walk's dry runs read the fixture's sources and write nothing (no cache, no store, no side-car).
+const WALK = ["walk", FIXTURE, "--src", join(FIXTURE, "../../src"), "--no-cache"] as const;
 
 beforeAll(ensureCliBinary, 120_000);
 afterAll(() => models.cleanup());
@@ -75,6 +78,10 @@ const SUCCESS_CASES: readonly Case[] = [
     argv: ["vocabulary", FIXTURE, "--level", "type", "--json"],
     expected: EXIT.OK,
   },
+  { why: "the default walk definition", argv: ["walk", "--print-definition"], expected: EXIT.OK },
+  { why: "explain's walk definition", argv: ["walk", "--print-definition", "explain"], expected: EXIT.OK },
+  { why: "a walk's plan", argv: [...WALK, "--prompt", "Why?", "--include", "edge:annotationUse>name:Audited", "--dry-run"], expected: EXIT.OK },
+  { why: "a walk's estimate, as json", argv: [...WALK, "--prompt", "Why?", "--levels", "module", "--estimate", "--json"], expected: EXIT.OK },
 ];
 
 const USAGE_CASES: readonly Case[] = [
@@ -133,6 +140,11 @@ const USAGE_CASES: readonly Case[] = [
   // The fixture has no store beside it: refused before the model is read.
   { why: "words to compare with no insights store", argv: ["vocabulary", FIXTURE, "--drift-insights"], expected: EXIT.USAGE },
   { why: "a store and nothing to read it", argv: ["vocabulary", FIXTURE, "--insights", "model.insights.db"], expected: EXIT.USAGE },
+  { why: "a selector term with an unknown edge kind", argv: [...WALK, "--include", "edge:calls", "--dry-run"], expected: EXIT.USAGE },
+  { why: "a walk under a reserved name", argv: [...WALK, "--name", "explain", "--dry-run"], expected: EXIT.USAGE },
+  { why: "a walk definition that is not there", argv: [...WALK, "--walk", "/no/such/walk.json", "--dry-run"], expected: EXIT.USAGE },
+  { why: "a definition to print that is not a built-in", argv: ["walk", "--print-definition", "mine"], expected: EXIT.USAGE },
+  { why: "an unknown level to walk", argv: [...WALK, "--levels", "class", "--dry-run"], expected: EXIT.USAGE },
 ];
 
 const FINDING_CASES: readonly Case[] = [

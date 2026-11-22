@@ -1,0 +1,2335 @@
+# The user message of every prompt the run sends, in walk order; system messages: ../system-prompts.txt, by digest.
+=== 1 operation java:com.acme.order.adapter/LedgerAdapter.<init>() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order.adapter/LedgerAdapter.<init>()
+
+## The unit
+### constructor `LedgerAdapter` (java:com.acme.order.adapter/LedgerAdapter.<init>()) — in type LedgerAdapter, in module com.acme.order.adapter
+Signature: ````
+<init>()
+````
+metrics: cyclomatic=1
+Source (com/acme/order/adapter/LedgerAdapter.java:6-15):
+````java
+public class LedgerAdapter extends LedgerClient {
+
+    private final AuditTrail trail = new AuditTrail();
+
+    @Override
+    public void post(Object document) {
+        trail.record(document);
+        super.post(document);
+    }
+}
+````
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 2 operation java:com.acme.order.adapter/LedgerAdapter.post(java.lang.Object) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order.adapter/LedgerAdapter.post(java.lang.Object)
+
+## The unit
+### method `post` (java:com.acme.order.adapter/LedgerAdapter.post(java.lang.Object)) — in type LedgerAdapter, in module com.acme.order.adapter
+Signature: ````
+post(java.lang.Object)
+````
+Annotations: @Override
+metrics: cyclomatic=1, sloc=4
+Source (com/acme/order/adapter/LedgerAdapter.java:11-14):
+````java
+    public void post(Object document) {
+        trail.record(document);
+        super.post(document);
+    }
+````
+Calls:
+- AuditTrail of AuditTrail (external)
+Field accesses:
+- read LedgerAdapter.trail
+Words to define in `words` (each once, with every identifier it appears in):
+- `post`: post
+- `document`: document
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 3 operation java:com.acme.order.legacy/List.length() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order.legacy/List.length()
+
+## The unit
+### method `length` (java:com.acme.order.legacy/List.length()) — in type List, in module com.acme.order.legacy
+Signature: ````
+length()
+````
+metrics: cyclomatic=2, sloc=3
+Source (com/acme/order/legacy/List.java:19-21):
+````java
+    public int length() {
+        return tail == null ? 1 : 1 + tail.length();
+    }
+````
+Field accesses:
+- read List.tail
+Words to define in `words` (each once, with every identifier it appears in):
+- `length`: length
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 4 operation java:com.acme.order/AbstractOrder.price() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/AbstractOrder.price()
+
+## The unit
+### method `price` (java:com.acme.order/AbstractOrder.price()) — in type AbstractOrder, in module com.acme.order
+Signature: ````
+price()
+````
+Annotations: @Override
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/AbstractOrder.java:20-22):
+````java
+    public Money price() {
+        return total;
+    }
+````
+Field accesses:
+- read AbstractOrder.total
+Words to define in `words` (each once, with every identifier it appears in):
+- `price`: price
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 5 operation java:com.acme.order/Audited.value() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Audited.value()
+
+## The unit
+### method `value` (java:com.acme.order/Audited.value()) — in type Audited, in module com.acme.order
+Signature: ````
+value()
+````
+metrics: cyclomatic=1, sloc=1
+Source (com/acme/order/Audited.java:10-10):
+````java
+    String value() default "";
+````
+Words to define in `words` (each once, with every identifier it appears in):
+- `value`: value
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 6 operation java:com.acme.order/Basket.<init>() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Basket.<init>()
+
+## The unit
+### constructor `Basket` (java:com.acme.order/Basket.<init>()) — in type Basket, in module com.acme.order
+Signature: ````
+<init>()
+````
+metrics: cyclomatic=1
+Source (com/acme/order/Basket.java:7-57):
+````java
+public class Basket {
+
+    private long total;
+
+    private final List<Line> lines = new ArrayList<>();
+
+    public void add(Line line) {
+        lines.add(line);
+        total += line.amount();
+    }
+
+    public long total() {
+        return total;
+    }
+
+    public Cursor cursor() {
+        return new Cursor();
+    }
+
+    /** Static nested: no enclosing Basket instance. */
+    public static class Line {
+
+        private final long amount;
+
+        public Line(long amount) {
+            this.amount = amount;
+        }
+
+        public long amount() {
+            return amount;
+        }
+
+        /** Nested inside a nested type. */
+        public static class Discount {
+
+            public long applyTo(long amount) {
+                return amount / 2;
+            }
+        }
+    }
+
+    /** Non-static inner: reads the enclosing Basket's fields. */
+    public class Cursor {
+
+        private int index;
+
+        public Line next() {
+            return lines.get(index++);
+        }
+    }
+}
+````
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 7 operation java:com.acme.order/Basket.Cursor.<init>() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Basket.Cursor.<init>()
+
+## The unit
+### constructor `Cursor` (java:com.acme.order/Basket.Cursor.<init>()) — in type Cursor, in module com.acme.order
+Signature: ````
+<init>()
+````
+metrics: cyclomatic=1
+Source (com/acme/order/Basket.java:49-56):
+````java
+    public class Cursor {
+
+        private int index;
+
+        public Line next() {
+            return lines.get(index++);
+        }
+    }
+````
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 8 operation java:com.acme.order/Basket.Cursor.next() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Basket.Cursor.next()
+
+## The unit
+### method `next` (java:com.acme.order/Basket.Cursor.next()) — in type Cursor, in module com.acme.order
+Signature: ````
+next()
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Basket.java:53-55):
+````java
+        public Line next() {
+            return lines.get(index++);
+        }
+````
+Calls:
+- List of List (external)
+Field accesses:
+- read/write Cursor.index
+- read Basket.lines
+Words to define in `words` (each once, with every identifier it appears in):
+- `next`: next
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 9 operation java:com.acme.order/Basket.Line.Discount.<init>() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Basket.Line.Discount.<init>()
+
+## The unit
+### constructor `Discount` (java:com.acme.order/Basket.Line.Discount.<init>()) — in type Discount, in module com.acme.order
+Signature: ````
+<init>()
+````
+metrics: cyclomatic=1
+Source (com/acme/order/Basket.java:40-45):
+````java
+        public static class Discount {
+
+            public long applyTo(long amount) {
+                return amount / 2;
+            }
+        }
+````
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 10 operation java:com.acme.order/Basket.Line.Discount.applyTo(long) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Basket.Line.Discount.applyTo(long)
+
+## The unit
+### method `applyTo` (java:com.acme.order/Basket.Line.Discount.applyTo(long)) — in type Discount, in module com.acme.order
+Signature: ````
+applyTo(long)
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Basket.java:42-44):
+````java
+            public long applyTo(long amount) {
+                return amount / 2;
+            }
+````
+Words to define in `words` (each once, with every identifier it appears in):
+- `applyTo`: apply
+- `amount`: amount
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 11 operation java:com.acme.order/Batch.allocator() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Batch.allocator()
+
+## The unit
+### method `allocator` (java:com.acme.order/Batch.allocator()) — in type Batch, in module com.acme.order
+Signature: ````
+allocator()
+````
+metrics: cyclomatic=1, sloc=3
+Documentation:
+````
+`int[]::new` — a constructor declared on the array type.
+````
+Source (com/acme/order/Batch.java:42-44):
+````java
+    public java.util.function.IntFunction<int[]> allocator() {
+        return int[]::new;
+    }
+````
+Words to define in `words` (each once, with every identifier it appears in):
+- `allocator`: allocator
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 12 operation java:com.acme.order/Batch.priced() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Batch.priced()
+
+## The unit
+### method `priced` (java:com.acme.order/Batch.priced()) — in type Batch, in module com.acme.order
+Signature: ````
+priced()
+````
+metrics: cyclomatic=1, sloc=3
+Documentation:
+````
+`prices.length` — a field of `Money[]`, not of `Money`.
+````
+Source (com/acme/order/Batch.java:37-39):
+````java
+    public int priced() {
+        return prices.length;
+    }
+````
+Field accesses:
+- read Batch.prices
+Words to define in `words` (each once, with every identifier it appears in):
+- `priced`: priced
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 13 operation java:com.acme.order/Batch.size() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Batch.size()
+
+## The unit
+### method `size` (java:com.acme.order/Batch.size()) — in type Batch, in module com.acme.order
+Signature: ````
+size()
+````
+metrics: cyclomatic=1, sloc=3
+Documentation:
+````
+`counts.length` — a field of `int[]`, not of `int`.
+````
+Source (com/acme/order/Batch.java:32-34):
+````java
+    public int size() {
+        return counts.length;
+    }
+````
+Field accesses:
+- read Batch.counts
+Words to define in `words` (each once, with every identifier it appears in):
+- `size`: size
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 14 operation java:com.acme.order/Channel.<init>() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Channel.<init>()
+
+## The unit
+### constructor `Channel` (java:com.acme.order/Channel.<init>()) — in type Channel, in module com.acme.order
+Signature: ````
+<init>()
+````
+metrics: cyclomatic=1
+Source (com/acme/order/Channel.java:4-13):
+````java
+public enum Channel implements Priceable {
+    WEB,
+    PHONE,
+    STORE;
+
+    @Override
+    public Money price() {
+        return Money.zero();
+    }
+}
+````
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 15 operation java:com.acme.order/Discountable.discount(int) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Discountable.discount(int)
+
+## The unit
+### method `discount` (java:com.acme.order/Discountable.discount(int)) — in type Discountable, in module com.acme.order
+Signature: ````
+discount(int)
+````
+metrics: cyclomatic=1, sloc=1
+Source (com/acme/order/Discountable.java:6-6):
+````java
+    Money discount(int percent);
+````
+Words to define in `words` (each once, with every identifier it appears in):
+- `discount`: discount
+- `percent`: percent
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 16 operation java:com.acme.order/EmptyBasketException.<init>(java.lang.String) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/EmptyBasketException.<init>(java.lang.String)
+
+## The unit
+### constructor `EmptyBasketException` (java:com.acme.order/EmptyBasketException.<init>(java.lang.String)) — in type EmptyBasketException, in module com.acme.order
+Signature: ````
+<init>(java.lang.String)
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/EmptyBasketException.java:6-8):
+````java
+    public EmptyBasketException(String message) {
+        super(message);
+    }
+````
+Calls:
+- RuntimeException of RuntimeException (external)
+Words to define in `words` (each once, with every identifier it appears in):
+- `message`: message
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 17 operation java:com.acme.order/Money.<init>(long) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Money.<init>(long)
+
+## The unit
+### constructor `Money` (java:com.acme.order/Money.<init>(long)) — in type Money, in module com.acme.order
+Signature: ````
+<init>(long)
+````
+metrics: cyclomatic=1
+Source (com/acme/order/Money.java:4-18):
+````java
+public record Money(long cents) implements Priceable {
+
+    public static Money zero() {
+        return new Money(0L);
+    }
+
+    public Money times(int factor) {
+        return new Money(cents * factor);
+    }
+
+    @Override
+    public Money price() {
+        return this;
+    }
+}
+````
+Words to define in `words` (each once, with every identifier it appears in):
+- `cents`: cents
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 18 operation java:com.acme.order/Money.cents() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Money.cents()
+
+## The unit
+### method `cents` (java:com.acme.order/Money.cents()) — in type Money, in module com.acme.order
+Signature: ````
+cents()
+````
+metrics: cyclomatic=1
+Source (com/acme/order/Money.java:4-18):
+````java
+public record Money(long cents) implements Priceable {
+
+    public static Money zero() {
+        return new Money(0L);
+    }
+
+    public Money times(int factor) {
+        return new Money(cents * factor);
+    }
+
+    @Override
+    public Money price() {
+        return this;
+    }
+}
+````
+Words to define in `words` (each once, with every identifier it appears in):
+- `cents`: cents
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 19 operation java:com.acme.order/Money.price() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Money.price()
+
+## The unit
+### method `price` (java:com.acme.order/Money.price()) — in type Money, in module com.acme.order
+Signature: ````
+price()
+````
+Annotations: @Override
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Money.java:15-17):
+````java
+    public Money price() {
+        return this;
+    }
+````
+Words to define in `words` (each once, with every identifier it appears in):
+- `price`: price
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 20 operation java:com.acme.order/Notifications.<init>() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Notifications.<init>()
+
+## The unit
+### constructor `Notifications` (java:com.acme.order/Notifications.<init>()) — in type Notifications, in module com.acme.order
+Signature: ````
+<init>()
+````
+metrics: cyclomatic=1
+Source (com/acme/order/Notifications.java:6-39):
+````java
+public class Notifications {
+
+    private final Consumer<Order> onShipped = order -> log("shipped " + order.reference());
+
+    public Runnable both(Order order) {
+        return chain(() -> log("packing " + order.reference()), () -> log("shipping " + order.reference()));
+    }
+
+    public Runnable chain(Runnable first, Runnable second) {
+        return () -> {
+            first.run();
+            second.run();
+        };
+    }
+
+    public Priceable freeOf(Order order) {
+        return new Priceable() {
+
+            @Override
+            public Money price() {
+                log("free " + order.reference());
+                return Money.zero();
+            }
+        };
+    }
+
+    public void notifyShipped(Order order) {
+        onShipped.accept(order);
+    }
+
+    void log(String message) {
+        System.out.println(message);
+    }
+}
+````
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 21 operation java:com.acme.order/Notifications.chain(java.lang.Runnable,java.lang.Runnable) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Notifications.chain(java.lang.Runnable,java.lang.Runnable)
+
+## The unit
+### method `chain` (java:com.acme.order/Notifications.chain(java.lang.Runnable,java.lang.Runnable)) — in type Notifications, in module com.acme.order
+Signature: ````
+chain(java.lang.Runnable,java.lang.Runnable)
+````
+metrics: cyclomatic=1, sloc=6
+Source (com/acme/order/Notifications.java:14-19):
+````java
+    public Runnable chain(Runnable first, Runnable second) {
+        return () -> {
+            first.run();
+            second.run();
+        };
+    }
+````
+Calls:
+- Runnable of Runnable (external)
+- Runnable of Runnable (external)
+Words to define in `words` (each once, with every identifier it appears in):
+- `chain`: chain
+- `first`: first
+- `second`: second
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 22 operation java:com.acme.order/Notifications.log(java.lang.String) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Notifications.log(java.lang.String)
+
+## The unit
+### method `log` (java:com.acme.order/Notifications.log(java.lang.String)) — in type Notifications, in module com.acme.order
+Signature: ````
+log(java.lang.String)
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Notifications.java:36-38):
+````java
+    void log(String message) {
+        System.out.println(message);
+    }
+````
+Calls:
+- PrintStream of PrintStream (external)
+Field accesses:
+- read System.System (external)
+Words to define in `words` (each once, with every identifier it appears in):
+- `log`: log
+- `message`: message
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 23 operation java:com.acme.order/Notifications.notifyShipped(com.acme.order.Order) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Notifications.notifyShipped(com.acme.order.Order)
+
+## The unit
+### method `notifyShipped` (java:com.acme.order/Notifications.notifyShipped(com.acme.order.Order)) — in type Notifications, in module com.acme.order
+Signature: ````
+notifyShipped(com.acme.order.Order)
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Notifications.java:32-34):
+````java
+    public void notifyShipped(Order order) {
+        onShipped.accept(order);
+    }
+````
+Calls:
+- Consumer of Consumer (external)
+Field accesses:
+- read Notifications.onShipped
+Words to define in `words` (each once, with every identifier it appears in):
+- `notifyShipped`: notify, shipped
+- `order`: order
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 24 operation java:com.acme.order/Priceable.price() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Priceable.price()
+
+## The unit
+### method `price` (java:com.acme.order/Priceable.price()) — in type Priceable, in module com.acme.order
+Signature: ````
+price()
+````
+metrics: cyclomatic=1, sloc=1
+Source (com/acme/order/Priceable.java:6-6):
+````java
+    Money price();
+````
+Words to define in `words` (each once, with every identifier it appears in):
+- `price`: price
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 25 operation java:com.acme.order/Reporting.<init>() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Reporting.<init>()
+
+## The unit
+### constructor `Reporting` (java:com.acme.order/Reporting.<init>()) — in type Reporting, in module com.acme.order
+Signature: ````
+<init>()
+````
+metrics: cyclomatic=1
+Source (com/acme/order/Reporting.java:9-41):
+````java
+public class Reporting {
+
+    public ArrayList<String> lines(String... rows) {
+        return new ArrayList<>(asList(rows));
+    }
+
+    public String join(String[] parts) {
+        StringBuilder out = new StringBuilder();
+        for (String part : parts) {
+            out.append(part);
+        }
+        return out.toString();
+    }
+
+    @Audited("monthly")
+    public <T extends Comparable<T>> T max(java.util.List<T> values) {
+        T best = null;
+        for (T value : values) {
+            if (best == null || value.compareTo(best) > 0) {
+                best = value;
+            }
+        }
+        return best;
+    }
+
+    public <T> T first(java.util.List<T> values) {
+        return values.isEmpty() ? null : values.get(0);
+    }
+
+    public LocalDate today() {
+        return LocalDate.now();
+    }
+}
+````
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 26 operation java:com.acme.order/Reporting.first(java.util.List) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Reporting.first(java.util.List)
+
+## The unit
+### method `first` (java:com.acme.order/Reporting.first(java.util.List)) — in type Reporting, in module com.acme.order
+Signature: ````
+first(java.util.List)
+````
+metrics: cyclomatic=2, sloc=3
+Source (com/acme/order/Reporting.java:34-36):
+````java
+    public <T> T first(java.util.List<T> values) {
+        return values.isEmpty() ? null : values.get(0);
+    }
+````
+Calls:
+- List of List (external)
+Words to define in `words` (each once, with every identifier it appears in):
+- `first`: first
+- `values`: values
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 27 operation java:com.acme.order/Reporting.join(java.lang.String[]) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Reporting.join(java.lang.String[])
+
+## The unit
+### method `join` (java:com.acme.order/Reporting.join(java.lang.String[])) — in type Reporting, in module com.acme.order
+Signature: ````
+join(java.lang.String[])
+````
+metrics: cyclomatic=2, sloc=7
+Source (com/acme/order/Reporting.java:15-21):
+````java
+    public String join(String[] parts) {
+        StringBuilder out = new StringBuilder();
+        for (String part : parts) {
+            out.append(part);
+        }
+        return out.toString();
+    }
+````
+Calls:
+- StringBuilder of StringBuilder (external)
+- StringBuilder of StringBuilder (external)
+- StringBuilder of StringBuilder (external)
+Words to define in `words` (each once, with every identifier it appears in):
+- `join`: join
+- `parts`: parts
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 28 operation java:com.acme.order/Reporting.lines(java.lang.String[]) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Reporting.lines(java.lang.String[])
+
+## The unit
+### method `lines` (java:com.acme.order/Reporting.lines(java.lang.String[])) — in type Reporting, in module com.acme.order
+Signature: ````
+lines(java.lang.String[])
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Reporting.java:11-13):
+````java
+    public ArrayList<String> lines(String... rows) {
+        return new ArrayList<>(asList(rows));
+    }
+````
+Calls:
+- ArrayList of ArrayList (external)
+- Arrays of Arrays (external)
+Words to define in `words` (each once, with every identifier it appears in):
+- `lines`: lines
+- `rows`: rows
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 29 operation java:com.acme.order/Reporting.max(java.util.List) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Reporting.max(java.util.List)
+
+## The unit
+### method `max` (java:com.acme.order/Reporting.max(java.util.List)) — in type Reporting, in module com.acme.order
+Signature: ````
+max(java.util.List)
+````
+Annotations: @Audited(value = "monthly")
+metrics: cyclomatic=4, sloc=9
+Source (com/acme/order/Reporting.java:24-32):
+````java
+    public <T extends Comparable<T>> T max(java.util.List<T> values) {
+        T best = null;
+        for (T value : values) {
+            if (best == null || value.compareTo(best) > 0) {
+                best = value;
+            }
+        }
+        return best;
+    }
+````
+Calls:
+- Comparable of Comparable (external)
+Words to define in `words` (each once, with every identifier it appears in):
+- `max`: max
+- `values`: values
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 30 operation java:com.acme.order/Reporting.today() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Reporting.today()
+
+## The unit
+### method `today` (java:com.acme.order/Reporting.today()) — in type Reporting, in module com.acme.order
+Signature: ````
+today()
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Reporting.java:38-40):
+````java
+    public LocalDate today() {
+        return LocalDate.now();
+    }
+````
+Calls:
+- LocalDate of LocalDate (external)
+Words to define in `words` (each once, with every identifier it appears in):
+- `today`: today
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 31 operation java:com.acme.order/StockGuard.<init>() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/StockGuard.<init>()
+
+## The unit
+### constructor `StockGuard` (java:com.acme.order/StockGuard.<init>()) — in type StockGuard, in module com.acme.order
+Signature: ````
+<init>()
+````
+metrics: cyclomatic=1
+Source (com/acme/order/StockGuard.java:9-24):
+````java
+public class StockGuard {
+
+    void ensure(int quantity) {
+        if (quantity < 0) {
+            throw new EmptyBasketException("negative quantity");
+        }
+        try {
+            check(quantity);
+        } catch (EmptyBasketException e) {
+            throw e;
+        }
+    }
+
+    void check(int quantity) throws EmptyBasketException {
+    }
+}
+````
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 32 operation java:com.acme.order/StockGuard.check(int) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/StockGuard.check(int)
+
+## The unit
+### method `check` (java:com.acme.order/StockGuard.check(int)) — in type StockGuard, in module com.acme.order
+Signature: ````
+check(int)
+````
+metrics: cyclomatic=1, sloc=2
+Source (com/acme/order/StockGuard.java:22-23):
+````java
+    void check(int quantity) throws EmptyBasketException {
+    }
+````
+Words to define in `words` (each once, with every identifier it appears in):
+- `check`: check
+- `quantity`: quantity
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 33 type java:com.acme.order.adapter/LedgerAdapter codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order.adapter/LedgerAdapter
+
+## The unit
+### class `LedgerAdapter` (java:com.acme.order.adapter/LedgerAdapter) — in module com.acme.order.adapter
+metrics: sloc=8
+Documentation:
+````
+Posts to the ledger and keeps a local trail.
+````
+Source (com/acme/order/adapter/LedgerAdapter.java:6-15):
+````java
+public class LedgerAdapter extends LedgerClient {
+
+    private final AuditTrail trail = new AuditTrail();
+
+    @Override
+    public void post(Object document) {
+        trail.record(document);
+        super.post(document);
+    }
+}
+````
+Supertypes:
+- extends LedgerClient (external)
+Fields:
+- trail: AuditTrail (class, external)
+Members, as already explained:
+- java:com.acme.order.adapter/LedgerAdapter.<init>() [operation, owned by entity] (java:com.acme.order.adapter/LedgerAdapter.<init>()): Operation LedgerAdapter.<init>().
+- post [operation, owned by entity] (java:com.acme.order.adapter/LedgerAdapter.post(java.lang.Object)): Operation LedgerAdapter.post(java.lang.Object).
+Words to define in `words` (each once, with every identifier it appears in):
+- `LedgerAdapter`: ledger, adapter
+- `trail`: trail
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 34 type java:com.acme.order.legacy/List codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order.legacy/List
+
+## The unit
+### class `List` (java:com.acme.order.legacy/List) — in module com.acme.order.legacy
+metrics: sloc=14
+Documentation:
+````
+A hand-rolled cons list from before java.util was allowed here.
+````
+Source (com/acme/order/legacy/List.java:4-22):
+````java
+public class List {
+
+    private final String head;
+
+    private final List tail;
+
+    public List(String head, List tail) {
+        this.head = head;
+        this.tail = tail;
+    }
+
+    public String head() {
+        return head;
+    }
+
+    public int length() {
+        return tail == null ? 1 : 1 + tail.length();
+    }
+}
+````
+Fields:
+- head: String (class, external)
+- tail: List (class)
+Members, as already explained:
+- java:com.acme.order.legacy/List.<init>(java.lang.String,com.acme.order.legacy.List) [operation] (java:com.acme.order.legacy/List.<init>(java.lang.String,com.acme.order.legacy.List)): Constructor: assigns the fields of `List` (`head`, `tail`).
+- head [operation] (java:com.acme.order.legacy/List.head()): Getter: returns the `head` field of `List`.
+- length [operation, owned by entity] (java:com.acme.order.legacy/List.length()): Operation List.length().
+Words to define in `words` (each once, with every identifier it appears in):
+- `List`: list
+- `head`: head
+- `tail`: tail
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 35 type java:com.acme.order/Audited codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/Audited
+
+## The unit
+### annotation `Audited` (java:com.acme.order/Audited) — in module com.acme.order
+Annotations: @Retention(value = RetentionPolicy.RUNTIME)
+metrics: sloc=3
+Documentation:
+````
+Marks a method whose calls must reach the audit log.
+````
+Source (com/acme/order/Audited.java:8-11):
+````java
+public @interface Audited {
+
+    String value() default "";
+}
+````
+Members, as already explained:
+- value [operation, owned by entity] (java:com.acme.order/Audited.value()): Operation Audited.value().
+Words to define in `words` (each once, with every identifier it appears in):
+- `Audited`: audited
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 36 type java:com.acme.order/Basket.Line.Discount codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/Basket.Line.Discount
+
+## The unit
+### class `Discount` (java:com.acme.order/Basket.Line.Discount) — in module com.acme.order
+metrics: sloc=5
+Documentation:
+````
+Nested inside a nested type.
+````
+Source (com/acme/order/Basket.java:40-45):
+````java
+        public static class Discount {
+
+            public long applyTo(long amount) {
+                return amount / 2;
+            }
+        }
+````
+Members, as already explained:
+- java:com.acme.order/Basket.Line.Discount.<init>() [operation, owned by entity] (java:com.acme.order/Basket.Line.Discount.<init>()): Operation Basket.Line.Discount.<init>().
+- applyTo [operation, owned by entity] (java:com.acme.order/Basket.Line.Discount.applyTo(long)): Operation Basket.Line.Discount.applyTo(long).
+Words to define in `words` (each once, with every identifier it appears in):
+- `Discount`: discount
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 37 operation java:com.acme.order/Basket.add(com.acme.order.Basket.Line) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Basket.add(com.acme.order.Basket.Line)
+
+## The unit
+### method `add` (java:com.acme.order/Basket.add(com.acme.order.Basket.Line)) — in type Basket, in module com.acme.order
+Signature: ````
+add(com.acme.order.Basket.Line)
+````
+metrics: cyclomatic=1, sloc=4
+Source (com/acme/order/Basket.java:13-16):
+````java
+    public void add(Line line) {
+        lines.add(line);
+        total += line.amount();
+    }
+````
+Calls:
+- List of List (external)
+- amount of Line (corpus)
+Field accesses:
+- read Basket.lines
+- read/write Basket.total
+Words to define in `words` (each once, with every identifier it appears in):
+- `add`: add
+- `line`: line
+
+## What the dependencies do
+- amount [operation] (java:com.acme.order/Basket.Line.amount()): Getter: returns the `amount` field of `Line`.
+=== 38 operation java:com.acme.order/Basket.cursor() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Basket.cursor()
+
+## The unit
+### method `cursor` (java:com.acme.order/Basket.cursor()) — in type Basket, in module com.acme.order
+Signature: ````
+cursor()
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Basket.java:22-24):
+````java
+    public Cursor cursor() {
+        return new Cursor();
+    }
+````
+Calls:
+- java:com.acme.order/Basket.Cursor.<init>() of Cursor (corpus)
+Words to define in `words` (each once, with every identifier it appears in):
+- `cursor`: cursor
+
+## What the dependencies do
+- java:com.acme.order/Basket.Cursor.<init>() [operation, owned by entity] (java:com.acme.order/Basket.Cursor.<init>()): Operation Basket.Cursor.<init>().
+=== 39 type java:com.acme.order/EmptyBasketException codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/EmptyBasketException
+
+## The unit
+### class `EmptyBasketException` (java:com.acme.order/EmptyBasketException) — in module com.acme.order
+metrics: sloc=5
+Documentation:
+````
+The corpus-declared exception the throw-site regression case targets.
+````
+Source (com/acme/order/EmptyBasketException.java:4-9):
+````java
+public class EmptyBasketException extends RuntimeException {
+
+    public EmptyBasketException(String message) {
+        super(message);
+    }
+}
+````
+Supertypes:
+- extends RuntimeException (external)
+Members, as already explained:
+- java:com.acme.order/EmptyBasketException.<init>(java.lang.String) [operation, owned by entity] (java:com.acme.order/EmptyBasketException.<init>(java.lang.String)): Operation EmptyBasketException.<init>(java.lang.String).
+Words to define in `words` (each once, with every identifier it appears in):
+- `EmptyBasketException`: empty, basket, exception
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 40 operation java:com.acme.order/Money.times(int) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Money.times(int)
+
+## The unit
+### method `times` (java:com.acme.order/Money.times(int)) — in type Money, in module com.acme.order
+Signature: ````
+times(int)
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Money.java:10-12):
+````java
+    public Money times(int factor) {
+        return new Money(cents * factor);
+    }
+````
+Calls:
+- java:com.acme.order/Money.<init>(long) of Money (corpus)
+Field accesses:
+- read Money.cents
+Words to define in `words` (each once, with every identifier it appears in):
+- `times`: times
+- `factor`: factor
+
+## What the dependencies do
+- java:com.acme.order/Money.<init>(long) [operation, owned by entity] (java:com.acme.order/Money.<init>(long)): Operation Money.<init>(long).
+=== 41 operation java:com.acme.order/Money.zero() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Money.zero()
+
+## The unit
+### method `zero` (java:com.acme.order/Money.zero()) — in type Money, in module com.acme.order
+Signature: ````
+zero()
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Money.java:6-8):
+````java
+    public static Money zero() {
+        return new Money(0L);
+    }
+````
+Calls:
+- java:com.acme.order/Money.<init>(long) of Money (corpus)
+Words to define in `words` (each once, with every identifier it appears in):
+- `zero`: zero
+
+## What the dependencies do
+- java:com.acme.order/Money.<init>(long) [operation, owned by entity] (java:com.acme.order/Money.<init>(long)): Operation Money.<init>(long).
+=== 42 operation java:com.acme.order/Notifications.both(com.acme.order.Order) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Notifications.both(com.acme.order.Order)
+
+## The unit
+### method `both` (java:com.acme.order/Notifications.both(com.acme.order.Order)) — in type Notifications, in module com.acme.order
+Signature: ````
+both(com.acme.order.Order)
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Notifications.java:10-12):
+````java
+    public Runnable both(Order order) {
+        return chain(() -> log("packing " + order.reference()), () -> log("shipping " + order.reference()));
+    }
+````
+Calls:
+- reference of AbstractOrder (corpus)
+- reference of AbstractOrder (corpus)
+- chain of Notifications (corpus)
+- log of Notifications (corpus)
+- log of Notifications (corpus)
+Words to define in `words` (each once, with every identifier it appears in):
+- `both`: both
+- `order`: order
+
+## What the dependencies do
+- reference [operation] (java:com.acme.order/AbstractOrder.reference()): Getter: returns the `reference` field of `AbstractOrder`.
+- chain [operation, owned by entity] (java:com.acme.order/Notifications.chain(java.lang.Runnable,java.lang.Runnable)): Operation Notifications.chain(java.lang.Runnable,java.lang.Runnable).
+- log [operation, owned by entity] (java:com.acme.order/Notifications.log(java.lang.String)): Operation Notifications.log(java.lang.String).
+=== 43 operation java:com.acme.order/OrderService.archive(com.acme.order.legacy.List) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/OrderService.archive(com.acme.order.legacy.List)
+
+## The unit
+### method `archive` (java:com.acme.order/OrderService.archive(com.acme.order.legacy.List)) — in type OrderService, in module com.acme.order
+Signature: ````
+archive(com.acme.order.legacy.List)
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/OrderService.java:29-31):
+````java
+    public void archive(com.acme.order.legacy.List orders) {
+        ledger.archive(orders.head());
+    }
+````
+Calls:
+- head of List (corpus)
+- LedgerClient of LedgerClient (external)
+Field accesses:
+- read OrderService.ledger
+Words to define in `words` (each once, with every identifier it appears in):
+- `archive`: archive
+- `orders`: orders
+
+## What the dependencies do
+- head [operation] (java:com.acme.order.legacy/List.head()): Getter: returns the `head` field of `List`.
+=== 44 operation java:com.acme.order/OrderService.archive(java.util.List) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/OrderService.archive(java.util.List)
+
+## The unit
+### method `archive` (java:com.acme.order/OrderService.archive(java.util.List)) — in type OrderService, in module com.acme.order
+Signature: ````
+archive(java.util.List)
+````
+metrics: cyclomatic=2, sloc=5
+Source (com/acme/order/OrderService.java:23-27):
+````java
+    public void archive(java.util.List<Order> orders) {
+        for (Order order : orders) {
+            ledger.archive(order.reference());
+        }
+    }
+````
+Calls:
+- reference of AbstractOrder (corpus)
+- LedgerClient of LedgerClient (external)
+Field accesses:
+- read OrderService.ledger
+Words to define in `words` (each once, with every identifier it appears in):
+- `archive`: archive
+- `orders`: orders
+
+## What the dependencies do
+- reference [operation] (java:com.acme.order/AbstractOrder.reference()): Getter: returns the `reference` field of `AbstractOrder`.
+=== 45 operation java:com.acme.order/OrderService.bill(com.acme.order.Order) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/OrderService.bill(com.acme.order.Order)
+
+## The unit
+### method `bill` (java:com.acme.order/OrderService.bill(com.acme.order.Order)) — in type OrderService, in module com.acme.order
+Signature: ````
+bill(com.acme.order.Order)
+````
+metrics: cyclomatic=1, sloc=5
+Source (com/acme/order/OrderService.java:17-21):
+````java
+    public Invoice bill(Order order) {
+        Invoice invoice = new Invoice(order.reference());
+        ledger.post(invoice);
+        return invoice;
+    }
+````
+Calls:
+- reference of AbstractOrder (corpus)
+- Invoice of Invoice (external)
+- LedgerClient of LedgerClient (external)
+Field accesses:
+- read OrderService.ledger
+Words to define in `words` (each once, with every identifier it appears in):
+- `bill`: bill
+- `order`: order
+
+## What the dependencies do
+- reference [operation] (java:com.acme.order/AbstractOrder.reference()): Getter: returns the `reference` field of `AbstractOrder`.
+=== 46 operation java:com.acme.order/StockGuard.ensure(int) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/StockGuard.ensure(int)
+
+## The unit
+### method `ensure` (java:com.acme.order/StockGuard.ensure(int)) — in type StockGuard, in module com.acme.order
+Signature: ````
+ensure(int)
+````
+metrics: cyclomatic=3, sloc=10
+Source (com/acme/order/StockGuard.java:11-20):
+````java
+    void ensure(int quantity) {
+        if (quantity < 0) {
+            throw new EmptyBasketException("negative quantity");
+        }
+        try {
+            check(quantity);
+        } catch (EmptyBasketException e) {
+            throw e;
+        }
+    }
+````
+Calls:
+- java:com.acme.order/EmptyBasketException.<init>(java.lang.String) of EmptyBasketException (corpus)
+- check of StockGuard (corpus)
+Throws:
+- EmptyBasketException
+- EmptyBasketException
+Words to define in `words` (each once, with every identifier it appears in):
+- `ensure`: ensure
+- `quantity`: quantity
+
+## What the dependencies do
+- java:com.acme.order/EmptyBasketException.<init>(java.lang.String) [operation, owned by entity] (java:com.acme.order/EmptyBasketException.<init>(java.lang.String)): Operation EmptyBasketException.<init>(java.lang.String).
+- check [operation, owned by entity] (java:com.acme.order/StockGuard.check(int)): Operation StockGuard.check(int).
+=== 47 module java:com.acme.order.adapter codegraph_module model=openai/gpt-5.6-luna system=206d67daaf006b8b
+# Unit: module java:com.acme.order.adapter
+
+## The unit
+### package `com.acme.order.adapter` (java:com.acme.order.adapter)
+Imports:
+- com.megacorp.ledger ×1 (external)
+Types in this module, as already explained:
+- LedgerAdapter [type, entity] (java:com.acme.order.adapter/LedgerAdapter): Type LedgerAdapter.
+Words to define in `words` (each once, with every identifier it appears in):
+- `com.acme.order.adapter`: adapter
+Words its types define, heaviest first (reconcile each in `glossary`):
+- adapter
+  - LedgerAdapter: domain, "adapter": adapter in LedgerAdapter.
+- ledger
+  - LedgerAdapter: domain, "ledger": ledger in LedgerAdapter.
+- trail
+  - LedgerAdapter: domain, "trail": trail in LedgerAdapter.
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 48 module java:com.acme.order.legacy codegraph_module model=openai/gpt-5.6-luna system=206d67daaf006b8b
+# Unit: module java:com.acme.order.legacy
+
+## The unit
+### package `com.acme.order.legacy` (java:com.acme.order.legacy)
+Types in this module, as already explained:
+- List [type, entity] (java:com.acme.order.legacy/List): Type List.
+Words to define in `words` (each once, with every identifier it appears in):
+- `com.acme.order.legacy`: legacy
+Words its types define, heaviest first (reconcile each in `glossary`):
+- head
+  - List: domain, "head": head in List.
+- list
+  - List: domain, "list": list in List.
+- tail
+  - List: domain, "tail": tail in List.
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 49 operation java:com.acme.order/AbstractOrder.<init>(java.lang.String) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/AbstractOrder.<init>(java.lang.String)
+
+## The unit
+### constructor `AbstractOrder` (java:com.acme.order/AbstractOrder.<init>(java.lang.String)) — in type AbstractOrder, in module com.acme.order
+Signature: ````
+<init>(java.lang.String)
+````
+metrics: cyclomatic=1, sloc=4
+Source (com/acme/order/AbstractOrder.java:10-13):
+````java
+    protected AbstractOrder(String reference) {
+        this.reference = reference;
+        this.total = Money.zero();
+    }
+````
+Calls:
+- zero of Money (corpus)
+Field accesses:
+- write AbstractOrder.reference
+- write AbstractOrder.total
+Words to define in `words` (each once, with every identifier it appears in):
+- `reference`: reference
+
+## What the dependencies do
+- zero [operation, owned by entity] (java:com.acme.order/Money.zero()): Operation Money.zero().
+=== 50 type java:com.acme.order/Basket.Line codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/Basket.Line
+
+## The unit
+### class `Line` (java:com.acme.order/Basket.Line) — in module com.acme.order
+metrics: sloc=14
+Documentation:
+````
+Static nested: no enclosing Basket instance.
+````
+Source (com/acme/order/Basket.java:27-46):
+````java
+    public static class Line {
+
+        private final long amount;
+
+        public Line(long amount) {
+            this.amount = amount;
+        }
+
+        public long amount() {
+            return amount;
+        }
+
+        /** Nested inside a nested type. */
+        public static class Discount {
+
+            public long applyTo(long amount) {
+                return amount / 2;
+            }
+        }
+    }
+````
+Fields:
+- amount
+Members, as already explained:
+- java:com.acme.order/Basket.Line.<init>(long) [operation] (java:com.acme.order/Basket.Line.<init>(long)): Constructor: assigns the fields of `Line` (`amount`).
+- amount [operation] (java:com.acme.order/Basket.Line.amount()): Getter: returns the `amount` field of `Line`.
+- Discount [type, entity] (java:com.acme.order/Basket.Line.Discount): Type Basket.Line.Discount.
+Words to define in `words` (each once, with every identifier it appears in):
+- `Line`: line
+- `amount`: amount
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 51 operation java:com.acme.order/Batch.running() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Batch.running()
+
+## The unit
+### method `running` (java:com.acme.order/Batch.running()) — in type Batch, in module com.acme.order
+Signature: ````
+running()
+````
+metrics: cyclomatic=1, sloc=12
+Documentation:
+````
+An anonymous class that reads its own field and calls its own method.
+````
+Source (com/acme/order/Batch.java:47-61):
+````java
+    public Priceable running() {
+        return new Priceable() {
+
+            private final Money running = Money.zero();
+
+            @Override
+            public Money price() {
+                return scaled(running);
+            }
+
+            private Money scaled(Money base) {
+                return base;
+            }
+        };
+    }
+````
+Calls:
+- java:com.acme.order/Batch#com/acme/order/Batch.java:48:32 of Batch (corpus)
+- zero of Money (corpus)
+- scaled of Batch (corpus)
+Field accesses:
+- read Batch.running
+Words to define in `words` (each once, with every identifier it appears in):
+- `running`: running
+
+## What the dependencies do
+- zero [operation, owned by entity] (java:com.acme.order/Money.zero()): Operation Money.zero().
+=== 52 operation java:com.acme.order/Channel.price() codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Channel.price()
+
+## The unit
+### method `price` (java:com.acme.order/Channel.price()) — in type Channel, in module com.acme.order
+Signature: ````
+price()
+````
+Annotations: @Override
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Channel.java:10-12):
+````java
+    public Money price() {
+        return Money.zero();
+    }
+````
+Calls:
+- zero of Money (corpus)
+Words to define in `words` (each once, with every identifier it appears in):
+- `price`: price
+
+## What the dependencies do
+- zero [operation, owned by entity] (java:com.acme.order/Money.zero()): Operation Money.zero().
+=== 53 type java:com.acme.order/Money codegraph_type_cycle model=openai/gpt-5.6-luna system=51b7c7ccdc9fe0e8
+# Unit: type java:com.acme.order/Money (a cycle of 2 types)
+
+## Cycle members
+Return one entry per id: java:com.acme.order/Money, java:com.acme.order/Priceable.
+
+### record `Money` (java:com.acme.order/Money) — in module com.acme.order
+metrics: sloc=12
+Documentation:
+````
+Minor units only; this fixture has no currencies.
+````
+Source (com/acme/order/Money.java:4-18):
+````java
+public record Money(long cents) implements Priceable {
+
+    public static Money zero() {
+        return new Money(0L);
+    }
+
+    public Money times(int factor) {
+        return new Money(cents * factor);
+    }
+
+    @Override
+    public Money price() {
+        return this;
+    }
+}
+````
+Supertypes:
+- implements Priceable
+Fields:
+- cents
+Members, as already explained:
+- java:com.acme.order/Money.<init>(long) [operation, owned by entity] (java:com.acme.order/Money.<init>(long)): Operation Money.<init>(long).
+- cents [operation, owned by entity] (java:com.acme.order/Money.cents()): Operation Money.cents().
+- price [operation, owned by entity] (java:com.acme.order/Money.price()): Operation Money.price().
+- times [operation, owned by entity] (java:com.acme.order/Money.times(int)): Operation Money.times(int).
+- zero [operation, owned by entity] (java:com.acme.order/Money.zero()): Operation Money.zero().
+Words to define in `words` (each once, with every identifier it appears in):
+- `Money`: money
+- `cents`: cents
+
+### interface `Priceable` (java:com.acme.order/Priceable) — in module com.acme.order
+metrics: sloc=3
+Documentation:
+````
+Anything the pricing engine can put a number on.
+````
+Source (com/acme/order/Priceable.java:4-7):
+````java
+public interface Priceable {
+
+    Money price();
+}
+````
+Members, as already explained:
+- price [operation, owned by entity] (java:com.acme.order/Priceable.price()): Operation Priceable.price().
+Words to define in `words` (each once, with every identifier it appears in):
+- `Priceable`: priceable
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 54 operation java:com.acme.order/Notifications.freeOf(com.acme.order.Order) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Notifications.freeOf(com.acme.order.Order)
+
+## The unit
+### method `freeOf` (java:com.acme.order/Notifications.freeOf(com.acme.order.Order)) — in type Notifications, in module com.acme.order
+Signature: ````
+freeOf(com.acme.order.Order)
+````
+metrics: cyclomatic=1, sloc=9
+Source (com/acme/order/Notifications.java:21-30):
+````java
+    public Priceable freeOf(Order order) {
+        return new Priceable() {
+
+            @Override
+            public Money price() {
+                log("free " + order.reference());
+                return Money.zero();
+            }
+        };
+    }
+````
+Calls:
+- java:com.acme.order/Notifications#com/acme/order/Notifications.java:22:32 of Notifications (corpus)
+- reference of AbstractOrder (corpus)
+- log of Notifications (corpus)
+- zero of Money (corpus)
+Words to define in `words` (each once, with every identifier it appears in):
+- `freeOf`: free
+- `order`: order
+
+## What the dependencies do
+- reference [operation] (java:com.acme.order/AbstractOrder.reference()): Getter: returns the `reference` field of `AbstractOrder`.
+- zero [operation, owned by entity] (java:com.acme.order/Money.zero()): Operation Money.zero().
+- log [operation, owned by entity] (java:com.acme.order/Notifications.log(java.lang.String)): Operation Notifications.log(java.lang.String).
+=== 55 operation java:com.acme.order/Order.discount(int) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Order.discount(int)
+
+## The unit
+### method `discount` (java:com.acme.order/Order.discount(int)) — in type Order, in module com.acme.order
+Signature: ````
+discount(int)
+````
+Annotations: @Audited(value = LedgerClient.AUDIT_TAG) @Override
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Order.java:31-34):
+````java
+    public Money discount(int percent) {
+        // `total` is inherited from AbstractOrder, not declared here.
+        return total.times(100 - percent);
+    }
+````
+Calls:
+- times of Money (corpus)
+Field accesses:
+- read LedgerClient.LedgerClient (external)
+- read AbstractOrder.total
+Words to define in `words` (each once, with every identifier it appears in):
+- `discount`: discount
+- `percent`: percent
+
+## What the dependencies do
+- times [operation, owned by entity] (java:com.acme.order/Money.times(int)): Operation Money.times(int).
+=== 56 type java:com.acme.order/Reporting codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/Reporting
+
+## The unit
+### class `Reporting` (java:com.acme.order/Reporting) — in module com.acme.order
+metrics: sloc=28
+Documentation:
+````
+Monthly reporting helpers.
+````
+Source (com/acme/order/Reporting.java:9-41):
+````java
+public class Reporting {
+
+    public ArrayList<String> lines(String... rows) {
+        return new ArrayList<>(asList(rows));
+    }
+
+    public String join(String[] parts) {
+        StringBuilder out = new StringBuilder();
+        for (String part : parts) {
+            out.append(part);
+        }
+        return out.toString();
+    }
+
+    @Audited("monthly")
+    public <T extends Comparable<T>> T max(java.util.List<T> values) {
+        T best = null;
+        for (T value : values) {
+            if (best == null || value.compareTo(best) > 0) {
+                best = value;
+            }
+        }
+        return best;
+    }
+
+    public <T> T first(java.util.List<T> values) {
+        return values.isEmpty() ? null : values.get(0);
+    }
+
+    public LocalDate today() {
+        return LocalDate.now();
+    }
+}
+````
+Members, as already explained:
+- java:com.acme.order/Reporting.<init>() [operation, owned by entity] (java:com.acme.order/Reporting.<init>()): Operation Reporting.<init>().
+- first [operation, owned by entity] (java:com.acme.order/Reporting.first(java.util.List)): Operation Reporting.first(java.util.List).
+- join [operation, owned by entity] (java:com.acme.order/Reporting.join(java.lang.String[])): Operation Reporting.join(java.lang.String[]).
+- lines [operation, owned by entity] (java:com.acme.order/Reporting.lines(java.lang.String[])): Operation Reporting.lines(java.lang.String[]).
+- max [operation, owned by entity] (java:com.acme.order/Reporting.max(java.util.List)): Operation Reporting.max(java.util.List).
+- today [operation, owned by entity] (java:com.acme.order/Reporting.today()): Operation Reporting.today().
+Words to define in `words` (each once, with every identifier it appears in):
+- `Reporting`: reporting
+
+## What the dependencies do
+- Audited [type, entity] (java:com.acme.order/Audited): Type Audited.
+=== 57 type java:com.acme.order/StockGuard codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/StockGuard
+
+## The unit
+### class `StockGuard` (java:com.acme.order/StockGuard) — in module com.acme.order
+metrics: sloc=14
+Documentation:
+````
+Throw-site regression case: a guard clause and a rethrow must each emit a
+{@code throws} edge anchored at its own statement, and the {@code throws}
+clause on {@code check} must stay a plain reference (propagation, not a
+failure exit).
+````
+Source (com/acme/order/StockGuard.java:9-24):
+````java
+public class StockGuard {
+
+    void ensure(int quantity) {
+        if (quantity < 0) {
+            throw new EmptyBasketException("negative quantity");
+        }
+        try {
+            check(quantity);
+        } catch (EmptyBasketException e) {
+            throw e;
+        }
+    }
+
+    void check(int quantity) throws EmptyBasketException {
+    }
+}
+````
+Members, as already explained:
+- java:com.acme.order/StockGuard.<init>() [operation, owned by entity] (java:com.acme.order/StockGuard.<init>()): Operation StockGuard.<init>().
+- check [operation, owned by entity] (java:com.acme.order/StockGuard.check(int)): Operation StockGuard.check(int).
+- ensure [operation, owned by entity] (java:com.acme.order/StockGuard.ensure(int)): Operation StockGuard.ensure(int).
+Words to define in `words` (each once, with every identifier it appears in):
+- `StockGuard`: stock, guard
+
+## What the dependencies do
+- EmptyBasketException [type, entity] (java:com.acme.order/EmptyBasketException): Type EmptyBasketException.
+=== 58 type java:com.acme.order/Basket codegraph_type_cycle model=openai/gpt-5.6-luna system=51b7c7ccdc9fe0e8
+# Unit: type java:com.acme.order/Basket (a cycle of 2 types)
+
+## Cycle members
+Return one entry per id: java:com.acme.order/Basket, java:com.acme.order/Basket.Cursor.
+
+### class `Basket` (java:com.acme.order/Basket) — in module com.acme.order
+metrics: sloc=34
+Documentation:
+````
+A basket being filled. Declares no constructor of its own.
+````
+Source (com/acme/order/Basket.java:7-57):
+````java
+public class Basket {
+
+    private long total;
+
+    private final List<Line> lines = new ArrayList<>();
+
+    public void add(Line line) {
+        lines.add(line);
+        total += line.amount();
+    }
+
+    public long total() {
+        return total;
+    }
+
+    public Cursor cursor() {
+        return new Cursor();
+    }
+
+    /** Static nested: no enclosing Basket instance. */
+    public static class Line {
+
+        private final long amount;
+
+        public Line(long amount) {
+            this.amount = amount;
+        }
+
+        public long amount() {
+            return amount;
+        }
+
+        /** Nested inside a nested type. */
+        public static class Discount {
+
+            public long applyTo(long amount) {
+                return amount / 2;
+            }
+        }
+    }
+
+    /** Non-static inner: reads the enclosing Basket's fields. */
+    public class Cursor {
+
+        private int index;
+
+        public Line next() {
+            return lines.get(index++);
+        }
+    }
+}
+````
+Fields:
+- lines: List (class, external)
+- total
+Members, as already explained:
+- java:com.acme.order/Basket.<init>() [operation, owned by entity] (java:com.acme.order/Basket.<init>()): Operation Basket.<init>().
+- add [operation, owned by entity] (java:com.acme.order/Basket.add(com.acme.order.Basket.Line)): Operation Basket.add(com.acme.order.Basket.Line).
+- cursor [operation, owned by entity] (java:com.acme.order/Basket.cursor()): Operation Basket.cursor().
+- total [operation] (java:com.acme.order/Basket.total()): Getter: returns the `total` field of `Basket`.
+- Cursor [type] (java:com.acme.order/Basket.Cursor): NOT EXPLAINED
+- Line [type, entity] (java:com.acme.order/Basket.Line): Type Basket.Line.
+Words to define in `words` (each once, with every identifier it appears in):
+- `Basket`: basket
+- `lines`: lines
+- `total`: total
+
+### class `Cursor` (java:com.acme.order/Basket.Cursor) — in module com.acme.order
+metrics: sloc=6
+Documentation:
+````
+Non-static inner: reads the enclosing Basket's fields.
+````
+Source (com/acme/order/Basket.java:49-56):
+````java
+    public class Cursor {
+
+        private int index;
+
+        public Line next() {
+            return lines.get(index++);
+        }
+    }
+````
+Fields:
+- index
+Members, as already explained:
+- java:com.acme.order/Basket.Cursor.<init>() [operation, owned by entity] (java:com.acme.order/Basket.Cursor.<init>()): Operation Basket.Cursor.<init>().
+- next [operation, owned by entity] (java:com.acme.order/Basket.Cursor.next()): Operation Basket.Cursor.next().
+Words to define in `words` (each once, with every identifier it appears in):
+- `Cursor`: cursor
+- `index`: index
+
+## What the dependencies do
+(no dependencies inside the corpus)
+=== 59 type java:com.acme.order/Batch codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/Batch
+
+## The unit
+### class `Batch` (java:com.acme.order/Batch) — in module com.acme.order
+metrics: sloc=29
+Documentation:
+````
+Array members and an anonymous class that uses its own members.
+
+<p>Both were blind spots found by auditing a real corpus (commons-lang), not by
+this corpus: arrays were present but nothing ever read `array.length`, and an
+anonymous class was present but nothing inside it touched its own fields.
+
+<p>`counts.length` and `int[]::new` declare their member on the ARRAY type. An
+array is not an entity, and its component type does not own those members —
+attributing them to the component invented a stub class named `int` and an
+access on `com.acme.order.Money` that the source never writes.
+
+<p>The anonymous `Priceable` is identified by `#file:line`; Spoon names it
+`Batch$1`, so any edge that names it from a type REFERENCE must be translated
+back, or one declared class ends up with two ids and the second is laundered
+into a stub carrying the corpus's own package.
+````
+Source (com/acme/order/Batch.java:20-62):
+````java
+public class Batch {
+
+    private final int[] counts;
+
+    private final Money[] prices;
+
+    public Batch(int[] counts, Money[] prices) {
+        this.counts = counts;
+        this.prices = prices;
+    }
+
+    /** `counts.length` — a field of `int[]`, not of `int`. */
+    public int size() {
+        return counts.length;
+    }
+
+    /** `prices.length` — a field of `Money[]`, not of `Money`. */
+    public int priced() {
+        return prices.length;
+    }
+
+    /** `int[]::new` — a constructor declared on the array type. */
+    public java.util.function.IntFunction<int[]> allocator() {
+        return int[]::new;
+    }
+
+    /** An anonymous class that reads its own field and calls its own method. */
+    public Priceable running() {
+        return new Priceable() {
+
+            private final Money running = Money.zero();
+
+            @Override
+            public Money price() {
+                return scaled(running);
+            }
+
+            private Money scaled(Money base) {
+                return base;
+            }
+        };
+    }
+}
+````
+Fields:
+- counts
+- prices: Money (record)
+Members, as already explained:
+- java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[]) [operation] (java:com.acme.order/Batch.<init>(int[],com.acme.order.Money[])): Constructor: assigns the fields of `Batch` (`counts`, `prices`).
+- allocator [operation, owned by entity] (java:com.acme.order/Batch.allocator()): Operation Batch.allocator().
+- priced [operation, owned by entity] (java:com.acme.order/Batch.priced()): Operation Batch.priced().
+- running [operation, owned by entity] (java:com.acme.order/Batch.running()): Operation Batch.running().
+- size [operation, owned by entity] (java:com.acme.order/Batch.size()): Operation Batch.size().
+Words to define in `words` (each once, with every identifier it appears in):
+- `Batch`: batch
+- `counts`: counts
+- `prices`: prices
+
+## What the dependencies do
+- Money [type, entity] (java:com.acme.order/Money): Type Money.
+- Priceable [type, entity] (java:com.acme.order/Priceable): Type Priceable.
+=== 60 type java:com.acme.order/Channel codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/Channel
+
+## The unit
+### enum `Channel` (java:com.acme.order/Channel) — in module com.acme.order
+metrics: sloc=9
+Documentation:
+````
+Where an order came from.
+````
+Source (com/acme/order/Channel.java:4-13):
+````java
+public enum Channel implements Priceable {
+    WEB,
+    PHONE,
+    STORE;
+
+    @Override
+    public Money price() {
+        return Money.zero();
+    }
+}
+````
+Supertypes:
+- implements Priceable
+Fields:
+- PHONE: Channel (enum)
+- STORE: Channel (enum)
+- WEB: Channel (enum)
+Members, as already explained:
+- java:com.acme.order/Channel.<init>() [operation, owned by entity] (java:com.acme.order/Channel.<init>()): Operation Channel.<init>().
+- price [operation, owned by entity] (java:com.acme.order/Channel.price()): Operation Channel.price().
+Words to define in `words` (each once, with every identifier it appears in):
+- `Channel`: channel
+- `PHONE`: phone
+- `STORE`: store
+- `WEB`: web
+
+## What the dependencies do
+- Money [type, entity] (java:com.acme.order/Money): Type Money.
+- Priceable [type, entity] (java:com.acme.order/Priceable): Type Priceable.
+=== 61 type java:com.acme.order/Discountable codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/Discountable
+
+## The unit
+### interface `Discountable` (java:com.acme.order/Discountable) — in module com.acme.order
+metrics: sloc=3
+Documentation:
+````
+An order that can be marked down. Extends another corpus interface.
+````
+Source (com/acme/order/Discountable.java:4-7):
+````java
+public interface Discountable extends Priceable {
+
+    Money discount(int percent);
+}
+````
+Supertypes:
+- extends Priceable
+Members, as already explained:
+- discount [operation, owned by entity] (java:com.acme.order/Discountable.discount(int)): Operation Discountable.discount(int).
+Words to define in `words` (each once, with every identifier it appears in):
+- `Discountable`: discountable
+
+## What the dependencies do
+- Money [type, entity] (java:com.acme.order/Money): Type Money.
+- Priceable [type, entity] (java:com.acme.order/Priceable): Type Priceable.
+=== 62 operation java:com.acme.order/Order.<init>(java.lang.String,com.acme.order.Channel) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Order.<init>(java.lang.String,com.acme.order.Channel)
+
+## The unit
+### constructor `Order` (java:com.acme.order/Order.<init>(java.lang.String,com.acme.order.Channel)) — in type Order, in module com.acme.order
+Signature: ````
+<init>(java.lang.String,com.acme.order.Channel)
+````
+metrics: cyclomatic=1, sloc=4
+Source (com/acme/order/Order.java:20-23):
+````java
+    public Order(String reference, Channel channel) {
+        super(reference);
+        this.channel = channel;
+    }
+````
+Calls:
+- java:com.acme.order/AbstractOrder.<init>(java.lang.String) of AbstractOrder (corpus)
+Field accesses:
+- write Order.channel
+Words to define in `words` (each once, with every identifier it appears in):
+- `reference`: reference
+- `channel`: channel
+
+## What the dependencies do
+- java:com.acme.order/AbstractOrder.<init>(java.lang.String) [operation, owned by entity] (java:com.acme.order/AbstractOrder.<init>(java.lang.String)): Operation AbstractOrder.<init>(java.lang.String).
+=== 63 type java:com.acme.order/AbstractOrder codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/AbstractOrder
+
+## The unit
+### class `AbstractOrder` (java:com.acme.order/AbstractOrder) — in module com.acme.order
+metrics: sloc=15
+Documentation:
+````
+Shared state for every kind of order.
+````
+Source (com/acme/order/AbstractOrder.java:4-23):
+````java
+public abstract class AbstractOrder implements Discountable {
+
+    protected Money total;
+
+    private final String reference;
+
+    protected AbstractOrder(String reference) {
+        this.reference = reference;
+        this.total = Money.zero();
+    }
+
+    public String reference() {
+        return reference;
+    }
+
+    @Override
+    public Money price() {
+        return total;
+    }
+}
+````
+Supertypes:
+- implements Discountable
+Fields:
+- reference: String (class, external)
+- total: Money (record)
+Members, as already explained:
+- java:com.acme.order/AbstractOrder.<init>(java.lang.String) [operation, owned by entity] (java:com.acme.order/AbstractOrder.<init>(java.lang.String)): Operation AbstractOrder.<init>(java.lang.String).
+- price [operation, owned by entity] (java:com.acme.order/AbstractOrder.price()): Operation AbstractOrder.price().
+- reference [operation] (java:com.acme.order/AbstractOrder.reference()): Getter: returns the `reference` field of `AbstractOrder`.
+Words to define in `words` (each once, with every identifier it appears in):
+- `AbstractOrder`: order
+- `reference`: reference
+- `total`: total
+
+## What the dependencies do
+- Discountable [type, entity] (java:com.acme.order/Discountable): Type Discountable.
+- Money [type, entity] (java:com.acme.order/Money): Type Money.
+- Priceable [type, entity] (java:com.acme.order/Priceable): Type Priceable.
+=== 64 operation java:com.acme.order/Order.<init>(java.lang.String) codegraph_operation model=openai/gpt-5.6-luna system=dc45667c9ad4bd03
+# Unit: operation java:com.acme.order/Order.<init>(java.lang.String)
+
+## The unit
+### constructor `Order` (java:com.acme.order/Order.<init>(java.lang.String)) — in type Order, in module com.acme.order
+Signature: ````
+<init>(java.lang.String)
+````
+metrics: cyclomatic=1, sloc=3
+Source (com/acme/order/Order.java:16-18):
+````java
+    public Order(String reference) {
+        this(reference, Channel.WEB);
+    }
+````
+Calls:
+- java:com.acme.order/Order.<init>(java.lang.String,com.acme.order.Channel) of Order (corpus)
+Field accesses:
+- read Channel.WEB
+Words to define in `words` (each once, with every identifier it appears in):
+- `reference`: reference
+
+## What the dependencies do
+- java:com.acme.order/Order.<init>(java.lang.String,com.acme.order.Channel) [operation, owned by entity] (java:com.acme.order/Order.<init>(java.lang.String,com.acme.order.Channel)): Operation Order.<init>(java.lang.String,com.acme.order.Channel).
+=== 65 type java:com.acme.order/Order codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/Order
+
+## The unit
+### class `Order` (java:com.acme.order/Order) — in module com.acme.order
+metrics: sloc=20
+Documentation:
+````
+A customer order. The one-argument constructor delegates to the other.
+````
+Source (com/acme/order/Order.java:6-35):
+````java
+public class Order extends AbstractOrder {
+
+    /** A compile-time constant: the initializer folds across the arithmetic. */
+    public static final int MAX_LINES = 4 * 25;
+
+    /** Final, but NOT a constant: an initializer that is code carries no value. */
+    private final StringBuilder trail = new StringBuilder();
+
+    private final Channel channel;
+
+    public Order(String reference) {
+        this(reference, Channel.WEB);
+    }
+
+    public Order(String reference, Channel channel) {
+        super(reference);
+        this.channel = channel;
+    }
+
+    public Channel channel() {
+        return channel;
+    }
+
+    @Audited(LedgerClient.AUDIT_TAG)
+    @Override
+    public Money discount(int percent) {
+        // `total` is inherited from AbstractOrder, not declared here.
+        return total.times(100 - percent);
+    }
+}
+````
+Supertypes:
+- extends AbstractOrder
+Fields:
+- MAX_LINES = 100
+- channel: Channel (enum)
+- trail: StringBuilder (class, external)
+Members, as already explained:
+- java:com.acme.order/Order.<init>(java.lang.String) [operation, owned by entity] (java:com.acme.order/Order.<init>(java.lang.String)): Operation Order.<init>(java.lang.String).
+- java:com.acme.order/Order.<init>(java.lang.String,com.acme.order.Channel) [operation, owned by entity] (java:com.acme.order/Order.<init>(java.lang.String,com.acme.order.Channel)): Operation Order.<init>(java.lang.String,com.acme.order.Channel).
+- channel [operation] (java:com.acme.order/Order.channel()): Getter: returns the `channel` field of `Order`.
+- discount [operation, owned by entity] (java:com.acme.order/Order.discount(int)): Operation Order.discount(int).
+Words to define in `words` (each once, with every identifier it appears in):
+- `Order`: order
+- `MAX_LINES`: max, lines
+- `channel`: channel
+- `trail`: trail
+
+## What the dependencies do
+- AbstractOrder [type, entity] (java:com.acme.order/AbstractOrder): Type AbstractOrder.
+- Audited [type, entity] (java:com.acme.order/Audited): Type Audited.
+- Channel [type, entity] (java:com.acme.order/Channel): Type Channel.
+- Money [type, entity] (java:com.acme.order/Money): Type Money.
+- Priceable [type, entity] (java:com.acme.order/Priceable): Type Priceable.
+=== 66 type java:com.acme.order/Notifications codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/Notifications
+
+## The unit
+### class `Notifications` (java:com.acme.order/Notifications) — in module com.acme.order
+metrics: sloc=27
+Documentation:
+````
+Delivery hooks. Nothing invocable in here has a name of its own.
+````
+Source (com/acme/order/Notifications.java:6-39):
+````java
+public class Notifications {
+
+    private final Consumer<Order> onShipped = order -> log("shipped " + order.reference());
+
+    public Runnable both(Order order) {
+        return chain(() -> log("packing " + order.reference()), () -> log("shipping " + order.reference()));
+    }
+
+    public Runnable chain(Runnable first, Runnable second) {
+        return () -> {
+            first.run();
+            second.run();
+        };
+    }
+
+    public Priceable freeOf(Order order) {
+        return new Priceable() {
+
+            @Override
+            public Money price() {
+                log("free " + order.reference());
+                return Money.zero();
+            }
+        };
+    }
+
+    public void notifyShipped(Order order) {
+        onShipped.accept(order);
+    }
+
+    void log(String message) {
+        System.out.println(message);
+    }
+}
+````
+Fields:
+- onShipped: Consumer (class, external)
+Members, as already explained:
+- java:com.acme.order/Notifications.<init>() [operation, owned by entity] (java:com.acme.order/Notifications.<init>()): Operation Notifications.<init>().
+- both [operation, owned by entity] (java:com.acme.order/Notifications.both(com.acme.order.Order)): Operation Notifications.both(com.acme.order.Order).
+- chain [operation, owned by entity] (java:com.acme.order/Notifications.chain(java.lang.Runnable,java.lang.Runnable)): Operation Notifications.chain(java.lang.Runnable,java.lang.Runnable).
+- freeOf [operation, owned by entity] (java:com.acme.order/Notifications.freeOf(com.acme.order.Order)): Operation Notifications.freeOf(com.acme.order.Order).
+- log [operation, owned by entity] (java:com.acme.order/Notifications.log(java.lang.String)): Operation Notifications.log(java.lang.String).
+- notifyShipped [operation, owned by entity] (java:com.acme.order/Notifications.notifyShipped(com.acme.order.Order)): Operation Notifications.notifyShipped(com.acme.order.Order).
+Words to define in `words` (each once, with every identifier it appears in):
+- `Notifications`: notifications
+- `onShipped`: shipped
+
+## What the dependencies do
+- AbstractOrder [type, entity] (java:com.acme.order/AbstractOrder): Type AbstractOrder.
+- Money [type, entity] (java:com.acme.order/Money): Type Money.
+- Priceable [type, entity] (java:com.acme.order/Priceable): Type Priceable.
+- Order [type, entity] (java:com.acme.order/Order): Type Order.
+=== 67 type java:com.acme.order/OrderService codegraph_type model=openai/gpt-5.6-luna system=e269e40492f79aa0
+# Unit: type java:com.acme.order/OrderService
+
+## The unit
+### class `OrderService` (java:com.acme.order/OrderService) — in module com.acme.order
+metrics: sloc=19
+Documentation:
+````
+Billing and archival. Both {@code archive} overloads take a parameter whose
+simple name is {@code List}; only their packages differ.
+````
+Source (com/acme/order/OrderService.java:9-32):
+````java
+public class OrderService {
+
+    private final LedgerClient ledger;
+
+    public OrderService(LedgerClient ledger) {
+        this.ledger = ledger;
+    }
+
+    public Invoice bill(Order order) {
+        Invoice invoice = new Invoice(order.reference());
+        ledger.post(invoice);
+        return invoice;
+    }
+
+    public void archive(java.util.List<Order> orders) {
+        for (Order order : orders) {
+            ledger.archive(order.reference());
+        }
+    }
+
+    public void archive(com.acme.order.legacy.List orders) {
+        ledger.archive(orders.head());
+    }
+}
+````
+Fields:
+- ledger: LedgerClient (class, external)
+Members, as already explained:
+- java:com.acme.order/OrderService.<init>(com.megacorp.ledger.LedgerClient) [operation] (java:com.acme.order/OrderService.<init>(com.megacorp.ledger.LedgerClient)): Constructor: assigns the fields of `OrderService` (`ledger`).
+- archive [operation, owned by entity] (java:com.acme.order/OrderService.archive(com.acme.order.legacy.List)): Operation OrderService.archive(com.acme.order.legacy.List).
+- archive [operation, owned by entity] (java:com.acme.order/OrderService.archive(java.util.List)): Operation OrderService.archive(java.util.List).
+- bill [operation, owned by entity] (java:com.acme.order/OrderService.bill(com.acme.order.Order)): Operation OrderService.bill(com.acme.order.Order).
+Words to define in `words` (each once, with every identifier it appears in):
+- `OrderService`: order, service
+- `ledger`: ledger
+
+## What the dependencies do
+- List [type, entity] (java:com.acme.order.legacy/List): Type List.
+- AbstractOrder [type, entity] (java:com.acme.order/AbstractOrder): Type AbstractOrder.
+- Order [type, entity] (java:com.acme.order/Order): Type Order.
+=== 68 module java:com.acme.order codegraph_module model=openai/gpt-5.6-luna system=206d67daaf006b8b
+# Unit: module java:com.acme.order
+
+## The unit
+### package `com.acme.order` (java:com.acme.order)
+Imports:
+- com.megacorp.ledger ×2 (external)
+- java.lang.annotation ×2 (external)
+- java.time ×1 (external)
+- java.util ×4 (external)
+- java.util.function ×1 (external)
+Types in this module, as already explained:
+- AbstractOrder [type, entity] (java:com.acme.order/AbstractOrder): Type AbstractOrder.
+- Audited [type, entity] (java:com.acme.order/Audited): Type Audited.
+- Basket [type, entity] (java:com.acme.order/Basket): Type Basket.
+- Cursor [type, entity] (java:com.acme.order/Basket.Cursor): Type Basket.Cursor.
+- Line [type, entity] (java:com.acme.order/Basket.Line): Type Basket.Line.
+- Discount [type, entity] (java:com.acme.order/Basket.Line.Discount): Type Basket.Line.Discount.
+- Batch [type, entity] (java:com.acme.order/Batch): Type Batch.
+- Channel [type, entity] (java:com.acme.order/Channel): Type Channel.
+- Discountable [type, entity] (java:com.acme.order/Discountable): Type Discountable.
+- EmptyBasketException [type, entity] (java:com.acme.order/EmptyBasketException): Type EmptyBasketException.
+- Money [type, entity] (java:com.acme.order/Money): Type Money.
+- Notifications [type, entity] (java:com.acme.order/Notifications): Type Notifications.
+- Order [type, entity] (java:com.acme.order/Order): Type Order.
+- OrderService [type, entity] (java:com.acme.order/OrderService): Type OrderService.
+- Priceable [type, entity] (java:com.acme.order/Priceable): Type Priceable.
+- Reporting [type, entity] (java:com.acme.order/Reporting): Type Reporting.
+- StockGuard [type, entity] (java:com.acme.order/StockGuard): Type StockGuard.
+Words to define in `words` (each once, with every identifier it appears in):
+- `com.acme.order`: order
+Words its types define, heaviest first (reconcile each in `glossary`):
+- order
+  - AbstractOrder: domain, "order": order in AbstractOrder.
+  - Order: domain, "order": order in Order.
+  - OrderService: domain, "order": order in OrderService.
+- basket
+  - Basket: domain, "basket": basket in Basket.
+  - EmptyBasketException: domain, "basket": basket in EmptyBasketException.
+- channel
+  - Channel: domain, "channel": channel in Channel.
+  - Order: domain, "channel": channel in Order.
+- discount
+  - Discount: domain, "discount": discount in Basket.Line.Discount.
+- cursor
+  - Cursor: domain, "cursor": cursor in Basket.Cursor.
+- lines
+  - Basket: domain, "lines": lines in Basket.
+  - Order: domain, "lines": lines in Order.
+- total
+  - AbstractOrder: domain, "total": total in AbstractOrder.
+  - Basket: domain, "total": total in Basket.
+- reference
+  - AbstractOrder: domain, "reference": reference in AbstractOrder.
+- amount
+  - Line: domain, "amount": amount in Basket.Line.
+- line
+  - Line: domain, "line": line in Basket.Line.
+- audited
+  - Audited: domain, "audited": audited in Audited.
+- batch
+  - Batch: domain, "batch": batch in Batch.
+- cents
+  - Money: domain, "cents": cents in Money.
+- discountable
+  - Discountable: domain, "discountable": discountable in Discountable.
+- empty
+  - EmptyBasketException: domain, "empty": empty in EmptyBasketException.
+- exception
+  - EmptyBasketException: domain, "exception": exception in EmptyBasketException.
+- guard
+  - StockGuard: domain, "guard": guard in StockGuard.
+- money
+  - Money: domain, "money": money in Money.
+- notifications
+  - Notifications: domain, "notifications": notifications in Notifications.
+- priceable
+  - Priceable: domain, "priceable": priceable in Priceable.
+- reporting
+  - Reporting: domain, "reporting": reporting in Reporting.
+- service
+  - OrderService: domain, "service": service in OrderService.
+- stock
+  - StockGuard: domain, "stock": stock in StockGuard.
+- max
+  - Order: domain, "max": max in Order.
+- shipped
+  - Notifications: domain, "shipped": shipped in Notifications.
+- counts
+  - Batch: domain, "counts": counts in Batch.
+- ledger
+  - OrderService: domain, "ledger": ledger in OrderService.
+- prices
+  - Batch: domain, "prices": prices in Batch.
+- index
+  - Cursor: domain, "index": index in Basket.Cursor.
+- phone
+  - Channel: domain, "phone": phone in Channel.
+- store
+  - Channel: domain, "store": store in Channel.
+- trail
+  - Order: domain, "trail": trail in Order.
+- web
+  - Channel: domain, "web": web in Channel.
+
+## What the dependencies do
+(no dependencies inside the corpus)

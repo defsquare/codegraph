@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readModelFileSync, type Model } from "@codegraph/core";
+import { buildGraph, loadModels } from "@codegraph/analyzer";
 import { contextPackFor, type ContextEnv } from "../src/context.js";
 import { buildWalk } from "../src/order.js";
 import { estimateTokens, renderPrompts } from "../src/prompt.js";
@@ -6,7 +10,7 @@ import { memoryBook } from "../src/records.js";
 import { unitHashes } from "../src/plan.js";
 import type { InsightRecord, OperationBlock, TypeBlock, WordEntry } from "../src/schema.js";
 import { createSourceReader, mapReader } from "../src/source.js";
-import { edge, field, graphOf, method, pkg, prepared, toySpeller, type } from "./fixture.js";
+import { EXPLAIN, edge, field, graphOf, method, pkg, prepared, toySpeller, type } from "./fixture.js";
 
 const P = "java:p";
 const T = "java:p/T";
@@ -52,12 +56,13 @@ function corpus() {
     facts,
     units,
     reader,
-    records: memoryBook(records),
+    records: memoryBook(records, EXPLAIN),
     unitOf: plan.unitOf,
     depth,
     maxLines: 200,
     speller: toySpeller(graph),
     terms: 60,
+    spec: EXPLAIN,
   });
   return { graph, plan, env };
 }
@@ -140,7 +145,7 @@ describe("cycle prompts", () => {
     const graph = graphOf(entities, edges);
     const { facts, units } = prepared(graph);
     const plan = buildWalk(units, graph);
-    const env: ContextEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map())), records: memoryBook(), unitOf: plan.unitOf, depth: 1, maxLines: 50, speller: toySpeller(graph), terms: 60 };
+    const env: ContextEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map())), records: memoryBook([], EXPLAIN), unitOf: plan.unitOf, depth: 1, maxLines: 50, speller: toySpeller(graph), terms: 60, spec: EXPLAIN };
     return contextPackFor(plan.unitOf.get(m("c0"))!, env);
   }
 
@@ -183,7 +188,7 @@ describe("words to define (PLAN.md §20.3)", () => {
     ]);
     const { facts, units } = prepared(graph);
     const plan = buildWalk(units, graph);
-    const book = memoryBook(records);
+    const book = memoryBook(records, EXPLAIN);
     let wordReads = 0;
     const env: ContextEnv = {
       graph,
@@ -196,6 +201,7 @@ describe("words to define (PLAN.md §20.3)", () => {
       maxLines: 50,
       speller: toySpeller(graph, { [SHOP]: ranked }),
       terms,
+      spec: EXPLAIN,
     };
     const pack = (id: string) => contextPackFor(plan.unitOf.get(id)!, env);
     return { pack, reads: () => wordReads };
@@ -276,7 +282,7 @@ describe("words to define (PLAN.md §20.3)", () => {
     const graph = graphOf([pkg("java:p"), type("java:p/T", "java:p")]);
     const { facts, units } = prepared(graph);
     const plan = buildWalk(units, graph);
-    const env: ContextEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map())), records: memoryBook(), unitOf: plan.unitOf, depth: 1, maxLines: 50, speller: toySpeller(graph), terms: 60 };
+    const env: ContextEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map())), records: memoryBook([], EXPLAIN), unitOf: plan.unitOf, depth: 1, maxLines: 50, speller: toySpeller(graph), terms: 60, spec: EXPLAIN };
     const [prompt] = renderPrompts(contextPackFor(plan.unitOf.get("java:p")!, env), 12);
     expect(prompt!.user).not.toContain("Words its types define");
     expect(prompt!.asked).toEqual({ words: 1, glossary: 0 });
@@ -305,5 +311,67 @@ describe("words to define (PLAN.md §20.3)", () => {
     expect(fp(shop([], 3).pack(SHOP))).not.toBe(base);
     expect(fp(shop([], 60, ["line", "order", "price", "sort", "unit", "key", "shop"]).pack(SHOP))).not.toBe(base);
     expect(fp(shop([], 60).pack(PLACE))).toBe(fp(shop([], 3).pack(PLACE)));
+  });
+});
+
+describe("the source fence says the member's language (PLAN.md §22.6 step 5)", () => {
+  const REPO = new URL("../../../", import.meta.url);
+  const modelOf = (fixture: string): Model => readModelFileSync(fileURLToPath(new URL(`fixtures/${fixture}/expected/model.jsonl`, REPO)));
+  const readerOf = (...fixtures: readonly string[]) =>
+    createSourceReader((relative) => {
+      for (const fixture of fixtures) {
+        try {
+          return readFileSync(fileURLToPath(new URL(`fixtures/${fixture}/src/${relative}`, REPO)), "utf8");
+        } catch {
+          // the next root
+        }
+      }
+      return undefined;
+    });
+
+  /** Every unit's prompts, as [unit, member id, the fence line under its "Source (…):" label]. */
+  function sourceFences(models: readonly Model[], fixtures: readonly string[]): [string, string][] {
+    const graph = buildGraph(loadModels([...models], { sources: [...fixtures] }).union);
+    const { facts, units } = prepared(graph);
+    const walk = buildWalk(units, graph);
+    const env: ContextEnv = { graph, facts, units, reader: readerOf(...fixtures), records: memoryBook([], EXPLAIN), unitOf: walk.unitOf, depth: 1, maxLines: 200, speller: toySpeller(graph), terms: 60, spec: EXPLAIN };
+    const out: [string, string][] = [];
+    for (const unit of walk.units) {
+      const pack = contextPackFor(unit, env);
+      for (const prompt of renderPrompts(pack, 12)) {
+        const lines = prompt.user.split("\n");
+        let member = "";
+        lines.forEach((line, i) => {
+          const heading = pack.members.find((m) => line.startsWith("### ") && line.includes(`(${m.id})`));
+          if (heading !== undefined) member = heading.id;
+          if (/^Source \(.*\):$/u.test(lines[i - 1] ?? "")) out.push([member, line]);
+        });
+      }
+    }
+    return out;
+  }
+
+  it.each([
+    ["java", "java"],
+    ["csharp", "csharp"],
+    ["typescript", "ts"],
+    ["elixir", "ex"],
+    ["ruby", "rb"],
+  ])("%s: every source fence opens ````%s, the model's lang", (fixture, lang) => {
+    const model = modelOf(fixture);
+    expect(model.lang).toBe(lang);
+    const fences = sourceFences([model], [fixture]);
+    expect(fences.length).toBeGreaterThan(0);
+    expect([...new Set(fences.map(([, line]) => line))]).toEqual([`\`\`\`\`${lang}`]);
+  });
+
+  it("per member, in a union of two languages: each fence is its own model's", () => {
+    const java = modelOf("java");
+    const ts = modelOf("typescript");
+    const declaredBy = new Map<string, string>();
+    for (const model of [java, ts]) for (const entity of model.entities) if (!declaredBy.has(entity.id)) declaredBy.set(entity.id, model.lang);
+    const fences = sourceFences([java, ts], ["java", "typescript"]);
+    expect(new Set(fences.map(([member]) => declaredBy.get(member)))).toEqual(new Set(["java", "ts"]));
+    for (const [member, line] of fences) expect(line, member).toBe(`\`\`\`\`${declaredBy.get(member)}`);
   });
 });

@@ -16,6 +16,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url));
+const SRC = fileURLToPath(new URL("../../../fixtures/java/src", import.meta.url));
 
 function invoke(argv: readonly string[]): {
   code: number;
@@ -115,6 +116,21 @@ describe("dispatch reaches every command", () => {
     expect(result.code).toBe(EXIT.OK);
     expect(result.code).not.toBe(EXIT.INTERNAL);
     expect(result.stdout.length, `${_name} produced no artifact`).toBeGreaterThan(0);
+  });
+
+  // The two commands that await a model provider are loaded on demand and return a promise: reached all the same.
+  it.each([
+    ["walk", ["walk", "--print-definition"]],
+    ["walk", ["walk", FIXTURE, "--src", SRC, "--no-cache", "--prompt", "Why?", "--dry-run", "--json"]],
+    ["explain", ["explain", FIXTURE, "--src", SRC, "--no-cache", "--dry-run", "--json"]],
+  ] as const)("%s is wired, lazily, and runs: %s", async (_name, argv) => {
+    const io = captureIo();
+    const outcome = run(argv, io);
+    expect(outcome).toBeInstanceOf(Promise);
+    const code = await outcome;
+    expect(code, io.stderr()).toBe(EXIT.OK);
+    expect(() => JSON.parse(io.stdout()) as unknown).not.toThrow();
+    expect(io.files().size).toBe(0);
   });
 
   it("has no seam placeholder left anywhere in src", () => {

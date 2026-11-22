@@ -1,7 +1,8 @@
 import { accessSync, constants } from "node:fs";
 import { basename, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { FOLD_LEVELS, FRAMEWORK_PROFILES, type FoldLevel } from "@codegraph/analyzer";
+import { FOLD_LEVELS, FRAMEWORK_PROFILES, SelectorError, parseTerm, type FoldLevel, type Selector } from "@codegraph/analyzer";
+import { CLOSURES, EXPLAIN_WALK_NAME, WALK_NAME_PATTERN, type Closure } from "@codegraph/insights";
 import { METRIC_PREFIXES, SCALES, metricNames } from "@codegraph/city";
 import { SCOPE_LEVELS, TERM_CLASSES, WEIGHT_KEYS, type ScopeLevel, type TermClass, type WeightKey } from "@codegraph/vocabulary";
 import { defaultDataDir } from "./app/store.js";
@@ -31,6 +32,7 @@ export const COMMAND_NAMES = [
   "serve",
   "domain-facts",
   "explain",
+  "walk",
   "insights",
   "scm",
   "snapshots",
@@ -92,6 +94,8 @@ export interface OptionSpec {
   readonly integer?: boolean | undefined;
   /** Value used when the flag is absent, shown in the help text. */
   readonly defaultValue?: string | undefined;
+  /** A string flag that may be given several times (`--include A --include B`): its values, in order. */
+  readonly multiple?: boolean | undefined;
 }
 
 export interface PositionalSpec {
@@ -527,7 +531,7 @@ export const SERVE_SPEC: CommandSpec = {
       name: "insights",
       type: "string",
       describe:
-        "The insights store behind the page's explanation panel and the Vocabulary tab's glossary (what 'codegraph explain' wrote). " +
+        "The insights store behind the page's explanation panel and the Vocabulary tab's glossary (what 'codegraph explain' wrote), or a walk's store (what 'codegraph walk' wrote: the panel shows the walk's answers, the glossary has none). " +
         "Default: <model>.insights.db beside the first model; with none, or one an older codegraph wrote that no 'codegraph explain' has migrated yet, the page shows no explanations.",
       placeholder: "FILE",
     },
@@ -582,117 +586,251 @@ export const DEFAULT_EXPLAIN_MODEL = "openai/gpt-5.6-luna";
  * not load the provider package (and with it the SDK) for every command.
  */
 export const DEFAULT_CLAUDE_CODE_MODEL = "sonnet";
+/** `--terms`: the words a module's glossary reconciles — explain's; a walk asks none and passes it unchanged. */
+export const DEFAULT_TERMS = 60;
 /** `--provider` values: the three adapters of @codegraph/llm, or pick from the environment. */
 export const EXPLAIN_PROVIDERS = ["auto", "openrouter", "cloudflare", "claude-code"] as const;
 export type ExplainProvider = (typeof EXPLAIN_PROVIDERS)[number];
+
+/**
+ * THE RUN FLAGS `explain` AND `walk` SHARE (PLAN.md §22.5): one table, both
+ * commands' options built from it (`runOptions`), so a flag added to one is a
+ * flag of both. Each command's own flags go after `--max-scc`; a walk restates
+ * a few descriptions in its own words (`WALK_WORDING`), never the flag list.
+ */
+const RUN_OPTIONS: readonly OptionSpec[] = [
+  {
+    name: "src",
+    type: "string",
+    describe:
+      "The source root the model's anchors are relative to. Defaults to the model's own " +
+      "`root`, resolved against the current directory.",
+    placeholder: "DIR",
+  },
+  {
+    name: "out",
+    type: "string",
+    describe: "The side-car to write (and to resume from). Defaults to <model>.insights.jsonl.",
+    placeholder: "FILE",
+  },
+  {
+    name: "provider",
+    type: "string",
+    describe:
+      "Where the model calls go: openrouter (OPENROUTER_API_KEY), cloudflare — Cloudflare AI " +
+      "Gateway's REST API (CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID, optional " +
+      "CLOUDFLARE_AI_GATEWAY_ID) — or claude-code, the local Claude Code CLI in headless mode " +
+      "(`claude -p`, Sonnet by default, no key). auto picks whichever is configured; with " +
+      "several, OpenRouter, then Cloudflare, then Claude Code.",
+    choices: [...EXPLAIN_PROVIDERS],
+    placeholder: "NAME",
+    defaultValue: "auto",
+  },
+  {
+    name: "claude-path",
+    type: "string",
+    describe:
+      "The Claude Code binary. Under --provider auto it implies claude-code; with openrouter or " +
+      "cloudflare it is an error. Otherwise CLAUDE_CODE_PATH, then `claude` on PATH, then the known " +
+      "install locations; a path that does not exist is an error, never a fall-through.",
+    placeholder: "FILE",
+  },
+  {
+    name: "model",
+    type: "string",
+    describe:
+      `Model slug for operations (the leaves). Defaults per provider: ${DEFAULT_EXPLAIN_MODEL} ` +
+      `(author/model form) on openrouter and cloudflare, ${DEFAULT_CLAUDE_CODE_MODEL} on claude-code ` +
+      "— an alias Claude Code resolves to the latest Sonnet; a full id such as claude-sonnet-5-5 " +
+      "pins the fingerprint.",
+    placeholder: "SLUG",
+  },
+  {
+    name: "rollup-model",
+    type: "string",
+    describe: "Model slug for types and modules; defaults to --model.",
+    placeholder: "SLUG",
+  },
+  {
+    name: "depth",
+    type: "string",
+    describe: "How many levels of dependency explanations a prompt carries.",
+    placeholder: "N",
+    integer: true,
+    defaultValue: "1",
+  },
+  {
+    name: "max-calls",
+    type: "string",
+    describe: "Stop planning model calls after this many; what runs is a dependency-consistent prefix.",
+    placeholder: "N",
+    integer: true,
+  },
+  {
+    name: "max-tokens",
+    type: "string",
+    describe:
+      "Cap on the tokens one answer may use (reasoning included). Omitted, the provider assumes " +
+      "the model's full output window and a prepaid account must afford THAT for every call; a " +
+      "block is ~1k tokens, a full cycle call ~12k. An answer cut at the cap fails its unit. " +
+      "Does not apply to claude-code (the CLI has no output cap): noted on stderr, ignored.",
+    placeholder: "N",
+    integer: true,
+  },
+  {
+    name: "concurrency",
+    type: "string",
+    describe: "Model calls in flight at once.",
+    placeholder: "N",
+    integer: true,
+    defaultValue: "4",
+  },
+  {
+    name: "max-lines",
+    type: "string",
+    describe: "Source lines shown per unit before the middle is elided.",
+    placeholder: "N",
+    integer: true,
+    defaultValue: "200",
+  },
+  {
+    name: "max-scc",
+    type: "string",
+    describe: "Members of a dependency cycle explained in one call; larger cycles are chunked.",
+    placeholder: "N",
+    integer: true,
+    defaultValue: "12",
+  },
+  {
+    name: "framework",
+    type: "string",
+    describe: "Add a framework's stereotypes and entry points to the facts shown.",
+    choices: Object.keys(FRAMEWORK_PROFILES),
+    placeholder: "NAME",
+  },
+  ...VIEW_OPTIONS,
+  NO_CACHE_OPTION,
+  {
+    name: "dry-run",
+    type: "boolean",
+    describe: "Print the plan — units, order, statuses, estimated tokens — and make no call.",
+  },
+  {
+    name: "estimate",
+    type: "boolean",
+    describe:
+      "Print the token volume this run would send and receive (input and output, per level) " +
+      "and make no call. Add --price-in/--price-out for a cost.",
+  },
+  {
+    name: "price-in",
+    type: "string",
+    describe: "Input price in USD per million tokens, for the estimate's cost line.",
+    placeholder: "USD",
+  },
+  {
+    name: "price-out",
+    type: "string",
+    describe: "Output price in USD per million tokens, for the estimate's cost line.",
+    placeholder: "USD",
+  },
+  {
+    name: "force",
+    type: "boolean",
+    describe: "Re-explain every unit, ignoring records whose fingerprint still matches.",
+  },
+  {
+    name: "retry-failed",
+    type: "boolean",
+    describe:
+      "Redo only the units the side-car records as failed (its `t:\"f\"` lines, each with the " +
+      "reason), plus their direct dependents, which were explained without them. Everything " +
+      "else is reused or left alone. Pass the same --model/--depth as the run that failed.",
+  },
+  {
+    name: "export",
+    type: "boolean",
+    describe:
+      "Write the side-car from the insights store (<model>.insights.db) and stop: no model is " +
+      "read, no call is made. Every run ends with this export; use it after an interrupted one.",
+  },
+  {
+    name: "import",
+    type: "string",
+    describe:
+      "REPLACE the insights store's records with those of a side-car (one edited by hand, or " +
+      "one from another machine) and stop. Asks first when the store holds records; --yes skips it.",
+    placeholder: "FILE",
+  },
+  {
+    name: "yes",
+    type: "boolean",
+    short: "y",
+    describe:
+      "Run without asking. Otherwise a run that makes model calls prints its token estimate " +
+      "and waits for confirmation — which needs an interactive terminal.",
+  },
+  JSON_OPTION,
+];
+
+/** The run flags with a command's own after `--max-scc`, each description reworded where `wording` says. */
+function runOptions(own: readonly OptionSpec[], wording: Readonly<Record<string, Partial<OptionSpec>>> = {}): readonly OptionSpec[] {
+  const at = RUN_OPTIONS.findIndex((option) => option.name === "max-scc") + 1;
+  return [...RUN_OPTIONS.slice(0, at), ...own, ...RUN_OPTIONS.slice(at)].map((option) => ({ ...option, ...wording[option.name] }));
+}
+
+/** `--closure` values, the selection's (PLAN.md §22.3 rule 4). */
+export const WALK_CLOSURES: readonly Closure[] = CLOSURES;
+
+/** The selection flags both commands take (PLAN.md §22.5): each an analyzer selector term, compiled by the walk's view. */
+const SELECTION_OPTIONS: readonly OptionSpec[] = [
+  {
+    name: "include",
+    type: "string",
+    multiple: true,
+    describe:
+      "Ask only the units whose member — itself, its nearest type or its nearest module — matches this selector term: " +
+      "id:ID, kind:K, trait:T, lang:L, name:GLOB, module:GLOB, file:GLOB, edge:KIND[>TERM], edge-in:KIND[<TERM]. " +
+      "Repeatable: several are any of them. The walk is still built over the whole model.",
+    placeholder: "SEL",
+  },
+  {
+    name: "exclude",
+    type: "string",
+    multiple: true,
+    describe: "Never ask a unit whose member (itself, its nearest type or module) matches this term; wins over --include. Repeatable.",
+    placeholder: "SEL",
+  },
+  {
+    name: "levels",
+    type: "string",
+    describe: "Comma-separated levels to ask: operation, type, module (all three unless given).",
+    placeholder: "LEVELS",
+  },
+  {
+    name: "closure",
+    type: "string",
+    describe:
+      "Also ask what the selection leans on: dependencies (every unit it depends on, so each asked prompt sees its " +
+      "callees answered), containers (the type and module above it), all (both). none unless given.",
+    choices: CLOSURES,
+  },
+];
+
+const INSTRUCTIONS_OPTION: OptionSpec = {
+  name: "instructions",
+  type: "string",
+  describe:
+    "Instructions added to every unit's system message, after the task (a definition's prompt.instructions); " +
+    "@FILE reads them from a file. Every unit asked under them is asked again when they change.",
+  placeholder: "TEXT|@FILE",
+};
 
 export const EXPLAIN_SPEC: CommandSpec = {
   name: "explain",
   summary: "Explain every operation, type and module with an LLM, bottom-up, into a side-car.",
   positional: MODELS_POSITIONAL_DEFAULTED,
-  options: [
-    {
-      name: "src",
-      type: "string",
-      describe:
-        "The source root the model's anchors are relative to. Defaults to the model's own " +
-        "`root`, resolved against the current directory.",
-      placeholder: "DIR",
-    },
-    {
-      name: "out",
-      type: "string",
-      describe: "The side-car to write (and to resume from). Defaults to <model>.insights.jsonl.",
-      placeholder: "FILE",
-    },
-    {
-      name: "provider",
-      type: "string",
-      describe:
-        "Where the model calls go: openrouter (OPENROUTER_API_KEY), cloudflare — Cloudflare AI " +
-        "Gateway's REST API (CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID, optional " +
-        "CLOUDFLARE_AI_GATEWAY_ID) — or claude-code, the local Claude Code CLI in headless mode " +
-        "(`claude -p`, Sonnet by default, no key). auto picks whichever is configured; with " +
-        "several, OpenRouter, then Cloudflare, then Claude Code.",
-      choices: [...EXPLAIN_PROVIDERS],
-      placeholder: "NAME",
-      defaultValue: "auto",
-    },
-    {
-      name: "claude-path",
-      type: "string",
-      describe:
-        "The Claude Code binary. Under --provider auto it implies claude-code; with openrouter or " +
-        "cloudflare it is an error. Otherwise CLAUDE_CODE_PATH, then `claude` on PATH, then the known " +
-        "install locations; a path that does not exist is an error, never a fall-through.",
-      placeholder: "FILE",
-    },
-    {
-      name: "model",
-      type: "string",
-      describe:
-        `Model slug for operations (the leaves). Defaults per provider: ${DEFAULT_EXPLAIN_MODEL} ` +
-        `(author/model form) on openrouter and cloudflare, ${DEFAULT_CLAUDE_CODE_MODEL} on claude-code ` +
-        "— an alias Claude Code resolves to the latest Sonnet; a full id such as claude-sonnet-5-5 " +
-        "pins the fingerprint.",
-      placeholder: "SLUG",
-    },
-    {
-      name: "rollup-model",
-      type: "string",
-      describe: "Model slug for types and modules; defaults to --model.",
-      placeholder: "SLUG",
-    },
-    {
-      name: "depth",
-      type: "string",
-      describe: "How many levels of dependency explanations a prompt carries.",
-      placeholder: "N",
-      integer: true,
-      defaultValue: "1",
-    },
-    {
-      name: "max-calls",
-      type: "string",
-      describe: "Stop planning model calls after this many; what runs is a dependency-consistent prefix.",
-      placeholder: "N",
-      integer: true,
-    },
-    {
-      name: "max-tokens",
-      type: "string",
-      describe:
-        "Cap on the tokens one answer may use (reasoning included). Omitted, the provider assumes " +
-        "the model's full output window and a prepaid account must afford THAT for every call; a " +
-        "block is ~1k tokens, a full cycle call ~12k. An answer cut at the cap fails its unit. " +
-        "Does not apply to claude-code (the CLI has no output cap): noted on stderr, ignored.",
-      placeholder: "N",
-      integer: true,
-    },
-    {
-      name: "concurrency",
-      type: "string",
-      describe: "Model calls in flight at once.",
-      placeholder: "N",
-      integer: true,
-      defaultValue: "4",
-    },
-    {
-      name: "max-lines",
-      type: "string",
-      describe: "Source lines shown per unit before the middle is elided.",
-      placeholder: "N",
-      integer: true,
-      defaultValue: "200",
-    },
-    {
-      name: "max-scc",
-      type: "string",
-      describe: "Members of a dependency cycle explained in one call; larger cycles are chunked.",
-      placeholder: "N",
-      integer: true,
-      defaultValue: "12",
-    },
+  options: runOptions([
     {
       name: "terms",
       type: "string",
@@ -709,76 +847,76 @@ export const EXPLAIN_SPEC: CommandSpec = {
         "are reused when already explained, never called).",
       placeholder: "IDS",
     },
+    ...SELECTION_OPTIONS,
+    INSTRUCTIONS_OPTION,
     {
-      name: "framework",
-      type: "string",
-      describe: "Add a framework's stereotypes and entry points to the facts shown.",
-      choices: Object.keys(FRAMEWORK_PROFILES),
-      placeholder: "NAME",
-    },
-    ...VIEW_OPTIONS,
-    NO_CACHE_OPTION,
-    {
-      name: "dry-run",
-      type: "boolean",
-      describe: "Print the plan — units, order, statuses, estimated tokens — and make no call.",
-    },
-    {
-      name: "estimate",
-      type: "boolean",
-      describe:
-        "Print the token volume this run would send and receive (input and output, per level) " +
-        "and make no call. Add --price-in/--price-out for a cost.",
-    },
-    {
-      name: "price-in",
-      type: "string",
-      describe: "Input price in USD per million tokens, for the estimate's cost line.",
-      placeholder: "USD",
-    },
-    {
-      name: "price-out",
-      type: "string",
-      describe: "Output price in USD per million tokens, for the estimate's cost line.",
-      placeholder: "USD",
-    },
-    {
-      name: "force",
-      type: "boolean",
-      describe: "Re-explain every unit, ignoring records whose fingerprint still matches.",
-    },
-    {
-      name: "retry-failed",
-      type: "boolean",
-      describe:
-        "Redo only the units the side-car records as failed (its `t:\"f\"` lines, each with the " +
-        "reason), plus their direct dependents, which were explained without them. Everything " +
-        "else is reused or left alone. Pass the same --model/--depth as the run that failed.",
-    },
-    {
-      name: "export",
-      type: "boolean",
-      describe:
-        "Write the side-car from the insights store (<model>.insights.db) and stop: no model is " +
-        "read, no call is made. Every run ends with this export; use it after an interrupted one.",
-    },
-    {
-      name: "import",
+      name: "walk",
       type: "string",
       describe:
-        "REPLACE the insights store's records with those of a side-car (one edited by hand, or " +
-        "one from another machine) and stop. Asks first when the store holds records; --yes skips it.",
+        "A codegraph.walk/1 file customizing explain: select, exclude, levels, closure, context, prompt.instructions " +
+        "and prompt.entities (never prompt.task, answer, trivial, another name or version: explain's answer is the " +
+        "Specy blocks). A flag replaces the file's key. `codegraph walk --print-definition explain` prints one.",
       placeholder: "FILE",
     },
+  ]),
+};
+
+/** A walk's words for the run flags whose descriptions name explain's files or explain's verb. */
+const WALK_WORDING: Readonly<Record<string, Partial<OptionSpec>>> = {
+  out: { describe: "The side-car to write (and to resume from). Defaults to <model>.N.walk.jsonl, N the walk's name; its store is the same path with .db." },
+  depth: { describe: "How many levels of dependency answers a prompt carries. Replaces the definition's context.depth (1 by default).", defaultValue: undefined },
+  "max-lines": { describe: "Source lines shown per unit before the middle is elided. Replaces the definition's context.maxLines (200 by default).", defaultValue: undefined },
+  "max-scc": { describe: "Members of a dependency cycle asked in one call; larger cycles are chunked." },
+  force: { describe: "Ask every selected unit again, ignoring records whose fingerprint still matches." },
+  "retry-failed": {
+    describe:
+      "Redo only the units the walk's store records as failed, plus their direct dependents, which were answered " +
+      "without them; the selection is theirs, so no selection flag goes with it. Pass the same --model/--depth.",
+  },
+  export: { describe: "Write the side-car from the walk's store (<model>.N.walk.db) and stop: no model is read, no call is made." },
+  import: { describe: "REPLACE the walk's store's records with those of one of its side-cars and stop. Asks first when the store holds records; --yes skips it." },
+};
+
+export const WALK_SPEC: CommandSpec = {
+  name: "walk",
+  summary: "Ask a question of every selected unit, bottom-up, with an LLM: a prompt or a walk definition, into its own store.",
+  positional: MODELS_POSITIONAL_DEFAULTED,
+  options: [
     {
-      name: "yes",
-      type: "boolean",
-      short: "y",
+      name: "walk",
+      type: "string",
       describe:
-        "Run without asking. Otherwise a run that makes model calls prints its token estimate " +
-        "and waits for confirmation — which needs an interactive terminal.",
+        "The walk to run: a codegraph.walk/1 definition file, or `explain`, the built-in (explain's spec, store and " +
+        "defaults). Neither: the default definition (name adhoc), asking --prompt.",
+      placeholder: "FILE|explain",
     },
-    JSON_OPTION,
+    {
+      name: "prompt",
+      type: "string",
+      describe: "The task asked of every unit, at every level (replaces the definition's prompt.task).",
+      placeholder: "TEXT",
+    },
+    {
+      name: "prompt-file",
+      type: "string",
+      describe: "The same task, read from a file.",
+      placeholder: "FILE",
+    },
+    INSTRUCTIONS_OPTION,
+    {
+      name: "name",
+      type: "string",
+      describe:
+        "The walk's name (replaces the definition's name): its store is <model>.N.walk.db. A store is only ever " +
+        "opened by the walk that wrote it, so --name OTHER keeps two definitions' answers apart. explain and insights are reserved.",
+      placeholder: "N",
+    },
+    {
+      name: "print-definition",
+      type: "boolean",
+      describe: "Print the default walk definition as JSON — or, followed by `explain`, explain's — and stop: a file to start from. No model is read.",
+    },
+    ...runOptions(SELECTION_OPTIONS, WALK_WORDING),
   ],
 };
 
@@ -789,11 +927,12 @@ export type InsightLevel = (typeof INSIGHT_LEVELS)[number];
 /**
  * `codegraph insights`: the first READER of the insights store (PLAN.md §17.3,
  * M16c). It opens `<model>.insights.db` and nothing else — not the model, not
- * the side-car, no provider — so the positional only says WHICH store.
+ * the side-car, no provider — so the positional only says WHICH store. A walk's
+ * store, `<model>.N.walk.db`, is read with `--walk N` (PLAN.md §22.5).
  */
 export const INSIGHTS_SPEC: CommandSpec = {
   name: "insights",
-  summary: "Query what `explain` has written: a summary, a list, one explanation, the words and their glossary, the run ledger.",
+  summary: "Query what `explain` — or a walk, --walk N — has written: a summary, a list, one explanation, the words and their glossary, the run ledger.",
   positional: {
     name: "model.jsonl",
     describe: "The model whose insights store (<model>.insights.db, beside it) to read. The model itself is not opened.",
@@ -805,8 +944,18 @@ export const INSIGHTS_SPEC: CommandSpec = {
     {
       name: "store",
       type: "string",
-      describe: "Read this store instead of the one beside the model (explain --out FILE puts it at FILE with .db for .jsonl).",
+      describe:
+        "Read this store instead of the one beside the model (explain --out FILE puts it at FILE with .db for .jsonl) — " +
+        "explain's or a walk's, as its header says, unless --walk names whose it must be.",
       placeholder: "FILE",
+    },
+    {
+      name: "walk",
+      type: "string",
+      describe:
+        "Read the store of the walk N (<model>.N.walk.db, beside the model) instead of explain's: its answers and fields, " +
+        "listed and shown as they are; a concept or words, which only explain asks for, are none. 'explain' is the default.",
+      placeholder: "N",
     },
     {
       name: "id",
@@ -1220,6 +1369,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   SERVE_SPEC,
   DOMAIN_FACTS_SPEC,
   EXPLAIN_SPEC,
+  WALK_SPEC,
   INSIGHTS_SPEC,
   SCM_SPEC,
   SNAPSHOTS_SPEC,
@@ -1342,10 +1492,11 @@ export interface DomainFactsOptions extends ModelInputOptions, ViewOptions, Cach
   readonly out: string | undefined;
 }
 
-export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOptions {
+/** The run flags `explain` and `walk` share (`RUN_OPTIONS`), resolved. */
+export interface RunFlags extends ModelInputOptions, ViewOptions, CacheOptions {
   /** `--src DIR`; undefined = the model's `root`. */
   readonly src: string | undefined;
-  /** `--out FILE`; undefined = `<model>.insights.jsonl` beside the first model. */
+  /** `--out FILE`; undefined = the walk's side-car beside the first model (`<model>.insights.jsonl` for explain). */
   readonly out: string | undefined;
   /** `--provider`; `auto` resolves from the environment (and the Claude Code discovery) at run time. */
   readonly provider: ExplainProvider;
@@ -1355,6 +1506,7 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly model: string | undefined;
   /** `--rollup-model`; undefined = the resolved `--model`. */
   readonly rollupModel: string | undefined;
+  /** `--depth`, defaulted; `typed.depth` says whether it was typed (a definition's `context` gives way only then). */
   readonly depth: number;
   readonly maxCalls: number | undefined;
   /** `--max-tokens`; undefined = the provider's default (the model's whole output window). */
@@ -1362,10 +1514,8 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly concurrency: number;
   readonly maxLines: number;
   readonly maxScc: number;
-  /** `--terms N`: a module's glossary keeps its heaviest N words. */
-  readonly terms: number;
-  /** `--scope a,b`; empty = everything. */
-  readonly scope: readonly string[];
+  /** The context flags as TYPED, undefined when absent: they replace a definition's `context` keys. */
+  readonly typed: { readonly depth: number | undefined; readonly maxLines: number | undefined };
   readonly framework: string | undefined;
   readonly dryRun: boolean;
   /** `--estimate`: the token-volume report, no call. */
@@ -1376,13 +1526,47 @@ export interface ExplainOptions extends ModelInputOptions, ViewOptions, CacheOpt
   readonly force: boolean;
   /** `--retry-failed`: the scope is the store's failure records. */
   readonly retryFailed: boolean;
-  /** `--export`: write the side-car from the insights store, and nothing else. */
+  /** `--export`: write the side-car from the walk's store, and nothing else. */
   readonly exportOnly: boolean;
-  /** `--import FILE`: replace the insights store's content with that side-car, and nothing else. */
+  /** `--import FILE`: replace the walk's store's content with that side-car, and nothing else. */
   readonly importFrom: string | undefined;
   /** `--yes`: skip the estimate-and-confirm step before a run that makes calls. */
   readonly yes: boolean;
   readonly json: boolean;
+}
+
+/** The selection flags (PLAN.md §22.5), parsed: undefined = not given, so a definition's key stands. */
+export interface SelectionFlags {
+  /** `--include SEL`, each one term (`parseTerm`); several are any of them. */
+  readonly include: readonly Selector[];
+  readonly exclude: readonly Selector[];
+  readonly levels: readonly InsightLevel[] | undefined;
+  readonly closure: Closure | undefined;
+}
+
+export interface ExplainOptions extends RunFlags, SelectionFlags {
+  /** `--terms N`: a module's glossary keeps its heaviest N words. */
+  readonly terms: number;
+  /** `--scope a,b`; empty = everything. Sugar for `--include id:a --include id:b`. */
+  readonly scope: readonly string[];
+  /** `--instructions TEXT|@FILE`, as typed; undefined = none (or the `--walk` file's). */
+  readonly instructions: string | undefined;
+  /** `--walk FILE`: a definition customizing explain. */
+  readonly walkFile: string | undefined;
+}
+
+export interface WalkOptions extends RunFlags, SelectionFlags {
+  /** `--walk FILE`, or `explain` for the built-in; undefined = the default definition. */
+  readonly walk: string | undefined;
+  /** `--prompt TEXT` / `--prompt-file FILE`: the task at every level. */
+  readonly prompt: string | undefined;
+  readonly promptFile: string | undefined;
+  /** `--instructions TEXT|@FILE`, as typed. */
+  readonly instructions: string | undefined;
+  /** `--name N`: the definition's name. */
+  readonly name: string | undefined;
+  /** `--print-definition [explain]`: print that definition and stop; every other field is then a default. */
+  readonly printDefinition: "default" | "explain" | undefined;
 }
 
 /** What `insights` prints: exactly one of these, decided by the flags. */
@@ -1391,8 +1575,13 @@ export type InsightsMode = "summary" | "list" | "one" | "word" | "glossary" | "p
 export interface InsightsOptions {
   /** The model path the store sits beside; never opened. */
   readonly model: string;
-  /** `--store FILE`; undefined = `<model>.insights.db`. */
+  /** `--store FILE`; undefined = `<model>.insights.db`, or `--walk N`'s `<model>.N.walk.db`. */
   readonly store: string | undefined;
+  /**
+   * `--walk N`: whose store it must be — "explain" for explain's. Undefined: explain's beside the model, or with
+   * `--store FILE` whichever walk's the file's header names.
+   */
+  readonly walk: string | undefined;
   readonly mode: InsightsMode;
   readonly id: string | undefined;
   /** `--word WORD`, looked up lowercase. */
@@ -1509,6 +1698,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "insights"; readonly options: InsightsOptions }
   | { readonly kind: "run"; readonly command: "domain-facts"; readonly options: DomainFactsOptions }
   | { readonly kind: "run"; readonly command: "explain"; readonly options: ExplainOptions }
+  | { readonly kind: "run"; readonly command: "walk"; readonly options: WalkOptions }
   | { readonly kind: "run"; readonly command: "scm"; readonly options: ScmOptions }
   | { readonly kind: "run"; readonly command: "snapshots"; readonly options: SnapshotsOptions }
   | { readonly kind: "run"; readonly command: "history"; readonly options: HistoryOptions }
@@ -1617,14 +1807,17 @@ export function renderHelp(spec: CommandSpec | undefined): string {
 type ParsedValues = Record<string, string | boolean | (string | boolean)[] | undefined>;
 
 function parseArgsConfig(spec: CommandSpec): {
-  readonly [flag: string]: { readonly type: "boolean" | "string"; readonly short?: string };
+  readonly [flag: string]: { readonly type: "boolean" | "string"; readonly short?: string; readonly multiple?: boolean };
 } {
-  const config: Record<string, { type: "boolean" | "string"; short?: string }> = {
+  const config: Record<string, { type: "boolean" | "string"; short?: string; multiple?: boolean }> = {
     help: { type: "boolean", short: "h" },
   };
   for (const option of spec.options) {
-    config[option.name] =
-      option.short === undefined ? { type: option.type } : { type: option.type, short: option.short };
+    config[option.name] = {
+      type: option.type,
+      ...(option.short === undefined ? {} : { short: option.short }),
+      ...(option.multiple === true ? { multiple: true } : {}),
+    };
   }
   return config;
 }
@@ -1638,6 +1831,13 @@ function flagOf(values: ParsedValues, name: string): boolean {
   return values[name] === true;
 }
 
+/** A repeatable flag's values, in the order typed; empty when absent. */
+function stringsOf(values: ParsedValues, name: string): readonly string[] {
+  const value = values[name];
+  if (typeof value === "string") return [value];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
 /**
  * Spec-driven validation: required-ness, closed value sets and integer values
  * are checked from the SAME data the help text is rendered from. Returns the
@@ -1645,7 +1845,7 @@ function flagOf(values: ParsedValues, name: string): boolean {
  */
 function validateValues(spec: CommandSpec, values: ParsedValues): void {
   for (const option of spec.options) {
-    if (option.type === "boolean") continue;
+    if (option.type === "boolean" || option.multiple === true) continue;
     const value = stringOf(values, option.name);
     if (value === undefined) {
       if (option.required === true) {
@@ -1913,7 +2113,9 @@ export function parseInvocation(argv: readonly string[]): Invocation {
   // `serve --app` opens folders through its routes, so no model is defaulted
   // from the working directory — the one command whose positional is optional.
   const isApp = spec.name === "serve" && flagOf(values, "app");
-  const models = isApp ? parsed.positionals : positionalsOf(spec, parsed.positionals);
+  // `walk --print-definition [explain]` reads no model either: its positional, if any, names a built-in.
+  const printing = spec.name === "walk" && flagOf(values, "print-definition");
+  const models = isApp || printing ? parsed.positionals : positionalsOf(spec, parsed.positionals);
 
   switch (spec.name) {
     case "validate":
@@ -2033,68 +2235,32 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         },
       };
     case "explain": {
-      const src = stringOf(values, "src");
-      if (src !== undefined && models.length > 1) {
-        throw new UsageError(
-          "--src applies to one model: its anchors are relative to ONE source root",
-          "Run explain once per model, or drop --src to read each model's own root.",
-        );
-      }
+      checkSrc(values, models);
       if (flagOf(values, "retry-failed") && stringOf(values, "scope") !== undefined) {
         throw new UsageError(
           "--retry-failed and --scope both choose what to explain",
           "--retry-failed takes its scope from the side-car's failure records; drop --scope, or drop --retry-failed to explain a scope afresh.",
         );
       }
-      if (flagOf(values, "export") && stringOf(values, "import") !== undefined) {
-        throw new UsageError(
-          "--export and --import move the same records in opposite directions",
-          "Run them one after the other: --import FILE replaces the store, --export writes the side-car from it.",
-        );
-      }
-      const provider = (stringOf(values, "provider") ?? "auto") as ExplainProvider;
-      const claudePath = stringOf(values, "claude-path");
-      // A named binary is meant to run (auto implies claude-code); a key provider could only ignore it.
-      if (claudePath !== undefined && provider !== "auto" && provider !== "claude-code") {
-        throw new UsageError(
-          `--claude-path names a binary that --provider ${provider} would never run`,
-          "Drop --claude-path, or pass --provider claude-code (or auto, which it implies).",
-        );
-      }
+      checkRetrySelection(values, "explain");
       return {
         kind: "run",
         command: "explain",
         options: {
-          models,
-          src,
-          out: stringOf(values, "out"),
-          provider,
-          claudePath,
-          model: stringOf(values, "model"),
-          rollupModel: stringOf(values, "rollup-model"),
-          depth: integerOf(values, "depth") ?? 1,
-          maxCalls: integerOf(values, "max-calls"),
-          maxTokens: integerOf(values, "max-tokens"),
-          concurrency: integerOf(values, "concurrency") ?? 4,
-          maxLines: integerOf(values, "max-lines") ?? 200,
-          maxScc: integerOf(values, "max-scc") ?? 12,
-          terms: integerOf(values, "terms") ?? 60,
+          ...runFlagsOf(values, models),
+          ...selectionOf(values),
+          terms: integerOf(values, "terms") ?? DEFAULT_TERMS,
           scope: metricList(stringOf(values, "scope")),
-          framework: stringOf(values, "framework"),
-          ...viewOf(values),
-          noCache: flagOf(values, "no-cache"),
-          dryRun: flagOf(values, "dry-run"),
-          estimate: flagOf(values, "estimate"),
-          priceIn: priceOf(values, "price-in"),
-          priceOut: priceOf(values, "price-out"),
-          force: flagOf(values, "force"),
-          retryFailed: flagOf(values, "retry-failed"),
-          exportOnly: flagOf(values, "export"),
-          importFrom: stringOf(values, "import"),
-          yes: flagOf(values, "yes"),
-          json: flagOf(values, "json"),
+          instructions: stringOf(values, "instructions"),
+          walkFile: stringOf(values, "walk"),
         },
       };
+    }
+    case "walk": {
+      if (printing) return { kind: "run", command: "walk", options: printDefinitionOf(values, models) };
+      checkSrc(values, models);
+      checkRetrySelection(values, "ask");
+      return { kind: "run", command: "walk", options: walkOptionsOf(values, models) };
     }
     case "insights": {
       const id = stringOf(values, "id");
@@ -2121,6 +2287,14 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         );
       }
       if (word?.trim() === "") throw new UsageError("--word needs a word", "A word as 'codegraph vocabulary' lists it, e.g. --word order.");
+      const walk = stringOf(values, "walk");
+      // Checked here: the name becomes part of a path (`<model>.N.walk.db`), so `../` never reaches one.
+      if (walk !== undefined && walk !== EXPLAIN_WALK_NAME && (!WALK_NAME_PATTERN.test(walk) || walk === "insights")) {
+        throw new UsageError(
+          `--walk ${JSON.stringify(walk)} is not a walk name: one matches [a-z][a-z0-9-]*, and "insights" is reserved for explain's store`,
+          "The name a walk was run under (--name N, or its definition's name); 'explain' reads explain's store.",
+        );
+      }
       const mode: InsightsMode = asked[0]?.[0] ?? "summary";
       return {
         kind: "run",
@@ -2128,6 +2302,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         options: {
           model: models[0] as string,
           store: stringOf(values, "store"),
+          walk,
           mode,
           id,
           word,
@@ -2235,6 +2410,166 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         options: { lang: stringOf(values, "lang"), json: flagOf(values, "json") },
       };
   }
+}
+
+/** `--src` names ONE source root, so it cannot go with several models. */
+function checkSrc(values: ParsedValues, models: readonly string[]): void {
+  if (stringOf(values, "src") !== undefined && models.length > 1) {
+    throw new UsageError(
+      "--src applies to one model: its anchors are relative to ONE source root",
+      "Run explain once per model, or drop --src to read each model's own root.",
+    );
+  }
+}
+
+const SELECTION_FLAGS = ["include", "exclude", "levels", "closure"] as const;
+
+/** `--retry-failed` takes its selection from the store's failure records: a selection flag would be a second answer. */
+function checkRetrySelection(values: ParsedValues, verb: string): void {
+  if (!flagOf(values, "retry-failed")) return;
+  const flag = SELECTION_FLAGS.find((name) => values[name] !== undefined);
+  if (flag === undefined) return;
+  throw new UsageError(
+    `--retry-failed and --${flag} both choose what to ${verb}`,
+    `--retry-failed takes its selection from the store's failure records; drop --${flag}, or drop --retry-failed to ${verb} a selection afresh.`,
+  );
+}
+
+/** The run flags `explain` and `walk` share (`RUN_OPTIONS`), with the checks that span two of them. */
+function runFlagsOf(values: ParsedValues, models: readonly string[]): RunFlags {
+  if (flagOf(values, "export") && stringOf(values, "import") !== undefined) {
+    throw new UsageError(
+      "--export and --import move the same records in opposite directions",
+      "Run them one after the other: --import FILE replaces the store, --export writes the side-car from it.",
+    );
+  }
+  const provider = (stringOf(values, "provider") ?? "auto") as ExplainProvider;
+  const claudePath = stringOf(values, "claude-path");
+  // A named binary is meant to run (auto implies claude-code); a key provider could only ignore it.
+  if (claudePath !== undefined && provider !== "auto" && provider !== "claude-code") {
+    throw new UsageError(
+      `--claude-path names a binary that --provider ${provider} would never run`,
+      "Drop --claude-path, or pass --provider claude-code (or auto, which it implies).",
+    );
+  }
+  const depth = integerOf(values, "depth");
+  const maxLines = integerOf(values, "max-lines");
+  return {
+    models,
+    src: stringOf(values, "src"),
+    out: stringOf(values, "out"),
+    provider,
+    claudePath,
+    model: stringOf(values, "model"),
+    rollupModel: stringOf(values, "rollup-model"),
+    depth: depth ?? 1,
+    maxCalls: integerOf(values, "max-calls"),
+    maxTokens: integerOf(values, "max-tokens"),
+    concurrency: integerOf(values, "concurrency") ?? 4,
+    maxLines: maxLines ?? 200,
+    maxScc: integerOf(values, "max-scc") ?? 12,
+    typed: { depth, maxLines },
+    framework: stringOf(values, "framework"),
+    ...viewOf(values),
+    noCache: flagOf(values, "no-cache"),
+    dryRun: flagOf(values, "dry-run"),
+    estimate: flagOf(values, "estimate"),
+    priceIn: priceOf(values, "price-in"),
+    priceOut: priceOf(values, "price-out"),
+    force: flagOf(values, "force"),
+    retryFailed: flagOf(values, "retry-failed"),
+    exportOnly: flagOf(values, "export"),
+    importFrom: stringOf(values, "import"),
+    yes: flagOf(values, "yes"),
+    json: flagOf(values, "json"),
+  };
+}
+
+const TERM_HINT =
+  "One selector term per flag, PREFIX:VALUE: id:ID, kind:K, trait:T, lang:L, name:GLOB, module:GLOB, file:GLOB, " +
+  "edge:KIND or edge:KIND>TERM, edge-in:KIND or edge-in:KIND<TERM. Repeat the flag for several (any of them).";
+
+/** One selector term, parsed now: a typo in a kind is a usage error before any model is read. */
+function termOf(flag: string, text: string): Selector {
+  try {
+    return parseTerm(text);
+  } catch (error) {
+    if (!(error instanceof SelectorError)) throw error;
+    throw new UsageError(`--${flag} ${error.message}`, TERM_HINT, { cause: error });
+  }
+}
+
+/** `--levels a,b`: a set of the walk's levels, in walk order; empty, unknown or repeated is a usage error. */
+function levelsOf(raw: string | undefined): readonly InsightLevel[] | undefined {
+  if (raw === undefined) return undefined;
+  const names = raw.split(",").map((name) => name.trim()).filter((name) => name.length > 0);
+  const valid = `Valid levels: ${INSIGHT_LEVELS.join(", ")}, comma-separated.`;
+  if (names.length === 0) throw new UsageError("--levels needs at least one level", valid);
+  const seen = new Set<string>();
+  for (const name of names) {
+    if (!(INSIGHT_LEVELS as readonly string[]).includes(name)) throw new UsageError(`--levels: unknown level "${name}"`, valid);
+    if (seen.has(name)) throw new UsageError(`--levels: "${name}" is listed twice`, valid);
+    seen.add(name);
+  }
+  return INSIGHT_LEVELS.filter((level) => seen.has(level));
+}
+
+function selectionOf(values: ParsedValues): SelectionFlags {
+  return {
+    include: stringsOf(values, "include").map((text) => termOf("include", text)),
+    exclude: stringsOf(values, "exclude").map((text) => termOf("exclude", text)),
+    levels: levelsOf(stringOf(values, "levels")),
+    closure: stringOf(values, "closure") as Closure | undefined,
+  };
+}
+
+/** `walk`'s own flags over the run and selection flags; `--walk explain` takes neither a task nor a name. */
+function walkOptionsOf(values: ParsedValues, models: readonly string[]): WalkOptions {
+  const walk = stringOf(values, "walk");
+  const prompt = stringOf(values, "prompt");
+  const promptFile = stringOf(values, "prompt-file");
+  const name = stringOf(values, "name");
+  if (prompt !== undefined && promptFile !== undefined) {
+    throw new UsageError("--prompt and --prompt-file both give the task", "Pass one of them: the task is one text, asked at every level.");
+  }
+  if (walk === "explain") {
+    const stray = prompt !== undefined ? "--prompt" : promptFile !== undefined ? "--prompt-file" : name !== undefined ? "--name" : undefined;
+    if (stray !== undefined) {
+      throw new UsageError(
+        `${stray} does not apply to --walk explain`,
+        "explain asks its own task under its own name (its store is <model>.insights.db): --instructions and the selection flags customize it. A task of your own is a walk of your own: --prompt TEXT or --walk FILE.",
+      );
+    }
+  }
+  return {
+    ...runFlagsOf(values, models),
+    ...selectionOf(values),
+    walk,
+    prompt,
+    promptFile,
+    instructions: stringOf(values, "instructions"),
+    name,
+    printDefinition: undefined,
+  };
+}
+
+/** `--print-definition [explain]`: nothing else is read, so nothing else may be typed. */
+function printDefinitionOf(values: ParsedValues, positionals: readonly string[]): WalkOptions {
+  const other = Object.keys(values).find((flag) => flag !== "print-definition" && values[flag] !== undefined);
+  if (other !== undefined) {
+    throw new UsageError(
+      `--print-definition takes no other option (got --${other})`,
+      "codegraph walk --print-definition [explain] > walk.json prints a file to start from; edit it, then run it with --walk walk.json.",
+    );
+  }
+  const [which, ...rest] = positionals;
+  if (rest.length > 0 || (which !== undefined && which !== "explain")) {
+    throw new UsageError(
+      `--print-definition prints the default definition, or explain's: got '${positionals.join(" ")}'`,
+      "codegraph walk --print-definition prints the default; codegraph walk --print-definition explain, explain's.",
+    );
+  }
+  return { ...walkOptionsOf({}, []), printDefinition: which === "explain" ? "explain" : "default" };
 }
 
 function vocabularyOf(values: ParsedValues): Omit<VocabularyOptions, "models"> {

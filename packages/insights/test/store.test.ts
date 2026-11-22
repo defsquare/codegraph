@@ -21,8 +21,10 @@ import {
 } from "../src/schema.js";
 import { decodeInsights, encodeInsightsToString } from "../src/sidecar.js";
 import { INSIGHTS_APPLICATION_ID, INSIGHTS_DB_VERSION, INSIGHT_ANSWER_KIND, InsightsStoreError, answerInsight, insightsStorePathFor } from "../src/store.js";
-import { memoryBook, storeBook, summaryOf } from "../src/records.js";
+import { summaryOf } from "../src/explain-spec.js";
+import { memoryBook, storeBook } from "../src/records.js";
 import { sqliteInsightsStore } from "../src/store-sqlite.js";
+import { EXPLAIN } from "./fixture.js";
 
 const memory = () => sqliteInsightsStore(loadSqlite().open(":memory:"));
 
@@ -217,7 +219,7 @@ describe("storeBook (M16b): the walk reads the store, one record at a time", () 
 
   it("answers fingerprints from one scan and summaries by point lookup; an unknown id is undefined for both", () => {
     const { store } = seeded();
-    const book = storeBook(store);
+    const book = storeBook(store, EXPLAIN);
     expect(book.size()).toBe(3);
     expect(book.fingerprint("o/b")).toBe("b".repeat(64));
     expect(book.fingerprint("nope")).toBeUndefined();
@@ -244,7 +246,7 @@ describe("storeBook (M16b): the walk reads the store, one record at a time", () 
     };
     const store = sqliteInsightsStore(db);
     store.importFile(decodeInsights(encodeInsightsToString(HEADER, [op("o/a")], eof(1))));
-    const book = storeBook(store);
+    const book = storeBook(store, EXPLAIN);
     for (let i = 0; i < 1000; i += 1) book.summary("o/a");
     expect(reads).toBe(1);
   });
@@ -273,7 +275,7 @@ describe("storeBook (M16b): the walk reads the store, one record at a time", () 
           // Compared with what the side-car holds: JSON has no -0.
           const file = decodeInsights(encodeInsightsToString(HEADER, records, eof(records.length)));
           store.importFile(file);
-          const book = memoryBook(file.records);
+          const book = memoryBook(file.records, EXPLAIN);
           for (const record of file.records) {
             expect(store.words(record.id)).toEqual(record.block.words);
             expect(book.words(record.id)).toEqual(record.block.words);
@@ -290,7 +292,7 @@ describe("storeBook (M16b): the walk reads the store, one record at a time", () 
   it("a book answers a type's words from the store, and keeps a put's words visible", () => {
     const words = [{ word: "order", in: ["Order"], concern: "domain" as const, sense: "a purchase", meaning: "What a customer asks to buy.", confidence: 0.9 }];
     const { store } = seeded();
-    const book = storeBook(store);
+    const book = storeBook(store, EXPLAIN);
     expect(book.words("t/A")).toBeUndefined();
     expect(book.words("nope")).toBeUndefined();
     const run = store.beginRun({ header: HEADER, startedAt: "t" });
@@ -301,7 +303,7 @@ describe("storeBook (M16b): the walk reads the store, one record at a time", () 
 
   it("put() is the store's commit: refused before a run begins, visible to the very next read after", () => {
     const { store } = seeded();
-    const book = storeBook(store);
+    const book = storeBook(store, EXPLAIN);
     expect(() => book.put("o/c", [op("o/c")])).toThrow(/no run/u);
     const run = store.beginRun({ header: HEADER, startedAt: "t" });
     book.begin(run);

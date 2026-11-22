@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AnswerBlock } from "./spec.js";
 import {
   DOMAIN_CONCEPTS,
   ENFORCEMENTS,
@@ -32,6 +33,10 @@ import {
  */
 
 export const INSIGHTS_KIND = "codegraph.insights/1";
+/** A walk's side-car (PLAN.md §22.4) — not `codegraph.walk/1`, which is a definition FILE's kind: two formats, two kinds. */
+export const WALK_RECORDS_KIND = "codegraph.walkRecords/1";
+/** The built-in walk's name: its store is `<model>.insights.db`, its kind `INSIGHTS_KIND`. */
+export const EXPLAIN_WALK_NAME = "explain";
 export const INSIGHTS_GENERATOR = "@codegraph/insights";
 /** The vocabulary a side-car speaks (see ddd.ts). */
 export const INSIGHTS_METAMODEL = "specy.domain/3";
@@ -163,9 +168,30 @@ export const ANSWER_BLOCKS = {
   module: ModuleBlock.required({ words: true, glossary: true }),
 } as const;
 
-/** What the model returns for a unit whose members form a cycle: one block per member id. */
+/** What the model returns for a unit whose members form a cycle: one block per member id. Any walk's block. */
+export function cycleResponseSchema<B extends z.ZodType>(block: B) {
+  return z.object({ members: z.array(z.object({ id: z.string(), block })) });
+}
+
+/** The cycle response of explain's blocks. */
 export function sccResponseSchema<L extends Level>(level: L) {
-  return z.object({ members: z.array(z.object({ id: z.string(), block: ANSWER_BLOCKS[level] })) });
+  return cycleResponseSchema(ANSWER_BLOCKS[level]);
+}
+
+/**
+ * The label a prompt quotes of an explain record (the type's concept, the
+ * operation's owner, the module's context hint): one rule, whoever asks — the
+ * explain spec's quote and the store's SQL projection both feed it.
+ */
+export function conceptLabel(level: Level, block: { owner?: string | undefined; concept?: string | undefined; context?: string | undefined }): string | undefined {
+  switch (level) {
+    case "operation":
+      return block.owner === undefined || block.owner === "unknown" ? undefined : `owned by ${block.owner}`;
+    case "type":
+      return block.concept;
+    case "module":
+      return block.context === undefined ? undefined : `context: ${block.context}`;
+  }
 }
 
 /** The natural key (core's `NaturalKey`), carried so a re-extraction re-joins without parsing ids. */
@@ -224,6 +250,17 @@ export const InsightRecord = z.discriminatedUnion("level", [
 ]);
 export type InsightRecord = z.infer<typeof InsightRecord>;
 
+/** A record of ANY walk: explain's envelope, its block opaque. `InsightRecord` is explain's instance of it. */
+export type WalkRecord = z.output<ReturnType<typeof recordShape<Level, z.ZodType<AnswerBlock>>>>;
+
+/** A walk's record schema: the same envelope, each level's block checked by the walk's own (compiled) schema. */
+export function walkRecordSchema(blocks: Readonly<Record<Level, z.ZodType<AnswerBlock>>>): z.ZodType<WalkRecord> {
+  return z.discriminatedUnion("level", [recordShape("operation", blocks.operation), recordShape("type", blocks.type), recordShape("module", blocks.module)]);
+}
+
+/** Any JSON object, its keys in the order they were written: a block read back under no particular definition. */
+export const STORED_BLOCK: z.ZodType<AnswerBlock> = z.record(z.string(), z.unknown());
+
 /**
  * Why a unit has no record: `provider` — the call itself was refused or never
  * answered (credits, auth, rate limit, transport); `invalid-answer` — the model
@@ -269,9 +306,21 @@ export type FailureRecord = z.infer<typeof FailureRecord>;
 
 export const ViewDescriptorSchema =z.object({ name: z.string(), filters: z.array(z.string()) });
 
+/**
+ * Which walk wrote a file, and under which definition: `digest` is what tells a changed definition of the same name.
+ * `answerDigest` (a defined walk's, `answerDigestOf`) is the shape of its blocks: another one is ANOTHER walk.
+ */
+export const WalkIdentity = z.object({ name: z.string(), version: z.string(), digest: z.string(), answerDigest: z.string().optional() });
+export type WalkIdentity = z.infer<typeof WalkIdentity>;
+
 export const InsightsHeader = z.object({
   t: z.literal("header"),
   kind: z.literal(INSIGHTS_KIND),
+  /**
+   * Only a CUSTOMIZED explain writes it (PLAN.md §22.4): explain's name and prompt version, and the digest of what it
+   * added to explain's prompt. A plain explain writes none, so its header keeps its bytes; an older build strips it.
+   */
+  walk: WalkIdentity.extend({ name: z.literal(EXPLAIN_WALK_NAME) }).optional(),
   generatedBy: z.string(),
   promptVersion: z.string(),
   metamodel: z.string(),
@@ -286,6 +335,28 @@ export const InsightsHeader = z.object({
   }),
 });
 export type InsightsHeader = z.infer<typeof InsightsHeader>;
+
+/** A walk's header: explain's, less the Specy `metamodel` (a walk's vocabulary is its definition), plus the walk. */
+export const WalkRecordsHeader = z.object({
+  t: z.literal("header"),
+  kind: z.literal(WALK_RECORDS_KIND),
+  walk: WalkIdentity.extend({ answerDigest: z.string() }),
+  generatedBy: z.string(),
+  /** The engine's: every fingerprint hashes it, a walk's as explain's. */
+  promptVersion: z.string(),
+  models: z.object({ leaf: z.string(), rollup: z.string() }),
+  provider: z.string().optional(),
+  depth: z.int().nonnegative(),
+  source: z.object({
+    paths: z.array(z.string()),
+    langs: z.array(z.string()),
+    view: ViewDescriptorSchema,
+  }),
+});
+export type WalkRecordsHeader = z.infer<typeof WalkRecordsHeader>;
+
+/** What a store's `meta` and a side-car's first line hold: explain's header or a walk's. */
+export type StoreHeader = InsightsHeader | WalkRecordsHeader;
 
 export const InsightsEof = z.object({
   t: z.literal("eof"),
@@ -331,10 +402,14 @@ export function strictify(schema: JsonSchema): JsonSchema {
   return walk(schema) as JsonSchema;
 }
 
-/** The JSON Schema for a level's block, or for the cycle response of that level. */
-export function responseJsonSchema(level: Level, shape: "block" | "scc" = "block"): JsonSchema {
-  const zod = shape === "block" ? ANSWER_BLOCKS[level] : sccResponseSchema(level);
+/** A response schema as it is sent: generated from its Zod definition, hardened for strict structured output. */
+export function strictJsonSchema(zod: z.ZodType): JsonSchema {
   return strictify(z.toJSONSchema(zod, { target: "draft-2020-12", io: "output" }) as JsonSchema);
+}
+
+/** The JSON Schema for a level's explain block, or for the cycle response of that level. */
+export function responseJsonSchema(level: Level, shape: "block" | "scc" = "block"): JsonSchema {
+  return strictJsonSchema(shape === "block" ? ANSWER_BLOCKS[level] : sccResponseSchema(level));
 }
 
 /** The response schema's name, as the provider requires it (a-z, 0-9, `_`, `-`). */

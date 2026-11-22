@@ -4,12 +4,13 @@ import { contextPackFor, type Speller } from "../src/context.js";
 import { fingerprintOf } from "../src/fingerprint.js";
 import { buildWalk } from "../src/order.js";
 import { planRun, retryScope, type PlanEnv, type PlanOptions, type RunPlan } from "../src/plan.js";
-import { COMPLETION_TOKENS_PER_BLOCK, COMPLETION_TOKENS_PER_GLOSSARY_ENTRY, COMPLETION_TOKENS_PER_WORD, estimateTokens } from "../src/prompt.js";
+import { COMPLETION_TOKENS_PER_BLOCK, COMPLETION_TOKENS_PER_GLOSSARY_ENTRY, COMPLETION_TOKENS_PER_WORD } from "../src/explain-spec.js";
+import { estimateTokens } from "../src/prompt.js";
 import { memoryBook, type RecordBook } from "../src/records.js";
 import { executeRun, type Completer, type CompletionRequest } from "../src/run.js";
 import { responseJsonSchema, type Block, type FailureRecord, type InsightRecord, type ModuleBlock, type OperationBlock, type TypeBlock } from "../src/schema.js";
 import { createSourceReader, mapReader } from "../src/source.js";
-import { edge, field, graphOf, method, packageCorpus, pkg, prepared, toySpeller, type } from "./fixture.js";
+import { EXPLAIN, edge, field, graphOf, method, packageCorpus, pkg, prepared, toySpeller, type } from "./fixture.js";
 
 const P = "java:p";
 const T = "java:p/T";
@@ -36,7 +37,7 @@ function corpus(extraEdges: Edge[] = []) {
   const graph = graphOf(entities, edges);
   const { facts, units } = prepared(graph);
   const walk = buildWalk(units, graph);
-  const env: PlanEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map([["T.java", SOURCE]]))), unitOf: walk.unitOf, speller: toySpeller(graph) };
+  const env: PlanEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map([["T.java", SOURCE]]))), unitOf: walk.unitOf, speller: toySpeller(graph), spec: EXPLAIN };
   return { graph, units, walk, env };
 }
 
@@ -140,7 +141,7 @@ async function run(existing: Map<string, InsightRecord>, options: Partial<PlanOp
 
 /** A book that counts what is asked of it: `fingerprint` is free, `summary` and `words` read (a projection of) a block. */
 function spyBook(records: Iterable<InsightRecord> = []) {
-  const inner = memoryBook(records);
+  const inner = memoryBook(records, EXPLAIN);
   const gets: string[] = [];
   const puts: string[] = [];
   let alls = 0;
@@ -185,7 +186,7 @@ describe("lazy reads (M16b): a block is read only when a prompt quotes it", () =
     // Drop one leaf: its dependents are re-planned, and their prompts quote what is left.
     records.delete(m("h"));
     const fromMap = planRun(walk, records, env, OPTIONS);
-    const fromBook = planRun(walk, memoryBook(records.values()), env, OPTIONS);
+    const fromBook = planRun(walk, memoryBook(records.values(), EXPLAIN), env, OPTIONS);
     expect(JSON.stringify(fromBook.steps)).toBe(JSON.stringify(fromMap.steps));
     expect(fromBook.estimates).toEqual(fromMap.estimates);
   });
@@ -321,7 +322,7 @@ describe("a words-only change (PLAN §20.3): stale where a prompt reads the word
     const graph = packageCorpus(2, [[1, 0]]);
     const { facts, units } = prepared(graph);
     const walk = buildWalk(units, graph);
-    const env: PlanEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map())), unitOf: walk.unitOf, speller: toySpeller(graph) };
+    const env: PlanEnv = { graph, facts, units, reader: createSourceReader(mapReader(new Map())), unitOf: walk.unitOf, speller: toySpeller(graph), spec: EXPLAIN };
     const C0 = "java:p0/C";
     const C1 = "java:p1/C";
     expect(walk.unitOf.get(C1)?.deps).toContain(C0);
@@ -350,7 +351,7 @@ describe("records stamped before the split (every dependent hashed its dependenc
   /** The previous fold, restated here rather than read from the plan: a unit hashed its dependencies' fingerprints, words included. */
   function stampedBefore(records: ReadonlyMap<string, InsightRecord>): Map<string, InsightRecord> {
     const { walk, env } = corpus();
-    const contextEnv = { ...env, records: memoryBook([]), depth: 1, maxLines: 100, terms: 60 };
+    const contextEnv = { ...env, records: memoryBook([], EXPLAIN), depth: 1, maxLines: 100, terms: 60 };
     const before = new Map<string, string>();
     for (const unit of walk.units) {
       const pack = contextPackFor(unit, contextEnv);

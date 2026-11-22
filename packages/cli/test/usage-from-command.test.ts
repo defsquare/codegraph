@@ -15,6 +15,11 @@ vi.mock("../src/commands/validate.js", () => ({
   },
 }));
 
+// The lazily loaded, asynchronous command: its usage errors settle through the same mapping.
+vi.mock("../src/commands/walk.js", () => ({
+  walkCommand: () => Promise.reject(new UsageError("--walk cannot read /nope.json", "The path is read relative to the current directory.")),
+}));
+
 const { run } = await import("../src/main.js");
 
 describe("a usage error thrown by a command", () => {
@@ -25,6 +30,19 @@ describe("a usage error thrown by a command", () => {
     expect(io.stdout()).toBe("");
     expect(io.stderr()).toContain("cannot read /nope.json");
     expect(io.stderr()).toContain("Check the path exists.");
+    expect(io.stderr()).not.toContain("bug in codegraph");
+  });
+});
+
+describe("a usage error rejected by an asynchronous command", () => {
+  it("exits 2 too, message and hint on stderr, stdout empty — never an unhandled rejection", async () => {
+    const io = captureIo();
+    const outcome = run(["walk", "--print-definition"], io);
+    expect(outcome).toBeInstanceOf(Promise);
+    expect(await outcome).toBe(EXIT.USAGE);
+    expect(io.stdout()).toBe("");
+    expect(io.stderr()).toContain("codegraph: --walk cannot read /nope.json");
+    expect(io.stderr()).toContain("The path is read relative to the current directory.");
     expect(io.stderr()).not.toContain("bug in codegraph");
   });
 });

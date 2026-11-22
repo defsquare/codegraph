@@ -1,7 +1,8 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { CONCEPT_DEFINITIONS, DOMAIN_CONCEPTS } from "../src/ddd.js";
-import type { OperationBlock } from "../src/schema.js";
+import { compileDefinition, parseWalkDefinition } from "../src/definition.js";
+import type { JsonSchema, OperationBlock } from "../src/schema.js";
 import {
   ANSWER_BLOCKS,
   BLOCKS,
@@ -10,11 +11,14 @@ import {
   PROMPT_VERSION,
   WORD_CONCERNS,
   clampConfidence,
+  cycleResponseSchema,
   responseJsonSchema,
   responseSchemaName,
   sccResponseSchema,
+  strictJsonSchema,
   strictify,
 } from "../src/schema.js";
+import { definitionWithFields, fieldsJsonArb } from "./definition-fixture.js";
 
 /** Every object node in a JSON Schema, depth-first. */
 function objectNodes(node: unknown, out: Record<string, unknown>[] = []): Record<string, unknown>[] {
@@ -29,23 +33,41 @@ function objectNodes(node: unknown, out: Record<string, unknown>[] = []): Record
 
 const FORBIDDEN = ["$schema", "$id", "minimum", "maximum", "minLength", "maxLength", "pattern", "format"];
 
+/** The strict dialect: every object requires all its properties and forbids extras; no constraint keyword anywhere. */
+function expectStrict(schema: JsonSchema): void {
+  const objects = objectNodes(schema);
+  expect(objects.length).toBeGreaterThan(0);
+  for (const object of objects) {
+    const properties = Object.keys(object["properties"] as Record<string, unknown>);
+    expect(object["additionalProperties"]).toBe(false);
+    expect([...(object["required"] as string[])].sort()).toEqual([...properties].sort());
+  }
+  const text = JSON.stringify(schema);
+  for (const keyword of FORBIDDEN) expect(text).not.toContain(`"${keyword}"`);
+}
+
 describe("the response schemas are strict-compatible", () => {
   it.each(LEVELS.flatMap((level) => [[level, "block"] as const, [level, "scc"] as const]))(
     "%s/%s: every object requires all its properties and forbids extras; no constraint keywords",
     (level, shape) => {
-      const schema = responseJsonSchema(level, shape);
-      const objects = objectNodes(schema);
-      expect(objects.length).toBeGreaterThan(0);
-      for (const object of objects) {
-        const properties = Object.keys(object["properties"] as Record<string, unknown>);
-        expect(object["additionalProperties"]).toBe(false);
-        expect([...(object["required"] as string[])].sort()).toEqual([...properties].sort());
-      }
-      const text = JSON.stringify(schema);
-      for (const keyword of FORBIDDEN) expect(text).not.toContain(`"${keyword}"`);
+      expectStrict(responseJsonSchema(level, shape));
       expect(responseSchemaName(level, shape)).toMatch(/^[a-zA-Z0-9_-]{1,64}$/);
     },
   );
+
+  it("so is every schema a walk definition's field grammar compiles to, block and cycle (PLAN.md §22.2)", () => {
+    fc.assert(
+      fc.property(fieldsJsonArb, fc.constantFrom(...LEVELS), (fields, level) => {
+        const compiled = compileDefinition(parseWalkDefinition(definitionWithFields(fields)));
+        for (const zod of [compiled.answer[level], cycleResponseSchema(compiled.answer[level])]) {
+          const schema = strictJsonSchema(zod);
+          expectStrict(schema);
+          expect(strictify(schema)).toEqual(schema);
+        }
+      }),
+      { numRuns: 300 },
+    );
+  });
 
   it("emits enums for the closed vocabularies so the model cannot invent a concept", () => {
     const type = responseJsonSchema("type");

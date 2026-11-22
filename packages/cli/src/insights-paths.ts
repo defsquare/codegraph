@@ -1,6 +1,15 @@
 import { existsSync } from "node:fs";
 import { loadSqlite } from "@codegraph/analyzer";
-import { InsightsStoreError, insightsStorePathFor, sqliteInsightsStore, type InsightsStore } from "@codegraph/insights";
+import {
+  EXPLAIN_WALK_NAME,
+  InsightsStoreError,
+  WalkMismatchError,
+  insightsStorePathFor,
+  sqliteInsightsStore,
+  sqliteStoreReader,
+  type InsightsStore,
+  type StoreReading,
+} from "@codegraph/insights";
 import { UsageError } from "./exit.js";
 
 /**
@@ -26,12 +35,7 @@ export function storePathForModel(modelPath: string): string {
  */
 export function openInsightsReader(path: string, flag: string): InsightsStore {
   // Checked first: opening a path that does not exist would CREATE it, and asking must not leave a file behind.
-  if (!existsSync(path)) {
-    throw new UsageError(
-      `no insights store at ${path}`,
-      `'codegraph explain <model.jsonl>' creates it (and imports a side-car it finds there). Pass ${flag} FILE if it is elsewhere.`,
-    );
-  }
+  if (!existsSync(path)) throw noStore(path, flag);
   const db = loadSqlite().open(path);
   try {
     return sqliteInsightsStore(db, { readOnly: true });
@@ -39,5 +43,40 @@ export function openInsightsReader(path: string, flag: string): InsightsStore {
     db.close();
     if (!(error instanceof InsightsStoreError)) throw error;
     throw new UsageError(`${path}: ${error.message}`, `Pass ${flag} FILE to read another store.`, { cause: error });
+  }
+}
+
+function noStore(path: string, flag: string): UsageError {
+  return new UsageError(
+    `no insights store at ${path}`,
+    `'codegraph explain <model.jsonl>' creates it (and imports a side-car it finds there). Pass ${flag} FILE if it is elsewhere.`,
+  );
+}
+
+/**
+ * A store opened as a READER of the walk `walk` — "explain" for explain's, exactly `openInsightsReader` — or, `walk`
+ * undefined, of whichever walk its header names (`--store FILE`): explain's, or a walk's read as stored, with no
+ * definition (`walkReader`). The same refusals, the store's words, nothing written; a walk's are named as the walk's.
+ */
+export function openStoreReader(path: string, walk: string | undefined, flag: string): StoreReading {
+  const named = walk !== undefined && walk !== EXPLAIN_WALK_NAME;
+  if (!existsSync(path)) {
+    if (!named) throw noStore(path, flag);
+    throw new UsageError(
+      `no store of the walk "${walk}" at ${path}`,
+      `'codegraph walk <model.jsonl> --name ${walk}' (or a --walk FILE naming it) creates it. Pass ${flag} FILE if it is elsewhere.`,
+    );
+  }
+  const db = loadSqlite().open(path);
+  try {
+    return sqliteStoreReader(db, walk);
+  } catch (error) {
+    db.close();
+    if (!(error instanceof InsightsStoreError)) throw error;
+    const hint =
+      named && error instanceof WalkMismatchError
+        ? `Each walk keeps its own store (explain's is <model>.insights.db, a walk N's <model>.N.walk.db): --walk NAME reads N's, ${flag} FILE whichever walk's a file is.`
+        : `Pass ${flag} FILE to read another store.`;
+    throw new UsageError(`${path}: ${error.message}`, hint, { cause: error });
   }
 }
