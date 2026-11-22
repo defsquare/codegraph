@@ -35,6 +35,15 @@ const WRAPPERS: &[&str] = &[
     "ReadOnly",
 ];
 
+/// `typing`, or `typing_extensions`: a third party's (no table holds it) that backports its forms.
+pub(super) fn is_typing(module: &ModuleRef) -> bool {
+    match module {
+        ModuleRef::Stdlib(module) => module == "typing",
+        ModuleRef::Site(module) => module == "typing_extensions",
+        _ => false,
+    }
+}
+
 impl Extractor<'_> {
     pub(super) fn annotations(&mut self) {
         let files = self.files;
@@ -133,7 +142,7 @@ impl Extractor<'_> {
             TypeExpr::Named(chain, span) => self.named(file, scope, chain, *span, from),
             TypeExpr::Generic(chain, span, arguments) => {
                 self.named(file, scope, chain, *span, from);
-                for argument in arguments {
+                for argument in self.type_arguments(file, scope, chain, arguments) {
                     self.references(file, scope, argument, from);
                 }
             }
@@ -231,14 +240,26 @@ impl Extractor<'_> {
         self.annotation_class(step.typed).map(|(key, _, _)| key)
     }
 
+    /// The arguments of a subscripted annotation that are types: `Literal[…]` holds values,
+    /// `Annotated[T, …]` one type and its metadata — a string there is no forward reference.
+    pub(super) fn type_arguments<'t>(
+        &mut self,
+        file: usize,
+        scope: usize,
+        chain: &Chain,
+        arguments: &'t [TypeExpr],
+    ) -> &'t [TypeExpr] {
+        match self.typing_form(file, scope, chain).as_deref() {
+            Some("Literal") => &[],
+            Some("Annotated") => &arguments[..arguments.len().min(1)],
+            _ => arguments,
+        }
+    }
+
     /// The name of the `typing` form a subscripted annotation is, if it is one.
     fn typing_form(&mut self, file: usize, scope: usize, chain: &Chain) -> Option<String> {
         match self.quietly(file, scope, chain).ok()?.typed {
-            Typed::External {
-                module: ModuleRef::Stdlib(module),
-                symbol,
-                ..
-            } if module == "typing" || module == "typing_extensions" => Some(symbol.join(".")),
+            Typed::External { module, symbol, .. } if is_typing(&module) => Some(symbol.join(".")),
             _ => None,
         }
     }

@@ -343,6 +343,26 @@ fn an_annotation_with_no_typed_entity_stays_on_its_body_and_a_base_argument_is_i
     assert_eq!(from("g"), vec![("reference", "Repo")]);
 }
 
+#[test]
+fn a_literal_holds_values_and_annotated_one_type_with_its_metadata() {
+    let extraction = extract_sources(&[(
+        "m.py",
+        "from typing import Annotated, Literal\nimport typing_extensions as te\nclass Op: pass\nclass Meta: pass\n\
+         def f(op: Literal[\"add\", \"Op\"], x: Annotated[Op, \"remove\", Meta], y: te.Literal[\"stop\"]): pass\n",
+    )]);
+    let all = edges(&extraction);
+    let references: Vec<&str> = all
+        .iter()
+        .filter(|edge| edge.0 == "reference" && matches!(edge.2.as_str(), "Op" | "Meta"))
+        .map(|edge| edge.2.as_str())
+        .collect();
+    assert_eq!(references, vec!["Op"]);
+    let drops: Vec<&str> = extraction.stats.drops.iter().map(|drop| drop.what.as_str()).collect();
+    for value in ["add", "remove", "stop"] {
+        assert!(!drops.contains(&value), "{value}: {drops:?}");
+    }
+}
+
 /// `(from, to, provenance, [(argument, value)])` of an annotation use.
 type Use<'a> = (String, String, &'a str, Vec<(String, String)>);
 

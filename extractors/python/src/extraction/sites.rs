@@ -195,7 +195,7 @@ impl Extractor<'_> {
                     self.note_evidence(value);
                 }
                 if let TypeExpr::Generic(_, _, arguments) = annotation {
-                    for argument in arguments {
+                    for argument in self.type_arguments(file, scope, chain, arguments) {
                         self.note_annotation(file, scope, argument);
                     }
                 }
@@ -1099,11 +1099,9 @@ impl Extractor<'_> {
             },
             TypeExpr::Generic(chain, span, arguments) => {
                 let typing = match self.quiet(file, scope, chain)?.typed {
-                    Typed::External {
-                        module: ModuleRef::Stdlib(module),
-                        symbol,
-                        ..
-                    } if module == "typing" || module == "typing_extensions" => symbol.join("."),
+                    Typed::External { module, symbol, .. } if super::annotations::is_typing(&module) => {
+                        symbol.join(".")
+                    }
                     _ => String::new(),
                 };
                 match typing.as_str() {
