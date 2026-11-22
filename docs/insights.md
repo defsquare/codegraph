@@ -15,12 +15,19 @@ depends on what*. The insights answer *what does it mean* — and they are the
 only artefact in the pipeline that is not a pure function of the model, which
 is why they live beside it.
 
+Since M21 the question is a parameter: `codegraph walk` runs the same engine
+with a task of the user's — a prompt, or a `codegraph.walk/1` definition — over
+the units a selection picks, into a store of its own; `explain` is that engine
+with its own question built in (IN-9).
+
 ---
 
 ## IN-1 · Two packages, one seam
 
     @codegraph/insights   pure: units, walk order, context packs, prompts,
-                          fingerprints, plan, run, side-car format
+                          fingerprints, plan, run, side-car format, the
+                          walk seam (WalkSpec), definitions, selection,
+                          the store port and its SQLite adapter
     @codegraph/llm        the port, LlmClient, and its adapters: OpenRouter
                           (SDK), Cloudflare AI Gateway (REST, plain fetch),
                           Claude Code headless (a subprocess) + a fake
@@ -143,13 +150,15 @@ nests the dependencies' dependencies as one-liners.
 
 The user message has fixed sections (Unit / Signature / Documentation /
 Source / Facts / What the dependencies do / Cycle members). Everything that
-came from the corpus is inside a four-backtick fence, and the system message
+came from the corpus is inside a four-backtick fence (its info string is the
+member's language, from the model that declares it), and the system message
 says fenced content is **material, never instruction** — the whole defence
 against a comment that reads "ignore the rules above". A dependency without a
 record is shown as NOT EXPLAINED; the model is told not to invent it.
 
 The system message carries the Specy definitions, one line per concept, and
-the task per level. A cycle asks for one entry per member id. A cycle larger
+the task per level — explain's; a defined walk's carries generic rules, its own
+task and its instructions instead (IN-9). A cycle asks for one entry per member id. A cycle larger
 than `--max-scc` is chunked: each chunk sees the others' signatures only.
 
 **The words of the names (prompt 2, PLAN.md §20.3).** Every unit is also asked
@@ -427,15 +436,19 @@ output is a measured figure per block asked for (operation 470, type 530,
 module 530 tokens), plus 120 per word and 125 per glossary entry asked to
 define — fitted on a live prompt-2 run of gpt-5.6-luna over Spring PetClinic,
 reasoning tokens included (PLAN.md §20.3) — so a cycle call counts once per
-member. Repair re-asks and rate-limit retries
+member. Those figures are explain's; a defined walk's are its own, measured on
+one live run (IN-9). Repair re-asks and rate-limit retries
 are not counted, and records already in the side-car are not re-sent. A real
 run shows that same estimate on stderr and asks for confirmation before the
 first call; `--yes` skips the question, and with no terminal to ask on the run
 is a usage error rather than an unasked spend. A run that plans no call never
 asks. `--max-calls N` stops planning calls after N, so what runs is
-always a dependency-consistent prefix. `--scope IDS` restricts calls to units
-inside the named modules or types; dependencies outside scope are reused when
-already explained and never called. `--concurrency N` runs N calls in flight
+always a dependency-consistent prefix. `--scope IDS` restricts calls to the
+units whose member, nearest type or nearest module is one of the ids — a
+sub-package is not reached through its parent package, nor a nested type
+through the type around it; dependencies outside scope are reused when already
+explained and never called. It is `--include id:` for each id, one case of the
+selection `--include`, `--exclude`, `--levels` and `--closure` express (IN-9). `--concurrency N` runs N calls in flight
 within a layer; a rate-limited account (OpenRouter allows new accounts 20
 requests a minute) is better served by `--concurrency 1`, and the client obeys
 the provider's `Retry-After` on a 429 before retrying. `--model` and `--rollup-model` pick the leaf and the roll-up
@@ -473,8 +486,8 @@ client.
 
 A failure record lives exactly as long as the gap it describes: a run that
 explains the unit drops it, a run that fails again replaces it with
-`attempts + 1`, and a run that did not attempt the unit (`--scope`,
-`--max-calls`) carries it over unchanged. The trailer's `failed` is the number
+`attempts + 1`, and a run that did not attempt the unit (`--scope` or any
+selection, `--max-calls`) carries it over unchanged. The trailer's `failed` is the number
 of failure records in the body. In the store a failure is a row written **the
 moment it happens** (`onFailure`), deleted in the same transaction that commits
 its unit's records, and the table is replaced by what is still owed when the
@@ -536,3 +549,320 @@ every other command still returns a plain number, and the promise is settled
 through the same exit-code mapping (`failure`), so a rejection can never escape
 unhandled. `runSync` serves the in-process test helpers and throws if it meets
 a promise.
+
+## IN-9 · The walk, generalized: `codegraph walk` (M21)
+
+`explain` asks ONE question — what is this, in the Specy vocabulary? — of EVERY
+unit. The machinery under it asks nothing about the question: units, the
+SCC-condensed order, context packs, Merkle fingerprints, the plan before the
+spend, the store, the retry. So that machinery stays where it is and learns
+nothing new; what `explain` hard-coded moves behind one seam, and a question of
+the user's is data compiled into it (PLAN.md §22).
+
+### The seam: what the engine asks of a walk
+
+`WalkSpec` (`spec.ts`) is everything `plan.ts`, `run.ts`, `context.ts`,
+`prompt.ts`, `records.ts` and `fingerprint.ts` used to reach for by name;
+`order.ts`, `units.ts` and `source.ts` do not see it (a boundary test holds
+that the walk builders name no selection).
+
+| the engine needs | `explain` gives (`explain-spec.ts`, unchanged) | a definition gives (`definition.ts`) |
+|---|---|---|
+| the system message per level and shape | the common rules, the Specy vocabulary, the task per level | the generic rules, `prompt.task[level]`, `prompt.instructions` |
+| extra lines in a member's section | the words to define, a module's glossary words | the entity instructions that select this member |
+| the answer schema per level and shape | the Specy blocks | the field grammar, compiled |
+| what is kept of an answer | confidence clamped, words restated | confidence clamped |
+| a block with no call | the templates of IN-7 | none: a trivial member is skipped (`trivial: "skip"`, the default) or asked |
+| what a dependent quotes | `description` and the concept label | `description`, and `label: value` when `answer.label` names a field of that level |
+| completion tokens per block, for the estimate | the fitted constants of IN-6 | one measured figure per level, nothing per field (below) |
+| what else the fingerprint hashes | nothing | `version`, the system message's digest, the answer schema's digest, the label, the member's instructions |
+
+The last row is the compatibility rule: the fingerprint's optional `walk` input
+is omitted by the built-in explain, so its canonical JSON — and every
+fingerprint ever stored — is unchanged. The golden suite
+(`packages/cli/test/golden/explain/`) pins explain's plan, every rendered
+prompt, every fingerprint and chain and a fake-completer side-car on the five
+fixtures; on the paid Spring PetClinic store the `explain --dry-run --json` plan
+is byte-identical before and after M21.
+
+### The definition (`codegraph.walk/1`)
+
+A definition is data, checked with no model read: `parseWalkDefinition` →
+`compileDefinition` → `CompiledWalk` (name, version, digest, selection,
+context, answer schemas, system messages) → `spec(env)`, the one part that
+needs the walk's graph (entity instructions select members under its view).
+
+```json
+{
+  "kind": "codegraph.walk/1",
+  "name": "audit",
+  "version": "1",
+  "levels": ["operation", "type"],
+  "select": { "edge": { "kind": "annotationUse", "to": { "name": "Audited" } } },
+  "closure": "containers",
+  "prompt": {
+    "task": {
+      "operation": "@Audited marks a method whose calls must reach the audit log. Say what a call of this operation would record, and whether anything in its source or its callees sends it to a log at all.",
+      "type": "Say which of this type's operations are audited, and whether its state can change outside them."
+    },
+    "instructions": "Answer in English. Quote the annotation's value when it matters.",
+    "entities": [
+      { "select": { "name": "Reporting" }, "instructions": "Reporting runs monthly: say what max returns on an empty list." }
+    ]
+  },
+  "answer": {
+    "label": "logged",
+    "fields": {
+      "operation": { "logged": { "enum": ["yes", "no", "unclear"] }, "recorded": "string[]" },
+      "type": { "unaudited": { "list": { "operation": "string", "why": "string" } } }
+    }
+  }
+}
+```
+
+- **Defaults** (every key but `kind` is optional): `name` `adhoc`; `version`
+  `1`; `levels` all three (a set); `select` everything; `exclude` nothing;
+  `closure` `none`; `trivial` `skip`; `context` `{ depth: 1, maxLines: 200,
+  source: true }`; `prompt.task` a neutral task per level ("Answer this walk's
+  instructions about this operation… Where none applies, say what it does.");
+  `prompt.instructions` none; `prompt.entities` none; `answer.fields` none.
+  `codegraph walk --print-definition` prints the default with every key
+  spelled.
+- **Every block** is `answer`, the declared fields by name, `description`,
+  `confidence` — the wire order, so the line that flows upward is written after
+  the answer it summarizes, and a key-sorting formatter moves no fingerprint.
+  The generic rules tell the model that `description` (at most 60 words) is
+  what every dependent is shown of it: **what flows upward is `description`**.
+- **The field grammar is closed**: `"string"`, `"number"`, `"boolean"`,
+  `"string[]"`, `{ "enum": [...] }`, `{ "list": { field: scalar or enum } }`,
+  each object form optionally `"nullable": true` (a nullable scalar is
+  `{ "type": "string", "nullable": true }`). Compiled to Zod and strictified by
+  the same `strictify` as explain's blocks: one definition gives the type, the
+  validator and the strict schema. A list does not nest. Rejected: a
+  user-supplied JSON Schema (strict output takes a narrow dialect, and the
+  workspace has no validator for arbitrary schemas).
+- **Reserved**: the walk names `explain` and `insights` (explain's walk and its
+  store); the field names `description`, `answer`, `confidence` (every block's),
+  `words`, `glossary` (explain's) and `concept` (the store's generated `concept`
+  column reads `$.concept` of any block). Names match `[a-z][a-z0-9-]*`.
+- **Refused, and why**: four backticks in any task or instruction text (the
+  corpus fence: an instruction can then never open or close one, so "fenced =
+  material" stays structural); `context.source: false` (the engine always shows
+  source, and a file must not run as if it said `true`); `answer.builtin` (the
+  Specy answer is not grammar a file may claim). Every fault carries its path —
+  structure first, then values, every fault of a pass at once.
+- **A task or fields for a level outside `levels` are kept**, digested and
+  hashed for that level, so `--levels` never invalidates a file nor moves a
+  fingerprint.
+- **The digest** (`definitionDigest`) is the sha256 of the canonical resolved
+  definition — defaults applied, keys sorted, text trimmed, the shortest
+  spelling of each field type, `levels` as a set — so a spelled default and an
+  omitted one digest the same. A CLI flag is folded into the JSON before it is
+  parsed: its fault is reported at its key (`name (from --name): …`) and the
+  digest is the effective definition's.
+- **Rejected**: prompt templates with placeholders (the user message's layout is
+  the engine's contract — fixed sections, corpus fenced, deterministic bytes);
+  a different task per entity inside one walk (a cycle is one prompt with one
+  answer schema; per-entity text is instructions, a different task is a second
+  walk with a filter).
+
+**Explain, customized.** `explain --instructions TEXT|@FILE` and `explain --walk
+FILE` reach explain through `customizeExplain`. The file (`parseExplainFile`)
+may set `select`, `exclude`, `levels`, `closure`, `context`,
+`prompt.instructions` and `prompt.entities`, may restate the built-in (`name:
+explain`, version `2`, `answer.builtin: specy.domain/3`), and is refused for
+`prompt.task`, `answer.fields`, `answer.label`, `trivial`, another name or
+version: the Specy blocks are what the readers, the glossary and the Specy
+skill depend on. With nothing to carry, the customized spec IS the built-in
+(the same object). A unit no instruction reaches, and every templated unit
+(which sends no prompt), keeps explain's fingerprint. `codegraph walk
+--print-definition explain` prints explain as a definition.
+
+### Selectors and what a filter means bottom-up
+
+Selectors live in `@codegraph/analyzer` (`selectors.ts`): the CLI defines no
+predicate of its own, and `analyze`, `city` and the navigator can take them
+later. A **term** is text, one per `--include`/`--exclude` flag: `id:ID`,
+`kind:K`, `trait:T`, `lang:L`, `name:GLOB`, `module:GLOB`, `file:GLOB`,
+`edge:KIND`, `edge:KIND>TERM` (it writes such an edge, to a match of TERM),
+`edge-in:KIND`, `edge-in:KIND<TERM` (such an edge points at it — the analyzer's
+derived inverse). **JSON** (`{ "id": … }`, `{ "edge": { "kind", "to" } }`,
+`{ "edgeIn": { "kind", "from" } }`) is what a file holds, and alone composes
+with `all`, `any`, `not`. The vocabulary is core's: an unknown kind, trait,
+language or edge kind is an error listing the valid names, never a silent empty
+match; `kind:` takes the union of the profiles' kinds and `lang:` the profile
+codes (`java`, `csharp`, `ts`, `ex`, `rb`).
+
+A glob matches the whole string, case-sensitively, with no escape (`*` is
+always a wildcard; an exact name is `id:`); `*` stays in a segment, `**`
+crosses. The separator is `/` for `file:` and, for `name:` and `module:`, the
+one the profile's `lexicon.qualified` states for the kind (`.` for a Java
+package, `/` for a TypeScript, Elixir or Ruby file module, `::` for a Ruby
+constant) — so `module:com.acme.order*` does not reach a sub-package and
+`module:com.acme.order**` does. A selector matches inside the view's
+projection: `--declared-only` makes every `edge` term see facts only, with no
+provenance syntax of its own, and `not` complements within the view. A term
+matches the entity itself; nothing is folded.
+
+**The walk is filter-blind.** It is built over the whole model whatever the
+selection, so units, cycles and fingerprints never depend on it and a record
+bought under one filter is reused by any later run whose inputs match. Building
+it over the filtered entities only was rejected for exactly that reason.
+`selection.ts` turns a `Selection` into the `inScope` predicate `planRun`
+already took, under five rules, each a tested property:
+
+1. **Nearest containers.** A member is selected when it, its NEAREST containing
+   type or its nearest containing module matches an include (none: everything)
+   and none of the three matches an exclude. Exclude always wins. Not
+   transitive: `--scope java:com.acme.order` leaves its sub-packages' units
+   unasked, and a nested type is not reached through the type around it.
+2. **Levels.** A unit is asked only if its level is in `levels`.
+3. **A cycle is one unit.** Include and exclude are both existential over its
+   members: one selected member selects it, one excluded member leaves it
+   unasked (asking it would ask the excluded member).
+4. **Closure.** `dependencies` adds the selection's transitive unit
+   dependencies, `containers` the type and module above a selected unit, `all`
+   both — the LEAST set closed under its rule. It never adds a barred unit
+   (outside `levels`, reached by an exclude, or a trivial member under
+   `trivial: "skip"`), and `dependencies` does not walk through one (f → g → h
+   with g excluded adds nothing: at depth 1 no asked prompt would quote h).
+   `containers` reaches the module above an operation even when the type
+   between them is barred; a parent package is not a container.
+5. **Not selected is `skip-scope`**, the existing status: reused when a record
+   with its fingerprint exists, never called, shown to dependents as NOT
+   EXPLAINED, and part of their fingerprint through `missingDependencies`.
+
+Templates are not filtered: under explain a trivial member is `template`
+whatever the selection, and is counted apart. A selection moves a unit's
+fingerprint only through `missingDependencies`: a unit keeps its fingerprint
+exactly when nothing in its transitive dependency cone is `skip-scope`. The
+plan prices the alternative (`priceSelection`): the direct dependencies of
+asked units it leaves unwalked, by why, and what the next closure would add —
+cold-plan figures, since on a warm store an added unit may be reused.
+
+`--scope` is `--include id:` for each id, compiled under the walk's resolved
+view, as every selector is. An `id:` matches nothing the view drops, so the two
+can differ from the pre-M21 predicate only for a corpus member whose nearest
+type or module is a stub under `--internal-only` — absent from the five
+fixtures and from PetClinic, where the eleven `--scope` baselines are
+byte-identical. `--scope` keeps its own unknown-id check; an `--include id:` is
+an opaque token and is not checked.
+
+### One store per walk
+
+A walk named N writes `<model>.N.walk.db`, the working copy, and its export
+`<model>.N.walk.jsonl`; `explain` keeps `<model>.insights.db` and
+`.insights.jsonl`, kind `codegraph.insights/1`, its bytes untouched. One store
+for every walk (a `walk` column in the primary key) was rejected: a migration
+of paid-for stores, for files that did not exist yet. One store per walk needs
+none: the block is already TEXT and the header already JSON in `meta`, so
+`INSIGHTS_DB_VERSION` stays 2, and `concept` and `insight_word` are simply empty
+on a walk's store.
+
+- **The side-car's header kind is `codegraph.walkRecords/1`** — not
+  `codegraph.walk/1`, the definition file's: two formats, two kinds — with
+  `walk: { name, version, digest, answerDigest }`. `answerDigest` is the sha256
+  of the three strict block schemas as sent, keys sorted. Record, failure and
+  trailer lines are the existing envelopes; the block is validated by the
+  walk's compiled schema (`walkRecords(compiled)`, a `RecordFormat`) instead of
+  the Specy union. The file never carries a schema, only the identity the name
+  check compares.
+- **The store is not a cache, here too.** A store, side-car or run header of
+  another walk's NAME is refused with its bytes untouched — at open
+  (`migrate()`, before any write, readers included), on `importFile`,
+  `beginRun`, the encoder, and line 1 of the decoder. A header with no `walk`
+  key is explain's; an empty store is nobody's yet.
+- **A changed answer is another walk.** The fingerprint hashes the answer
+  schema, so new fields re-ask every unit anyway, and a store keeping both
+  shapes would export a side-car no definition decodes: a store of the same
+  name under another `answerDigest` is refused like another name's ("`--name
+  OTHER` keeps both").
+- **A changed definition is said, not refused.** Same name and answer, another
+  `digest` (a task, instructions, version, selection): fingerprints decide what
+  is asked again, and the run says so in words before any count — the first
+  line of a dry run or an estimate, on stderr under `--json`, and before the
+  confirmation's question: `note: the definition changed since this store was
+  written: these N units are asked again and their records REPLACED; --name
+  OTHER keeps both.` Declined, nothing is written (the store's sha256 is
+  unchanged).
+- **A customized explain** keeps its kind and its store and records `walk: {
+  name: "explain", version: "2", digest }`, the digest over its instructions
+  alone (a selection or a depth must not move a plain explain's header); a
+  plain explain's header gains no key. An older build reads such a file as a
+  plain explain and drops the key on export.
+- **What a dependent quotes after a re-open** is a projection the spec declares
+  (`WalkSpec.quoted`, the block paths its quote reads): the store answers it in
+  SQL, memory builds the same projection through one builder, and explain's
+  four paths are the ones its SQL always read.
+- **Reads keep a block as stored.** A writer validates against the current
+  schema; a read accepts any object block, so a record already paid for never
+  becomes unreadable.
+- `decode → import → export` is the identity for a walk's records as well — a
+  fast-check property over arbitrary grammar-shaped blocks.
+
+### The readers
+
+A reader holds no definition. `walkReader(name)` compares the walk's name,
+never its answer, and reads each block as stored, so a store written under
+answer fields since changed stays readable; it writes nothing (a writable open,
+the codec and its record schema all refuse). `sqliteStoreReader(db, walk?)`
+picks the reader from the store's header. Explain's projections stay
+explain's: the "owned by X" concept label and the "owed words" count apply to a
+`codegraph.insights/1` store only.
+
+- **`codegraph insights --walk N`** reads `<model>.N.walk.db`; `--store FILE`
+  alone reads whichever walk's store its header names, and with `--walk N` the
+  file must be N's. No flag, or `--walk explain`, is explain's output byte for
+  byte. A walk's summary names the walk, its version and its definition digest;
+  `--id` prints the block field by field. `--concept`, `--word`, `--glossary`,
+  `--polysemy` and `--concerns` answer **none** — exit 0, the reason on stderr,
+  under `--json` one `codegraph.insightsNone/1` document — rather than an empty
+  table a consumer would read as "no such concept".
+- **`codegraph serve --insights FILE`** chooses the reader the same way. A walk's
+  `/insight.json` answer is `kind, id, status, walk, record`: the `walk` key is
+  the discriminator, on every status, and never on explain's answers, whose
+  keys are unchanged. `/glossary.json` answers `no-store` on a walk's store. A
+  store with no header yet is re-opened on each request, so a walk that fills it
+  later is not read through explain's schema.
+- **The Navigate panel** renders a walk's block in the same inference frame as
+  explain's: the badge "LLM answer", the walk's name, the model, the confidence;
+  then the answer, every field by its declared name (a list item by item, a
+  nested object indented, `false` shown, `—` for an empty value), then the
+  description. The page restates the block's own keys (`WALK_BLOCK_KEYS`) as a
+  literal pinned by a test and still imports nothing from this package.
+  Explain's panel markup is byte-identical to the build before M21.
+
+### Cost
+
+Input is estimated as explain's is (IN-6). Output is
+`WALK_COMPLETION_TOKENS_PER_BLOCK` per block asked for: operation 500, type
+620, module 620. Operation and type are the means of one live run (PLAN.md
+§22.6, step 8; 2026-11-22): Spring PetClinic, `--provider claude-code`, model
+`sonnet`, depth 1, a walk that declares no answer field (its blocks carry
+`answer`, `description` and `confidence` only), 83 calls, $0.9380. The 63
+operation blocks averaged 499 tokens (273 to 802), the 20 type blocks 620 (307
+to 1 177). No module was asked there, so a module takes the type's figure;
+nothing measured a declared field, so a field adds nothing to the estimate,
+though it adds to the answer. The estimate says all of this (`output ≈
+measured on a live run: operation 500, type 620 tokens per block asked for
+(sonnet through claude-code, on a walk that declares no field: declared fields
+add to it; no module was measured, it takes the type's figure)`), and its JSON
+carries the same sentence in `assumptions.completionTokens`.
+
+On that run, the estimate made before it was 12.4 % above the billed input
+(225 603 tokens estimated, 200 779 billed: operations 21.6 % above, types
+7.0 % below) and, with the 500 per block it then used at every level, 5.3 %
+below the billed output (41 500 against 43 814: operations 0.3 % above, types
+19.3 % below). The figures now used are that run's means, so they reproduce
+its output by construction (43 900 against 43 814); they say nothing yet about
+another corpus, model or question. One run, on one corpus, with one model and
+one question, is their whole basis.
+
+### Not supported (PLAN.md §22.7)
+
+Planning only the selection's dependency cone (a plan still builds a context
+pack for every unit, to hash it); selectors over measures, roles or another
+walk's results; a walk quoting another walk's descriptions; `context.source:
+false` and `context.sections`; a task per entity subset; an answer schema
+beyond the grammar; selectors on `analyze`, `city` and `navigator`; the Navigate
+panel choosing among several walks' stores; the desktop app running a walk.

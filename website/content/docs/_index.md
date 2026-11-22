@@ -40,7 +40,7 @@ extractors, and the build from a clone.
 
 - **Five languages: Java, C#, TypeScript, Elixir and Ruby.** Eleven language profiles exist on paper; the extractors are [Spoon for Java](/docs/reference/java-extractor/), [Roslyn for C#](/docs/reference/csharp-extractor/), [the compiler API for TypeScript](/docs/reference/typescript-extractor/), [the compiler's parser for Elixir](/docs/reference/elixir-extractor/) and [Prism for Ruby](/docs/reference/ruby-extractor/). Each is a self-contained binary; the TypeScript one runs on Node 22. The [metrics pass](/docs/reference/metrics-pass/) measures any of their models. A Clojure adapter is next.
 - **No build means imperfect resolution.** Without a classpath some references stay unresolved; they become stubs, honest but still gaps. Keep one package to one source root per run.
-- **`explain` costs money and needs a network.** It is the only command that does; `--dry-run` and `--estimate` come first.
+- **`explain` and `walk` cost money and need a network** (or an installed Claude Code). They are the only commands that do; `--dry-run` and `--estimate` come first.
 - **Not a linter.** Codegraph reports structure, coupling and cycles, not style or bugs.
 - **Platform coverage is uneven.** macOS gets the app and every extractor from the tap; Linux gets the extractors from Homebrew and the command as a release download; Windows gets release binaries for the command, Java and C#, and `npx` for TypeScript. The Elixir extractor is built for Apple silicon and Linux x64 only; the Ruby extractor and the metrics pass for macOS and Linux on both architectures, and not for Windows.
 

@@ -19,7 +19,7 @@ header → i* → f* → eof
 
 Records are sorted by `(level, id)`, with `operation` before `type` before `module`, and are re-serialized through their Zod schema, so a record built in memory and one read back from disk are the same bytes. **The body carries no timestamp**; only the trailer does. Two runs with the same records are therefore diffable: what changed is what was re-explained.
 
-During a run, finished records are appended one per line to `<out>.journal` and the sorted side-car is rewritten from base plus journal at each layer boundary, so an interrupted run resumes where it stopped. Reading a journal is lenient (its last line may be cut); reading the side-car proper is strict.
+The side-car is an export. A run works against a SQLite store beside it, `<model>.insights.db`, committing every finished unit as it arrives, and writes the side-car once, when the run ends, with the bytes the store exports — so an interrupted run resumes where it stopped, and `explain --export` writes the file again from the store. A side-car with no store beside it is imported by the first run that writes; one edited by hand is warned about and overwritten unless taken with `explain --import FILE`. Reading the side-car is strict.
 
 ## `header`
 
@@ -27,6 +27,7 @@ During a run, finished records are appended one per line to `<out>.journal` and 
 |---|---|---|
 | `t` | `"header"` | |
 | `kind` | `"codegraph.insights/1"` | |
+| `walk` | `{name, version, digest}`, optional | present only when explain was customized (`--instructions`, `--walk FILE`): `name` is `explain`, `version` the prompt version, `digest` the digest of the instructions; a plain explain's header has no such key |
 | `generatedBy` | string | `@codegraph/insights` |
 | `promptVersion` | string | bumped whenever the prompt or a block shape changes; every fingerprint includes it |
 | `metamodel` | string | the vocabulary the blocks speak — `specy.domain/3` |
@@ -194,6 +195,25 @@ One exception, by version: `words` and `glossary` arrived with prompt 2, so a re
 Every record carries a sha256 over what it was computed from: the prompt version, the model slug, the level, the source slices, the comments, the signatures, a digest of the facts shown, the words its prompt asked to define (and a module's glossary words), the **fingerprints of the units it depended on**, and the ids of dependencies that had no record. Merkle-style: change one leaf's source and exactly its transitive dependents and containers change.
 
 The explanation text is deliberately **not** hashed — a non-deterministic answer must never cascade re-runs. A re-run plans `reuse` for every unit whose members' records match; `--force` overrides. Because a missing dependency is part of the fingerprint, a dependent explained while its callee had failed or was out of scope is redone once the callee exists.
+
+## A walk's side-car
+
+[`codegraph walk`](/docs/reference/cli/walk/) writes the same layout — `header → i* → f* → eof` — to `<model>.N.walk.jsonl`, N the walk's name, the export of its own store `<model>.N.walk.db`. Its header's kind is `codegraph.walkRecords/1` (the definition file's kind is `codegraph.walk/1`: two formats, two kinds), it carries no `metamodel`, and it carries `walk`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `walk.name` | string | the walk's name; a store or side-car is only ever read by the walk of that name |
+| `walk.version` | string | the definition's `version` |
+| `walk.digest` | 64-char hex | the digest of the effective definition (flags folded in, defaults applied, keys sorted): a change is reported before a run, never refused |
+| `walk.answerDigest` | 64-char hex | the digest of the answer schemas as sent: a store or side-car of this name under other answer fields is refused |
+
+Record, failure and trailer lines are the envelopes above. The `block` is the walk's own: `answer`, the fields its [definition](/docs/reference/walk-definition/#the-field-grammar) declares by name, `description`, `confidence`; it is validated against the definition's compiled schema, not against the Specy blocks below. `decode → import → export` is the identity for a walk's side-car as for explain's.
+
+```json
+{"t":"header","kind":"codegraph.walkRecords/1","walk":{"name":"risk-review","version":"1","digest":"774bdb0ad59cbffd8cfdfe3a1630842915096912f7412e35af8dcc41da11c308","answerDigest":"56e34c47a3eac0f5417be6e8d9a0fbd39a299e97897e6dc4cd6861b1d71893ef"},"generatedBy":"@codegraph/insights","promptVersion":"2","models":{"leaf":"fake/leaf","rollup":"fake/rollup"},"provider":"openrouter","depth":1,"source":{"paths":["model.jsonl"],"langs":["java"],"view":{"name":"all","filters":[]}}}
+```
+
+(A header from a test run against the deterministic fake client, its `source.paths` shortened; no live walk has been recorded for this page.)
 
 ## Templated records
 

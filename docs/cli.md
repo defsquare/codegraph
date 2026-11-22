@@ -26,8 +26,8 @@ share. Task-oriented walkthroughs live in the [README](../README.md).
 - **`--json`** prints the same information as a machine-readable object.
 - **A sibling `model.db`** (the SQLite analysis store) is built on first use and
   reused afterwards by `analyze`, `export`, `navigator`, `vocabulary`,
-  `domain-facts` and `explain`; on those, `--no-cache` reads the JSONL
-  directly.
+  `domain-facts`, `serve`, `explain` and `walk`; on those, `--no-cache` reads
+  the JSONL directly.
 
 ## Synopsis
 
@@ -82,12 +82,23 @@ codegraph explain  [model.jsonl] [--src DIR] [--out FILE] [--dry-run]
                    [--claude-path FILE]
                    [--model SLUG] [--rollup-model SLUG] [--depth N]
                    [--max-calls N] [--max-tokens N] [--scope IDS]
+                   [--include SEL]... [--exclude SEL]... [--levels LEVELS]
+                   [--closure none|dependencies|containers|all]
+                   [--instructions TEXT|@FILE] [--walk FILE]
                    [--concurrency N]
                    [--max-lines N] [--max-scc N] [--terms N] [--force] [--retry-failed]
                    [--export | --import FILE] [--yes] [--json]
                    [--framework spring] [--internal-only] [--declared-only]
 
-codegraph insights [model.jsonl] [--store FILE] [--json]
+codegraph walk     [model.jsonl] [--walk FILE|explain] [--prompt TEXT | --prompt-file FILE]
+                   [--instructions TEXT|@FILE] [--name N]
+                   [--include SEL]... [--exclude SEL]... [--levels LEVELS]
+                   [--closure none|dependencies|containers|all]
+                   [every run flag of explain but --scope and --terms]
+codegraph walk     --print-definition [explain]
+                   # a codegraph.walk/1 file to start from; no model read
+
+codegraph insights [model.jsonl] [--store FILE] [--walk N] [--json]
                    [--id ID | --failures | --runs |
                     --word WORD | --glossary MODULE_ID | --polysemy | --concerns |
                     --level operation|type|module --concept NAME
@@ -182,6 +193,16 @@ artifact, `/insight.json?id=…`, looked up in `<model>.insights.db` beside the
 first model (or `--insights FILE`) when asked for. With no store the route
 answers 404 and the page looks exactly as it did.
 
+`--insights FILE` may also name a walk's store (`<model>.N.walk.db`, written by
+`walk`): the server reads whichever walk the store's header names, and the
+panel shows that walk's answer in the same inference frame — the badge "LLM
+answer", the walk's name, the model and its confidence, then the answer, every
+declared field by its name, and the description. On a walk's store
+`/insight.json` answers with one more key, `walk` (the walk's name), right
+after `status` — on `explained`, `failed` and `unknown` alike, and never on
+explain's answers, whose keys are unchanged — and `/glossary.json` answers
+`no-store`. One store per page: explain's or one walk's.
+
 Over the same store, a clicked word on the Vocabulary tab also shows **what
 the explanations under that scope said it means**: each module's
 reconciliation (and the types that disagree on it), then each explained
@@ -231,8 +252,10 @@ the page from the image's own assets. A `.js` extractor (`snapshots
 --extractor`, a registry entry with `launch: node`) then runs under the
 `node` on PATH, since the image is not one. Its gates —
 `scripts/sea-smoke.mjs`, run by `test.sh` and CI on every platform — are
-`--version`, `analyze` byte-identical to the ESM build, and `serve --app`
-answering the page.
+`--version`, `analyze` byte-identical to the ESM build, `serve --app`
+answering the page, `walk` (both `--print-definition`s and a dry run over the
+Java fixture) answering as the ESM build does, and `insights --walk` reading a
+walk's store (summary and `--id`) as the ESM build does.
 
 ### `city`
 Writes the code-city artifact (`city.json`): modules as districts (nested when
@@ -364,10 +387,99 @@ its own name, an operation's parameters, a type's fields, split as `vocabulary`
 splits them), and a module reconciles what its types said into a `glossary`
 of its heaviest `--terms N` words (default 60) that a type defined. Design record: [insights.md](insights.md).
 
+`explain` is the built-in walk of the engine `walk` runs on (below), and takes
+its selection and its instructions the same way, without changing its question,
+its blocks or its store. `--include SEL` / `--exclude SEL` (repeatable, one
+selector term each, any of them; exclude wins), `--levels a,b` and `--closure
+none|dependencies|containers|all` choose the units asked; `--scope a,b` is
+`--include id:a --include id:b` — a unit is explained when its member, its
+nearest type or its nearest module is one of the ids, so a sub-package is not
+reached through its parent (`--include 'module:com.acme.order**'` is the
+sub-tree) — and keeps its own check that each id exists. `--instructions
+TEXT|@FILE` appends a paragraph to every system message. `--walk FILE` reads a
+`codegraph.walk/1` file that may set `select`, `exclude`, `levels`, `closure`,
+`context`, `prompt.instructions` and `prompt.entities` (instructions for the
+members a selector selects), and is refused for `prompt.task`, `answer`,
+`trivial`, another name or version; a flag replaces the file's key. Trivial
+members stay templated whatever the selection. A customized run keeps kind
+`codegraph.insights/1` and `<model>.insights.db`; its header gains `walk: {
+name: "explain", version: "2", digest }` (the digest over the instructions),
+and a unit no instruction reaches keeps its fingerprint. When the store already
+holds records and the customization changed, the plan's first line (stderr
+under `--json`, and before the confirmation's question) says how many units are
+asked again and their records replaced. The plan and the estimate print what a
+selection leaves unwalked (`selection: N dependencies of the selection are not
+walked (…); without a record, shown as NOT EXPLAINED`) and what the next `--closure` would add.
+`--retry-failed` meets neither `--scope` nor a selection flag. Explain's JSON
+kinds and their keys are unchanged.
+
+### `walk`
+Asks a question of the user's of every selected unit, bottom-up, on the engine
+`explain` runs on — the same units, cycle-condensed order, context packs,
+fingerprints, plan, confirmation, store discipline and retry. The question is
+`--prompt TEXT` (or `--prompt-file FILE`: one task at every level) or a
+`codegraph.walk/1` definition, `--walk FILE`: a task per level, instructions
+for every prompt and for the members a selector selects, and the fields each
+answer carries in a closed grammar (`"string"`, `"number"`, `"boolean"`,
+`"string[]"`, `{ "enum": […] }`, `{ "list": { … } }`, each object form
+optionally `"nullable": true`). Every answer also carries `answer`, a
+`description` of at most 60 words — the line the units above it are shown —
+and `confidence`. Neither flag: the default definition (name `adhoc`, a neutral
+task). `walk --print-definition` prints it with every key spelled, and
+`walk --print-definition explain` prints explain's; neither reads a model.
+
+`--include SEL` / `--exclude SEL` take one selector term each, repeatable —
+`id:ID`, `kind:K`, `trait:T`, `lang:L`, `name:GLOB`, `module:GLOB`,
+`file:GLOB`, `edge:KIND[>TERM]`, `edge-in:KIND[<TERM]` — and a unit is asked
+when its member, its nearest type or its nearest module matches an include and
+none matches an exclude. `--levels` and `--closure` are as for `explain`; a
+definition's `trivial` is `skip` by default, so trivial members are not asked
+(and are shown NOT EXPLAINED to their dependents) unless it says `ask`. The
+walk is built over the whole model whatever the selection. `--name N`,
+`--instructions`, `--depth` and `--max-lines` replace the definition's keys;
+every flag is folded into the definition before it is parsed, so a fault names
+its flag (`name (from --name): …`) and the digest is the effective
+definition's. `--walk explain` runs explain itself under walk's JSON kinds, on
+explain's store; it refuses `--prompt`, `--prompt-file` and `--name`.
+`--retry-failed` takes its selection from the failure records and refuses
+every selection flag. Every other run flag is explain's (`--src`, `--out`,
+`--provider`, `--claude-path`, `--model`, `--rollup-model`, `--max-calls`,
+`--max-tokens`, `--concurrency`, `--max-scc`, the view flags, `--no-cache`,
+`--dry-run`, `--estimate` and its prices, `--force`, `--export`, `--import`,
+`--yes`, `--json`) through one shared option table.
+
+A walk named N works against `<model>.N.walk.db` and exports
+`<model>.N.walk.jsonl` (`--out FILE`: the side-car at FILE, the store beside it
+with `.db`), header kind `codegraph.walkRecords/1` with `walk: { name, version,
+digest, answerDigest }`. A store is opened only by the walk that wrote it: one
+of another name, explain's included, is refused with its bytes untouched, and
+so is one of this name written under other answer fields (`--name OTHER` keeps
+both). A changed task, instructions, version or selection is not refused: the
+first line of the plan, of the estimate and of the confirmation says `note: the
+definition changed since this store was written: these N units are asked again
+and their records REPLACED; --name OTHER keeps both.` — declined, nothing is
+written. `--json` prints `codegraph.walkPlan/1` (`kind, walk, models, depth,
+estimates, steps[, price]`), `codegraph.walkEstimate/1` (`kind, walk, models,
+depth, units, layers, calls, promptTokens, completionTokens, byLevel,
+byStatus[, priceIn, priceOut, cost], assumptions[, price]`) or
+`codegraph.walkSummary/1` (`kind, walk, out, counts, usage, failures[,
+aborted]`); `walk` is `{ name, version, digest }`, `price` the selection's
+price per level. The output-token figure is measured, per block asked for:
+operation 500, type 620 — the means of one live run (Spring PetClinic, `sonnet`
+through Claude Code, a walk declaring no field); a module, never measured,
+takes the type's figure, and a declared field adds nothing to the estimate,
+though it adds to the answer. The estimate's `output ≈` line and
+`assumptions.completionTokens` say so. Exit codes are explain's: `3` when a unit failed or the load was not
+clean, `2` for every refusal. Reference: [insights.md](insights.md) IN-9.
+
 ### `insights`
-Asks the insights store what `explain` has written — and opens nothing else:
-not the model (its path only says *which* store; `--store FILE` names one
-directly), not the side-car, no provider. Any question over tens of thousands
+Asks the insights store what `explain` — or a walk — has written, and opens
+nothing else: not the model (its path only says *which* store; `--store FILE`
+names one directly), not the side-car, no provider. `--walk N` reads the walk
+N's store, `<model>.N.walk.db`; `--store FILE` alone reads whichever walk's
+store the file's header names, and with `--walk N` the file must be N's
+(another walk's store is refused, untouched). No flag, or `--walk explain`, is
+explain's store and explain's output, byte for byte. Any question over tens of thousands
 of records is an index lookup, a fraction of a second. One question per
 invocation:
 
@@ -406,9 +518,23 @@ invocation:
 - `--runs` — the ledger, oldest first: when, which models, what each run
   explained and spent.
 
-`--json` makes each answer one kind-tagged document (`codegraph.insightsSummary/1`,
-`…List/1`, `…Word/1`, `…Glossary/1`, `…Polysemy/1`, `…Concerns/1`, `…Failures/1`,
-`…Runs/1`; `--id --json` is the record exactly as the side-car carries it).
+On a walk's store the summary names the walk, its version and its definition
+digest; a list prints id, level, confidence and the description's first line;
+`--id` prints the block field by field in stored order (`answer:` first,
+`description:` last, a list one `- item` per line, `—` for `null` or an empty
+value); `--failures` and `--runs` are as above. The records are read as stored,
+whatever answer fields the walk's definition declares today. `--concept`,
+`--word`, `--glossary`, `--polysemy` and `--concerns` ask for what only explain
+writes, and answer **none**: exit `0`, nothing on stdout, the reason on stderr
+(`none: a walk's blocks carry no concept — the walk "N" answers its own fields;
+…`), and under `--json` one document
+`{"kind":"codegraph.insightsNone/1","walk":"N","asked":"--word","none":"a walk's blocks carry no words"}`.
+
+`--json` makes each answer one kind-tagged document (`codegraph.insightsSummary/1`
+— on a walk's store with `walk` right after `kind` —, `…List/1`, `…Word/1`,
+`…Glossary/1`, `…Polysemy/1`, `…Concerns/1`, `…Failures/1`, `…Runs/1`,
+`codegraph.insightsNone/1`; `--id --json` is the record exactly as the side-car
+carries it).
 A record a model explained under prompt 1 defines no words, so the word
 answers cannot see it: they say on stderr how many such records there are,
 the summary counts them, `--id` says so on the record, and `--glossary` on

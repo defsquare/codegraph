@@ -58,4 +58,4 @@ Matching reads the referenced entity's `name` and parent chain — never a parse
 
 A framework RULE that is not an annotation is data too: Spring 4.3+ treats the sole constructor of a bean as an injection point with nothing written on it, so the profile carries that as a flag. A meta-annotated stereotype is deliberately NOT followed: resolving `@MyService` to the `@Service` it carries needs the annotation type's own declaration, which is exactly what a stub does not have — so such a type is unclassified rather than classified by a guess.
 
-`--framework spring` is accepted by [`analyze`](/docs/reference/cli/analyze/), [`city`](/docs/reference/cli/city/), [`domain-facts`](/docs/reference/cli/domain-facts/) and [`explain`](/docs/reference/cli/explain/).
+`--framework spring` is accepted by [`analyze`](/docs/reference/cli/analyze/), [`city`](/docs/reference/cli/city/), [`serve`](/docs/reference/cli/serve/), [`domain-facts`](/docs/reference/cli/domain-facts/), [`explain`](/docs/reference/cli/explain/) and [`walk`](/docs/reference/cli/walk/).

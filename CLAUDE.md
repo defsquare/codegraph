@@ -78,8 +78,16 @@ packages/insights/   @codegraph/insights — the bottom-up EXPLANATION walk: uni
                      context packs, prompts, Merkle fingerprints, plan/run, the
                      insights STORE (a port + a SQLite adapter handed an open
                      database) and its export, the `.insights.jsonl` side-car
-                     (Specy domain vocabulary). Pure computation: source, model
-                     calls and the database are injected.
+                     (Specy domain vocabulary). The engine asks its question
+                     through ONE seam (`WalkSpec`): explain is the built-in
+                     spec; a `codegraph.walk/1` DEFINITION (data: a task per
+                     level, instructions, a closed field grammar → Zod) is
+                     another; a SELECTION (analyzer selectors, nearest-container
+                     rule, closure) picks the units asked, never the units
+                     walked. ONE STORE PER WALK: `<model>.N.walk.db`/`.jsonl`,
+                     header `codegraph.walkRecords/1`, refused to any other
+                     walk. Pure computation: source, model calls and the
+                     database are injected.
 packages/llm/        @codegraph/llm — LlmClient (the PORT) + its adapters: OpenRouter
                      (SDK), Cloudflare AI Gateway (REST), Claude Code headless
                      (subprocess: `claude -p`, found by discovery, no key) + a
@@ -194,7 +202,7 @@ extractors/csharp/dist/linux-x64/codegraph-csharp --src <dir> --out model.jsonl
 
 ./build.sh --ts --sea                  # ONE Node single-executable of the CLI + daemon + both frontends
 packages/cli/dist-sea/<rid>/codegraph --version           # for THIS platform only (the image is this Node)
-node packages/cli/scripts/sea-smoke.mjs packages/cli/dist-sea/<rid>/codegraph   # its three gates (test.sh runs it)
+node packages/cli/scripts/sea-smoke.mjs packages/cli/dist-sea/<rid>/codegraph   # its five gates (test.sh runs it)
 
 pnpm --filter @codegraph/desktop tauri:dev     # the desktop shell (after --sea): copies the image as the
 #   sidecar, then `tauri dev` — needs Rust + the platform's WebKit (apps/desktop/README.md)
@@ -269,6 +277,16 @@ OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-call
 ./bin/codegraph insights model.jsonl --id ID               # one explanation whole; --failures, --runs, --json
 #   reads <model>.insights.db and NOTHING else (not the model, no provider); writes nothing
 ./bin/codegraph serve model.jsonl --insights FILE          # the explanation panel's store, if not beside the model
+./bin/codegraph walk model.jsonl --src DIR --prompt "…" --include 'edge:annotationUse>name:Audited' --dry-run
+#   your question, bottom-up, of the selected units (--include/--exclude SEL, --levels, --closure);
+#   every explain run flag; → model.adhoc.walk.db + .jsonl (--name N: model.N.walk.*), never explain's store
+./bin/codegraph walk --print-definition [explain]          # a codegraph.walk/1 file to start from; no model read
+./bin/codegraph walk model.jsonl --src DIR --walk FILE [--name N] [--estimate]   # task per level, instructions, answer fields
+#   output tokens per block: operation 500, type/module 620, measured on ONE PetClinic run (sonnet,
+#   claude-code, no field declared; module and fields unmeasured); docs/insights.md IN-9 "Cost"
+./bin/codegraph explain model.jsonl --src DIR --exclude 'file:**/generated/**' --instructions @context.md
+#   explain customized (also --include, --levels, --closure, --walk FILE); --scope a,b = --include id:a --include id:b
+./bin/codegraph insights model.jsonl --walk N [--id ID]    # a walk's store (or --store FILE: whichever walk its header names)
 ```
 
 ## Metamodel invariants (violating these is a bug, not a style choice)

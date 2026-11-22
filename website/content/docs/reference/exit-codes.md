@@ -51,6 +51,8 @@ Valid options for 'codegraph city': --height METRIC, --height-scale <linear|sqrt
 | [`domain-facts`](/docs/reference/cli/domain-facts/) | the load was not clean; the artifact is still written |
 | [`vocabulary`](/docs/reference/cli/vocabulary/) | the load was not clean; and with `--drift`, whenever a business term is said by no scope of the level (never for what `--drift-insights` reports: a model's judgement is not a finding) |
 | [`explain`](/docs/reference/cli/explain/) | the load was not clean, or any unit failed to be explained |
+| [`walk`](/docs/reference/cli/walk/) | the load was not clean, or any unit failed to be answered |
+| [`insights`](/docs/reference/cli/insights/) | `--id` names a unit that was asked for and failed (the answer is its reason) |
 | [`snapshots`](/docs/reference/cli/snapshots/) | any sampled revision failed to extract; the successful frames stay in the store |
 | [`history`](/docs/reference/cli/history/) | the input file is not a `history.jsonl` |
 | [`scm`](/docs/reference/cli/scm/), [`timeline`](/docs/reference/cli/timeline/), [`replay`](/docs/reference/cli/replay/), [`profiles`](/docs/reference/cli/profiles/) | never |

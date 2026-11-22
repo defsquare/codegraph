@@ -4,7 +4,7 @@ linkTitle: CLI
 weight: 1
 ---
 
-`codegraph` is one command with sixteen sub-commands. Every sub-command prints its own options with `codegraph <command> --help`; the pages below are that output, with the conventions the commands share stated once here.
+`codegraph` is one command with eighteen sub-commands. Every sub-command prints its own options with `codegraph <command> --help`; the pages below are that output, with the conventions the commands share stated once here.
 
 ```
 codegraph <command> [options]
@@ -24,7 +24,7 @@ global options:
 
 **`--json`** prints the same information as a machine-readable object on stdout.
 
-**A sibling `model.db`** — the SQLite analysis store — is built on first use and reused afterwards. `--no-cache` reads the JSONL directly; it is accepted by `analyze`, `export`, `navigator`, `vocabulary`, `domain-facts` and `explain`.
+**A sibling `model.db`** — the SQLite analysis store — is built on first use and reused afterwards. `--no-cache` reads the JSONL directly; it is accepted by `analyze`, `export`, `navigator`, `vocabulary`, `domain-facts`, `serve`, `explain` and `walk`.
 
 **Exit codes** distinguish a broken tool from a broken model: `0` success, `1` an internal bug, `2` a usage error, `3` findings. See [Exit codes](/docs/reference/exit-codes/).
 
@@ -39,8 +39,11 @@ global options:
 | [`city`](/docs/reference/cli/city/) | Write the code city: modules as districts, types as buildings. |
 | [`navigator`](/docs/reference/cli/navigator/) | Explore the model: a searchable tree with per-node dependency detail. |
 | [`vocabulary`](/docs/reference/cli/vocabulary/) | Report the words the model's names are made of, per corpus, module or type; or drift against a glossary. |
+| [`serve`](/docs/reference/cli/serve/) | Serve the navigator with the code city as a tab, over this model. |
 | [`domain-facts`](/docs/reference/cli/domain-facts/) | Write per-type domain dossiers: joined facts for domain extraction. |
 | [`explain`](/docs/reference/cli/explain/) | Explain every operation, type and module with an LLM, bottom-up, into a side-car. |
+| [`walk`](/docs/reference/cli/walk/) | Ask a question of every selected unit, bottom-up, with an LLM: a prompt or a walk definition, into its own store. |
+| [`insights`](/docs/reference/cli/insights/) | Query what `explain` — or a walk, `--walk N` — has written: a summary, a list, one explanation, the words and their glossary, the run ledger. |
 | [`scm`](/docs/reference/cli/scm/) | Mine a repository's history into a deterministic `history.jsonl`. |
 | [`snapshots`](/docs/reference/cli/snapshots/) | Extract a repo at sampled revisions into a temporal store (`model.db`). |
 | [`history`](/docs/reference/cli/history/) | Report churn, hotspots and authorship over a mined `history.jsonl`. |

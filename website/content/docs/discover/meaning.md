@@ -194,5 +194,6 @@ Next: [Domain](/docs/discover/domain/).
 
 - [Explaining a package with a language model](/docs/tutorials/explain/)
 - [Estimate, cap and scope an explain run](/docs/how-to/explain-cost/)
+- [Ask your own question of the code](/docs/how-to/walk-your-question/) — `walk`: another question, the same bottom-up order
 - [`insights.jsonl` reference](/docs/reference/artifacts/insights-jsonl/), with every block field and vocabulary
 - [Explaining bottom-up](/docs/explanation/explaining-bottom-up/)

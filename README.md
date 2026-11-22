@@ -311,6 +311,30 @@ installed and logged in — found on `PATH` or named with `--claude-path`; no
 key). `auto` prefers a key over the installed CLI; a direct Anthropic API
 adapter is a named slot for later.
 
+### Ask it your own question
+
+`codegraph walk` runs the same bottom-up walk with a question of yours, over
+the units a selector picks, into a store of its own (`<model>.NAME.walk.db`;
+explain's is never touched):
+
+```bash
+codegraph walk fixtures/java/expected/model.jsonl --src fixtures/java/src \
+  --prompt "Which of these is audited, and what does the audit record?" \
+  --include 'edge:annotationUse>name:Audited' --dry-run      # 2 calls: the two @Audited operations
+codegraph walk --print-definition > audit.json               # a file to edit: "name": "audit", a task per level, instructions, answer fields
+codegraph walk fixtures/java/expected/model.jsonl --src fixtures/java/src --walk audit.json --estimate
+codegraph insights fixtures/java/expected/model.jsonl --walk audit   # once it has run: its answers, field by field with --id
+```
+
+Every answer carries the fields the definition declares plus a one-line
+`description`, which is what the units above it are shown. `explain` takes the
+same selection flags and `--instructions` without changing its own question.
+The output-token estimate of a defined walk uses 500 tokens per operation
+answer and 620 per type answer, measured on one live run (Spring PetClinic,
+`sonnet` through Claude Code); a module, not measured, takes the type's
+figure, and declared fields add to an answer but not to the estimate. Design: [`docs/insights.md`](docs/insights.md)
+IN-9; reference: [`docs/cli.md`](docs/cli.md).
+
 ### Feed it to something else
 
 `codegraph export --format json|csv` gives you the folded graph;
@@ -373,9 +397,9 @@ Read these before you commit an afternoon.
   repeatable, but the same package declared under several roots at once (main
   and test sources, or one package split across modules) confuses noClasspath
   resolution; pass such roots in separate runs.
-- **`explain` costs money and needs a network** (or an installed Claude Code,
-  which spends the subscription). It is the only command that
-  does. `--dry-run` and `--estimate` tell you what it would do first, a real
+- **`explain` and `walk` cost money and need a network** (or an installed
+  Claude Code, which spends the subscription). They are the only commands that
+  do. `--dry-run` and `--estimate` tell you what a run would do first, a real
   run asks for confirmation after showing the estimate (`--yes` in scripts),
   and `--max-calls` caps it.
 - **Not a linter.** Codegraph reports structure, coupling and cycles; it does
@@ -426,7 +450,7 @@ so a model file has one direction of truth. The full reference is
 | `packages/scm` | git history miner |
 | `packages/city`, `packages/viz` | city model, Three.js renderer |
 | `packages/navigator`, `packages/navigator-ui` | navigator model, React browser |
-| `packages/insights`, `packages/llm` | the explanation walk, the provider clients |
+| `packages/insights`, `packages/llm` | the bottom-up walk (`explain`, and `walk`'s definitions and selection), the provider clients |
 | `packages/cli` | the `codegraph` command |
 
 ## Documentation
@@ -444,7 +468,7 @@ so a model file has one direction of truth. The full reference is
 - [`docs/metrics.md`](docs/metrics.md) — the metrics pass: what it measures, how it joins a model, change history
 - [`docs/distribution.md`](docs/distribution.md) — the Homebrew tap, what a tagged release produces, what is signed and how
 - [`docs/navigator.md`](docs/navigator.md) — the navigator's design
-- [`docs/insights.md`](docs/insights.md) — the explanation walk's design
+- [`docs/insights.md`](docs/insights.md) — the explanation walk's design, and `walk`: definitions, selectors, one store per walk
 - [`docs/vocabulary.md`](docs/vocabulary.md) — the vocabulary's design: the lexicons, the split, the classes and weights, `vocabulary.json`, the cloud, the words a model defines and the glossary readers
 - [`PLAN.md`](PLAN.md) — milestones, decisions and their rationale
 - [`CLAUDE.md`](CLAUDE.md) — architecture boundaries and the metamodel invariants
