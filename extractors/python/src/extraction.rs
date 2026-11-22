@@ -706,9 +706,8 @@ impl Extractor<'_> {
                 if !importer {
                     continue;
                 }
-                let first = site.arguments.iter().find(|argument| argument.keyword.is_none());
-                let dotted = match first.map(|argument| &argument.value) {
-                    Some(ValueDecl::Str(dotted)) if !dotted.starts_with('.') && !dotted.is_empty() => dotted.clone(),
+                let dotted = match &site.literal {
+                    Some(dotted) if !dotted.starts_with('.') && !dotted.is_empty() => dotted.clone(),
                     _ => {
                         self.stats.drop(file, site.span.0, "computed-import", site.text.clone());
                         continue;

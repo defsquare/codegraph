@@ -925,7 +925,7 @@ impl Extractor<'_> {
         let scope = decl.scope;
         let typed = if let Some(annotation) = &decl.annotation {
             self.annotated(file, scope, annotation).unwrap_or(Typed::Untyped)
-        } else if let Some((callee, _)) = &decl.constructed {
+        } else if let Some(callee) = &decl.constructed {
             match self.quiet(file, scope, callee).map(|step| step.typed) {
                 Some(Typed::Corpus {
                     file,
@@ -1067,7 +1067,7 @@ impl Extractor<'_> {
             scope,
             chain: chain.clone(),
             kind: SiteKind::Load,
-            arguments: Vec::new(),
+            literal: None,
             span: (0, 0),
             text: String::new(),
         };

@@ -346,14 +346,8 @@ fn reads_a_body_as_sites_each_a_chain_from_its_head() {
         .iter()
         .find(|site| site.text == "self.repo.find(key=1)")
         .unwrap();
-    assert_eq!(
-        find.arguments,
-        vec![ArgumentDecl {
-            keyword: Some("key".into()),
-            value: ValueDecl::Number("1".into()),
-            spread: false
-        }]
-    );
+    // A site keeps of its call only the first positional string literal: here, none.
+    assert_eq!(find.literal, None);
 }
 
 #[test]
@@ -395,14 +389,9 @@ fn records_assignments_with_their_value_their_constructor_and_their_annotation()
             ValueDecl::Bool(true)
         ]))
     );
-    assert_eq!(value(4), Some(ValueDecl::Code("Flask(__name__)".into())));
-    assert_eq!(
-        decls.assignments[4]
-            .constructed
-            .as_ref()
-            .map(|(callee, _)| callee.clone()),
-        Some(name("Flask"))
-    );
+    // Code is no value: its text is not kept; a call keeps its callee, for flow.
+    assert_eq!(value(4), Some(ValueDecl::Code(String::new())));
+    assert_eq!(decls.assignments[4].constructed, Some(name("Flask")));
     assert_eq!(
         value(5),
         Some(ValueDecl::Name(attribute(name("Kind"), "FAST"), "Kind.FAST".into()))

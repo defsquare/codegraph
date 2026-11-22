@@ -164,8 +164,9 @@ pub struct Site {
     pub scope: usize,
     pub chain: Chain,
     pub kind: SiteKind,
-    /// The arguments of the chain's outermost call, when it ends in one.
-    pub arguments: Vec<ArgumentDecl>,
+    /// The first positional argument of the call the chain ends in, when it is a string
+    /// literal: what `import_module("a.b")` names.
+    pub literal: Option<String>,
     pub span: Span,
     /// The source text, on one line, for `--explain-dropped`.
     pub text: String,
@@ -296,8 +297,8 @@ pub struct AssignDecl {
     pub scope: usize,
     pub target: Target,
     pub value: Option<ValueDecl>,
-    /// The value is a call: its callee, and its arguments.
-    pub constructed: Option<(Chain, Vec<ArgumentDecl>)>,
+    /// The value is a call: its callee.
+    pub constructed: Option<Chain>,
     pub annotation: Option<TypeExpr>,
     pub augmented: bool,
     pub span: Span,
@@ -780,12 +781,18 @@ impl Reader<'_> {
     // ----------------------------------------------------------- values ----
 
     /// What an expression writes as a value: a literal, a name, or its source.
+    /// A written value; code is `Code` with no text, which only an argument keeps.
     fn value(&self, expr: &Expr) -> ValueDecl {
-        stacker::maybe_grow(RED_ZONE, GROWTH, || self.value_here(expr))
+        self.value_with(expr, false)
     }
 
-    fn value_here(&self, expr: &Expr) -> ValueDecl {
+    fn value_with(&self, expr: &Expr, code_text: bool) -> ValueDecl {
+        stacker::maybe_grow(RED_ZONE, GROWTH, || self.value_here(expr, code_text))
+    }
+
+    fn value_here(&self, expr: &Expr, code_text: bool) -> ValueDecl {
         let source = || self.one_line(expr.range());
+        let code = || ValueDecl::Code(if code_text { source() } else { String::new() });
         // An expression recovery made up (a Python 2 `0660`): no text, so no value.
         if expr.range().is_empty() {
             return ValueDecl::Code(String::new());
@@ -804,11 +811,13 @@ impl Reader<'_> {
                 Number::Float(value) => ValueDecl::Number(float_text(*value)),
                 Number::Complex { .. } => ValueDecl::Unevaluated(source()),
             },
-            Expr::UnaryOp(unary) if unary.op == ast::UnaryOp::USub => match self.value(&unary.operand) {
-                ValueDecl::Number(text) if text == "0" => ValueDecl::Number(text),
-                ValueDecl::Number(text) => ValueDecl::Number(format!("-{text}")),
-                _ => ValueDecl::Unevaluated(source()),
-            },
+            Expr::UnaryOp(unary) if unary.op == ast::UnaryOp::USub => {
+                match self.value_with(&unary.operand, code_text) {
+                    ValueDecl::Number(text) if text == "0" => ValueDecl::Number(text),
+                    ValueDecl::Number(text) => ValueDecl::Number(format!("-{text}")),
+                    _ => ValueDecl::Unevaluated(source()),
+                }
+            }
             Expr::BooleanLiteral(boolean) => ValueDecl::Bool(boolean.value),
             Expr::NoneLiteral(_) => ValueDecl::None,
             Expr::Name(_) | Expr::Attribute(_) => match dotted(expr) {
@@ -819,21 +828,25 @@ impl Reader<'_> {
             | Expr::Tuple(ast::ExprTuple { elts, .. })
             | Expr::Set(ast::ExprSet { elts, .. }) => {
                 if elts.iter().all(|item| !item.is_starred_expr()) {
-                    ValueDecl::Array(elts.iter().map(|item| self.value(item)).collect())
+                    ValueDecl::Array(elts.iter().map(|item| self.value_with(item, code_text)).collect())
                 } else {
-                    ValueDecl::Code(source())
+                    code()
                 }
             }
             Expr::Dict(dict) => {
                 let pairs: Option<Vec<(ValueDecl, ValueDecl)>> = dict
                     .items
                     .iter()
-                    .map(|item| item.key.as_ref().map(|key| (self.value(key), self.value(&item.value))))
+                    .map(|item| {
+                        item.key
+                            .as_ref()
+                            .map(|key| (self.value_with(key, code_text), self.value_with(&item.value, code_text)))
+                    })
                     .collect();
-                pairs.map_or_else(|| ValueDecl::Code(source()), |pairs| ValueDecl::Pairs(pairs, source()))
+                pairs.map_or_else(code, |pairs| ValueDecl::Pairs(pairs, source()))
             }
             other if constant_shaped(other) => ValueDecl::Unevaluated(source()),
-            _ => ValueDecl::Code(source()),
+            _ => code(),
         }
     }
 
@@ -842,14 +855,14 @@ impl Reader<'_> {
         for argument in &arguments.args {
             out.push(ArgumentDecl {
                 keyword: None,
-                value: self.value(argument),
+                value: self.value_with(argument, true),
                 spread: argument.is_starred_expr(),
             });
         }
         for keyword in &arguments.keywords {
             out.push(ArgumentDecl {
                 keyword: keyword.arg.as_ref().map(|arg| arg.to_string()),
-                value: self.value(&keyword.value),
+                value: self.value_with(&keyword.value, true),
                 spread: keyword.arg.is_none(),
             });
         }
@@ -939,15 +952,18 @@ impl Reader<'_> {
     fn site(&mut self, expr: &Expr, kind: SiteKind) {
         let mut beside = Vec::new();
         let chain = self.chain(expr, &mut beside);
-        let arguments = match expr {
-            Expr::Call(call) => self.arguments(&call.arguments),
-            _ => Vec::new(),
+        let literal = match expr {
+            Expr::Call(call) => call.arguments.args.first().and_then(|first| match self.value(first) {
+                ValueDecl::Str(text) => Some(text),
+                _ => None,
+            }),
+            _ => None,
         };
         self.out.sites.push(Site {
             scope: self.scope,
             chain,
             kind,
-            arguments,
+            literal,
             span: self.span(expr.range()),
             text: self.one_line(expr.range()),
         });
@@ -1015,7 +1031,7 @@ impl Reader<'_> {
 
     fn assignment(&self, value: Option<&Expr>, annotation: Option<&Expr>, augmented: bool, span: Span) -> AssignDecl {
         let constructed = match value {
-            Some(Expr::Call(call)) => Some((self.chain(&call.func, &mut Vec::new()), self.arguments(&call.arguments))),
+            Some(Expr::Call(call)) => Some(self.chain(&call.func, &mut Vec::new())),
             _ => None,
         };
         AssignDecl {
