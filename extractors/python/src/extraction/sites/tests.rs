@@ -520,10 +520,12 @@ fn a_literal_import_module_or_dunder_import_is_an_import_and_a_computed_name_is_
     let extraction = extract_sources(&[
         ("pkg/__init__.py", ""),
         ("pkg/sub.py", ""),
+        ("pkg/0001_initial.py", ""),
         (
             "m.py",
             "import importlib\nmod = importlib.import_module(\"json\")\nplugin = importlib.import_module(name)\n\
-             legacy = __import__(\"pkg.sub\")\nbad = __import__(\"zipimport\\x00junk\")\n",
+             legacy = __import__(\"pkg.sub\")\nbad = __import__(\"zipimport\\x00junk\")\n\
+             migration = importlib.import_module(\"pkg.0001_initial\")\n",
         ),
     ]);
     let imports: Vec<(String, u32)> = extraction
@@ -539,6 +541,8 @@ fn a_literal_import_module_or_dunder_import_is_an_import_and_a_computed_name_is_
             ("python:<stdlib>%2Fimportlib".to_owned(), 1),
             ("python:<stdlib>%2Fjson".to_owned(), 2),
             ("python:pkg%2Fsub.py".to_owned(), 4),
+            // A module file may begin with a digit: no statement imports it, `import_module` does.
+            ("python:pkg%2F0001_initial.py".to_owned(), 6),
         ]
     );
     let drops: Vec<(&str, u32, &str)> = extraction

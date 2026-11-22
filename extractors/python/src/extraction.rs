@@ -139,14 +139,12 @@ impl Stubs {
     }
 }
 
-/// What a string must be to name a module: dotted identifiers (`a.b`), nothing relative or
+/// What a string must be to name a module: dotted names of letters, digits and `_`, nothing relative or
 /// stray (`__import__("zipimport\\x00junk")` names none).
 pub(crate) fn is_module_name(text: &str) -> bool {
-    text.split('.').all(|part| {
-        let mut chars = part.chars();
-        chars.next().is_some_and(|first| first.is_alphabetic() || first == '_')
-            && chars.all(|c| c.is_alphanumeric() || c == '_')
-    })
+    // A file's module may begin with a digit (`0001_initial`): no statement imports it, `import_module` does.
+    text.split('.')
+        .all(|part| !part.is_empty() && part.chars().all(|c| c.is_alphanumeric() || c == '_'))
 }
 
 /// Per `def` of a file: whether it is the one an entity is made of — of those written in one
