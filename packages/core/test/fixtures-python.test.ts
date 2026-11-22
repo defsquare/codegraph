@@ -155,6 +155,26 @@ describe("fixtures/python/expected/model.jsonl", () => {
     expect(SourceAnchor.parse(flags["anchor"]).span).toEqual([29, 29]);
   });
 
+  it("measures every corpus module, class and invocable, and comments what a docstring or a # block explains", () => {
+    const model = loadSnapshot();
+    for (const e of model.entities) {
+      const bag = e as unknown as Bag;
+      const metrics = bag["metrics"] as Record<string, number> | undefined;
+      if (isStubEntity(e) || !["module", "class", "function", "method"].includes(e.kind)) {
+        expect(metrics, e.id).toBeUndefined();
+        continue;
+      }
+      expect(metrics?.["sloc"], e.id).toBeGreaterThanOrEqual(0);
+      const invocable = e.kind === "function" || e.kind === "method";
+      expect(metrics?.["cyclomatic"] !== undefined, e.id).toBe(invocable);
+      if (invocable) expect(metrics?.["cyclomatic"], e.id).toBeGreaterThanOrEqual(1);
+    }
+    // A docstring; else the `#` block above, directives left out.
+    expect(entity(model, `${PKG}packing.py`)["comments"]).toEqual(["Bases read through star imports."]);
+    expect(entity(model, `${PKG}packing.py/Parcel`)["comments"]).toEqual(["`Box` is in shapes.__all__: the star binds it."]);
+    expect(entity(model, `${PKG}shapes.py/Crate`)["comments"]).toEqual(["A crate: not in `__all__`."]);
+  });
+
   it("makes a def written twice ONE entity anchored at the first, and an NFKC twin one name", () => {
     const model = loadSnapshot();
     const dataDir = model.entities.filter((e) => e.id === `${PKG}compat.py/data_dir`);

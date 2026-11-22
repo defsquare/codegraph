@@ -6,5 +6,7 @@ class Box:
     pass
 
 
+# A crate: not in `__all__`.
+# noqa: D101
 class Crate:
     pass

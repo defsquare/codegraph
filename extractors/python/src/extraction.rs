@@ -100,6 +100,20 @@ impl Stubs {
     }
 }
 
+/// A docstring, else the `#` block above: one string, `TComment`.
+fn comment(entity: &mut Entity, text: Option<&String>) {
+    if let Some(text) = text.filter(|text| !text.is_empty()) {
+        entity.comments = Some(vec![text.clone()]);
+        entity.traits.push("TComment");
+    }
+}
+
+/// Measures (METAMODEL §3.8), key-sorted, `TMetrics`.
+fn measure(entity: &mut Entity, metrics: Vec<(&'static str, u32)>) {
+    entity.metrics = Some(metrics);
+    entity.traits.push("TMetrics");
+}
+
 /// `name(a, b=…, /, c, *args, d, **kwargs)`: the parameters as Python spells
 /// them, a default marked and never written out (its value is the parameter's).
 fn signature(function: &FunctionDecl) -> String {
@@ -201,6 +215,9 @@ impl Extractor<'_> {
                 start: 1,
                 end: file.lines,
             });
+            let decls = &self.files[index];
+            comment(&mut entity, decls.docstring.as_ref());
+            measure(&mut entity, vec![("sloc", decls.sloc((1, file.lines)))]);
             self.entities.push(entity);
         }
     }
@@ -247,13 +264,28 @@ impl Extractor<'_> {
                         self.kinds.insert(key.clone(), kind);
                         let mut entity = match decls.scopes[scope].kind {
                             ScopeKind::Function(function) => {
-                                self.invocable(file, &decls.functions[function], &key, kind)
-                            }
-                            _ => {
-                                let mut entity = Entity::new(key.clone(), kind, CLASS_TRAITS);
-                                entity.is_stub = Some(false);
+                                let function = &decls.functions[function];
+                                let mut entity = self.invocable(file, function, &key, kind);
+                                comment(
+                                    &mut entity,
+                                    function.docstring.as_ref().or(decls.comment_above(function.head)),
+                                );
+                                let sloc = decls.sloc(function.span);
+                                measure(&mut entity, vec![("cyclomatic", function.cyclomatic), ("sloc", sloc)]);
                                 entity
                             }
+                            ScopeKind::Class(class) => {
+                                let class = &decls.classes[class];
+                                let mut entity = Entity::new(key.clone(), kind, CLASS_TRAITS);
+                                entity.is_stub = Some(false);
+                                comment(
+                                    &mut entity,
+                                    class.docstring.as_ref().or(decls.comment_above(class.head)),
+                                );
+                                measure(&mut entity, vec![("sloc", decls.sloc(class.span))]);
+                                entity
+                            }
+                            _ => unreachable!("only a class or a function scope is keyed"),
                         };
                         entity.name = Some(name.clone());
                         entity.parent = Some(parent);
@@ -584,6 +616,50 @@ mod tests {
         assert_eq!(
             drops,
             vec![("redefinition-of-another-kind", 6, "F (a class holds the key)")]
+        );
+    }
+
+    fn entity<'a>(extraction: &'a Extraction, rendered: &str) -> &'a Entity {
+        extraction
+            .model
+            .entities
+            .iter()
+            .find(|e| e.key.render(ids::LANG) == rendered)
+            .unwrap_or_else(|| panic!("no entity {rendered}"))
+    }
+
+    #[test]
+    fn a_docstring_else_the_comment_block_above_and_the_measures_each_kind_carries() {
+        let extraction = extract_sources(&[(
+            "m.py",
+            "\"\"\"The module.\"\"\"\n# Helpers.\n# Two lines.\ndef f(x):\n    \"\"\"Doc of f.\"\"\"\n    if x and x > 1:  # trailing\n        return 1\n    return 2\n\n\
+             # A class.\n@decorated\nclass C:\n    # The method.\n    def m(self, xs):\n        return [y for y in xs if y] or (lambda: 1 if xs else 2)\n",
+        )]);
+        let comments = |rendered: &str| entity(&extraction, rendered).comments.clone();
+        let metrics = |rendered: &str| entity(&extraction, rendered).metrics.clone();
+        assert_eq!(comments("python:m.py"), Some(vec!["The module.".to_owned()]));
+        assert_eq!(comments("python:m.py/f"), Some(vec!["Doc of f.".to_owned()]));
+        // Above the decorators: the declaration starts with them.
+        assert_eq!(comments("python:m.py/C"), Some(vec!["A class.".to_owned()]));
+        assert_eq!(comments("python:m.py/C.m"), Some(vec!["The method.".to_owned()]));
+        assert_eq!(metrics("python:m.py"), Some(vec![("sloc", 10)]));
+        // The span, so the anchor: from the name's line — the decorator is outside it.
+        assert_eq!(metrics("python:m.py/C"), Some(vec![("sloc", 3)]));
+        // `if` + `and`; then a comprehension's loop and its `if`, `or`, and the lambda's ternary — a
+        // lambda is no invocable, so its branches are its writer's.
+        assert_eq!(metrics("python:m.py/f"), Some(vec![("cyclomatic", 3), ("sloc", 5)]));
+        assert_eq!(metrics("python:m.py/C.m"), Some(vec![("cyclomatic", 5), ("sloc", 2)]));
+        for rendered in ["python:m.py", "python:m.py/f", "python:m.py/C", "python:m.py/C.m"] {
+            let traits = &entity(&extraction, rendered).traits;
+            assert!(
+                traits.contains(&"TComment") && traits.contains(&"TMetrics"),
+                "{rendered}: {traits:?}"
+            );
+        }
+        assert!(
+            !entity(&extraction, "python:m.py/f#param:x")
+                .traits
+                .contains(&"TMetrics")
         );
     }
 

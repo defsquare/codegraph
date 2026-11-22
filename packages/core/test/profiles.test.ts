@@ -800,6 +800,8 @@ describe("structural claims that must not silently regress", () => {
     it("carries measures on modules, classes and invocables (M10b), values on bindings (M10c)", () => {
       for (const kind of ["module", "class", "function", "method"]) expect(allowed(kind), kind).toContain("TMetrics");
       for (const kind of ["variable", "attribute", "parameter"]) expect(allowed(kind), kind).toContain("TWithValue");
+      // A lambda is no invocable: its branches are its writer's, as a Ruby block's are.
+      expect(pythonProfile.notes.join("\n")).toMatch(/A lambda contributes to the invocable that writes it/);
     });
 
     it("documents the id scheme, the stub roots, the provenance tiers and the stated limits", () => {
