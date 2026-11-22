@@ -451,6 +451,24 @@ mod tests {
     }
 
     #[test]
+    fn the_shipped_catalogue_claims_python_by_the_extensions_its_extractor_walks() {
+        let text = include_str!("../../src-tauri/resources/extractors.json");
+        let rows = parse_catalogue(text).unwrap();
+        let python = rows
+            .iter()
+            .find(|r| r.name == "python")
+            .expect("a python row");
+        // The same three as extractors/python/src/corpus.rs: a module, a GUI script, a stub.
+        assert_eq!(python.extensions, vec![".py", ".pyw", ".pyi"]);
+        assert_eq!(python.command, "codegraph-python");
+        assert_eq!(
+            python.install,
+            "brew install defsquare/tap/codegraph-python"
+        );
+        assert!(python.role.is_none());
+    }
+
+    #[test]
     fn writes_the_registry_atomically_into_a_directory_it_creates() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("codegraph").join("registry.json");
