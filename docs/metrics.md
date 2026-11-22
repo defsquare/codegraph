@@ -63,7 +63,8 @@ Every run ends with one line on stderr:
 
 ```
 codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 leading, 0 trailing,
-0 contained; 0 ambiguous, 2387 unjoined) over 2983 files; sloc = bca ploc on 16395 of 16395 exact joins
+0 contained; 0 ambiguous, 2387 unjoined) over 2983 files; sloc = bca ploc on 16395 of 16395 exact joins;
+26209 entities rewritten
 ```
 
 - **exact** — the entity and a space cover the same lines.

@@ -27,7 +27,7 @@ unchanged since.
    ```
 
    ```text
-   codegraph-metrics: 106 of 109 measured entities joined (106 exact, 0 leading, 0 contained; 3 ambiguous, 0 unjoined) over 31 files; sloc = bca ploc on 106 of 106 exact joins; 106 entities rewritten
+   codegraph-metrics: 106 of 109 measured entities joined (106 exact, 0 leading, 0 trailing, 0 contained; 3 ambiguous, 0 unjoined) over 31 files; sloc = bca ploc on 106 of 106 exact joins; 106 entities rewritten
    ```
 
    The model is rewritten through a temporary file and renamed on success, so
@@ -118,7 +118,7 @@ codegraph-metrics model.jsonl --src fixtures/ruby/src --history
 ```
 
 ```text
-codegraph-metrics: 106 of 109 measured entities joined (106 exact, 0 leading, 0 contained; 3 ambiguous, 0 unjoined) over 31 files; sloc = bca ploc on 106 of 106 exact joins; 0 entities rewritten
+codegraph-metrics: 106 of 109 measured entities joined (106 exact, 0 leading, 0 trailing, 0 contained; 3 ambiguous, 0 unjoined) over 31 files; sloc = bca ploc on 106 of 106 exact joins; 0 entities rewritten
 codegraph-metrics: history at 17b247076c65 (@1791932959): 27 files, 107 entities blamed → model.history-metrics.jsonl
 ```
 
