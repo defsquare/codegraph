@@ -833,6 +833,8 @@ describe("structural claims that must not silently regress", () => {
       expect(notes).toMatch(/`__class__` in a method/);
       expect(notes).toMatch(/`spread-argument`/);
       expect(notes).toMatch(/`dotted-site-class`/);
+      expect(notes).toMatch(/keyed at the dotted module, every segment before the last taken for module path \(`<site>%2Fdjango\.db\.models\/Model`/);
+      expect(notes).toMatch(/a GUESS/);
       // A base read through a name bound once to a class: flow, not a written base.
       expect(notes).toMatch(/`alias-base`/);
       expect(notes).toMatch(/a name a literal `__slots__` lists/);

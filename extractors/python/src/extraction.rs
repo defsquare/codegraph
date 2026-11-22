@@ -263,6 +263,8 @@ struct Extractor<'a> {
     attribute_assignments: HashMap<Key, Vec<(usize, usize)>>,
     /// `(module, symbol)` of the library names a site gives a class's standing.
     evidence: HashSet<(ModuleRef, String)>,
+    /// The `<site>` classes keyed at a dotted module the site only implies (`dotted-site-class`).
+    dotted_site: HashSet<Key>,
     /// Assignments being typed: a binding that names itself is no type.
     typing: HashSet<(usize, usize)>,
     /// Entities that are the source of an invocation / of an access.
@@ -729,6 +731,23 @@ impl Extractor<'_> {
         })
     }
 
+    /// The stub key of a library class, as a site names it below the module it was imported
+    /// from. A `<site>` name reached through an imported name (`models.Model` below
+    /// `django.db`) is keyed at the dotted module (`django.db.models`), every segment before
+    /// the last taken for module path — the key `from django.db.models import Model` gives. A
+    /// guess (`models` could be a class or a value of `django.db`), counted `dotted-site-class`.
+    pub(super) fn stub_class(&mut self, module: &ModuleRef, symbol: &str) -> Key {
+        if let (ModuleRef::Site(dotted), Some((path, name))) = (module, symbol.rsplit_once('.')) {
+            let module = ModuleRef::Site(format!("{dotted}.{path}"));
+            let parent = self.stubs.module(&module, &self.file_keys);
+            let key = self.stubs.type_below(parent, name);
+            self.dotted_site.insert(key.clone());
+            return key;
+        }
+        let parent = self.stubs.module(module, &self.file_keys);
+        self.stubs.type_below(parent, symbol)
+    }
+
     /// The key a value naming a class is a type literal of: a corpus class, or a standard one the table declares.
     fn class_literal(&mut self, value: &Value) -> Option<Key> {
         match value {
@@ -943,8 +962,7 @@ impl Extractor<'_> {
                                 ModuleRef::Site(_) => self.stats.resolved_site += 1,
                                 _ => self.stats.resolved_missing += 1,
                             }
-                            let module = self.stubs.module(&module, &self.file_keys);
-                            self.stubs.type_below(module, &symbol.join("."))
+                            self.stub_class(&module, &symbol.join("."))
                         }
                         Value::AmbiguousStar(modules) => {
                             let what = format!("{} ({})", base.text, modules.join(" or "));
@@ -1034,6 +1052,7 @@ pub fn extract(
         declared_types: HashMap::new(),
         attribute_assignments: HashMap::new(),
         evidence: HashSet::new(),
+        dotted_site: HashSet::new(),
         typing: HashSet::new(),
         invokes: HashSet::new(),
         accesses: HashSet::new(),
@@ -1074,6 +1093,7 @@ pub fn extract(
         mut declared_types,
         invokes,
         accesses,
+        dotted_site,
         ..
     } = extractor;
     // A module or a class whose own code calls or reads says so (an invocable always may).
@@ -1094,13 +1114,7 @@ pub fn extract(
             entity.traits.push("TWithValue");
         }
     }
-    stats.dotted_site_classes = stubs
-        .types
-        .iter()
-        .filter(|(module, _)| module.starts_with("<site>"))
-        .flat_map(|(_, below)| below.keys())
-        .filter(|symbol| symbol.contains('.'))
-        .count();
+    stats.dotted_site_classes = dotted_site.len();
     let stub_entities = stubs.entities();
     stats.stubs = stub_entities.len();
     phase("stubs", format!("{} stubs", stub_entities.len()));

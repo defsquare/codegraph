@@ -247,7 +247,7 @@ describe("fixtures/python/expected/model.jsonl", () => {
     expect(hasEdge(model, "invocation", `${services}/Service.run`, save, "declared")).toBe(false);
     expect(hasEdge(model, "invocation", `${services}/checkout`, save, "derived")).toBe(true);
     const tracked = `${PKG}shipping.py/Tracked.recent`;
-    expect(hasEdge(model, "invocation", tracked, "python:<site>%2Fdjango.db/models.Model", "derived")).toBe(true);
+    expect(hasEdge(model, "invocation", tracked, "python:<site>%2Fdjango.db.models/Model", "derived")).toBe(true);
     // A raise of what `except … as` caught, of a corpus class; a class a call makes.
     expect(hasEdge(model, "throws", `${services}/Service.run`, "python:<builtins>/KeyError")).toBe(true);
     expect(hasEdge(model, "throws", `${services}/Service.run`, `${PKG}errors.py/OrderError`)).toBe(true);
@@ -363,7 +363,7 @@ describe("fixtures/python/expected/model.jsonl", () => {
       ["python:<builtins>/Exception", "python:<builtins>"],
       ["python:<stdlib>%2Fenum/Enum", "python:<stdlib>%2Fenum"],
       ["python:<stdlib>%2Fcollections.abc/Mapping", "python:<stdlib>%2Fcollections.abc"],
-      ["python:<site>%2Fdjango.db/models.Model", "python:<site>%2Fdjango.db"],
+      ["python:<site>%2Fdjango.db.models/Model", "python:<site>%2Fdjango.db.models"],
       ["python:<site>%2Fsqlalchemy.orm/DeclarativeBase", "python:<site>%2Fsqlalchemy.orm"],
     ] as const) {
       const stub = entity(model, id);

@@ -1244,8 +1244,7 @@ impl Extractor<'_> {
         match fold {
             Fold::Module(module) => (self.stubs.module(module, &self.file_keys), landed(module)),
             Fold::Written { module, symbol } | Fold::Class(ClassId::Opaque { module, symbol }) => {
-                let parent = self.stubs.module(module, &self.file_keys);
-                (self.stubs.type_below(parent, symbol), landed(module))
+                (self.stub_class(module, symbol), landed(module))
             }
             Fold::Class(ClassId::Table(class)) => {
                 if class.0 == "builtins" {

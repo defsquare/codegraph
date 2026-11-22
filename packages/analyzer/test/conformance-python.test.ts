@@ -89,7 +89,7 @@ describe("the analyzer over the Python snapshot", () => {
     }
     expect(graph.isStub("python:<builtins>/Exception")).toBe(true);
     expect(graph.isStub("python:<stdlib>%2Fenum/Enum")).toBe(true);
-    expect(graph.isStub("python:<site>%2Fdjango.db/models.Model")).toBe(true);
+    expect(graph.isStub("python:<site>%2Fdjango.db.models/Model")).toBe(true);
     expect(graph.isStub(`${PKG}pricing%2Fmissing.py`)).toBe(true);
   });
 

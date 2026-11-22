@@ -172,8 +172,8 @@ fn every_receiver_shape_lands_in_the_tier_the_notes_give_it() {
     assert_eq!(
         of(&all, "M.go"),
         vec![
-            ("invocation", "<site>%2Fdjango.db/models.Model", "derived", None),
-            ("invocation", "<site>%2Fdjango.db/models.Model", "derived", None),
+            ("invocation", "<site>%2Fdjango.db.models/Model", "derived", None),
+            ("invocation", "<site>%2Fdjango.db.models/Model", "derived", None),
         ]
     );
     assert_eq!(
@@ -615,13 +615,52 @@ fn a_literal_import_module_or_dunder_import_is_an_import_and_a_computed_name_is_
 }
 
 #[test]
-fn a_site_class_reached_through_an_imported_name_keeps_its_dotted_symbol_and_is_counted() {
-    let extraction = extract_sources(&[(
-        "m.py",
-        "from django.db import models\nfrom rest import Base\nclass O(models.Model): pass\nclass P(Base): pass\n",
-    )]);
+fn a_site_class_reached_through_an_imported_name_is_keyed_at_the_dotted_module_and_counted() {
+    let extraction = extract_sources(&[
+        (
+            "m.py",
+            "from django.db import models\nfrom rest import Base\nfrom flask import request\n\
+             class O(models.Model): pass\nclass P(Base): pass\ndef view():\n    return request.get_json()\n",
+        ),
+        // The other two spellings, where no guess is needed.
+        ("n.py", "from django.db.models import Model\nclass Q(Model): pass\n"),
+        (
+            "o.py",
+            "import django.db.models\nclass R(django.db.models.Model): pass\n",
+        ),
+    ]);
+    let stub_classes: Vec<String> = extraction
+        .model
+        .entities
+        .iter()
+        .filter(|e| e.is_stub == Some(true) && e.kind == "class")
+        .map(|e| e.key.render(ids::LANG))
+        .collect();
+    // Three spellings of one class, one key: every segment before the last is module path.
+    assert_eq!(
+        stub_classes,
+        vec!["python:<site>%2Fdjango.db.models/Model", "python:<site>%2Frest/Base"]
+    );
+    // A guess, counted: `models` could be a class or a value of `django.db`, not a submodule.
     assert_eq!(extraction.stats.dotted_site_classes, 1);
     assert!(extraction.stats.summary().contains("dotted-site-class"));
+    // A library function or value still folds to the module the import names; the import as written.
+    let calls: Vec<String> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "invocation")
+        .map(|e| e.to.render(ids::LANG))
+        .collect();
+    assert_eq!(calls, vec!["python:<site>%2Fflask"]);
+    let imports: Vec<String> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "import")
+        .map(|e| e.to.render(ids::LANG))
+        .collect();
+    assert!(imports.contains(&"python:<site>%2Fdjango.db".to_owned()), "{imports:?}");
 }
 
 const ALIASES: &str = "\
@@ -670,7 +709,7 @@ fn a_base_bound_once_to_a_class_is_that_class_by_flow_and_anything_else_stays_co
         vec![
             row("A", "m.py/Real"),
             row("T", "<stdlib>%2Funittest/TestCase"),
-            row("M", "<site>%2Fdjango.db/models.Model"),
+            row("M", "<site>%2Fdjango.db.models/Model"),
         ]
     );
     // What an ancestor reached only through an alias answers rests on the same inference.

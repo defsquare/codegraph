@@ -23,9 +23,10 @@ describe("the city over the python fixture", () => {
     // A file that declares no class (variables, functions, imports) is no district.
     expect(districts.has(`${PKG}settings.py`)).toBe(false);
     expect(districts.has(`${PKG}retry.py`)).toBe(false);
-    // A stub module is named as the import writes it.
-    expect(districts.get("python:<site>%2Fdjango.db")?.name).toBe("django.db");
-    expect(districts.get("python:<site>%2Fdjango.db")?.isStub).toBe(true);
+    // A stub module that holds a class is a district named by its dotted name — for
+    // `models.Model` reached through `from django.db import models`, the dotted module.
+    expect(districts.get("python:<site>%2Fdjango.db.models")?.name).toBe("django.db.models");
+    expect(districts.get("python:<site>%2Fdjango.db.models")?.isStub).toBe(true);
   });
 
   it("makes a building of every class, wherever it is written and however it is made", () => {
@@ -50,7 +51,7 @@ describe("the city over the python fixture", () => {
     const stubs = city.buildings.filter((b) => b.isStub).map((b) => b.id);
     expect(stubs).toContain("python:<builtins>/Exception");
     expect(stubs).toContain("python:<stdlib>%2Fenum/Enum");
-    expect(stubs).toContain("python:<site>%2Fdjango.db/models.Model");
+    expect(stubs).toContain("python:<site>%2Fdjango.db.models/Model");
     // A relative import to a file that is not there: a stub, never a corpus building.
     expect(stubs).toContain(`${PKG}pricing%2Fmissing.py/Seasonal`);
   });
