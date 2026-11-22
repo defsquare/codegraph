@@ -114,8 +114,8 @@ pub enum ValueDecl {
     /// A dotted name: a class, an enum member, a constant — the resolver decides.
     Name(Chain, String),
     Array(Vec<ValueDecl>),
-    /// A dict display: keys and values, written order.
-    Pairs(Vec<(ValueDecl, ValueDecl)>),
+    /// A dict display: keys and values, written order; and its source text, which is its literal.
+    Pairs(Vec<(ValueDecl, ValueDecl)>, String),
     /// Constant-shaped, not folded (`-x`, `1 << 4`, an f-string): the source text.
     Unevaluated(String),
     /// Code — a call, a lambda, a comprehension: no value; the source text for an argument.
@@ -725,7 +725,7 @@ impl Reader<'_> {
                     .iter()
                     .map(|item| item.key.as_ref().map(|key| (self.value(key), self.value(&item.value))))
                     .collect();
-                pairs.map_or_else(|| ValueDecl::Code(source()), ValueDecl::Pairs)
+                pairs.map_or_else(|| ValueDecl::Code(source()), |pairs| ValueDecl::Pairs(pairs, source()))
             }
             other if constant_shaped(other) => ValueDecl::Unevaluated(source()),
             _ => ValueDecl::Code(source()),

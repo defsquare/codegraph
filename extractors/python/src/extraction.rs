@@ -5,16 +5,18 @@
 //! below `<builtins>`, a `<stdlib>` module or a `<site>` one, made only
 //! because an edge points at it.
 
+use crate::classes::{ClassId, Classes, OwnMember};
 use crate::corpus::{Corpus, Decoding};
 use crate::declarations::{
-    FileDecls, FunctionDecl, ParameterDecl, ParameterKind, Reference, ScopeKind, Span, declarations,
+    Bound, FileDecls, FunctionDecl, ParameterDecl, ParameterKind, Reference, ScopeKind, Span, Target, ValueDecl,
+    declarations,
 };
 use crate::ids;
 use crate::resolve::{How, ImportTarget, ModuleRef, Modules, Resolver, Value};
 use crate::stats::Stats;
 use crate::stdlib_table::{self, Kind};
 use crate::{NAME, RUFF_TAG, VERSION};
-use codegraph_model::{Anchor, Edge, Entity, Key, Model};
+use codegraph_model::{Anchor, Edge, Entity, Key, Literal, Model};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 const MODULE_TRAITS: &[&str] = &["TNamed", "TModule", "TWithChildren", "TSourceAnchor"];
@@ -40,6 +42,8 @@ const INVOCABLE_TRAITS: &[&str] = &[
     "TSourceAnchor",
 ];
 const PARAMETER_TRAITS: &[&str] = &["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"];
+/// A variable's and an attribute's: one composition, kept apart by kind.
+const BINDING_TRAITS: &[&str] = &["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"];
 
 pub struct Extraction {
     pub model: Model,
@@ -153,10 +157,20 @@ fn signature(function: &FunctionDecl) -> String {
     format!("{}({})", function.name, parts.join(", "))
 }
 
+/// Where a name is bound: its line, its span, and the assignment when one binds it.
+type BindingSite = (u32, Span, Option<usize>);
+
 struct Extractor<'a> {
     corpus: &'a Corpus,
     files: &'a [FileDecls],
     resolver: &'a Resolver<'a>,
+    classes: &'a Classes,
+    /// (file, class, name) → its attribute's key: the root-most corpus class's that has the name.
+    attribute_keys: HashMap<(usize, usize, String), Key>,
+    /// (file, name) → a module variable's key.
+    variable_keys: HashMap<(usize, String), Key>,
+    /// Written onto their entities once every key exists.
+    values: HashMap<Key, Literal>,
     file_keys: Vec<Key>,
     /// Per file, per scope: the entity whose body it is; `None` where the declaration was dropped.
     scope_keys: Vec<Vec<Option<Key>>>,
@@ -315,6 +329,260 @@ impl Extractor<'_> {
         }
         entity.parameters = Some(parameters);
         entity
+    }
+
+    /// Module variables, class attributes and parameter values — once every declaration has its key.
+    fn bindings(&mut self) {
+        for file in 0..self.files.len() {
+            self.variables(file);
+            for class in 0..self.files[file].classes.len() {
+                self.attributes(file, class);
+            }
+            self.parameter_values(file);
+        }
+    }
+
+    /// Every module-level binding but a `def`, a `class` and an import — which hold the name —
+    /// and every `global` write from a function: one variable per name, at the first.
+    fn variables(&mut self, file: usize) {
+        let files = self.files;
+        let decls = &files[file];
+        // Each binding by name, in first-seen order.
+        let mut order: Vec<&str> = Vec::new();
+        let mut written: HashMap<&str, Vec<BindingSite>> = HashMap::new();
+        let mut held: HashMap<&str, &'static str> = HashMap::new();
+        for binding in &decls.scopes[0].bindings {
+            let name = binding.name.as_str();
+            let site = match binding.bound {
+                Bound::Function(_) => {
+                    held.entry(name).or_insert("a function holds the key");
+                    continue;
+                }
+                Bound::Class(_) => {
+                    held.entry(name).or_insert("a class holds the key");
+                    continue;
+                }
+                Bound::Import { .. } => {
+                    held.entry(name).or_insert("an import binds it");
+                    continue;
+                }
+                Bound::Assigned(index) => (binding.line, decls.assignments[index].span, Some(index)),
+                Bound::Value | Bound::Parameter { .. } => (binding.line, (binding.line, binding.line), None),
+            };
+            if !written.contains_key(name) {
+                order.push(name);
+            }
+            written.entry(name).or_default().push(site);
+        }
+        for (index, assignment) in decls.assignments.iter().enumerate() {
+            if let Target::Name(name) = &assignment.target
+                && assignment.scope != 0
+                && decls.scopes[assignment.scope]
+                    .globals
+                    .iter()
+                    .any(|global| global == name)
+            {
+                if !written.contains_key(name.as_str()) {
+                    order.push(name);
+                }
+                written
+                    .entry(name)
+                    .or_default()
+                    .push((assignment.span.0, assignment.span, Some(index)));
+            }
+        }
+        for name in order {
+            let mut sites = written.remove(name).unwrap_or_default();
+            sites.sort_by_key(|site| site.0);
+            let Some(&(line, span, assignment)) = sites.first() else {
+                continue;
+            };
+            if let Some(why) = held.get(name) {
+                self.stats
+                    .drop(file, line, "rebinding-of-a-declaration", format!("{name} ({why})"));
+                continue;
+            }
+            let parent = self.file_keys[file].clone();
+            let key = ids::member_key(&parent, name);
+            if self.kinds.contains_key(&key) {
+                continue;
+            }
+            self.kinds.insert(key.clone(), "variable");
+            self.variable_keys.insert((file, name.to_owned()), key.clone());
+            let entity = self.binding_entity(file, key, "variable", name, parent, line, span, assignment);
+            self.entities.push(entity);
+        }
+    }
+
+    /// One attribute per class and name, owned by the root-most corpus class of the order that has
+    /// the name; where a `def` or a nested `class` holds the name, the binding is counted.
+    fn attributes(&mut self, file: usize, class: usize) {
+        let classes = self.classes;
+        let files = self.files;
+        let Some(class_key) = self.scope_keys[file][files[file].classes[class].body].clone() else {
+            return;
+        };
+        for (name, sites) in classes.attributes(file, class) {
+            let held = |file: usize, class: usize| match classes.member(file, class, name) {
+                Some(OwnMember::Function(_)) => Some("a method holds the key"),
+                Some(OwnMember::Class(_)) => Some("a class holds the key"),
+                _ => None,
+            };
+            let owner = classes
+                .mro(file, class)
+                .iter()
+                .rev()
+                .find_map(|id| match id {
+                    ClassId::Corpus { file, class } if classes.member(*file, *class, name).is_some() => {
+                        Some((*file, *class))
+                    }
+                    _ => None,
+                })
+                .unwrap_or((file, class));
+            if let Some(why) = held(file, class).or_else(|| held(owner.0, owner.1)) {
+                let what = format!("{}.{name} ({why})", class_key.symbol);
+                self.stats.drop(file, sites.line, "rebinding-of-a-declaration", what);
+                continue;
+            }
+            let Some(owner_key) = self.scope_keys[owner.0][files[owner.0].classes[owner.1].body].clone() else {
+                continue;
+            };
+            let key = ids::member_key(&owner_key, name);
+            self.attribute_keys.insert((file, class, name.clone()), key.clone());
+            if self.kinds.contains_key(&key) {
+                continue;
+            }
+            self.kinds.insert(key.clone(), "attribute");
+            let first = &classes.attributes(owner.0, owner.1)[name];
+            let assignment = first
+                .assignments
+                .first()
+                .copied()
+                .filter(|index| files[owner.0].assignments[*index].span.0 == first.line);
+            let span = assignment.map_or((first.line, first.line), |index| files[owner.0].assignments[index].span);
+            let entity = self.binding_entity(owner.0, key, "attribute", name, owner_key, first.line, span, assignment);
+            self.entities.push(entity);
+        }
+    }
+
+    /// A variable or an attribute: anchored at its first binding, with the `#` block above it and that binding's value.
+    #[allow(clippy::too_many_arguments)]
+    fn binding_entity(
+        &mut self,
+        file: usize,
+        key: Key,
+        kind: &'static str,
+        name: &str,
+        parent: Key,
+        line: u32,
+        span: Span,
+        assignment: Option<usize>,
+    ) -> Entity {
+        let decls = &self.files[file];
+        let mut entity = Entity::new(key.clone(), kind, BINDING_TRAITS);
+        entity.name = Some(name.to_owned());
+        entity.parent = Some(parent);
+        entity.anchor = Some(self.anchor(file, span));
+        comment(&mut entity, decls.comment_above(line));
+        if let Some(index) = assignment {
+            let assignment = &decls.assignments[index];
+            if let Some(value) = &assignment.value
+                && let Some(literal) = self.literal(file, assignment.scope, value)
+            {
+                self.values.insert(key, literal);
+            }
+        }
+        entity
+    }
+
+    /// A parameter's literal default, read where its `def` is written.
+    fn parameter_values(&mut self, file: usize) {
+        let files = self.files;
+        for function in &files[file].functions {
+            let Some(invocable) = self.scope_keys[file][function.body].clone() else {
+                continue;
+            };
+            for parameter in &function.parameters {
+                if let Some(default) = &parameter.default
+                    && let Some(literal) = self.literal(file, function.scope, default)
+                {
+                    self.values
+                        .insert(ids::parameter_key(&invocable, &parameter.name), literal);
+                }
+            }
+        }
+    }
+
+    /// A written value in core's tags (METAMODEL §1.6); code has none.
+    fn literal(&mut self, file: usize, scope: usize, value: &ValueDecl) -> Option<Literal> {
+        Some(match value {
+            ValueDecl::Str(text) => Literal::String(text.clone()),
+            ValueDecl::Number(text) => Literal::Number(text.clone()),
+            ValueDecl::Bool(flag) => Literal::Boolean(*flag),
+            ValueDecl::None => Literal::Null,
+            ValueDecl::Array(items) => Literal::Array(
+                items
+                    .iter()
+                    .map(|item| self.literal(file, scope, item))
+                    .collect::<Option<Vec<_>>>()?,
+            ),
+            ValueDecl::Pairs(_, text) | ValueDecl::Unevaluated(text) => Literal::Unevaluated(text.clone()),
+            ValueDecl::Code(_) => return None,
+            ValueDecl::Name(chain, text) => {
+                let unevaluated = Literal::Unevaluated(text.clone());
+                let Some(names) = chain.dotted() else {
+                    return Some(unevaluated);
+                };
+                let value = self.resolver.reference(file, scope, &names).value;
+                if let Some(key) = self.class_literal(&value) {
+                    return Some(Literal::Type(key));
+                }
+                // `Kind.FAST`: a member of a corpus class with an enumeration among its ancestors.
+                if let Some((member, owner)) = names.split_last()
+                    && !owner.is_empty()
+                    && let Value::Class { file, class } = self.resolver.reference(file, scope, owner).value
+                    && self.classes.is_enum(file, class)
+                    && self.classes.member(file, class, member) == Some(OwnMember::Attribute)
+                    && let Some(ty) = self.scope_keys[file][self.files[file].classes[class].body].clone()
+                {
+                    return Some(Literal::Enum {
+                        ty,
+                        name: member.clone(),
+                    });
+                }
+                // A constant: a module's or a class body's binding, a library's value. A parameter,
+                // a local, a function is code.
+                let constant = match value {
+                    Value::Assigned { file, assignment } => {
+                        let scope = self.files[file].assignments[assignment].scope;
+                        matches!(
+                            self.files[file].scopes[scope].kind,
+                            ScopeKind::Module | ScopeKind::Class(_)
+                        )
+                    }
+                    Value::External { kind, .. } => !matches!(kind, Some(Kind::Function | Kind::Module(_))),
+                    Value::Builtin { .. } => true,
+                    _ => false,
+                };
+                return constant.then_some(unevaluated);
+            }
+        })
+    }
+
+    /// The key a value naming a class is a type literal of: a corpus class, or a standard one the table declares.
+    fn class_literal(&mut self, value: &Value) -> Option<Key> {
+        match value {
+            Value::Class { file, class } => self.scope_keys[*file][self.files[*file].classes[*class].body].clone(),
+            Value::External {
+                module: module @ ModuleRef::Stdlib(_),
+                symbol,
+                kind: Some(Kind::Class),
+            } => {
+                let module = self.stubs.module(module, &self.file_keys);
+                Some(self.stubs.type_below(module, &symbol.join(".")))
+            }
+            _ => None,
+        }
     }
 
     // --------------------------------------------------------------- edges ----
@@ -492,11 +760,16 @@ pub fn extract(
     let modules = Modules::new(corpus);
     let resolver = Resolver::new(&modules, &files);
     phase("imports", format!("{} files resolved", files.len()));
+    let classes = Classes::new(&files, &resolver);
 
     let mut extractor = Extractor {
         corpus,
         files: &files,
         resolver: &resolver,
+        classes: &classes,
+        attribute_keys: HashMap::new(),
+        variable_keys: HashMap::new(),
+        values: HashMap::new(),
         file_keys: corpus.files.iter().map(|file| ids::file_key(&file.rel)).collect(),
         scope_keys: Vec::with_capacity(files.len()),
         kinds: HashMap::new(),
@@ -508,6 +781,7 @@ pub fn extract(
     };
     extractor.modules();
     extractor.declarations();
+    extractor.bindings();
     phase("entities", format!("{} entities", extractor.entities.len()));
     extractor.imports();
     extractor.bases();
@@ -518,8 +792,15 @@ pub fn extract(
         mut stats,
         mut entities,
         edges,
+        mut values,
         ..
     } = extractor;
+    for entity in &mut entities {
+        if let Some(value) = values.remove(&entity.key) {
+            entity.value = Some(value);
+            entity.traits.push("TWithValue");
+        }
+    }
     let stub_entities = stubs.entities();
     stats.stubs = stub_entities.len();
     phase("stubs", format!("{} stubs", stub_entities.len()));
@@ -660,6 +941,148 @@ mod tests {
             !entity(&extraction, "python:m.py/f#param:x")
                 .traits
                 .contains(&"TMetrics")
+        );
+    }
+
+    const BINDINGS: &str = "from enum import Enum\nimport json\nDEBUG = False\n# The limit.\nLIMIT = 3\nLIMIT = 4\n\
+        try:\n    from fast import speed\nexcept ImportError:\n    speed = None\n\
+        def helper(): pass\nhelper = None\ndef setup():\n    global registry\n    registry = {}\n\
+        class Kind(Enum):\n    FAST = 1\n    SLOW = 2\n\
+        class Base:\n    rate = 0.5\n    def __init__(self, kind=Kind.FAST, label=\"x\", n=-1):\n        self.lines = []\n        self.total = 0\n        self.label = label\n    def total(self): pass\n\
+        class Child(Base):\n    def __init__(self):\n        self.lines = [1]\n        self.extra = None\n\
+        DEFAULT = Kind.SLOW\nCLASS = Base\nCALLED = helper()\nALIAS = LIMIT\nimport logging\nLEVEL = logging.DEBUG\n";
+
+    #[test]
+    fn a_module_binding_is_a_variable_and_a_class_binding_an_attribute_unless_a_declaration_holds_the_key() {
+        let extraction = extract_sources(&[("m.py", BINDINGS)]);
+        let of_kind = |kind: &str| -> Vec<String> {
+            let mut out: Vec<String> = rendered(&extraction)
+                .into_iter()
+                .filter(|(_, k)| *k == kind)
+                .map(|(key, _)| key)
+                .collect();
+            out.sort();
+            out
+        };
+        assert_eq!(
+            of_kind("variable"),
+            [
+                "ALIAS", "CALLED", "CLASS", "DEBUG", "DEFAULT", "LEVEL", "LIMIT", "registry"
+            ]
+            .map(|name| format!("python:m.py/{name}"))
+        );
+        // One attribute per class and name, owned by the root-most corpus class that has it.
+        assert_eq!(
+            of_kind("attribute"),
+            [
+                "Base.label",
+                "Base.lines",
+                "Base.rate",
+                "Child.extra",
+                "Kind.FAST",
+                "Kind.SLOW"
+            ]
+            .map(|name| format!("python:m.py/{name}"))
+        );
+        let drops: Vec<(&str, u32, &str)> = extraction
+            .stats
+            .drops
+            .iter()
+            .map(|d| (d.reason, d.line, d.what.as_str()))
+            .collect();
+        assert_eq!(
+            drops,
+            vec![
+                ("rebinding-of-a-declaration", 10, "speed (an import binds it)"),
+                ("rebinding-of-a-declaration", 12, "helper (a function holds the key)"),
+                ("rebinding-of-a-declaration", 23, "Base.total (a method holds the key)"),
+            ]
+        );
+        let limit = entity(&extraction, "python:m.py/LIMIT");
+        assert_eq!(limit.anchor.as_ref().map(|a| (a.start, a.end)), Some((5, 5)));
+        assert_eq!(limit.comments, Some(vec!["The limit.".to_owned()]));
+        assert_eq!(
+            limit.parent.as_ref().map(|p| p.render(ids::LANG)),
+            Some("python:m.py".to_owned())
+        );
+        let lines = entity(&extraction, "python:m.py/Base.lines");
+        assert_eq!(lines.anchor.as_ref().map(|a| a.start), Some(22));
+        assert_eq!(
+            lines.parent.as_ref().map(|p| p.render(ids::LANG)),
+            Some("python:m.py/Base".to_owned())
+        );
+        for (rendered, traits) in [
+            (
+                "python:m.py/DEBUG",
+                vec![
+                    "TNamed",
+                    "TStructural",
+                    "TTypedEntity",
+                    "TChildOf",
+                    "TSourceAnchor",
+                    "TWithValue",
+                ],
+            ),
+            (
+                "python:m.py/CALLED",
+                vec!["TNamed", "TStructural", "TTypedEntity", "TChildOf", "TSourceAnchor"],
+            ),
+            (
+                "python:m.py/Kind.FAST",
+                vec![
+                    "TNamed",
+                    "TStructural",
+                    "TTypedEntity",
+                    "TChildOf",
+                    "TSourceAnchor",
+                    "TWithValue",
+                ],
+            ),
+        ] {
+            assert_eq!(entity(&extraction, rendered).traits, traits, "{rendered}");
+        }
+    }
+
+    #[test]
+    fn a_written_value_is_a_literal_a_class_a_type_an_enum_member_its_member_and_code_none() {
+        let extraction = extract_sources(&[("m.py", BINDINGS)]);
+        let value = |rendered: &str| entity(&extraction, rendered).value.clone();
+        let kind = entity(&extraction, "python:m.py/Kind").key.clone();
+        let enum_member = |name: &str| {
+            Some(Literal::Enum {
+                ty: kind.clone(),
+                name: name.into(),
+            })
+        };
+        assert_eq!(value("python:m.py/DEBUG"), Some(Literal::Boolean(false)));
+        assert_eq!(value("python:m.py/LIMIT"), Some(Literal::Number("3".into())));
+        assert_eq!(value("python:m.py/registry"), Some(Literal::Unevaluated("{}".into())));
+        assert_eq!(value("python:m.py/DEFAULT"), enum_member("SLOW"));
+        assert_eq!(
+            value("python:m.py/CLASS"),
+            Some(Literal::Type(entity(&extraction, "python:m.py/Base").key.clone()))
+        );
+        assert_eq!(value("python:m.py/CALLED"), None);
+        // A name is a value where it names a constant — a module binding, a library's — never a parameter.
+        assert_eq!(value("python:m.py/ALIAS"), Some(Literal::Unevaluated("LIMIT".into())));
+        assert_eq!(
+            value("python:m.py/LEVEL"),
+            Some(Literal::Unevaluated("logging.DEBUG".into()))
+        );
+        assert_eq!(value("python:m.py/Base.label"), None);
+        assert_eq!(value("python:m.py/Kind.FAST"), Some(Literal::Number("1".into())));
+        assert_eq!(value("python:m.py/Base.rate"), Some(Literal::Number("0.5".into())));
+        assert_eq!(value("python:m.py/Base.lines"), Some(Literal::Array(Vec::new())));
+        assert_eq!(value("python:m.py/Child.extra"), Some(Literal::Null));
+        let parameter = |name: &str| value(&format!("python:m.py/Base.__init__#param:{name}"));
+        assert_eq!(parameter("kind"), enum_member("FAST"));
+        assert_eq!(parameter("label"), Some(Literal::String("x".into())));
+        assert_eq!(parameter("n"), Some(Literal::Number("-1".into())));
+        assert_eq!(parameter("self"), None);
+        assert!(
+            entity(&extraction, "python:m.py/Base.__init__#param:n")
+                .traits
+                .contains(&"TWithValue")
         );
     }
 

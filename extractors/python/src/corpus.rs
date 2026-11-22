@@ -624,6 +624,31 @@ pub fn load(sources: &[String], import_roots: &[String], cwd: &Path) -> Result<C
     })
 }
 
+/// A corpus of in-memory UTF-8 sources, sorted by path as a walk sorts them.
+#[cfg(test)]
+pub fn from_sources(files: &[(&str, &str)]) -> Corpus {
+    let mut files: Vec<SourceFile> = files
+        .iter()
+        .map(|(rel, text)| {
+            let line_starts = line_starts(text);
+            SourceFile {
+                rel: (*rel).to_owned(),
+                text: (*text).to_owned(),
+                decoding: Decoding::Utf8,
+                lines: line_count(text, &line_starts),
+                line_starts,
+            }
+        })
+        .collect();
+    files.sort_by(|a, b| a.rel.cmp(&b.rel));
+    Corpus {
+        root_display: ".".into(),
+        root_name: Some("repo".into()),
+        files,
+        import_roots: Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

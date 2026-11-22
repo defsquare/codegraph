@@ -175,6 +175,24 @@ describe("fixtures/python/expected/model.jsonl", () => {
     expect(entity(model, `${PKG}shapes.py/Crate`)["comments"]).toEqual(["A crate: not in `__all__`."]);
   });
 
+  it("makes a module binding a variable and a class binding an attribute, with the literal it is written as", () => {
+    const model = loadSnapshot();
+    const variable = entity(model, `${PKG}shapes.py/__all__`);
+    expect(variable["kind"]).toBe("variable");
+    expect(variable["value"]).toEqual({ k: "array", items: [{ k: "string", v: "Box" }] });
+    const post = entity(model, `${PKG}shipping.py/Carrier.POST`);
+    expect([post["kind"], post["parent"], post["value"]]).toEqual(["attribute", `${PKG}shipping.py/Carrier`, { k: "string", v: "post" }]);
+    // `self.reference = reference` in `__init__`: an attribute of the class, and a parameter is no value.
+    const reference = entity(model, `${ORDER}.reference`);
+    expect([reference["kind"], reference["parent"], reference["value"]]).toEqual(["attribute", ORDER, undefined]);
+    // An import holds the name an `except ImportError` fallback rebinds: no variable.
+    expect(model.entities.some((e) => e.id === `${PKG}compat.py/JSONDecodeError`)).toBe(false);
+    // A function's local is flow: no variable is below an invocable.
+    for (const e of model.entities.filter((candidate) => candidate.kind === "variable")) {
+      expect(entity(model, (e as unknown as Bag)["parent"] as string)["kind"], e.id).toBe("module");
+    }
+  });
+
   it("makes a def written twice ONE entity anchored at the first, and an NFKC twin one name", () => {
     const model = loadSnapshot();
     const dataDir = model.entities.filter((e) => e.id === `${PKG}compat.py/data_dir`);

@@ -407,7 +407,7 @@ fn records_assignments_with_their_value_their_constructor_and_their_annotation()
         value(5),
         Some(ValueDecl::Name(attribute(name("Kind"), "FAST"), "Kind.FAST".into()))
     );
-    assert!(matches!(value(6), Some(ValueDecl::Pairs(pairs)) if pairs.len() == 1));
+    assert!(matches!(value(6), Some(ValueDecl::Pairs(pairs, _)) if pairs.len() == 1));
     let repo = &decls.assignments[7];
     assert_eq!(
         repo.target,

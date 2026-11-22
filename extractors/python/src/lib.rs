@@ -11,6 +11,7 @@
 //! closure live in `@codegraph/core`. The parser's API is internal and
 //! unversioned, so exactly one file names its types: `declarations.rs`.
 
+pub mod classes;
 pub mod cli;
 pub mod corpus;
 pub mod declarations;
