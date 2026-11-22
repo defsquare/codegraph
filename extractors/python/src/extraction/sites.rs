@@ -165,7 +165,7 @@ impl Extractor<'_> {
                     .filter_map(|parameter| parameter.annotation.as_ref())
                     .chain(function.returns.as_ref());
                 for annotation in annotations {
-                    self.note_annotation(file, function.scope, annotation);
+                    self.note_annotation(file, function.annotation_scope, annotation);
                 }
             }
             for assignment in &decls.assignments {
@@ -439,7 +439,9 @@ impl Extractor<'_> {
     fn returns(&mut self, file: usize, function: usize) -> Typed {
         let decl = &self.files[file].functions[function];
         match &decl.returns {
-            Some(annotation) => self.annotated(file, decl.scope, annotation).unwrap_or(Typed::Untyped),
+            Some(annotation) => self
+                .annotated(file, decl.annotation_scope, annotation)
+                .unwrap_or(Typed::Untyped),
             None => Typed::Untyped,
         }
     }
@@ -894,7 +896,9 @@ impl Extractor<'_> {
             .get(index)
             .and_then(|parameter| parameter.annotation.as_ref())
         {
-            Some(annotation) => self.annotated(file, decl.scope, annotation).unwrap_or(Typed::Untyped),
+            Some(annotation) => self
+                .annotated(file, decl.annotation_scope, annotation)
+                .unwrap_or(Typed::Untyped),
             None => Typed::Untyped,
         }
     }

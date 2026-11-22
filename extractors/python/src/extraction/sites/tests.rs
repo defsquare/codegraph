@@ -702,3 +702,49 @@ fn overloads_and_their_implementation_are_one_function_anchored_at_the_implement
         Some("python:<site>%2Flib/Order".to_owned())
     );
 }
+
+#[test]
+fn a_type_parameter_is_bound_where_its_class_or_def_is_read_and_is_no_attribute() {
+    let extraction = extract_sources(&[(
+        "m.py",
+        "class Box[T]:\n    def put(self, item: T) -> T:\n        return item\n\
+         class Crate[U](Box[U]):\n    def pick[V](self, item: V) -> U: ...\n\
+         def first[W](items: list[W]) -> W:\n    return items[0]\n",
+    )]);
+    // No name unbound, no attribute: a type parameter belongs to no class.
+    let drops: Vec<(&str, &str)> = extraction
+        .stats
+        .drops
+        .iter()
+        .map(|d| (d.reason, d.what.as_str()))
+        .collect();
+    assert_eq!(drops, vec![]);
+    let kinds: Vec<(String, &str)> = super::super::tests::rendered(&extraction)
+        .into_iter()
+        .filter(|(_, kind)| !matches!(*kind, "parameter" | "module"))
+        .collect();
+    let named = |pairs: &[(&str, &'static str)]| -> Vec<(String, &'static str)> {
+        pairs
+            .iter()
+            .map(|(key, kind)| (format!("python:m.py/{key}"), *kind))
+            .collect()
+    };
+    assert_eq!(
+        kinds,
+        named(&[
+            ("Box", "class"),
+            ("Box.put", "method"),
+            ("Crate", "class"),
+            ("Crate.pick", "method"),
+            ("first", "function"),
+        ])
+    );
+    let bases: Vec<String> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "inheritance")
+        .map(|e| e.to.render(ids::LANG))
+        .collect();
+    assert_eq!(bases, vec!["python:m.py/Box".to_owned()]);
+}

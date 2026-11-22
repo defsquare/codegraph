@@ -28,6 +28,9 @@ pub enum ScopeKind {
     Lambda,
     /// A comprehension's: its targets.
     Comprehension,
+    /// PEP 695's annotation scope: a generic class's or `def`'s type parameters, between where
+    /// it is written and its body — where its header and its annotations are read.
+    TypeParams,
 }
 
 #[derive(Debug)]
@@ -275,6 +278,8 @@ pub struct FunctionDecl {
     pub binding: MethodBinding,
     /// `@overload`: a signature, not the implementation.
     pub overload: bool,
+    /// Where its annotations are read: where it is written, or its type parameters' scope.
+    pub annotation_scope: usize,
     pub parameters: Vec<ParameterDecl>,
     pub returns: Option<TypeExpr>,
     pub decorators: Vec<DecoratorDecl>,
@@ -675,7 +680,9 @@ impl Reader<'_> {
     fn scope(&mut self, kind: ScopeKind, parent: Option<usize>) -> usize {
         let index = self.out.scopes.len();
         let owner = match kind {
-            ScopeKind::Lambda | ScopeKind::Comprehension => parent.map_or(0, |parent| self.out.scopes[parent].owner),
+            ScopeKind::Lambda | ScopeKind::Comprehension | ScopeKind::TypeParams => {
+                parent.map_or(0, |parent| self.out.scopes[parent].owner)
+            }
             _ => index,
         };
         self.out.scopes.push(Scope {
@@ -1097,6 +1104,10 @@ impl Reader<'_> {
             return;
         }
         let decorators = self.decorators(&class.decorator_list);
+        // PEP 695: the header is read where the type parameters are bound.
+        let enclosing = self.scope;
+        let header = self.type_params(class.type_params.as_deref());
+        self.scope = header;
         let mut bases = Vec::new();
         let mut metaclass = false;
         let mut fields: Vec<(String, u32)> = Vec::new();
@@ -1144,6 +1155,7 @@ impl Reader<'_> {
                 self.visit_expr(&keyword.value);
             }
         }
+        self.scope = enclosing;
         let index = self.out.classes.len();
         let body = self.out.scopes.len();
         let head = class
@@ -1170,7 +1182,7 @@ impl Reader<'_> {
             Bound::Class(index),
             class.name.start().to_u32(),
         );
-        self.scope(ScopeKind::Class(index), Some(scope));
+        self.scope(ScopeKind::Class(index), Some(header));
         // The fields a `namedtuple(…)` base makes are the class's.
         for (field, line) in fields {
             self.out.scopes[body].bindings.push(Binding {
@@ -1179,21 +1191,30 @@ impl Reader<'_> {
                 line,
             });
         }
-        if let Some(parameters) = &class.type_params {
-            for parameter in &parameters.type_params {
-                self.bind(
-                    body,
-                    parameter.name().as_str(),
-                    Bound::Value,
-                    parameter.start().to_u32(),
-                );
-            }
-        }
         let saved = std::mem::replace(&mut self.scope, body);
         let checking = std::mem::replace(&mut self.type_checking, false);
         self.visit_body(&class.body);
         self.scope = saved;
         self.type_checking = checking;
+    }
+
+    /// A generic class's or `def`'s type parameters, bound in a scope of their own (PEP 695);
+    /// where it is written, when it has none.
+    fn type_params(&mut self, params: Option<&ast::TypeParams>) -> usize {
+        let Some(params) = params else {
+            return self.scope;
+        };
+        let parent = self.scope;
+        let scope = self.scope(ScopeKind::TypeParams, Some(parent));
+        for parameter in &params.type_params {
+            self.bind(
+                scope,
+                parameter.name().as_str(),
+                Bound::Value,
+                parameter.start().to_u32(),
+            );
+        }
+        scope
     }
 
     /// The names a literal `__slots__` value lists — a string, a list, tuple or set of strings,
@@ -1298,6 +1319,7 @@ impl Reader<'_> {
             }
         }
         let parameters = self.parameters(&function.parameters);
+        let header = self.type_params(function.type_params.as_deref());
         let index = self.out.functions.len();
         let body = self.out.scopes.len();
         let head = function
@@ -1314,6 +1336,7 @@ impl Reader<'_> {
             property: in_class && names.iter().any(|n| PROPERTIES.contains(&n.as_str())),
             binding,
             overload: names.iter().any(|n| n == "overload"),
+            annotation_scope: header,
             parameters,
             returns: function.returns.as_deref().map(|returns| self.type_expr(returns)),
             decorators,
@@ -1322,7 +1345,7 @@ impl Reader<'_> {
         });
         let scope = self.scope;
         self.bind(scope, name, Bound::Function(index), function.name.start().to_u32());
-        self.scope(ScopeKind::Function(index), Some(scope));
+        self.scope(ScopeKind::Function(index), Some(header));
         let parameters: Vec<Binding> = self.out.functions[index]
             .parameters
             .iter()
@@ -1337,16 +1360,6 @@ impl Reader<'_> {
             })
             .collect();
         self.out.scopes[body].bindings.extend(parameters);
-        if let Some(type_params) = &function.type_params {
-            for parameter in &type_params.type_params {
-                self.bind(
-                    body,
-                    parameter.name().as_str(),
-                    Bound::Value,
-                    parameter.start().to_u32(),
-                );
-            }
-        }
         let saved = std::mem::replace(&mut self.scope, body);
         let checking = std::mem::replace(&mut self.type_checking, false);
         let outer = self.function.replace(index);

@@ -47,7 +47,7 @@ impl Extractor<'_> {
                 let primary = self.primary[file][index];
                 for parameter in &function.parameters {
                     if let Some(annotation) = &parameter.annotation
-                        && let Some(declared) = self.annotation(file, function.scope, annotation, &key)
+                        && let Some(declared) = self.annotation(file, function.annotation_scope, annotation, &key)
                         && primary
                     {
                         self.declared_types
@@ -55,7 +55,7 @@ impl Extractor<'_> {
                     }
                 }
                 if let Some(returns) = &function.returns
-                    && let Some(declared) = self.annotation(file, function.scope, returns, &key)
+                    && let Some(declared) = self.annotation(file, function.annotation_scope, returns, &key)
                     && primary
                 {
                     self.declared_types.insert(key.clone(), declared);

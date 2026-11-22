@@ -20,7 +20,7 @@ pub fn lookup<'a>(decls: &'a FileDecls, scope: usize, name: &str) -> Vec<&'a Bin
         // The scope the name is read in, whatever it is; above it, functions only.
         let encloses = matches!(
             here.kind,
-            ScopeKind::Function(_) | ScopeKind::Lambda | ScopeKind::Comprehension
+            ScopeKind::Function(_) | ScopeKind::Lambda | ScopeKind::Comprehension | ScopeKind::TypeParams
         );
         if own || encloses {
             if declares(&here.globals) {

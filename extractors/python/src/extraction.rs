@@ -358,7 +358,12 @@ impl Extractor<'_> {
             keys[0] = Some(self.file_keys[file].clone());
             let primary = primaries(decls);
             for scope in 1..decls.scopes.len() {
-                let parent_scope = decls.scopes[scope].parent.unwrap_or(0);
+                // The scope the declaration is written in: a type parameters' scope stands between.
+                let parent_scope = match decls.scopes[scope].kind {
+                    ScopeKind::Class(class) => decls.classes[class].scope,
+                    ScopeKind::Function(function) => decls.functions[function].scope,
+                    _ => continue,
+                };
                 // Below a dropped declaration nothing has a key either.
                 let Some(parent) = keys[parent_scope].clone() else {
                     continue;
@@ -378,7 +383,9 @@ impl Extractor<'_> {
                         let kind = if in_class { "method" } else { "function" };
                         (key, kind, &function.name, function.span)
                     }
-                    ScopeKind::Module | ScopeKind::Lambda | ScopeKind::Comprehension => continue,
+                    ScopeKind::Module | ScopeKind::Lambda | ScopeKind::Comprehension | ScopeKind::TypeParams => {
+                        continue;
+                    }
                 };
                 // An `@overload` signature before its implementation: the implementation makes the entity.
                 let deferred = matches!(decls.scopes[scope].kind, ScopeKind::Function(function) if !primary[function]);
