@@ -23,6 +23,7 @@ import spoon.reflect.code.CtAssignment;
 import spoon.reflect.code.CtExecutableReferenceExpression;
 import spoon.reflect.code.CtFieldAccess;
 import spoon.reflect.code.CtFieldWrite;
+import spoon.reflect.code.CtInvocation;
 import spoon.reflect.code.CtLambda;
 import spoon.reflect.code.CtLocalVariable;
 import spoon.reflect.code.CtNewClass;
@@ -115,7 +116,9 @@ import spoon.reflect.visitor.filter.TypeFilter;
  *       name at all yields {@code java:&lt;unnamed&gt;/&lt;unknown&gt;}; an edge there
  *       would create one junk node that every unresolved call in the corpus
  *       points at, silently inflating coupling metrics. Dropped and counted
- *       ({@link #droppedUnidentifiedTargets()}).
+ *       ({@link #droppedUnidentifiedTargets()}) — except an unqualified call in
+ *       a lambda ECJ could not type, which {@link UnboundCallLookup} names by
+ *       the language's own lookup when exactly one corpus method fits.
  * </ul>
  */
 public final class EdgeExtractor {
@@ -145,6 +148,9 @@ public final class EdgeExtractor {
   private final CorpusWhitelist whitelist;
   private final Anchors anchors;
 
+  /** Unqualified calls in a body ECJ never resolved; membership is the whitelist's answer. */
+  private final UnboundCallLookup unboundCalls;
+
   // Per-run state, reset by every extract() call.
   private final Set<Edge> edges = new LinkedHashSet<>();
   private final Map<AccessKey, boolean[]> accesses = new LinkedHashMap<>();
@@ -157,6 +163,8 @@ public final class EdgeExtractor {
   public EdgeExtractor(CorpusWhitelist whitelist, Anchors anchors) {
     this.whitelist = whitelist;
     this.anchors = anchors;
+    this.unboundCalls =
+        new UnboundCallLookup(reference -> typeIdOfReference(reference).filter(whitelist::declares).isPresent());
   }
 
   public CorpusWhitelist whitelist() {
@@ -444,8 +452,35 @@ public final class EdgeExtractor {
         emitAnonymousInstantiation(site, anonymous, provenance.get());
         continue;
       }
+      Optional<UnboundCallLookup.Resolution> unbound =
+          invocation instanceof CtInvocation<?> call ? unboundCalls.resolve(call) : Optional.empty();
+      if (unbound.isPresent()) {
+        emitUnboundCall(site, unbound.get(), provenance.get());
+        continue;
+      }
       emitCall(site, invocation.getExecutable(), provenance.get());
     }
+  }
+
+  /**
+   * An unqualified call ECJ never bound, resolved by {@link UnboundCallLookup} to
+   * the corpus method it names — under the id pass 2 declared for it. A lookup
+   * that could not see every member is an inference, and the edge says so.
+   */
+  private void emitUnboundCall(CtElement site, UnboundCallLookup.Resolution resolution, Provenance provenance) {
+    CtMethod<?> method = resolution.method();
+    Optional<String> type = typeIdOf(method.getDeclaringType());
+    Optional<String> member = type.flatMap(owner -> safe(() -> EntityIds.forMethodIn(owner, method)));
+    if (member.isEmpty()) {
+      droppedUnidentifiedTargets++;
+      return;
+    }
+    Target target = new Target(member.get(), type.get());
+    emitCallTo(
+        site,
+        target,
+        () -> candidatesFor(method, target),
+        resolution.complete() ? provenance : Provenance.DERIVED);
   }
 
   /** {@code Foo::bar} names a call site as surely as {@code foo.bar()} does. */
@@ -467,6 +502,11 @@ public final class EdgeExtractor {
       droppedUnidentifiedTargets++;
       return;
     }
+    emitCallTo(site, target.get(), () -> candidatesFor(executable, target.get()), provenance);
+  }
+
+  private void emitCallTo(
+      CtElement site, Target target, Supplier<List<String>> dispatchCandidates, Provenance provenance) {
     Optional<SourceAnchor> anchor = anchorOf(site);
     if (anchor.isEmpty()) {
       return;
@@ -476,19 +516,19 @@ public final class EdgeExtractor {
       return;
     }
 
-    String member = target.get().memberId();
+    String member = target.memberId();
     if (!whitelist.declares(member)) {
       // The member is external (or was never resolved): fold the fact up to its
       // declaring type, the only granularity a stub can honestly represent.
-      emitTypeLevelCall(owner.get(), target.get().typeId(), provenance, anchor.get());
+      emitTypeLevelCall(owner.get(), target.typeId(), provenance, anchor.get());
       return;
     }
     if (owner.get().kind() != OwnerKind.INVOCABLE) {
-      emitTypeLevelCall(owner.get(), target.get().typeId(), provenance, anchor.get());
+      emitTypeLevelCall(owner.get(), target.typeId(), provenance, anchor.get());
       return;
     }
 
-    List<String> candidates = candidatesFor(executable, target.get());
+    List<String> candidates = dispatchCandidates.get();
     Provenance effective = candidates.isEmpty() ? provenance : Provenance.DYNAMIC_CANDIDATE;
     add(Edge.invocation(owner.get().id(), member, effective, anchor.get(), candidates));
   }
@@ -541,7 +581,11 @@ public final class EdgeExtractor {
     if (executable.isConstructor() || executable.isStatic()) {
       return List.of();
     }
-    CtExecutable<?> declaration = safeDeclaration(executable);
+    return candidatesFor(safeDeclaration(executable), target);
+  }
+
+  /** The same, from the declaration itself — what an unbound call resolves to. */
+  private List<String> candidatesFor(CtExecutable<?> declaration, Target target) {
     if (declaration instanceof CtMethod<?> method
         && (method.isPrivate() || method.isFinal() || method.isStatic())) {
       return List.of();

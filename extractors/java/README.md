@@ -175,6 +175,16 @@ decided by `CorpusWhitelist` alone.
 - **Reflection is invisible.** `Class.forName`, `Method.invoke`, proxies, Spring
   XML/annotation wiring, `ServiceLoader`, JNDI: no edge. Documented in the Java
   profile's `notes`, not discovered per-analysis.
+- **A lambda whose functional interface is missing is a body ECJ never
+  resolved.** ECJ types a lambda from its interface; without it, no call in the
+  body (nested lambdas included) gets a declaring type or parameter types. An
+  unqualified call there is resolved by `UnboundCallLookup` — the innermost
+  enclosing type with a method of that name, then the one method whose arity
+  fits — `declared` when every type consulted has its supertypes in the corpus,
+  `derived` otherwise; same-arity overloads, `Object` method names, `this.m()`,
+  `super.m()` and method references stay dropped. Until this was fixed,
+  spring-petclinic's `cm -> cm.createCache("vets", cacheConfiguration())` left
+  `cacheConfiguration()` with no caller.
 
 ## Layout
 
