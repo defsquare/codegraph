@@ -1,7 +1,16 @@
 import { accessSync, constants } from "node:fs";
 import { basename, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { FOLD_LEVELS, FRAMEWORK_PROFILES, SelectorError, parseTerm, type FoldLevel, type Selector } from "@codegraph/analyzer";
+import {
+  FOLD_LEVELS,
+  FRAMEWORK_PROFILES,
+  HOTSPOT_FAMILIES,
+  SelectorError,
+  parseTerm,
+  type FoldLevel,
+  type HotspotFamily,
+  type Selector,
+} from "@codegraph/analyzer";
 import { CLOSURES, EXPLAIN_WALK_NAME, WALK_NAME_PATTERN, type Closure } from "@codegraph/insights";
 import { METRIC_PREFIXES, SCALES, metricNames } from "@codegraph/city";
 import { SCOPE_LEVELS, TERM_CLASSES, WEIGHT_KEYS, type ScopeLevel, type TermClass, type WeightKey } from "@codegraph/vocabulary";
@@ -54,7 +63,9 @@ export type FormatName = (typeof FORMATS)[number];
 
 /**
  * `history --report` values. The last two are the CROSS-GRAPH reports (M9b):
- * they join the mined history with a model, so they read `--model` too.
+ * they join the mined history with a model, so they read `--model` too. Since
+ * M23b `hotspots` and `summary` join one WHEN `--model` is given, and are the
+ * history's own reports when it is not.
  */
 export const HISTORY_REPORTS = [
   "summary",
@@ -1325,9 +1336,20 @@ export const HISTORY_SPEC: CommandSpec = {
       name: "model",
       type: "string",
       describe:
-        "Model for the cross-graph reports (hidden, deadweight); " +
-        "defaults to this directory's default model.",
+        "A model to join on file paths. hidden and deadweight need one (default: this " +
+        "directory's default model). Given to hotspots, each file gains its lines, its " +
+        "cyclomatic complexity, its dependency cycle and its rank in four families; given " +
+        "to summary, the share of commits that cross a top-level directory of the model.",
       placeholder: "FILE",
+    },
+    {
+      name: "rank",
+      type: "string",
+      describe:
+        "hotspots with --model: the family the rows are ordered by — classic (revisions x " +
+        "lines), branchy (revisions x cyclomatic; the default), tangled (revisions of a file " +
+        "in a dependency cycle), fragile (revisions x fix density).",
+      choices: HOTSPOT_FAMILIES,
     },
     {
       name: "min-support",
@@ -1762,6 +1784,8 @@ export interface HistoryOptions {
   readonly top: number | undefined;
   /** `--model FILE` for the cross-graph reports; undefined means the default model. */
   readonly model: string | undefined;
+  /** `--rank FAMILY`: the order of the joined hotspot report; undefined is its default. */
+  readonly rank: HotspotFamily | undefined;
   /** Coupling thresholds; the specs' defaults unless overridden. */
   readonly minSupport: number;
   readonly minConfidence: number;
@@ -2488,15 +2512,30 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         },
       };
     }
-    case "history":
+    case "history": {
+      const report = (stringOf(values, "report") ?? DEFAULT_HISTORY_REPORT) as HistoryReportName;
+      const rank = stringOf(values, "rank") as HotspotFamily | undefined;
+      if (rank !== undefined && report !== "hotspots") {
+        throw new UsageError(
+          `--rank orders the joined hotspot report, not ${report}`,
+          "Use it with --report hotspots --model FILE.",
+        );
+      }
+      if (rank !== undefined && stringOf(values, "model") === undefined) {
+        throw new UsageError(
+          "--rank needs a model to rank by",
+          "Name it: --report hotspots --model FILE --rank " + rank,
+        );
+      }
       return {
         kind: "run",
         command: "history",
         options: {
           history: models[0] as string,
-          report: (stringOf(values, "report") ?? DEFAULT_HISTORY_REPORT) as HistoryReportName,
+          report,
           top: integerOf(values, "top"),
           model: stringOf(values, "model"),
+          rank,
           minSupport: integerOf(values, "min-support") ?? 3,
           minConfidence: (integerOf(values, "min-confidence") ?? 50) / 100,
           serve: flagOf(values, "serve"),
@@ -2506,6 +2545,7 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           json: flagOf(values, "json"),
         },
       };
+    }
     case "query":
       return { kind: "run", command: "query", options: queryOf(values, spec, models) };
     case "timeline":

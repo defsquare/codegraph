@@ -1,17 +1,25 @@
 import { readFileSync } from "node:fs";
 import { Buffer } from "node:buffer";
 import {
+  HOTSPOT_FAMILIES,
   buildGraph,
+  crossModuleShare,
   deadWeight,
   fileDependencies,
+  fileMeasures,
   hiddenCoupling,
   joinOnPaths,
+  joinedHotspots,
+  type CodeGraph,
+  type CrossModuleShare,
   type DeadWeightReport,
   type FileJoin,
   type HiddenCouplingReport,
+  type JoinedHotspotReport,
 } from "@codegraph/analyzer";
 import { buildFileCity, cityToJsonString, layoutFileCity } from "@codegraph/city";
 import {
+  COUPLING_DEFAULTS,
   HistoryError,
   authorStats,
   decodeHistoryText,
@@ -38,6 +46,12 @@ import { startCityServer, vizAssets, type CityServerOptions } from "../serve.js"
  * declared graph cannot explain, and declared dependencies history never
  * exercised. The join itself lives in the analyzer; this command only feeds
  * both sides in.
+ *
+ * `hotspots` and `summary` join a model ONLY WHEN `--model` NAMES ONE (M23b):
+ * they are the history's own reports otherwise, and a `model.jsonl` that
+ * happens to sit in the directory must not change what they print. Joined,
+ * `hotspots` is effort times complexity in four families, and `summary` gains
+ * the share of commits that cross a top-level directory of the model.
  *
  * `--serve` hosts the FILE-LEVEL REPLAY: the history becomes a laid-out city
  * artifact (buildings = file lineages, districts = directories) with a
@@ -110,13 +124,49 @@ export function historyCommand(
     return EXIT.OK;
   }
 
+  try {
+    return printReport(history, options, io);
+  } catch (error) {
+    if (error instanceof NotAModel) return EXIT.FINDINGS;
+    throw error;
+  }
+}
+
+function printReport(history: History, options: HistoryOptions, io: IoSink): ExitCode {
   switch (options.report) {
-    case "summary":
-      outLines(io, options.json ? [jsonOf("summary", summarize(history))] : summaryText(history));
+    case "summary": {
+      const crossing = options.model === undefined ? undefined : crossModule(history, options, io);
+      outLines(
+        io,
+        options.json
+          ? [jsonOf("summary", { ...summarize(history), ...(crossing === undefined ? {} : { crossModule: crossing }) })]
+          : [...summaryText(history), ...(crossing === undefined ? [] : [crossModuleLine(crossing)])],
+      );
       return EXIT.OK;
+    }
     case "hotspots": {
       const top = options.top ?? 20;
       const rows = hotspots(history);
+      if (options.model !== undefined) {
+        const { graph, deps, join } = crossGraph(history, options, io);
+        const report = joinedHotspots(withOwners(history, rows), fileMeasures(graph, deps), join, { rank: options.rank });
+        reportUnjoined(report, rows.length, io);
+        outLines(
+          io,
+          options.json
+            ? [
+                jsonOf("hotspots", {
+                  rank: report.rank,
+                  total: report.rows.length,
+                  outsideModel: report.outsideModel,
+                  outsideHistory: report.outsideHistory,
+                  rows: report.rows.slice(0, top),
+                }),
+              ]
+            : joinedHotspotsText(history, report, top),
+        );
+        return EXIT.OK;
+      }
       outLines(
         io,
         options.json
@@ -192,12 +242,19 @@ export function historyCommand(
   }
 }
 
-/** Load the model side and join it, once, for either cross-graph report. */
+/**
+ * The `--model` was readable and is not a model. Thrown, not returned, so no
+ * report can be computed over the empty union such a file loads as: "none —
+ * every co-changed pair is explained" would then be said of nothing at all.
+ */
+class NotAModel extends Error {}
+
+/** Load the model side and join it, once, for any report that reads both graphs. */
 function crossGraph(
   history: History,
   options: HistoryOptions,
   io: IoSink,
-): { deps: ReturnType<typeof fileDependencies>; join: FileJoin } {
+): { graph: CodeGraph; deps: ReturnType<typeof fileDependencies>; join: FileJoin } {
   const modelPath = options.model ?? defaultModelPath();
   let loaded: ReturnType<typeof loadModelFiles>;
   try {
@@ -209,10 +266,17 @@ function crossGraph(
       { cause: error },
     );
   }
+  const unreadable = loaded.diagnostics.schemaErrors[0];
+  if (unreadable !== undefined) {
+    errLine(io, `${modelPath} is not a model: ${unreadable.message}`);
+    errLine(io, `Run 'codegraph validate ${modelPath}' for every finding.`);
+    throw new NotAModel(modelPath);
+  }
   if (!loaded.clean) {
     errLine(io, `warning: ${modelPath} has findings; the join was computed anyway.`);
   }
-  const deps = fileDependencies(buildGraph(loaded.union));
+  const graph = buildGraph(loaded.union);
+  const deps = fileDependencies(graph);
   const join = joinOnPaths(deps.files, history.paths);
   if (join.ambiguous.length > 0) {
     errLine(
@@ -220,7 +284,94 @@ function crossGraph(
       `note: ${join.ambiguous.length} paths joined ambiguously and were left out of the join.`,
     );
   }
-  return { deps, join };
+  return { graph, deps, join };
+}
+
+/**
+ * The share of commits crossing a top-level directory of the model. Sweeping
+ * commits are left out by the limit `coupling` uses, and for its reason: a
+ * reformat touches every directory and says nothing about the cut.
+ */
+function crossModule(history: History, options: HistoryOptions, io: IoSink): CrossModuleShare {
+  const { join } = crossGraph(history, options, io);
+  const changesets: string[][] = history.commits.map(() => []);
+  for (const change of history.changes) {
+    const path = history.paths[change.path];
+    if (path !== undefined) changesets[change.commit]?.push(path);
+  }
+  const share = crossModuleShare(changesets, join, { maxChangesetSize: COUPLING_DEFAULTS.maxChangesetSize });
+  if (share.skipped > 0) {
+    errLine(
+      io,
+      `note: ${share.skipped} sweeping commits left out of the cross-module share ` +
+        `(changesets over ${COUPLING_DEFAULTS.maxChangesetSize} files cross everything).`,
+    );
+  }
+  return share;
+}
+
+function crossModuleLine(share: CrossModuleShare): string {
+  const where = `${share.modules.length} ${share.root === "" ? "at its root" : `under ${share.root}`}`;
+  return (
+    `  cross-module: ${share.crossing} of ${share.commits} commits touching the model ` +
+    `cross its top-level directories (${percent(share.share)}; ${where})`
+  );
+}
+
+type OwnedHotspot = ReturnType<typeof hotspots>[number] & {
+  /** The owner's share of the lines added to the file; `null` when nobody added any. */
+  readonly ownerShare: number | null;
+  /** The day of that owner's last commit ANYWHERE in the history. */
+  readonly ownerLastSeen: string | null;
+  /** That owner's row in `--report authors`, from 1: two files with one rank have one owner. */
+  readonly ownerRank: number | null;
+};
+
+/**
+ * Ownership WITHOUT A NAME. The walk asks "is whoever wrote most of this still
+ * around?" and "do the hotspots have one owner?", and its report may be handed
+ * to someone else: a share, a date and a ROW NUMBER answer both without
+ * putting a person in it. The row is the owner's in `--report authors`, which
+ * is where the name is. Same owner rule as that report and the bus factor.
+ */
+function withOwners(history: History, rows: ReturnType<typeof hotspots>): OwnedHotspot[] {
+  const owners = fileOwners(history);
+  const lastSeen = new Map<string, number>();
+  for (const commit of history.commits) {
+    const author = history.authors[commit.author];
+    if (author !== undefined) lastSeen.set(author, Math.max(lastSeen.get(author) ?? 0, commit.time));
+  }
+  const rank = new Map(authorStats(history).rows.map((author, index) => [author.author, index + 1]));
+  return rows.map((row) => {
+    const owner = owners.get(row.path);
+    const seen = owner === undefined ? undefined : lastSeen.get(owner.name);
+    return {
+      ...row,
+      ownerShare: owner?.share ?? null,
+      ownerLastSeen: seen === undefined ? null : day(seen),
+      ownerRank: owner === undefined ? null : (rank.get(owner.name) ?? null),
+    };
+  });
+}
+
+/** What the join left out, on stderr: a low joined count means the model came from elsewhere. */
+function reportUnjoined(report: JoinedHotspotReport<OwnedHotspot>, historyFiles: number, io: IoSink): void {
+  const plural = (count: number, one: string, many: string): string => (count === 1 ? one : many);
+  if (report.outsideModel > 0) {
+    errLine(
+      io,
+      `note: ${report.outsideModel} of ${historyFiles} history files ` +
+        `${plural(report.outsideModel, "has", "have")} no counterpart in the model ` +
+        `(docs, build files, deleted files, anything outside the extracted root).`,
+    );
+  }
+  if (report.outsideHistory > 0) {
+    errLine(
+      io,
+      `note: ${report.outsideHistory} model ${plural(report.outsideHistory, "file was", "files were")} ` +
+        `touched by no mined commit.`,
+    );
+  }
 }
 
 function reportSkipped(report: CoChangeReport, io: IoSink): void {
@@ -301,6 +452,53 @@ function hotspotsText(
         row.path,
       ]),
     ),
+  );
+  return lines;
+}
+
+/** `-` for what was not measured or not ranked: absent is not zero. */
+const cell = (value: number | null): string => (value === null ? "-" : String(value));
+
+function joinedHotspotsText(
+  history: History,
+  report: JoinedHotspotReport<OwnedHotspot>,
+  top: number,
+): readonly string[] {
+  const shown = report.rows.slice(0, top);
+  const lines = [
+    `hotspots of ${history.repo}, joined with the model ` +
+      `(top ${shown.length} of ${report.rows.length} files, by ${report.rank} rank):`,
+  ];
+  if (report.rows.length === 0) {
+    lines.push("  none — no history file matches a file of the model. Was it extracted inside this clone?");
+    return lines;
+  }
+  lines.push(
+    ...table(
+      [
+        "REVISIONS", "SLOC", "CYCLOMATIC", "CYCLE", "FIXES", "DENSITY", "AUTHORS", "OWNER",
+        ...HOTSPOT_FAMILIES.map((family) => family.toUpperCase()),
+        "PATH",
+      ],
+      shown.map((row) => [
+        String(row.revisions),
+        cell(row.sloc),
+        cell(row.cyclomatic),
+        String(row.cycle),
+        String(row.fixes),
+        row.bugDensity.toFixed(2),
+        String(row.authors),
+        row.ownerShare === null ? "-" : `${Math.round(row.ownerShare * 100)}% #${row.ownerRank ?? "?"}`,
+        ...HOTSPOT_FAMILIES.map((family) => cell(row.ranks[family])),
+        row.path,
+      ]),
+    ),
+  );
+  lines.push(
+    "ranks: classic = revisions x sloc, branchy = revisions x cyclomatic, " +
+      "tangled = revisions of a file in a dependency cycle (CYCLE = its files), " +
+      "fragile = revisions x density = fixes; - = not ranked. " +
+      "OWNER = the share of the file's added lines its main author wrote, and that author's row in --report authors.",
   );
   return lines;
 }

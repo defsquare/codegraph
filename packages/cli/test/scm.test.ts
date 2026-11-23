@@ -269,6 +269,7 @@ describe("codegraph history reports hand-counted numbers", () => {
         report: "summary",
         top: undefined,
         model: undefined,
+        rank: undefined,
         minSupport: 3,
         minConfidence: 0.5,
         serve: true,
