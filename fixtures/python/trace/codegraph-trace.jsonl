@@ -1,0 +1,17 @@
+{"t":"header","tool":"codegraph-trace","version":"0.1.0","python":"3.13.18","root":"/work/fixtures/python/src"}
+{"t":"base","file":"src/acme_order/ghost.py","class":"Ghost","index":0,"module":"builtins","name":"object"}
+{"t":"base","file":"src/acme_order/orders/order.py","class":"Order","index":0,"module":"acme_order.orders.base","name":"Base","at":"src/acme_order/orders/base.py"}
+{"t":"base","file":"src/acme_order/orders/order.py","class":"Order","index":1,"module":"acme_order.orders.base","name":"Auditable","at":"src/acme_order/orders/base.py"}
+{"t":"base","file":"src/acme_order/records.py","class":"Point","index":0,"module":"builtins","name":"tuple"}
+{"t":"base","file":"src/acme_order/shipping.py","class":"Dynamic","index":0,"module":"acme_order.orders.base","name":"Base","at":"src/acme_order/orders/base.py"}
+{"t":"base","file":"src/acme_order/shipping.py","class":"Shipment","index":0,"module":"django.db.models.base","name":"Model"}
+{"t":"function","file":"src/acme_order/money.py","line":1,"name":"Price.__new__"}
+{"t":"function","file":"src/acme_order/money.py","line":12,"name":"Price.gross"}
+{"t":"function","file":"src/acme_order/services.py","line":91,"name":"Handler.process"}
+{"t":"function","file":"vendor/elsewhere.py","line":3,"name":"helper"}
+{"t":"call","file":"src/acme_order/refunds.py","line":13,"name":"lookup","at":"src/acme_order/refunds.py","def":5}
+{"t":"call","file":"src/acme_order/refunds.py","line":13,"name":"vanished","at":"src/acme_order/refunds.py","def":5}
+{"t":"call","file":"src/acme_order/services.py","line":54,"name":"process","at":"src/acme_order/services.py","def":91}
+{"t":"call","file":"src/acme_order/services.py","line":54,"name":"process","at":"src/acme_order/money.py","def":1}
+{"t":"call","file":"vendor/elsewhere.py","line":9,"name":"helper","at":"vendor/elsewhere.py","def":3}
+{"t":"eof","bases":6,"functions":4,"calls":5}

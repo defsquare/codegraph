@@ -19,6 +19,9 @@
 //!   side counts as part of the declaration and the other does not (Spoon
 //!   starts a method after `@Override`, tree-sitter at it; the TypeScript
 //!   compiler starts a class at its decorator, tree-sitter after it).
+//! - TRAILING (Python): the same first line, the space ending later by
+//!   nothing but comment and blank lines — tree-sitter's block runs on over
+//!   the comments after a body's last statement, Ruff ends the `def` there.
 //! - CONTAINED: an entity no space spans takes the outermost unjoined,
 //!   compatible spaces inside its span — an Elixir function's clauses, a C#
 //!   property's accessors. Never an entity anchored exactly where its parent
@@ -60,6 +63,7 @@ pub const KEYS: &[&str] = &[
 pub enum Join {
     Exact,
     Leading,
+    Trailing,
     Contained,
     /// Several entities and spaces on one span that do not pair up.
     Ambiguous,
@@ -214,6 +218,7 @@ pub fn language(lang: &str, path: &str) -> Option<LANG> {
         "csharp" => Some(LANG::Csharp),
         "ex" => Some(LANG::Elixir),
         "rb" => Some(LANG::Ruby),
+        "python" => Some(LANG::Python),
         "ts" if path.ends_with(".tsx") => Some(LANG::Tsx),
         "ts" => Some(LANG::Typescript),
         _ => None,
@@ -222,20 +227,46 @@ pub fn language(lang: &str, path: &str) -> Option<LANG> {
 
 /// Parses `code` and measures `targets`, all anchored in this file.
 pub fn measure_file(lang: LANG, code: &[u8], targets: &[Measurable]) -> Result<Vec<Measured>, String> {
+    let universal;
+    let code = if lang == LANG::Python {
+        universal = universal_newlines(code);
+        &universal[..]
+    } else {
+        code
+    };
     let root = analyze(Source::new(lang, code), MetricsOptions::default()).map_err(|e| e.to_string())?;
     let spaces = flatten(&root);
     let text = String::from_utf8_lossy(code);
     let lines: Vec<&str> = text.lines().collect();
-    Ok(join(&spaces, &lines, targets))
+    Ok(join(&spaces, &lines, targets, lang == LANG::Python))
 }
 
-fn join(spaces: &[Flat<'_>], lines: &[&str], targets: &[Measurable]) -> Vec<Measured> {
+/// Python ends a line at `\n`, `\r\n` or a lone `\r` (universal newlines), and
+/// the extractor's lines are the parser's; tree-sitter counts rows on `\n`
+/// alone. A lone `\r` becomes `\n` — byte for byte, so no offset moves.
+fn universal_newlines(code: &[u8]) -> Vec<u8> {
+    code.iter()
+        .enumerate()
+        .map(|(i, &b)| {
+            if b == b'\r' && code.get(i + 1) != Some(&b'\n') {
+                b'\n'
+            } else {
+                b
+            }
+        })
+        .collect()
+}
+
+fn join(spaces: &[Flat<'_>], lines: &[&str], targets: &[Measurable], indented: bool) -> Vec<Measured> {
     // Which target each space is charged to, and how each target joined.
     let mut owner: Vec<Option<usize>> = vec![None; spaces.len()];
     let mut how: Vec<Join> = vec![Join::Unjoined; targets.len()];
 
     exact(spaces, targets, &mut owner, &mut how);
     leading(spaces, lines, targets, &mut owner, &mut how);
+    if indented {
+        trailing(spaces, lines, targets, &mut owner, &mut how);
+    }
     contained(spaces, targets, &mut owner, &mut how);
 
     // FOLD, bottom-up: pre-order reversed visits every child before its parent.
@@ -248,12 +279,12 @@ fn join(spaces: &[Flat<'_>], lines: &[&str], targets: &[Measurable]) -> Vec<Meas
         }
     }
     let mut per_target: Vec<Charged> = vec![Charged::default(); targets.len()];
-    // The one space an Exact or Leading entity IS; a Contained one has several.
+    // The one space an Exact, Leading or Trailing entity IS; a Contained one has several.
     let mut sole_space: Vec<Option<usize>> = vec![None; targets.len()];
     for (s, o) in owner.iter().enumerate() {
         if let Some(t) = *o {
             per_target[t].add(&charged[s]);
-            if matches!(how[t], Join::Exact | Join::Leading) {
+            if matches!(how[t], Join::Exact | Join::Leading | Join::Trailing) {
                 sole_space[t] = Some(s);
             }
         }
@@ -264,7 +295,7 @@ fn join(spaces: &[Flat<'_>], lines: &[&str], targets: &[Measurable]) -> Vec<Meas
         .enumerate()
         .map(|(t, target)| {
             let mut values = Vec::new();
-            if matches!(how[t], Join::Exact | Join::Leading | Join::Contained) {
+            if matches!(how[t], Join::Exact | Join::Leading | Join::Trailing | Join::Contained) {
                 charged_values(&per_target[t], &mut values);
             }
             let sole = sole_space[t].map(|s| spaces[s].space);
@@ -393,6 +424,52 @@ fn leading(spaces: &[Flat<'_>], lines: &[&str], targets: &[Measurable], owner: &
         if let Some(s) = nearest.filter(|&s| owner[s].is_none()) {
             owner[s] = Some(t);
             how[t] = Join::Leading;
+        }
+    }
+}
+
+/// TRAILING, for an indentation-delimited grammar: the same first line, the
+/// space ending later by nothing but `#` comments and blank lines. Outermost
+/// entities first, as for LEADING; the nearest such end wins.
+fn trailing(
+    spaces: &[Flat<'_>],
+    lines: &[&str],
+    targets: &[Measurable],
+    owner: &mut [Option<usize>],
+    how: &mut [Join],
+) {
+    // Lines (after, through] of the file, 1-based.
+    let gap_is_trailing = |after: u32, through: u32| {
+        lines.get(after as usize..through as usize).is_some_and(|gap| {
+            gap.iter().all(|line| {
+                let line = line.trim_start();
+                line.is_empty() || line.starts_with('#')
+            })
+        })
+    };
+    let mut open: Vec<usize> = (0..targets.len()).filter(|&t| how[t] == Join::Unjoined).collect();
+    open.sort_by_key(|&t| {
+        (
+            std::cmp::Reverse(targets[t].end - targets[t].start),
+            targets[t].depth,
+            targets[t].entity,
+        )
+    });
+    for t in open {
+        let target = &targets[t];
+        let nearest = (0..spaces.len())
+            .filter(|&s| {
+                let (start, end) = spaces[s].span();
+                start == target.start
+                    && end > target.end
+                    && owner[s].is_none()
+                    && compatible(target.category, spaces[s].space.kind)
+                    && gap_is_trailing(target.end, end)
+            })
+            .min_by_key(|&s| (spaces[s].span().1 - target.end, s));
+        if let Some(s) = nearest {
+            owner[s] = Some(t);
+            how[t] = Join::Trailing;
         }
     }
 }
@@ -631,6 +708,98 @@ export class R {
         let measured = measure_file(LANG::Typescript, code.as_bytes(), &targets).unwrap();
         let joins: Vec<Join> = (0..3).map(|e| outcome(&measured, e).join).collect();
         assert_eq!(joins, [Join::Exact, Join::Leading, Join::Exact]);
+    }
+
+    #[test]
+    fn a_python_model_is_measured_whatever_its_files_are_called() {
+        // A `.pyi` stub is Python, and so is a script Python by its shebang alone.
+        for path in ["src/a/b.py", "src/a/b.pyi", "bin/acme-report"] {
+            assert_eq!(super::language("python", path), Some(LANG::Python), "{path}");
+        }
+    }
+
+    #[test]
+    fn a_decorated_python_def_joins_the_space_that_starts_at_its_def() {
+        // The extractor anchors a `def` at its `def` line, as CPython's `ast`
+        // does; tree-sitter's `function_definition` excludes the decorator too.
+        let code = "\
+@register
+class A:
+    @property
+    def f(self):
+        g = lambda x: x if x else 0
+        if self.y:
+            return g(1)
+        return 0
+";
+        let targets = [
+            target(0, Category::Unit, 1, 8, 0),
+            target(1, Category::Type, 2, 8, 1),
+            target(2, Category::Invocable, 4, 8, 2),
+        ];
+        let measured = measure_file(LANG::Python, code.as_bytes(), &targets).unwrap();
+        let joins: Vec<Join> = (0..3).map(|e| outcome(&measured, e).join).collect();
+        assert_eq!(joins, [Join::Exact, Join::Exact, Join::Exact]);
+        assert_eq!(value(&measured, 2, "nexits"), Some("2"));
+        assert_eq!(outcome(&measured, 2).ploc, Some(5));
+    }
+
+    #[test]
+    fn a_python_file_ended_by_lone_carriage_returns_joins_on_the_lines_python_reads() {
+        // Python reads a lone `\r` as a line end (universal newlines) and so
+        // does the extractor; tree-sitter counts rows on `\n` alone.
+        let code = "class A:\r    def f(self):\r        return 1\r\r    def g(self):\r        return 2\r";
+        let targets = [
+            target(0, Category::Unit, 1, 6, 0),
+            target(1, Category::Type, 1, 6, 1),
+            target(2, Category::Invocable, 2, 3, 2),
+            target(3, Category::Invocable, 5, 6, 2),
+        ];
+        let measured = measure_file(LANG::Python, code.as_bytes(), &targets).unwrap();
+        let joins: Vec<Join> = (0..4).map(|e| outcome(&measured, e).join).collect();
+        assert_eq!(joins, [Join::Exact, Join::Exact, Join::Exact, Join::Exact]);
+        assert_eq!(outcome(&measured, 2).ploc, Some(2));
+    }
+
+    #[test]
+    fn a_python_block_that_takes_the_comments_after_its_last_statement_joins_trailing() {
+        // tree-sitter's block runs on over the comments after a body's last
+        // statement, at its indentation; Ruff, like CPython's `ast`, ends the
+        // `def` (and the class around it) at that statement.
+        let code = "\
+class T:
+    def f(self):
+        return 1
+
+        # kept for later:
+        # return 2
+
+    def g(self):
+        pass
+        # nothing
+";
+        let targets = [
+            target(0, Category::Unit, 1, 10, 0),
+            target(1, Category::Type, 1, 9, 1),
+            target(2, Category::Invocable, 2, 3, 2),
+            target(3, Category::Invocable, 8, 9, 2),
+            // `f` up to its `return` would be code in the gap: never trailing.
+            target(4, Category::Invocable, 2, 2, 3),
+        ];
+        let measured = measure_file(LANG::Python, code.as_bytes(), &targets).unwrap();
+        let joins: Vec<Join> = (0..5).map(|e| outcome(&measured, e).join).collect();
+        assert_eq!(
+            joins,
+            [
+                Join::Exact,
+                Join::Trailing,
+                Join::Trailing,
+                Join::Trailing,
+                Join::Unjoined
+            ]
+        );
+        assert_eq!(value(&measured, 2, "nexits"), Some("1"));
+        assert!(value(&measured, 2, "lloc").is_some(), "one space: the span family too");
     }
 
     #[test]

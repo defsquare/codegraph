@@ -19,6 +19,9 @@ CSHARP_DIR="$ROOT/extractors/csharp"
 ELIXIR_DIR="$ROOT/extractors/elixir"
 METRICS_DIR="$ROOT/extractors/metrics"
 RUBY_DIR="$ROOT/extractors/ruby"
+PYTHON_DIR="$ROOT/extractors/python"
+# The model.jsonl writer the Rust extractors depend on by path (not an extractor).
+MODEL_RS_DIR="$ROOT/extractors/model-rs"
 
 # ---------------------------------------------------------------- output ----
 
@@ -473,6 +476,23 @@ burrito_target() { printf '%s' "$1" | tr '-' '_'; }
 
 have_metrics_pass() { [ -f "$METRICS_DIR/Cargo.toml" ]; }
 have_ruby_extractor() { [ -f "$RUBY_DIR/Cargo.toml" ]; }
+have_python_extractor() { [ -f "$PYTHON_DIR/Cargo.toml" ]; }
+
+# The Python extractor's parser grows its stack through `psm`, which the `cc`
+# crate compiles from C at BUILD time. The binary itself needs nothing.
+ensure_c_compiler() {
+  local compiler
+  for compiler in "${CC:-}" cc gcc clang; do
+    if [ -n "$compiler" ] && command -v "$compiler" >/dev/null 2>&1; then
+      ok "C compiler ($compiler)"
+      return 0
+    fi
+  done
+  die "no C compiler found — the Python extractor's parser compiles a few lines of C (psm) at build time" \
+    "debian/ubuntu: sudo apt install build-essential" \
+    "macOS:         xcode-select --install" \
+    "or skip it entirely: $SCRIPT_NAME --ts"
+}
 
 # ensure_cargo [crate-dir] [what] — cargo on PATH or in rustup's default home,
 # at that crate's `rust-version`. Never installed automatically.
@@ -551,7 +571,7 @@ cargo_ruby() {
 SKIP_INSTALL="no"
 FROZEN="yes"
 AUTO_INSTALL="yes"
-TARGET="all"      # all | ts | java | csharp | elixir | ruby | metrics
+TARGET="all"      # all | ts | java | csharp | elixir | ruby | python | metrics
 
 # Returns 0 if it consumed the argument, 1 if the caller should handle it.
 parse_common_flag() {
@@ -561,6 +581,7 @@ parse_common_flag() {
     --csharp|--csharp-only) TARGET="csharp" ;;
     --elixir|--elixir-only) TARGET="elixir" ;;
     --ruby|--ruby-only) TARGET="ruby" ;;
+    --python|--python-only) TARGET="python" ;;
     --metrics|--metrics-only) TARGET="metrics" ;;
     --all)              TARGET="all" ;;
     --skip-install)     SKIP_INSTALL="yes" ;;
@@ -576,4 +597,5 @@ wants_java()   { [ "$TARGET" = "all" ] || [ "$TARGET" = "java" ]; }
 wants_csharp() { [ "$TARGET" = "all" ] || [ "$TARGET" = "csharp" ]; }
 wants_elixir() { [ "$TARGET" = "all" ] || [ "$TARGET" = "elixir" ]; }
 wants_ruby()   { [ "$TARGET" = "all" ] || [ "$TARGET" = "ruby" ]; }
+wants_python() { [ "$TARGET" = "all" ] || [ "$TARGET" = "python" ]; }
 wants_metrics() { [ "$TARGET" = "all" ] || [ "$TARGET" = "metrics" ]; }

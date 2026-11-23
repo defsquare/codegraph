@@ -57,6 +57,7 @@ settled, usually the hard way.
 | Metrics pass (M17) | one Rust binary, `codegraph-metrics`, linking big-code-analysis as a library and run as a PASS over any extractor's model, joined to entities on their anchors; the extractor's `sloc` and `cyclomatic` never touched; *charged* keys add up over spaces, *span* keys do not | the whole suite inside each extractor would be four bridges, four build systems learning Rust and the join written four times; nothing the join needs lives in a compiler — only `(file, start, end)`, which every entity already carries |
 | History measures (M17b) | a side-car `<model>.history-metrics.jsonl`, measured at the model's commit and clocked at its time, joined in memory by `city` and `serve` as `history:`/`history-file:`; never a key in `model.jsonl` | reverses this section's own first draft: a window counts back from the commit's time, so two snapshots a week apart would differ on entities whose code never moved; evolution facts are a third artifact (Phase 8) |
 | Ruby reopening (M18) | one entity per declaring file, every other body `attachedTo` the primary (the one that writes a superclass, else the first in file order); a wrapper body declares nothing; a constant reference into another file is a `derived` import; `include`/`extend`/`prepend` are `traitUsage` | Ruby reopens across files as a matter of course, and containment ≠ attachment says exactly "written here, belongs there"; a Zeitwerk application writes no `require`, so without the derived import the one cross-language layer would be empty for every Rails corpus |
+| Python module (M22) | the module is the file, keyed AND named by its path below the root; an absolute import is looked up over the roots the layout implies, nearest first, then the standard library's table distilled from typeshed, then `<site>`; a re-export is an `import` of what the source writes and a `reference` to what the name is; the C3 order answers member lookups and is never written | the dotted name depends on which directory is taken for a root, which is an inference, and a key must not move when a heuristic does; nothing installed is read, so which distribution ships a `<site>` module is not guessed; the edge set is unordered, so the method resolution order is not represented and a method-resolution question is not answered from the model |
 
 ## Where this shows up
 
@@ -75,9 +76,10 @@ Almost every row is argued at length somewhere in this section:
   [reference: the Java extractor](/docs/reference/java-extractor/).
 - Evolution facts, replay layout, snapshot strategy —
   [time as structure](/docs/explanation/time-as-structure/).
-- The Elixir and Ruby extractors, the metrics pass and its history side-car —
+- The Elixir, Ruby and Python extractors, the metrics pass and its history side-car —
   [reference: Elixir extractor](/docs/reference/elixir-extractor/),
   [reference: Ruby extractor](/docs/reference/ruby-extractor/),
+  [reference: Python extractor](/docs/reference/python-extractor/),
   [reference: metrics pass](/docs/reference/metrics-pass/) and
   [time as structure](/docs/explanation/time-as-structure/).
 - Measures, literal values, annotation usage, DI wiring —

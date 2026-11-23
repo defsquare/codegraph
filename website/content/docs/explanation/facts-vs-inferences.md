@@ -27,7 +27,7 @@ Every edge in the model carries a `provenance`:
 | `declared` | written literally in the source | explicit `extends`, a direct call |
 | `derived` | computed by analysis | Go implicit interface satisfaction, TypeScript structural conformance, Python protocols, Rust blanket impls |
 | `dynamic-candidate` | dispatch not statically resolvable; the targets are guesses | multimethods, PHP `__call`, duck typing, `dyn Trait` |
-| `generated` | produced by macro or annotation expansion | Rust `#[derive]`, Lombok, Python decorators, Clojure macros |
+| `generated` | produced by macro or annotation expansion | Rust `#[derive]`, Lombok, Clojure macros, a Python `namedtuple(…)` base (the class inherits `tuple`; no `class` writes it) |
 
 The set is closed and owned by the core package, which is the point that makes
 it usable: an analysis that wants facts only filters on one value, and it will

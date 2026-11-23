@@ -176,6 +176,9 @@ describe("Elixir", () => {
 
 describe("Python", () => {
   check("python", [
+    // The module is the file, named by its path: directories qualify it, `.py` is no word.
+    ["module", "src/acme_order/order_service.py", ["src", "acme", "order", "order", "service"], { qualifier: 3 }],
+    ["module", "scripts/load_orders.pyw", ["scripts", "load", "orders"], { qualifier: 1 }],
     ["function", "parse_http_response", ["parse", "http", "response"]],
     ["class", "HTTPClient", ["http", "client"]],
     ["method", "__init__", null],

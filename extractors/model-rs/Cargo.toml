@@ -1,0 +1,18 @@
+[package]
+name = "codegraph-model"
+description = "The model.jsonl writer the Rust extractors share: natural keys, canonical order, core's bytes"
+# Never released on its own and printed nowhere: an extractor's header names
+# the extractor's version, not this one.
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.94"
+license = "MIT"
+publish = false
+
+# Standalone: never adopted by a workspace above it. Each extractor depends on
+# it by path, and the extractor's own release profile builds it.
+[workspace]
+
+[lib]
+name = "codegraph_model"
+path = "src/lib.rs"

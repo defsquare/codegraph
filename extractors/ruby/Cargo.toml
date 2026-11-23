@@ -20,6 +20,9 @@ name = "codegraph-ruby"
 path = "src/main.rs"
 
 [dependencies]
+# The model.jsonl writer every Rust extractor shares: keys, canonical order,
+# core's bytes. A path dependency, built by this package's release profile.
+codegraph-model = { path = "../model-rs" }
 # Exact pin: the parser IS the front end. A Prism that reads one more syntax
 # form moves entities, so a bump is a deliberate, reviewed change that
 # regenerates the fixture snapshot (`PRISM_VERSION` in src/lib.rs is pinned to

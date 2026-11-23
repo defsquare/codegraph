@@ -1,11 +1,11 @@
-Third-party software in codegraph-metrics 0.1.0
+Third-party software in codegraph-metrics 0.3.0
 
 This binary links the crates below, unmodified. Those under the Mozilla Public
 License 2.0 are available in source form at:
   big-code-analysis 2.2.0: https://crates.io/crates/big-code-analysis/2.2.0 (https://github.com/dekobon/big-code-analysis)
   uluru 3.1.0: https://crates.io/crates/uluru/3.1.0 (https://github.com/servo/uluru)
 
-The 190 crates, with their declared licenses:
+The 191 crates, with their declared licenses:
   aho-corasick 1.1.5 — Unlicense OR MIT — https://github.com/BurntSushi/aho-corasick
   allocator-api2 0.2.21 — MIT OR Apache-2.0 — https://github.com/zakarumych/allocator-api2
   arc-swap 1.9.2 — MIT OR Apache-2.0 — https://github.com/vorner/arc-swap
@@ -182,6 +182,7 @@ The 190 crates, with their declared licenses:
   tree-sitter-elixir 0.3.5 — Apache-2.0 — https://github.com/elixir-lang/tree-sitter-elixir
   tree-sitter-java 0.23.5 — MIT — https://github.com/tree-sitter/tree-sitter-java
   tree-sitter-language 0.1.8 — MIT — https://github.com/tree-sitter/tree-sitter
+  tree-sitter-python 0.25.0 — MIT — https://github.com/tree-sitter/tree-sitter-python
   tree-sitter-ruby 0.23.1 — MIT — https://github.com/tree-sitter/tree-sitter-ruby
   tree-sitter-typescript 0.23.2 — MIT — https://github.com/tree-sitter/tree-sitter-typescript
   typenum 1.20.1 — MIT OR Apache-2.0 — https://github.com/paholg/typenum
@@ -5887,6 +5888,31 @@ SOFTWARE.
   tree-sitter-typescript 0.23.2
 ------------------------------------------------------------------------------
 (no license file in the published crate: MIT — its terms are those of that SPDX license)
+
+==============================================================================
+  tree-sitter-python 0.25.0 (LICENSE)
+------------------------------------------------------------------------------
+The MIT License (MIT)
+
+Copyright (c) 2016 Max Brunsfeld
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ==============================================================================
   typenum 1.20.1 (LICENSE)

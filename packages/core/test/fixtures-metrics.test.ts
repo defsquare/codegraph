@@ -9,12 +9,13 @@ import { validateModel, type Profile } from "../src/profile.js";
 import { csharpProfile } from "../src/profiles/csharp.js";
 import { elixirProfile } from "../src/profiles/elixir.js";
 import { javaProfile } from "../src/profiles/java.js";
+import { pythonProfile } from "../src/profiles/python.js";
 import { rubyProfile } from "../src/profiles/ruby.js";
 import { typescriptProfile } from "../src/profiles/typescript.js";
 
 /**
  * THE M17a GATE — `codegraph-metrics` (extractors/metrics, PLAN.md §18), the
- * big-code-analysis pass, over the five fixture models. Its own tests prove it
+ * big-code-analysis pass, over the six fixture models. Its own tests prove it
  * reproduces `model.metrics.jsonl` byte for byte; what only this side can say
  * is that the result is a model core itself would write, that nothing moved
  * but the measures, and that the extractor's own measures survived untouched.
@@ -48,7 +49,8 @@ const repo = (path: string): string => fileURLToPath(new URL(`../../../${path}`,
  * The rest have no space of their own — implicit constructors anchored on
  * their class, Java lambdas (big-code-analysis opens none), body-less
  * declarations, Elixir protocols and impls, a Ruby `Struct.new do … end` or
- * `class_methods do … end` — and carry none of the keys.
+ * `class_methods do … end`, a Python class a call makes (`P = namedtuple(…)`)
+ * or one only a syntax error's recovery holds — and carry none of the keys.
  */
 const FIXTURES: ReadonlyArray<{ lang: string; profile: Profile; joined: number }> = [
   { lang: "java", profile: javaProfile, joined: 70 },
@@ -56,6 +58,7 @@ const FIXTURES: ReadonlyArray<{ lang: string; profile: Profile; joined: number }
   { lang: "typescript", profile: typescriptProfile, joined: 89 },
   { lang: "elixir", profile: elixirProfile, joined: 96 },
   { lang: "ruby", profile: rubyProfile, joined: 106 },
+  { lang: "python", profile: pythonProfile, joined: 192 },
 ];
 
 const metricsOf = (entity: Entity): Record<string, number> | undefined =>
@@ -124,6 +127,7 @@ describe.each(FIXTURES)("fixtures/$lang/expected/model.metrics.jsonl", ({ lang, 
  *   ensure (TS)       if +1, catch +1, if nested in the catch +2               = 4, 3 throws + 1 return
  *   available? (ex)   case +1                                                  = 1
  *   total (rb)        `return … if …` +1                                       = 1, 1 return
+ *   checkout (py)     if +1                                                    = 1, 1 return
  *
  * Java `max` is also ABC-counted: assignments `best = null`, `best = value`;
  * one branch (the `compareTo` call); conditions `== null`, `> 0` — √(4+1+4) = 3;
@@ -179,6 +183,26 @@ describe("hand-counted measures", () => {
     // The extractor's own two measures ride through the pass untouched.
     expect(measure("ruby", total, "cyclomatic")).toBe(2);
     expect(measure("ruby", total, "sloc")).toBe(4);
+  });
+
+  // `@retry(…)` above `def checkout(…)` is the module's, not the function's: the
+  // span starts at `def`. One assignment (`total = …`); four calls (`save`,
+  // `dumps`, `print`, `len`); one condition (`is not`) — √(1+16+1); seven
+  // statements, the docstring one of them.
+  it("Python checkout", () => {
+    const checkout = "python:src%2Facme_order%2Fservices.py/checkout";
+    expect(measure("python", checkout, "cognitive")).toBe(1);
+    expect(measure("python", checkout, "nexits")).toBe(1);
+    expect(measure("python", checkout, "abc.assignments")).toBe(1);
+    expect(measure("python", checkout, "abc.branches")).toBe(4);
+    expect(measure("python", checkout, "abc.conditions")).toBe(1);
+    expect(measure("python", checkout, "abc.magnitude")).toBe(4.2426);
+    expect(measure("python", checkout, "lloc")).toBe(7);
+    // big-code-analysis counts the docstring as comment lines, the profile as
+    // code: the extractor's `sloc` is bca's `ploc` (7) plus that one line.
+    expect(measure("python", checkout, "cloc")).toBe(1);
+    expect(measure("python", checkout, "sloc")).toBe(8);
+    expect(measure("python", checkout, "cyclomatic")).toBe(2);
   });
 });
 

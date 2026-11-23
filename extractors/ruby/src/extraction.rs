@@ -13,11 +13,11 @@ use crate::declarations::{
     What, declarations, is_operator,
 };
 use crate::ids;
-use crate::model::{Anchor, Edge, Entity, Key, Literal, Model};
 use crate::resolve::{Ancestor, Found, Place, Resolution, Step, TypeKind, Whitelist};
 use crate::stats::{Stats, TraceStats};
 use crate::trace::Trace;
 use crate::{NAME, PRISM_VERSION, VERSION};
+use codegraph_model::{Anchor, Edge, Entity, Key, Literal, Model};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
@@ -78,7 +78,7 @@ impl Stubs {
     }
 
     fn module(&mut self, key: Key, name: &str) -> Key {
-        self.modules.insert(key.module.clone(), name.to_owned());
+        self.modules.insert(key.module.to_string(), name.to_owned());
         key
     }
 
@@ -289,7 +289,7 @@ impl Extractor<'_> {
 
     fn anchor(&self, file: usize, span: Span) -> Anchor {
         Anchor {
-            file: self.corpus.files[file].rel.clone(),
+            file: self.corpus.files[file].rel.as_str().into(),
             start: span.0,
             end: span.1,
         }
@@ -329,6 +329,7 @@ impl Extractor<'_> {
             anchor,
             access,
             candidates: None,
+            arguments: None,
         };
         if self.seen_edges.insert(edge.clone()) {
             self.edges.push(edge);
@@ -493,6 +494,7 @@ impl Extractor<'_> {
                 anchor: self.anchor(file, span),
                 access: None,
                 candidates: Some(candidates),
+                arguments: None,
             };
             if self.seen_edges.insert(edge.clone()) {
                 self.edges.push(edge);
@@ -587,7 +589,7 @@ impl Extractor<'_> {
             entity.defined_in = Some(vec![file.rel.clone()]);
             entity.metrics = Some(vec![("sloc", self.files[index].sloc((1, file.lines)))]);
             entity.anchor = Some(Anchor {
-                file: file.rel.clone(),
+                file: file.rel.as_str().into(),
                 start: 1,
                 end: file.lines,
             });
@@ -623,7 +625,7 @@ impl Extractor<'_> {
                     _ => None,
                 };
                 if let Some(primary) = primary.filter(|primary| *primary != key) {
-                    entity.attached_to = Some(primary);
+                    entity.attached_to = Some(Box::new(primary));
                     entity.traits.push("TAttachedTo");
                 }
                 if let Some(comment) = &self.files[file].scopes[scope].comment {
@@ -703,7 +705,7 @@ impl Extractor<'_> {
                         entity.traits.push("TComment");
                     }
                     if let Some(value) = &constant.value {
-                        entity.value = Some(self.literal(file, scope_index, value));
+                        entity.value = Some(Box::new(self.literal(file, scope_index, value)));
                         entity.traits.push("TWithValue");
                     }
                     self.entities.push(entity);
@@ -767,7 +769,7 @@ impl Extractor<'_> {
             entity.parent = Some(key.clone());
             entity.anchor = Some(self.anchor(file, parameter.span));
             if let Some(default) = &parameter.default {
-                entity.value = Some(self.literal(file, scope, default));
+                entity.value = Some(Box::new(self.literal(file, scope, default)));
                 entity.traits.push("TWithValue");
             }
             self.entities.push(entity);
@@ -1589,6 +1591,7 @@ pub fn extract(
         ("rbs", core.version().to_owned()),
     ];
     let model = Model {
+        lang: ids::LANG,
         extractor: extractor_header,
         root: corpus.root_display.clone(),
         repository,

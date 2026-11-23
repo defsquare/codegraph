@@ -1,10 +1,10 @@
 ---
 title: Metrics pass
 linkTitle: Metrics pass
-weight: 14
+weight: 15
 ---
 
-`codegraph-metrics` 0.3.0 (big-code-analysis 2.2.0) — the measuring pass over any extractor's model. A Cargo package in `extractors/metrics/`, linking [big-code-analysis](https://github.com/dekobon/big-code-analysis) as a library with five tree-sitter grammars. It is **not an extractor**: it reads a `model.jsonl`, parses every source file the measured entities are anchored in, joins big-code-analysis's function and class spaces to those entities on their anchors, and rewrites their `metrics` maps — cognitive complexity, Halstead, the maintainability index, ABC, exits, logical and comment lines, public methods and attributes. No other byte of the file moves. One binary serves Java, C#, TypeScript, Elixir and Ruby; what each key means is on [Measures and literals](/docs/reference/metamodel/measures-literals/), and what each counts, where it comes from and how to read it on the [Metrics catalogue](/docs/reference/metrics-catalogue/).
+`codegraph-metrics` 0.3.0 (big-code-analysis 2.2.0) — the measuring pass over any extractor's model. A Cargo package in `extractors/metrics/`, linking [big-code-analysis](https://github.com/dekobon/big-code-analysis) as a library with six tree-sitter grammars. It is **not an extractor**: it reads a `model.jsonl`, parses every source file the measured entities are anchored in, joins big-code-analysis's function and class spaces to those entities on their anchors, and rewrites their `metrics` maps — cognitive complexity, Halstead, the maintainability index, ABC, exits, logical and comment lines, public methods and attributes. No other byte of the file moves. One binary serves Java, C#, TypeScript, Elixir, Ruby and Python; what each key means is on [Measures and literals](/docs/reference/metamodel/measures-literals/), and what each counts, where it comes from and how to read it on the [Metrics catalogue](/docs/reference/metrics-catalogue/).
 
 ```bash
 brew install defsquare/tap/codegraph-metrics    # already there if any extractor came from the tap
@@ -49,17 +49,18 @@ Exit codes: `0` success · `1` failure · `2` bad usage.
 stdout carries nothing but `--help`, `--version` and `--licenses`. Every run ends with one line on stderr — the join's report of itself. Over the Ruby reference corpus:
 
 ```text
-codegraph-metrics: 106 of 109 measured entities joined (106 exact, 0 leading, 0 contained; 3 ambiguous, 0 unjoined) over 31 files; sloc = bca ploc on 106 of 106 exact joins; 106 entities rewritten
+codegraph-metrics: 106 of 109 measured entities joined (106 exact, 0 leading, 0 trailing, 0 contained; 3 ambiguous, 0 unjoined) over 31 files; sloc = bca ploc on 106 of 106 exact joins; 106 entities rewritten
 ```
 
 and over BroadleafCommerce, 2 983 Java files in 0.8 s:
 
 ```text
-codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 leading, 0 contained; 0 ambiguous, 2387 unjoined) over 2983 files; sloc = bca ploc on 16395 of 16395 exact joins
+codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 leading, 0 trailing, 0 contained; 0 ambiguous, 2387 unjoined) over 2983 files; sloc = bca ploc on 16395 of 16395 exact joins; 26209 entities rewritten
 ```
 
 - **exact** — the entity and a space cover the same lines.
 - **leading** — they end together and start apart by annotation, attribute or decorator lines only: Spoon starts a method after `@Override`, tree-sitter at it; the TypeScript compiler starts an exported class at its decorator, tree-sitter after it. Most of a Spring corpus.
+- **trailing** (Python) — they start together and end apart by comment and blank lines only: tree-sitter's block runs on over the comments written after a body's last statement, at its indentation; Ruff, like CPython's `ast`, ends the `def` — and a class whose last method it is — at that statement.
 - **contained** — one entity over several spaces: an Elixir function's clauses, a C# property's accessors. Charged keys only.
 - **ambiguous** — entities and spaces share a span and do not pair up. In Ruby, a type declared by assignment (`Point = Struct.new(:x) do … end`): the model names a class there, the grammar sees a block. The entity keeps the extractor's own keys and gets none of the pass's.
 - **unjoined** — big-code-analysis opens no space there. Expected for implicit constructors (anchored on their class), Java lambdas (big-code-analysis charges them to their method), bodyless declarations (interface signatures, annotation elements, type aliases, enums, ambient declarations), Elixir protocol and impl bodies, `defguard`, `defdelegate`. Those entities carry none of the keys — absent, never zero.
@@ -74,7 +75,7 @@ codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 le
   Unjoined Invocable e11 com/acme/order/Basket.java:7-57 (on its parent's anchor)
   Unjoined Invocable e70 com/acme/order/Notifications.java:11-11
   …
-codegraph-metrics: 70 of 87 measured entities joined (61 exact, 9 leading, 0 contained; 0 ambiguous, 17 unjoined) over 16 files; sloc = bca ploc on 61 of 61 exact joins; 70 entities rewritten
+codegraph-metrics: 70 of 87 measured entities joined (61 exact, 9 leading, 0 trailing, 0 contained; 0 ambiguous, 17 unjoined) over 16 files; sloc = bca ploc on 61 of 61 exact joins; 70 entities rewritten
 ```
 
 `e11` is `Basket`'s implicit constructor, anchored on the class; `e70` a lambda; `e9` an annotation element with no body.
@@ -111,7 +112,7 @@ The keys come in two families, because a join does not always pair one entity wi
 | `npm` | span, types | methods | methods declared directly in the type that its language makes public |
 | `npa` | span, types | attributes | public attributes declared directly in the type |
 
-The definitions are big-code-analysis 2.2's ([metrics](https://dekobon.github.io/big-code-analysis/metrics.html)); the attribution to entities is this model's. Only entities whose profile licenses `TMetrics` and that the extractor measured are touched: the pass never adds a trait. The [Metrics catalogue](/docs/reference/metrics-catalogue/) walks every key — its origin, what each of the five languages counts, the thresholds the literature reads it by — and lists what big-code-analysis computes that the pass leaves out, and why.
+The definitions are big-code-analysis 2.2's ([metrics](https://dekobon.github.io/big-code-analysis/metrics.html)); the attribution to entities is this model's. Only entities whose profile licenses `TMetrics` and that the extractor measured are touched: the pass never adds a trait. The [Metrics catalogue](/docs/reference/metrics-catalogue/) walks every key — its origin, what each of the six languages counts, the thresholds the literature reads it by — and lists what big-code-analysis computes that the pass leaves out, and why.
 
 **Bytes as `codegraph` writes them.** A new value is rounded to four decimals (`ln` and `log₂` may differ in the last bit between platforms) and spelled as JavaScript spells a number; the `metrics` map is re-sorted; an unchanged line is copied, never re-encoded. Two runs over one corpus write the same bytes on every OS, and the file stays byte-identical to what core's own encoder would write — `./test.sh --metrics` and the `metrics-native` CI job, built natively on four runners, hold the five `fixtures/<lang>/expected/model.metrics.jsonl` snapshots to that.
 
@@ -133,6 +134,7 @@ What each language leaves unmeasured, by big-code-analysis's own choice or its g
 | TypeScript | interface signatures, type aliases, enums, namespaces, ambient declarations — no space. The witness is off by the lines of JSX text in `.tsx` |
 | Elixir | `defprotocol` and `defimpl` bodies, `defguard`, `defdelegate`; a multi-clause function is *contained* and carries charged keys only. big-code-analysis leaves a heredoc's text out of `ploc`, so the witness disagrees there |
 | Ruby | a type declared by assignment (`Struct.new … do`, `Class.new … do`) and a concern's `class_methods do` — blocks to the grammar, *ambiguous* to the join. Everything else joins exactly |
+| Python | a class a call makes (`Amount = namedtuple(…)`, `Color = Enum(…)`, `NamedTuple(…)`, `TypedDict(…)`) — no space; a file the two parsers recover differently. A body whose last statement is followed by comments joins *trailing*. The witness is off by a docstring's lines: the profile counts them as code, big-code-analysis as comment (`cloc`) |
 
 A model from a language the pass does not know is left as it is, with one line saying so.
 

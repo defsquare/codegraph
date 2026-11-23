@@ -1,26 +1,32 @@
-//! The model as this extractor holds it before writing: natural keys, entities
+//! The model as an extractor holds it before writing: natural keys, entities
 //! and outgoing edges. Vocabulary strings (kinds, traits, edge kinds,
 //! provenance) are core's, written verbatim and never interpreted here.
 
 use std::cmp::Ordering;
+use std::sync::{Arc, OnceLock};
 
-pub const LANG: &str = "rb";
-
-/// A natural key `(module, symbol, disambiguator?)` — `lang` is `rb` for every
-/// key this extractor writes. A module names itself: empty symbol, no
-/// disambiguator (schemas/README.md §2).
+/// A natural key `(module, symbol, disambiguator?)` — `lang` is the model's,
+/// one for every key a file holds. A module names itself: empty symbol, no
+/// disambiguator (schemas/README.md §2). Components are shared text: a key
+/// cloned from another, or below it, holds its module's path once, not a copy.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Key {
-    pub module: String,
-    pub symbol: String,
-    pub d: Option<String>,
+    pub module: Arc<str>,
+    pub symbol: Arc<str>,
+    pub d: Option<Arc<str>>,
+}
+
+/// The empty symbol every module key holds, allocated once.
+pub fn no_symbol() -> Arc<str> {
+    static EMPTY: OnceLock<Arc<str>> = OnceLock::new();
+    EMPTY.get_or_init(|| Arc::from("")).clone()
 }
 
 impl Key {
-    pub fn module(module: impl Into<String>) -> Self {
+    pub fn module(module: impl Into<Arc<str>>) -> Self {
         Key {
             module: module.into(),
-            symbol: String::new(),
+            symbol: no_symbol(),
             d: None,
         }
     }
@@ -36,9 +42,9 @@ impl Key {
             return self.disambiguated(name);
         }
         let symbol = if self.symbol.is_empty() {
-            name.to_owned()
+            name.into()
         } else {
-            format!("{}.{}", self.symbol, name)
+            format!("{}.{}", self.symbol, name).into()
         };
         Key {
             module: self.module.clone(),
@@ -48,9 +54,9 @@ impl Key {
     }
 
     pub fn disambiguated(&self, tag: &str) -> Key {
-        let d = match &self.d {
-            None => tag.to_owned(),
-            Some(d) => format!("{d}#{tag}"),
+        let d: Arc<str> = match &self.d {
+            None => tag.into(),
+            Some(d) => format!("{d}#{tag}").into(),
         };
         Key {
             module: self.module.clone(),
@@ -59,9 +65,9 @@ impl Key {
         }
     }
 
-    /// The display projection `rb:<module>[/<symbol>][#<d>]` — for messages and tests only.
-    pub fn render(&self) -> String {
-        let mut out = format!("{LANG}:{}", self.module);
+    /// The display projection `<lang>:<module>[/<symbol>][#<d>]` — for messages and tests only.
+    pub fn render(&self, lang: &str) -> String {
+        let mut out = format!("{lang}:{}", self.module);
         if !self.symbol.is_empty() {
             out.push('/');
             out.push_str(&self.symbol);
@@ -96,24 +102,37 @@ pub fn utf16_cmp(a: &str, b: &str) -> Ordering {
 /// `[file, startLine, endLine]`, 1-based and inclusive; `file` is root-relative.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Anchor {
-    pub file: String,
+    /// Shared: every anchor in one file holds its path once.
+    pub file: Arc<str>,
     pub start: u32,
     pub end: u32,
 }
 
 /// A written, declaration-site value (METAMODEL §1.6) in core's closed tag set.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Literal {
     String(String),
     /// Canonical decimal text.
     Number(String),
     Boolean(bool),
     Null,
+    /// A member of an enumeration: its type, by key, and the member's simple name.
+    Enum {
+        ty: Key,
+        name: String,
+    },
     /// A type, by key: closed against the model like any reference.
     Type(Key),
     Array(Vec<Literal>),
     /// A constant expression not folded: its source text.
     Unevaluated(String),
+}
+
+/// One argument of an annotation use, always named (METAMODEL §1.6).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct NamedArgument {
+    pub name: String,
+    pub value: Literal,
 }
 
 #[derive(Clone, Debug)]
@@ -123,15 +142,18 @@ pub struct Entity {
     pub traits: Vec<&'static str>,
     pub name: Option<String>,
     pub signature: Option<String>,
+    /// The type `TTypedEntity` names, by key: closed like any reference. Boxed, as the
+    /// other fields most entities lack: an entity is held per declaration, so its size counts.
+    pub declared_type: Option<Box<Key>>,
     pub is_stub: Option<bool>,
     pub parent: Option<Key>,
-    pub attached_to: Option<Key>,
+    pub attached_to: Option<Box<Key>>,
     pub parameters: Option<Vec<Key>>,
     pub defined_in: Option<Vec<String>>,
     pub comments: Option<Vec<String>>,
     /// Measures by key (METAMODEL §3.8); written key-sorted.
     pub metrics: Option<Vec<(&'static str, u32)>>,
-    pub value: Option<Literal>,
+    pub value: Option<Box<Literal>>,
     pub anchor: Option<Anchor>,
 }
 
@@ -143,6 +165,7 @@ impl Entity {
             traits: traits.to_vec(),
             name: None,
             signature: None,
+            declared_type: None,
             is_stub: None,
             parent: None,
             attached_to: None,
@@ -168,10 +191,15 @@ pub struct Edge {
     /// Every target a `dynamic-candidate` invocation was seen to reach, `to`
     /// among them; absent on any other edge.
     pub candidates: Option<Vec<Key>>,
+    /// An `annotationUse`'s written arguments, in source order; an empty list is not written.
+    pub arguments: Option<Vec<NamedArgument>>,
 }
 
 #[derive(Debug)]
 pub struct Model {
+    /// The header's `lang`: the profile every record is read against, and the
+    /// prefix of every rendered id.
+    pub lang: &'static str,
     /// The header's `extractor` object, in the order written.
     pub extractor: Vec<(&'static str, String)>,
     pub root: String,
@@ -189,19 +217,22 @@ mod tests {
     fn a_module_names_itself_and_members_nest_with_a_dot() {
         let file = Key::module("lib%2Forder.rb");
         assert!(file.is_module());
-        assert_eq!(file.render(), "rb:lib%2Forder.rb");
+        assert_eq!(file.render("rb"), "rb:lib%2Forder.rb");
         let order = Key {
             module: file.module.clone(),
             symbol: "Acme::Order".into(),
             d: None,
         };
-        assert_eq!(order.member("total").render(), "rb:lib%2Forder.rb/Acme::Order.total");
-        // A top-level method sits directly below the file.
-        assert_eq!(file.member("main").render(), "rb:lib%2Forder.rb/main");
-        let call = order.member("call").disambiguated("self");
-        assert_eq!(call.render(), "rb:lib%2Forder.rb/Acme::Order.call#self");
         assert_eq!(
-            call.disambiguated("param:args").render(),
+            order.member("total").render("rb"),
+            "rb:lib%2Forder.rb/Acme::Order.total"
+        );
+        // A top-level method sits directly below the file.
+        assert_eq!(file.member("main").render("rb"), "rb:lib%2Forder.rb/main");
+        let call = order.member("call").disambiguated("self");
+        assert_eq!(call.render("rb"), "rb:lib%2Forder.rb/Acme::Order.call#self");
+        assert_eq!(
+            call.disambiguated("param:args").render("rb"),
             "rb:lib%2Forder.rb/Acme::Order.call#self#param:args"
         );
     }

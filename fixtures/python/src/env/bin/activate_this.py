@@ -1,0 +1,2 @@
+class FromTheEnvironment:
+    pass

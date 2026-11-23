@@ -30,6 +30,12 @@
     "install": "brew install defsquare/tap/codegraph-ruby"
   },
   {
+    "name": "python",
+    "extensions": [".py", ".pyw", ".pyi"],
+    "command": "codegraph-python",
+    "install": "brew install defsquare/tap/codegraph-python"
+  },
+  {
     "name": "metrics",
     "role": "pass",
     "extensions": [],

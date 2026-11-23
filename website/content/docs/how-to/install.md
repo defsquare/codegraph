@@ -9,10 +9,13 @@ Codegraph is distributed from one Homebrew tap,
 and the `codegraph` command are one install; every language extractor is its
 own, so a user of one language never downloads the runtimes of the others.
 Each install is a prebuilt binary that needs nothing else on the machine: no
-JDK for Java, no .NET for C#, no Erlang for Elixir, no Ruby for Ruby. The
+JDK for Java, no .NET for C#, no Erlang for Elixir, no Ruby for Ruby, no
+Python for Python. The
 TypeScript extractor is the one exception, an npm package that runs on Node 22.
 Every extractor brings the [metrics pass](/docs/reference/metrics-pass/) with
-it, one binary for all five languages.
+it, one binary for all six languages. The Python extractor is built and tested
+but not released yet: its formula and its assets ship from the release after
+v0.3.0.
 
 **Before you start:** Homebrew, on macOS or Linux. Without it, every binary is
 also a direct download; see [Without Homebrew](#without-homebrew).
@@ -38,6 +41,7 @@ also a direct download; see [Without Homebrew](#without-homebrew).
    brew install defsquare/tap/codegraph-typescript   # the npm package, on Homebrew's node
    brew install defsquare/tap/codegraph-elixir       # Erlang and Elixir inside; Apple silicon only
    brew install defsquare/tap/codegraph-ruby         # one binary, no Ruby needed; since v0.2.0
+   brew install defsquare/tap/codegraph-python       # one binary, no Python needed; from the release after v0.3.0
    # each of these depends on defsquare/tap/codegraph-metrics, the pass that adds
    # cognitive complexity, Halstead, ABC… to any extractor's model — installed once
    ```
@@ -60,7 +64,7 @@ also a direct download; see [Without Homebrew](#without-homebrew).
    java       12     17  import, inheritance, interfaceImplementation, invocation, access, reference, annotationUse, throws
    js          8     13  import, inheritance, invocation, access, reference
    php        12     10  import, inheritance, interfaceImplementation, invocation, access, reference, traitUsage, fileInclude
-   python      9     10  import, inheritance, interfaceImplementation, invocation, access, reference
+   python      7     19  import, inheritance, interfaceImplementation, invocation, access, reference, annotationUse, throws
    rb          7     27  import, inheritance, traitUsage, invocation, access, reference, throws
    rust       13     12  import, interfaceImplementation, invocation, access, reference
    ts         14     28  import, inheritance, interfaceImplementation, invocation, access, reference, annotationUse, throws
@@ -93,7 +97,7 @@ codegraph --version      # 0.1.0
 The release carries `codegraph-win-x64.exe`, `codegraph-java-win-x64.exe` and
 `codegraph-csharp-win-x64.exe`; put them on `PATH` under whatever names you
 like. The TypeScript extractor is `npx codegraph-typescript` on Node 22. There
-is no Elixir or Ruby extractor for Windows, and no metrics pass.
+is no Elixir, Ruby or Python extractor for Windows, and no metrics pass.
 
 ## Without Homebrew
 
@@ -108,6 +112,7 @@ Every binary is an asset of the
 | `codegraph-csharp-<platform>` | the C# extractor, a .NET single-file binary |
 | `codegraph-elixir-<platform>` | the Elixir extractor (`osx-arm64`, `linux-x64`) |
 | `codegraph-ruby-<platform>` | the Ruby extractor (`osx-arm64`, `osx-x64`, `linux-arm64`, `linux-x64`), since v0.2.0 |
+| `codegraph-python-<platform>` | the Python extractor (the same four platforms), from the release after v0.3.0 |
 | `codegraph-metrics-<platform>` | the [metrics pass](/docs/reference/metrics-pass/) every extractor formula depends on (the same four platforms) |
 | `Codegraph-<version>-<platform>.dmg` | the macOS app (`osx-arm64`, `osx-x64`) |
 
@@ -124,7 +129,9 @@ which sets none.
 To work on codegraph itself. **Before you start:** Node 22 or newer, `git`,
 and pnpm (`corepack enable pnpm`); then the toolchain of each extractor you
 build: a JDK 17+ for Java, the .NET 10 SDK for C#, Erlang/OTP 27 and Elixir
-for Elixir, Rust 1.94+ and libclang for Ruby, Rust 1.94+ for the metrics pass.
+for Elixir, Rust 1.94+ and libclang for Ruby, Rust 1.98+ and a C compiler for
+Python, Rust 1.94+ for the metrics pass. No Python is needed to build or test
+the Python extractor.
 
 1. Clone the repository and build every package.
 
@@ -156,6 +163,7 @@ for Elixir, Rust 1.94+ and libclang for Ruby, Rust 1.94+ for the metrics pass.
    ./build.sh --csharp                          # → bin/codegraph-csharp
    ./build.sh --elixir                          # → bin/codegraph-elixir
    ./build.sh --ruby                            # → bin/codegraph-ruby (Rust 1.94+ and libclang to build)
+   ./build.sh --python                          # → bin/codegraph-python (Rust 1.98+ and a C compiler to build)
    ./build.sh --metrics                         # → bin/codegraph-metrics (Rust 1.94+ to build)
    ```
 
@@ -175,5 +183,5 @@ permission notice with any copy.
 - [Extract a model from a Java repository](/docs/how-to/extract-java/)
 - [Your first code city](/docs/tutorials/first-city/)
 - [CLI reference](/docs/reference/cli/)
-- [Java](/docs/reference/java-extractor/), [C#](/docs/reference/csharp-extractor/), [TypeScript](/docs/reference/typescript-extractor/), [Elixir](/docs/reference/elixir-extractor/) and [Ruby](/docs/reference/ruby-extractor/) extractor references
+- [Java](/docs/reference/java-extractor/), [C#](/docs/reference/csharp-extractor/), [TypeScript](/docs/reference/typescript-extractor/), [Elixir](/docs/reference/elixir-extractor/), [Ruby](/docs/reference/ruby-extractor/) and [Python](/docs/reference/python-extractor/) extractor references
 - [Metrics pass reference](/docs/reference/metrics-pass/) and [how to run it](/docs/how-to/measure-metrics/)

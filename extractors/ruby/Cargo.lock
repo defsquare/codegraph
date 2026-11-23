@@ -74,9 +74,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "codegraph-model"
+version = "0.0.0"
+
+[[package]]
 name = "codegraph-ruby"
 version = "0.3.0"
 dependencies = [
+ "codegraph-model",
  "ruby-prism",
 ]
 

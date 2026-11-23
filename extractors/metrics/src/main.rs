@@ -441,6 +441,7 @@ struct Tally {
     failed_entities: usize,
     exact: usize,
     leading: usize,
+    trailing: usize,
     contained: usize,
     ambiguous: usize,
     unjoined: usize,
@@ -454,6 +455,7 @@ impl Tally {
         match m.join {
             Join::Exact => self.exact += 1,
             Join::Leading => self.leading += 1,
+            Join::Trailing => self.trailing += 1,
             Join::Contained => self.contained += 1,
             Join::Ambiguous => self.ambiguous += 1,
             Join::Unjoined => self.unjoined += 1,
@@ -465,10 +467,10 @@ impl Tally {
     }
 
     fn summary(&self, declaring: usize) -> String {
-        let joined = self.exact + self.leading + self.contained;
+        let joined = self.exact + self.leading + self.trailing + self.contained;
         let mut text = format!(
-            "{joined} of {declaring} measured entities joined ({} exact, {} leading, {} contained; {} ambiguous, {} unjoined) over {} files",
-            self.exact, self.leading, self.contained, self.ambiguous, self.unjoined, self.files
+            "{joined} of {declaring} measured entities joined ({} exact, {} leading, {} trailing, {} contained; {} ambiguous, {} unjoined) over {} files",
+            self.exact, self.leading, self.trailing, self.contained, self.ambiguous, self.unjoined, self.files
         );
         if self.sloc_compared > 0 {
             text.push_str(&format!(

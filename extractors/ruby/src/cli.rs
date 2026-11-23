@@ -6,7 +6,6 @@
 use crate::corpus;
 use crate::extraction;
 use crate::trace;
-use crate::writer;
 use crate::{NAME, VERSION};
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -271,7 +270,7 @@ fn extract(options: &Options, io: &mut Io<'_>, cwd: &Path) -> Result<(), String>
     let path = corpus::absolute(&options.out, cwd);
     let file = File::create(&path).map_err(|e| format!("cannot write {}: {e}", options.out))?;
     let mut out = BufWriter::with_capacity(1 << 20, file);
-    let counts = writer::write(&extraction.model, &mut out).map_err(|e| e.to_string())?;
+    let counts = codegraph_model::write(&extraction.model, &mut out).map_err(|e| e.to_string())?;
     phase(&mut *io.stderr, "write", format!("{} records", counts.records()));
 
     for line in &extraction.stats.explained {

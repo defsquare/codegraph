@@ -1,7 +1,7 @@
 ---
 title: Metrics catalogue
 linkTitle: Metrics catalogue
-weight: 15
+weight: 16
 ---
 
 Every measure a model or its side-car can carry — what it counts, who writes it, where it comes from and how to read it. Three readers of source write measures, and nothing else does:
@@ -12,7 +12,7 @@ Every measure a model or its side-car can carry — what it counts, who writes i
 | **the [metrics pass](/docs/reference/metrics-pass/)** — [big-code-analysis](https://github.com/dekobon/big-code-analysis) 2.2.0 as a library, joined to the model on anchors | `cognitive`, `nexits`, `abc.*`, `lloc`, `cloc`, `halstead.*`, `mi`, `npm`, `npa` | the same map |
 | **the pass with `--history`** — big-code-analysis's git measures | twenty `vcs` measures, per file and per entity | the side-car [`history-metrics.jsonl`](/docs/reference/artifacts/history-metrics-jsonl/) |
 
-The definitions of everything the pass writes are big-code-analysis's — its [code metrics](https://dekobon.github.io/big-code-analysis/metrics.html) and [change-history metrics](https://dekobon.github.io/big-code-analysis/metrics-vcs.html) chapters are the primary source, pinned at `=2.2.0` so a bump is a reviewed snapshot diff and never a silent change of meaning. What this page adds is codegraph's side of each number: the key it lands under, which entity it is charged to, what each of the five languages counts, and what big-code-analysis computes that codegraph deliberately leaves out.
+The definitions of everything the pass writes are big-code-analysis's — its [code metrics](https://dekobon.github.io/big-code-analysis/metrics.html) and [change-history metrics](https://dekobon.github.io/big-code-analysis/metrics-vcs.html) chapters are the primary source, pinned at `=2.2.0` so a bump is a reviewed snapshot diff and never a silent change of meaning. What this page adds is codegraph's side of each number: the key it lands under, which entity it is charged to, what each of the six languages counts, and what big-code-analysis computes that codegraph deliberately leaves out.
 
 Four rules to read every number by:
 
@@ -104,6 +104,7 @@ The `&&`/`||` operator itself counts nothing; its non-comparison operands count 
 | C# | a `when` guard and a `catch` filter are condition slots; a relational pattern's operator (`x is > 0`) is not counted again, the slot pays; `int?` is not a ternary but `a?.b` shares the token and counts; generics excluded as in Java |
 | TypeScript | optional `?` on parameters, properties and tuple elements, and conditional types `T extends U ? X : Y`, are type syntax and count nothing; type-argument brackets are not comparisons |
 | Elixir | an `if`/`unless` predicate and each `cond` clause are slots; the clauses of `case`, `with … else`, `receive` (its `after` included), `try`'s `rescue`/`catch`/`else`, and a multi-clause `fn` score one each — a bare `_ ->` catch-all nothing; each `<-` clause of a `with` is a condition; `else` of an `if` is Fitzpatrick's `else`; `in` counts by use; no ternary, no `try` keyword of its own; sigil delimiters are not comparisons |
+| Python | a call is a branch, construction included (`Foo()` is a call); a comparison (`is`, `in` and their negations included), a ternary, a `not`, and each `elif`, `else`, `except`, `finally` and `case` clause are conditions; `and`/`or` count their bare operands, not themselves; a bare annotation (`x: int`) is no assignment, `+=` and the walrus `:=` are |
 | Ruby | `rescue` plays `catch`; a bare predicate (`if flag`, `x if flag`, `while running`) is one condition; a subject-less `case` scores each `when` pattern as an `\|\|` operand, a subject-ful `case` scores one per clause; `class Foo < Bar` and `def <(other)` are not comparisons |
 
 **Reading it.** Fitzpatrick's advice is a relative ruler: rank the functions of a file by magnitude and read the top decile. The Ruby community, where ABC is most used (RuboCop, flog), treats a magnitude above about **17** as a refactoring candidate and above **30** as hard to maintain; expect higher norms in Java and C#, which assign more explicitly.
@@ -120,6 +121,7 @@ The number of explicit exit points of a function: every `return`, every `throw`/
 | C# | `return`, `throw` as a statement or as an expression, `yield` |
 | TypeScript | `return`, `throw`, `yield` |
 | Elixir | there is no `return`: `throw`, `raise`, `reraise`, `exit` |
+| Python | `return`, `raise` and `yield` — a generator's suspension hands control back |
 | Ruby | `return`; `raise`, `exit` and `exit!` called bare or on `Kernel` — not `fail`, `abort`, `throw` or an argument-less re-raise inside `rescue`, which the grammar cannot tell from a variable read |
 
 **Reading it.** `2–4` is usually a good sign — guard clauses, then a flat body. Above about **8** the function wants splitting. MISRA C and DO-178C still require exactly 1.
@@ -178,6 +180,7 @@ Lorenz and Kidd's 1994 class-size measures, later folded into the MOOD suite: th
 | C# | methods, constructors, operators and conversions marked `public`; each accessor of a public property or indexer (`get`, `set`, `init`) as one method, minus those narrowed to `private`/`protected`; an expression-bodied property as one; interface members | `public` field declarators; interface fields. A positional record's parameters are not counted |
 | TypeScript | class members without `private` or `protected`: methods, constructors, getters and setters each, abstract signatures, arrow-function fields; interface method and construct signatures. Overload signatures are not counted | class fields without `private`/`protected`, constructor parameter properties, interface property signatures |
 | Elixir | a `defmodule` is the class: `def` and `defmacro` are public, `defp` and `defmacrop` are not | its `defstruct` fields, every one public |
+| Python | every `def` written directly in the class body, decorated (`@property`, `@staticmethod`) or not, `async` included — Python has no visibility keyword, so `_x` and `__x` count as public; a nested class counts its own | each name bound once: by `=` at class level (a bare annotation `x: int` binds nothing) or by `self.x =`/`cls.x =` in a method, a class default and an instance write of one name counting once — all public |
 | Ruby | `def` and `def self.` written directly in a `class` body while the running visibility is public — a bare `private`/`protected` keyword flips it for what follows; `private :foo` and `private def foo` do not | `attr_accessor`/`attr_reader`/`attr_writer` symbols and `@x =`/`@@x =` assignments in the class body, under public visibility |
 
 **Ruby modules carry 0.** big-code-analysis treats a `module` body as a namespace, not a class, so a module's `npm` and `npa` are `0` however many methods it defines — a measurement, by its rule, not an absence. For the methods a Ruby module (or any type) holds, read the city's built-in `methods` source or the navigator's tree, which count the model's own children.

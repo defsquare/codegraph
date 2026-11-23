@@ -5,7 +5,7 @@
 //! thing to get right is the order of everything.
 
 use crate::json;
-use crate::model::{Anchor, Edge, Entity, Key, LANG, Literal, Model, utf16_cmp};
+use crate::model::{Anchor, Edge, Entity, Key, Literal, Model, utf16_cmp};
 use std::collections::HashMap;
 use std::io::{self, Write};
 
@@ -78,21 +78,22 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
     let mut entities: Vec<&Entity> = model.entities.iter().collect();
     entities.sort_by(|a, b| a.key.canonical_cmp(&b.key));
 
+    let lang = model.lang;
     let mut surrogate_of: HashMap<&Key, usize> = HashMap::with_capacity(entities.len());
     let mut module_surrogate: HashMap<&str, usize> = HashMap::new();
     for (index, entity) in entities.iter().enumerate() {
         if surrogate_of.insert(&entity.key, index).is_some() {
-            return Err(WriteError::DuplicateKey(entity.key.render()));
+            return Err(WriteError::DuplicateKey(entity.key.render(lang)));
         }
         // 2. A module names itself: the entity with an empty, undisambiguated symbol.
         if entity.key.is_module() {
-            module_surrogate.insert(entity.key.module.as_str(), index);
+            module_surrogate.insert(&*entity.key.module, index);
         }
     }
     let reference = |key: &Key, from: &Key| -> Result<usize, WriteError> {
         surrogate_of.get(key).copied().ok_or_else(|| WriteError::Dangling {
-            from: from.render(),
-            to: key.render(),
+            from: from.render(lang),
+            to: key.render(lang),
         })
     };
 
@@ -106,7 +107,7 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
             paths.extend(defined_in.iter().map(String::as_str));
         }
     }
-    paths.extend(model.edges.iter().map(|edge| edge.anchor.file.as_str()));
+    paths.extend(model.edges.iter().map(|edge| &*edge.anchor.file));
     let files = sorted_distinct(paths);
     let file_ref = index_of(&files);
 
@@ -123,11 +124,7 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
     let anchor = |line: &mut String, anchor: &Anchor| {
         json::integers(
             line,
-            [
-                file_ref[anchor.file.as_str()],
-                anchor.start as usize,
-                anchor.end as usize,
-            ],
+            [file_ref[&*anchor.file], anchor.start as usize, anchor.end as usize],
         );
     };
 
@@ -136,7 +133,7 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
     line.push_str("{\"t\":\"header\",\"schemaVersion\":");
     json::string(&mut line, SCHEMA_VERSION);
     line.push_str(",\"lang\":");
-    json::string(&mut line, LANG);
+    json::string(&mut line, lang);
     line.push_str(",\"extractor\":");
     object(&mut line, &model.extractor);
     line.push_str(",\"root\":");
@@ -166,8 +163,8 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
 
     for (index, entity) in entities.iter().enumerate() {
         let module_index = *module_surrogate
-            .get(entity.key.module.as_str())
-            .ok_or_else(|| WriteError::NoModule(entity.key.render()))?;
+            .get(&*entity.key.module)
+            .ok_or_else(|| WriteError::NoModule(entity.key.render(lang)))?;
         line.clear();
         line.push_str(&format!(
             "{{\"t\":\"e\",\"i\":{index},\"k\":{},\"tr\":",
@@ -197,6 +194,9 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
         if let Some(signature) = &entity.signature {
             line.push_str(",\"signature\":");
             json::string(&mut line, signature);
+        }
+        if let Some(declared_type) = &entity.declared_type {
+            line.push_str(&format!(",\"declaredType\":{}", reference(declared_type, &entity.key)?));
         }
         if let Some(is_stub) = entity.is_stub {
             line.push_str(if is_stub {
@@ -266,7 +266,7 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
         af.cmp(bf)
             .then(ao.cmp(bo))
             .then_with(|| utf16_cmp(a.kind, b.kind))
-            .then_with(|| file_ref[a.anchor.file.as_str()].cmp(&file_ref[b.anchor.file.as_str()]))
+            .then_with(|| file_ref[&*a.anchor.file].cmp(&file_ref[&*b.anchor.file]))
             .then(a.anchor.start.cmp(&b.anchor.start))
             .then(a.anchor.end.cmp(&b.anchor.end))
             .then_with(|| utf16_cmp(a.provenance, b.provenance))
@@ -283,6 +283,20 @@ pub fn write(model: &Model, out: &mut dyn Write) -> Result<Counts, WriteError> {
                 .map(|candidate| reference(candidate, &edge.from).map(|surrogate| surrogate.to_string()))
                 .collect::<Result<Vec<String>, WriteError>>()?;
             line.push_str(&format!(",\"candidates\":[{}]", refs.join(",")));
+        }
+        if let Some(arguments) = edge.arguments.as_ref().filter(|arguments| !arguments.is_empty()) {
+            line.push_str(",\"arguments\":[");
+            for (index, argument) in arguments.iter().enumerate() {
+                if index > 0 {
+                    line.push(',');
+                }
+                line.push_str("{\"name\":");
+                json::string(&mut line, &argument.name);
+                line.push_str(",\"value\":");
+                literal(&mut line, &argument.value, &|key| reference(key, &edge.from))?;
+                line.push('}');
+            }
+            line.push(']');
         }
         if let Some((read, write)) = edge.access {
             line.push_str(&format!(",\"isRead\":{read},\"isWrite\":{write}"));
@@ -328,6 +342,11 @@ fn literal(
         }
         Literal::Boolean(flag) => line.push_str(&format!("{{\"k\":\"boolean\",\"v\":{flag}}}")),
         Literal::Null => line.push_str("{\"k\":\"null\"}"),
+        Literal::Enum { ty, name } => {
+            line.push_str(&format!("{{\"k\":\"enum\",\"type\":{},\"name\":", reference(ty)?));
+            json::string(line, name);
+            line.push('}');
+        }
         Literal::Type(key) => line.push_str(&format!("{{\"k\":\"type\",\"type\":{}}}", reference(key)?)),
         Literal::Array(items) => {
             line.push_str("{\"k\":\"array\",\"items\":[");
@@ -363,10 +382,11 @@ fn object(line: &mut String, pairs: &[(&'static str, String)]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids;
+    use crate::model::NamedArgument;
 
+    /// A file module, keyed by a path that needs no escaping.
     fn file(path: &str) -> Entity {
-        let mut entity = Entity::new(ids::file_key(path), "file", &["TNamed", "TModule", "TWithChildren"]);
+        let mut entity = Entity::new(Key::module(path), "file", &["TNamed", "TModule", "TWithChildren"]);
         entity.name = Some(path.to_owned());
         entity.is_stub = Some(false);
         entity.defined_in = Some(vec![path.to_owned()]);
@@ -375,6 +395,7 @@ mod tests {
 
     fn model(entities: Vec<Entity>, edges: Vec<Edge>) -> Model {
         Model {
+            lang: "rb",
             extractor: vec![("name", "codegraph-ruby".into()), ("version", "0.0.0".into())],
             root: "src".into(),
             repository: None,
@@ -406,6 +427,7 @@ mod tests {
             },
             access: None,
             candidates: Some(vec![b.key.clone(), c.key.clone()]),
+            arguments: None,
         };
         let text = written(&model(vec![a, b, c], vec![edge]));
         // core's key order (packages/core/src/jsonl.ts): candidates, isRead, isWrite, anchor.
@@ -413,6 +435,78 @@ mod tests {
             text.contains(r#"{"t":"x","k":0,"f":0,"o":1,"p":0,"candidates":[1,2],"anchor":[0,3,3]}"#),
             "{text}"
         );
+    }
+
+    #[test]
+    fn writes_a_declared_type_and_annotation_arguments_in_cores_key_order() {
+        let a = file("a.py");
+        let mut class = Entity::new(a.key.member("Color"), "class", &["TNamed"]);
+        class.name = Some("Color".into());
+        let mut variable = Entity::new(a.key.member("DEFAULT"), "variable", &["TNamed", "TTypedEntity"]);
+        variable.name = Some("DEFAULT".into());
+        variable.signature = Some("DEFAULT".into());
+        variable.declared_type = Some(Box::new(class.key.clone()));
+        variable.value = Some(Box::new(Literal::Enum {
+            ty: class.key.clone(),
+            name: "RED".into(),
+        }));
+        let edge = Edge {
+            kind: "annotationUse",
+            from: variable.key.clone(),
+            to: class.key.clone(),
+            provenance: "declared",
+            anchor: Anchor {
+                file: "a.py".into(),
+                start: 2,
+                end: 2,
+            },
+            access: None,
+            candidates: None,
+            arguments: Some(vec![
+                NamedArgument {
+                    name: "path".into(),
+                    value: Literal::String("/orders".into()),
+                },
+                NamedArgument {
+                    name: "methods".into(),
+                    value: Literal::Array(vec![Literal::String("GET".into())]),
+                },
+                NamedArgument {
+                    name: "arg2".into(),
+                    value: Literal::Type(class.key.clone()),
+                },
+            ]),
+        };
+        let text = written(&model(vec![a, class, variable], vec![edge]));
+        // core's ENTITY_KEY_ORDER: name, signature, declaredType, isStub, …, value, anchor.
+        assert!(
+            text.contains(r#""s":"DEFAULT","name":"DEFAULT","signature":"DEFAULT","declaredType":1,"value":{"k":"enum","type":1,"name":"RED"}}"#),
+            "{text}"
+        );
+        // core's EDGE_KEY_ORDER: candidates, arguments, isRead, isWrite, anchor.
+        assert!(
+            text.contains(
+                r#""p":0,"arguments":[{"name":"path","value":{"k":"string","v":"/orders"}},{"name":"methods","value":{"k":"array","items":[{"k":"string","v":"GET"}]}},{"name":"arg2","value":{"k":"type","type":1}}],"anchor":[0,2,2]}"#
+            ),
+            "{text}"
+        );
+        // An empty list is omitted, as core omits it: the edge kind vouches for the key.
+        let mut bare = model(vec![file("b.py"), file("c.py")], vec![]);
+        bare.edges.push(Edge {
+            kind: "annotationUse",
+            from: Key::module("b.py"),
+            to: Key::module("c.py"),
+            provenance: "declared",
+            anchor: Anchor {
+                file: "b.py".into(),
+                start: 1,
+                end: 1,
+            },
+            access: None,
+            candidates: None,
+            arguments: Some(Vec::new()),
+        });
+        assert!(written(&bare).contains(r#""p":0,"anchor":[0,1,1]}"#));
     }
 
     #[test]
@@ -431,6 +525,7 @@ mod tests {
             },
             access: None,
             candidates: None,
+            arguments: None,
         };
         let text = written(&model(vec![b, a], vec![edge]));
         let lines: Vec<&str> = text.lines().collect();
@@ -454,9 +549,25 @@ mod tests {
         let duplicate = write(&model(vec![file("a.rb"), file("a.rb")], vec![]), &mut Vec::new());
         assert!(matches!(duplicate, Err(WriteError::DuplicateKey(key)) if key == "rb:a.rb"));
 
-        let mut orphan = Entity::new(ids::type_key(&ids::file_key("a.rb"), "A"), "class", &["TNamed"]);
-        orphan.parent = Some(ids::file_key("missing.rb"));
+        let mut orphan = Entity::new(Key::module("a.rb").member("A"), "class", &["TNamed"]);
+        orphan.parent = Some(Key::module("missing.rb"));
         let dangling = write(&model(vec![file("a.rb"), orphan], vec![]), &mut Vec::new());
         assert!(matches!(dangling, Err(WriteError::Dangling { to, .. }) if to == "rb:missing.rb"));
+    }
+
+    #[test]
+    fn the_header_and_every_message_name_the_models_own_language() {
+        let mut python = model(vec![file("a.py")], vec![]);
+        python.lang = "python";
+        python.extractor = vec![("name", "codegraph-python".into()), ("ruff", "0.0.0".into())];
+        let text = written(&python);
+        let header = text.lines().next().expect("a header");
+        assert!(
+            header.contains(r#""lang":"python","extractor":{"name":"codegraph-python","ruff":"0.0.0"}"#),
+            "{header}"
+        );
+        python.entities.push(file("a.py"));
+        let duplicate = write(&python, &mut Vec::new());
+        assert!(matches!(duplicate, Err(WriteError::DuplicateKey(key)) if key == "python:a.py"));
     }
 }

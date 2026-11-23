@@ -10,19 +10,19 @@ anchors, and rewrites their `metrics` maps. Nothing else in the file moves.
 One binary serves every extractor (PLAN.md §18); what each key means is in
 METAMODEL.md §3.8.
 
-> **Status (M17b, Ruby since M18b):** code metrics for Java, C#, TypeScript, Elixir and Ruby models;
+> **Status (M17b, Ruby since M18b, Python since M22b):** code metrics for Java, C#, TypeScript, Elixir, Ruby and Python models;
 > change history per file and per entity into a side-car (`--history`, §5).
 > Running it from the app and the tap (M17c) comes next.
 
 ## 1. From a clone
 
 A standalone Cargo crate under `extractors/metrics`, linking
-`big-code-analysis` 2.2.0 as a library with five tree-sitter grammars. It
+`big-code-analysis` 2.2.0 as a library with six tree-sitter grammars. It
 needs Rust ≥ 1.94 to build and nothing to run:
 
 ```bash
 ./build.sh --metrics                    # cargo build --release → extractors/metrics/target/release/codegraph-metrics
-./test.sh --metrics                     # cargo test: the join's unit tests + the five enriched snapshots, byte for byte
+./test.sh --metrics                     # cargo test: the join's unit tests + the six enriched snapshots, byte for byte
 ./bin/codegraph-java --src src/main/java --out model.jsonl
 ./bin/codegraph-metrics model.jsonl     # in place; --out FILE writes elsewhere
 ```
@@ -62,14 +62,20 @@ its code, `--footprint attribute:lloc` sizes it by its type's own statements.
 Every run ends with one line on stderr:
 
 ```
-codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 leading, 0 contained;
-0 ambiguous, 2387 unjoined) over 2983 files; sloc = bca ploc on 16395 of 16395 exact joins
+codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 leading, 0 trailing,
+0 contained; 0 ambiguous, 2387 unjoined) over 2983 files; sloc = bca ploc on 16395 of 16395 exact joins;
+26209 entities rewritten
 ```
 
 - **exact** — the entity and a space cover the same lines.
 - **leading** — they end together and start apart by annotation, attribute or
   decorator lines only (Spoon starts a method after `@Override`, tree-sitter
   at it).
+- **trailing** (Python) — they start together and end apart by comment and
+  blank lines only: tree-sitter's block runs on over the comments written
+  after a body's last statement, at its indentation; Ruff, like CPython's
+  `ast`, ends the `def` — and a class whose last method it is — at that
+  statement.
 - **contained** — one entity over several spaces (an Elixir function's
   clauses, a C# property's accessors): charged keys only.
 - **ambiguous** — entities and spaces share a span and do not pair up. In
@@ -80,14 +86,26 @@ codegraph-metrics: 26209 of 28596 measured entities joined (16395 exact, 9814 le
   implicit constructors (anchored on their class), Java lambdas
   (big-code-analysis charges them to their method), bodyless declarations
   (interface signatures, annotation elements, type aliases, enums, ambient
-  declarations), Elixir protocol and impl bodies, `defguard`, `defdelegate`.
+  declarations), Elixir protocol and impl bodies, `defguard`, `defdelegate`,
+  a Python class a call makes (`Amount = namedtuple(…)`, `Color = Enum(…)`,
+  `NamedTuple(…)`, `TypedDict(…)`). Also where two parsers recover from one
+  syntax error differently: the extractor reads the tree its own parser
+  recovered (Prism, Ruff), the pass tree-sitter's.
   Those entities carry none of the keys — absent, never zero.
 - **sloc = bca ploc** — the witness: on an exact join both count the lines
   holding code, so they must agree; a disagreement points at a parser (a file
-  the extractor could not parse) or a definition (JSX text lines in `.tsx`).
+  the extractor could not parse) or a definition (JSX text lines in `.tsx`; a
+  Python docstring, which the profile counts as code and big-code-analysis as
+  comment lines — `cloc` — so on Python `sloc` is `ploc` plus the non-blank
+  lines of the docstrings in the span).
 
 `--audit` lists every entity not joined exactly, with its outcome, category
 and span, and marks the ones anchored on their parent.
+
+A Python file is read with universal newlines, as Python reads it: a lone
+`\r` ends a line for the extractor's parser, and the pass hands
+big-code-analysis a `\n` in its place (byte for byte — no offset moves), or
+tree-sitter would see the whole file on one line.
 
 ## 4. Change history: `--history`
 

@@ -21,7 +21,14 @@
 #   Ruby       : cargo build     -> extractors/ruby/target/release/codegraph-ruby
 #                                   (Prism linked in: needs nothing on the machine
 #                                   that runs it — bin/codegraph-ruby; building it
-#                                   needs libclang, for the parser bindings)
+#                                   needs libclang, for the parser bindings; the
+#                                   shared writer extractors/model-rs is a path
+#                                   dependency, built with it)
+#   Python     : cargo build     -> extractors/python/target/release/codegraph-python
+#                                   (Ruff's parser linked in, a git dependency at one
+#                                   tag: needs nothing on the machine that runs it —
+#                                   bin/codegraph-python; building it needs Rust at
+#                                   the tag's floor and a C compiler, for psm)
 #   Metrics    : cargo build     -> extractors/metrics/target/release/codegraph-metrics
 #                                   (the big-code-analysis pass over any extractor's
 #                                   model, PLAN.md §18 — bin/codegraph-metrics)
@@ -62,6 +69,8 @@ Options:
   --elixir, --elixir-only
                        only extractors/elixir (mix escript.build)
   --ruby, --ruby-only  only extractors/ruby (cargo build --release)
+  --python, --python-only
+                       only extractors/python (cargo build --release)
   --metrics, --metrics-only
                        only extractors/metrics (cargo build --release)
   --native             Java: also build the GraalVM native binary for THIS
@@ -113,7 +122,7 @@ printf '%scodegraph build%s  %s(%s)%s\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$ROOT" "
 
 step "toolchain"
 if wants_ts; then check_node; ensure_pnpm; fi
-SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"; SKIP_RUBY="no"; SKIP_METRICS="no"
+SKIP_JAVA="no"; SKIP_CSHARP="no"; SKIP_ELIXIR="no"; SKIP_RUBY="no"; SKIP_PYTHON="no"; SKIP_METRICS="no"
 if wants_metrics; then
   if have_metrics_pass; then ensure_cargo
   else warn "no extractors/metrics in this checkout — skipping the metrics pass"; SKIP_METRICS="yes"; fi
@@ -121,6 +130,10 @@ fi
 if wants_ruby; then
   if have_ruby_extractor; then ensure_cargo "$RUBY_DIR" "the Ruby extractor (extractors/ruby)"; ensure_libclang
   else warn "no extractors/ruby in this checkout — skipping the Ruby build"; SKIP_RUBY="yes"; fi
+fi
+if wants_python; then
+  if have_python_extractor; then ensure_cargo "$PYTHON_DIR" "the Python extractor (extractors/python)"; ensure_c_compiler
+  else warn "no extractors/python in this checkout — skipping the Python build"; SKIP_PYTHON="yes"; fi
 fi
 if wants_java; then
   if have_java_extractor; then
@@ -286,6 +299,22 @@ if wants_ruby && [ "$SKIP_RUBY" = "no" ]; then
   step_done
 fi
 
+# ---------------------------------------------------------------- python ----
+
+if wants_python && [ "$SKIP_PYTHON" = "no" ]; then
+  if [ "$CLEAN" = "yes" ]; then
+    step "clean (python)"
+    run cargo clean --manifest-path "$PYTHON_DIR/Cargo.toml"
+    step_done
+  fi
+  # --locked: Ruff's parser is a git dependency whose commit the lockfile
+  # holds, and a bump is a reviewed snapshot diff (PLAN.md §23.8), never a
+  # side effect of a build.
+  step "build python extractor (cargo build --release)"
+  run cargo build --release --locked --manifest-path "$PYTHON_DIR/Cargo.toml"
+  step_done
+fi
+
 # --------------------------------------------------------------- metrics ----
 
 if wants_metrics && [ "$SKIP_METRICS" = "no" ]; then
@@ -362,6 +391,12 @@ if wants_ruby && [ "$SKIP_RUBY" = "no" ]; then
   case "$(host_rid)" in
     win-*) report "$RUBY_DIR/target/release/codegraph-ruby.exe" ;;
     *)     report "$RUBY_DIR/target/release/codegraph-ruby" ;;
+  esac
+fi
+if wants_python && [ "$SKIP_PYTHON" = "no" ]; then
+  case "$(host_rid)" in
+    win-*) report "$PYTHON_DIR/target/release/codegraph-python.exe" ;;
+    *)     report "$PYTHON_DIR/target/release/codegraph-python" ;;
   esac
 fi
 if wants_metrics && [ "$SKIP_METRICS" = "no" ]; then

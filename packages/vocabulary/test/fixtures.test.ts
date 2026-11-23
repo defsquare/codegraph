@@ -16,7 +16,7 @@ import { expectClosed } from "./closure.js";
  * rewrites them first — review the diff.
  */
 
-const FIXTURES = ["java", "csharp", "typescript", "elixir", "ruby", "unicode"] as const;
+const FIXTURES = ["java", "csharp", "typescript", "elixir", "ruby", "python", "unicode"] as const;
 
 const path = (fixture: string, file: string): string =>
   fileURLToPath(new URL(`../../../fixtures/${fixture}/expected/${file}`, import.meta.url));
@@ -73,6 +73,8 @@ describe("the hand counts of the fixtures' READMEs", () => {
     ["typescript", "packages", 21, 21, 21],
     ["elixir", "pricing", 28, 9, 9],
     ["ruby", "pricing", 8, 5, 5],
+    ["python", "currency", 13, 4, 4],
+    ["python", "pricing", 4, 4, 4],
   ];
 
   it.each(rows)("%s: %s weighs %i over %i occurrences, %i carriers", (fixture, word, weight, occurrences, carriers) => {
@@ -83,5 +85,11 @@ describe("the hand counts of the fixtures' READMEs", () => {
 
   it("csharp: the interface marker is no word", () => {
     expect(buildVocabulary(graphOf("csharp")).terms.map((entry) => entry.text)).not.toContain("i");
+  });
+
+  // pytest's per-directory fixture file, in nearly every Python repository.
+  it("python: `conftest` is a technical word", () => {
+    const conftest = buildVocabulary(graphOf("python")).terms.filter((entry) => entry.text === "conftest");
+    expect(conftest.map((entry) => entry.class)).toEqual(["technical"]);
   });
 });

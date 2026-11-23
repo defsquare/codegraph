@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+"""Prints an order's total: a script, by its shebang."""
+import sys
+
+from acme_order import Order
+
+
+def main(argv):
+    return Order(argv[1]).total
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

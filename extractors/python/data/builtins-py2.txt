@@ -1,0 +1,25 @@
+# The names of Python 2.7's builtins that Python 3's do not bind, so a Python 2
+# file reads them as the builtins they are, never as unbound names. From
+# https://docs.python.org/2.7/library/functions.html and
+# https://docs.python.org/2.7/library/exceptions.html (fetched 2026-11-22).
+# The docs file basestring, buffer, file, unicode and xrange as functions: each
+# is a type in CPython 2.7 (`type(unicode) is type`), so a class here. A class
+# names its base. True, False, None and __debug__ are left out: keywords in
+# Python 3, the language either way. Read by src/stdlib_table.rs, never edited.
+class	basestring	object
+class	buffer	object
+class	file	object
+class	long	object
+class	StandardError	Exception
+class	unicode	basestring
+class	VMSError	OSError
+class	xrange	object
+function	apply
+function	cmp
+function	coerce
+function	execfile
+function	intern
+function	raw_input
+function	reduce
+function	reload
+function	unichr

@@ -12,7 +12,10 @@
 //! parameter         …/Acme::Order.total#param:currency         unnamed or repeated: #param:<ordinal>
 //! ```
 
-use crate::model::Key;
+use codegraph_model::Key;
+
+/// The model's `lang`: the profile core reads it against, the prefix of every id.
+pub const LANG: &str = "rb";
 
 /// The stub module of what the VM defines before any file runs.
 pub const RUBY: &str = "<ruby>";
@@ -67,7 +70,7 @@ pub fn reserved_key(reserved: &str) -> Key {
 pub fn type_key(module: &Key, fqn: &str) -> Key {
     Key {
         module: module.module.clone(),
-        symbol: escape_name(fqn),
+        symbol: escape_name(fqn).into(),
         d: None,
     }
 }
@@ -104,52 +107,52 @@ mod tests {
     #[test]
     fn keys_have_the_documented_shapes() {
         let file = file_key("lib/acme/order.rb");
-        assert_eq!(file.render(), "rb:lib%2Facme%2Forder.rb");
+        assert_eq!(file.render(LANG), "rb:lib%2Facme%2Forder.rb");
         let order = type_key(&file, "Acme::Order");
-        assert_eq!(order.render(), "rb:lib%2Facme%2Forder.rb/Acme::Order");
+        assert_eq!(order.render(LANG), "rb:lib%2Facme%2Forder.rb/Acme::Order");
         assert_eq!(
-            method_key(&order, "total", false).render(),
+            method_key(&order, "total", false).render(LANG),
             "rb:lib%2Facme%2Forder.rb/Acme::Order.total"
         );
         assert_eq!(
-            method_key(&order, "call", true).render(),
+            method_key(&order, "call", true).render(LANG),
             "rb:lib%2Facme%2Forder.rb/Acme::Order.call#self"
         );
         assert_eq!(
-            method_key(&order, "/", false).render(),
+            method_key(&order, "/", false).render(LANG),
             "rb:lib%2Facme%2Forder.rb/Acme::Order.%2F"
         );
         assert_eq!(
-            method_key(&order, "%", false).render(),
+            method_key(&order, "%", false).render(LANG),
             "rb:lib%2Facme%2Forder.rb/Acme::Order.%25"
         );
         assert_eq!(
-            method_key(&order, "<=>", false).render(),
+            method_key(&order, "<=>", false).render(LANG),
             "rb:lib%2Facme%2Forder.rb/Acme::Order.<=>"
         );
         let call = method_key(&order, "call", true);
         assert_eq!(
-            parameter_key(&call, "args").render(),
+            parameter_key(&call, "args").render(LANG),
             "rb:lib%2Facme%2Forder.rb/Acme::Order.call#self#param:args"
         );
         assert_eq!(
-            parameter_key(&call, "1").render(),
+            parameter_key(&call, "1").render(LANG),
             "rb:lib%2Facme%2Forder.rb/Acme::Order.call#self#param:1"
         );
         assert_eq!(
-            type_key(&reserved_key(RUBY), "StandardError").render(),
+            type_key(&reserved_key(RUBY), "StandardError").render(LANG),
             "rb:<ruby>/StandardError"
         );
-        assert_eq!(feature_key("net/http").render(), "rb:<gems>%2Fnet%2Fhttp");
+        assert_eq!(feature_key("net/http").render(LANG), "rb:<gems>%2Fnet%2Fhttp");
     }
 
     #[test]
     fn no_walked_path_can_spell_a_reserved_module() {
         // Legal file names on Linux; each must stay distinct from the reserved keys.
-        assert_eq!(file_key("<ruby>").render(), "rb:%3Cruby>");
-        assert_eq!(file_key("<gems>/json.rb").render(), "rb:%3Cgems>%2Fjson.rb");
+        assert_eq!(file_key("<ruby>").render(LANG), "rb:%3Cruby>");
+        assert_eq!(file_key("<gems>/json.rb").render(LANG), "rb:%3Cgems>%2Fjson.rb");
         assert_ne!(file_key("<gems>/json.rb"), feature_key("json.rb"));
-        assert_eq!(file_key("lib/promo#2024.rb").render(), "rb:lib%2Fpromo%232024.rb");
+        assert_eq!(file_key("lib/promo#2024.rb").render(LANG), "rb:lib%2Fpromo%232024.rb");
     }
 
     #[test]

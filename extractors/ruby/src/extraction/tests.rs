@@ -1,5 +1,6 @@
 use super::*;
 use crate::corpus::{SourceFile, line_count};
+use crate::ids::LANG;
 
 fn extraction(files: &[(&str, &str)]) -> Extraction {
     traced(files, None)
@@ -19,7 +20,7 @@ fn traced(files: &[(&str, &str)], trace: Option<&str>) -> Extraction {
             lines: line_count(source.as_bytes()),
         })
         .collect();
-    files.sort_by(|a, b| crate::model::utf16_cmp(&a.rel, &b.rel));
+    files.sort_by(|a, b| codegraph_model::utf16_cmp(&a.rel, &b.rel));
     let corpus = Corpus {
         root_display: "src".to_owned(),
         files,
@@ -33,7 +34,7 @@ fn one(source: &str) -> Extraction {
 }
 
 fn ids_of(extraction: &Extraction) -> Vec<String> {
-    let mut ids: Vec<String> = extraction.model.entities.iter().map(|e| e.key.render()).collect();
+    let mut ids: Vec<String> = extraction.model.entities.iter().map(|e| e.key.render(LANG)).collect();
     ids.sort();
     ids
 }
@@ -45,7 +46,7 @@ fn edges_of(extraction: &Extraction, kind: &str) -> Vec<(String, String, &'stati
         .edges
         .iter()
         .filter(|e| e.kind == kind)
-        .map(|e| (e.from.render(), e.to.render(), e.provenance, e.anchor.start))
+        .map(|e| (e.from.render(LANG), e.to.render(LANG), e.provenance, e.anchor.start))
         .collect();
     edges.sort();
     edges
@@ -57,8 +58,8 @@ fn from(extraction: &Extraction, kind: &str, from: &str) -> Vec<(String, &'stati
         .model
         .edges
         .iter()
-        .filter(|e| e.kind == kind && e.from.render() == from)
-        .map(|e| (e.to.render(), e.provenance, e.anchor.start))
+        .filter(|e| e.kind == kind && e.from.render(LANG) == from)
+        .map(|e| (e.to.render(LANG), e.provenance, e.anchor.start))
         .collect();
     edges.sort_by(|a, b| (a.2, &a.0).cmp(&(b.2, &b.0)));
     edges
@@ -69,7 +70,7 @@ fn entity<'a>(extraction: &'a Extraction, id: &str) -> &'a Entity {
         .model
         .entities
         .iter()
-        .find(|e| e.key.render() == id)
+        .find(|e| e.key.render(LANG) == id)
         .unwrap_or_else(|| panic!("no entity {id}"))
 }
 
@@ -78,7 +79,7 @@ fn edge<'a>(extraction: &'a Extraction, kind: &str, from: &str, to: &str) -> &'a
         .model
         .edges
         .iter()
-        .find(|e| e.kind == kind && e.from.render() == from && e.to.render() == to)
+        .find(|e| e.kind == kind && e.from.render(LANG) == from && e.to.render(LANG) == to)
         .unwrap_or_else(|| panic!("no {kind} edge {from} -> {to}"))
 }
 
@@ -90,9 +91,9 @@ fn key(id: &str) -> Key {
     };
     let (module, symbol) = rest.split_once('/').unwrap_or((rest, ""));
     Key {
-        module: module.to_owned(),
-        symbol: symbol.to_owned(),
-        d,
+        module: module.into(),
+        symbol: symbol.into(),
+        d: d.map(Into::into),
     }
 }
 
@@ -147,11 +148,11 @@ fn a_reopening_is_one_entity_per_file_attached_to_the_primary_declaration() {
     ]);
     // `a_patch.rb` sorts first, and the body that writes a superclass is still the primary.
     assert_eq!(
-        entity(&run, "rb:a_patch.rb/Order").attached_to,
+        entity(&run, "rb:a_patch.rb/Order").attached_to.as_deref().cloned(),
         Some(key("rb:order.rb/Order"))
     );
     assert!(entity(&run, "rb:a_patch.rb/Order").traits.contains(&"TAttachedTo"));
-    assert_eq!(entity(&run, "rb:order.rb/Order").attached_to, None);
+    assert_eq!(entity(&run, "rb:order.rb/Order").attached_to.as_deref().cloned(), None);
     // Two bodies in one file: one entity, anchored at the first, holding both methods.
     assert_eq!(
         entity(&run, "rb:order.rb/Order")
@@ -164,7 +165,7 @@ fn a_reopening_is_one_entity_per_file_attached_to_the_primary_declaration() {
     // A corpus body of a core class is attached to the VM's, which is a stub.
     let string = entity(&run, "rb:string.rb/String");
     assert_eq!(string.is_stub, Some(false));
-    assert_eq!(string.attached_to, Some(key("rb:<ruby>/String")));
+    assert_eq!(string.attached_to.as_deref().cloned(), Some(key("rb:<ruby>/String")));
     assert_eq!(entity(&run, "rb:<ruby>/String").is_stub, Some(true));
 }
 
@@ -440,7 +441,13 @@ fn a_constant_declared_in_another_file_is_a_derived_import_unless_required() {
 fn keys_parameters_by_name_and_by_ordinal_when_there_is_none_or_it_repeats() {
     let run = one("class Order\n  def each(first, *, _, _, &blk); end\n  def self.call(*); end\nend\n");
     let each = entity(&run, "rb:a.rb/Order.each");
-    let keys: Vec<String> = each.parameters.as_ref().unwrap().iter().map(Key::render).collect();
+    let keys: Vec<String> = each
+        .parameters
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|key| key.render(LANG))
+        .collect();
     assert_eq!(
         keys,
         vec![
@@ -599,7 +606,7 @@ fn a_value_constant_is_an_entity_with_what_the_source_assigns() {
     let limit = entity(&run, "rb:a.rb/Acme::LIMIT");
     assert_eq!((limit.kind, limit.name.as_deref()), ("constant", Some("Acme::LIMIT")));
     assert_eq!(limit.parent, Some(key("rb:a.rb/Acme")));
-    assert_eq!(limit.value, Some(Literal::Number("3".into())));
+    assert_eq!(limit.value.as_deref().cloned(), Some(Literal::Number("3".into())));
     assert_eq!(limit.comments, Some(vec!["The limit.".to_owned()]));
     assert_eq!(
         limit.traits,
@@ -614,7 +621,7 @@ fn a_value_constant_is_an_entity_with_what_the_source_assigns() {
     );
     assert_eq!(limit.anchor.as_ref().map(|a| (a.start, a.end)), Some((3, 3)));
     assert_eq!(
-        entity(&run, "rb:a.rb/Acme::ROLES").value,
+        entity(&run, "rb:a.rb/Acme::ROLES").value.as_deref().cloned(),
         Some(Literal::Array(vec![
             Literal::String("admin".into()),
             Literal::String("guest".into())
@@ -622,21 +629,21 @@ fn a_value_constant_is_an_entity_with_what_the_source_assigns() {
     );
     // A constant naming a type is a type literal, closed against the model — the VM's too.
     assert_eq!(
-        entity(&run, "rb:a.rb/Acme::DEFAULT").value,
+        entity(&run, "rb:a.rb/Acme::DEFAULT").value.as_deref().cloned(),
         Some(Literal::Type(key("rb:a.rb/Acme::Money")))
     );
     assert_eq!(
-        entity(&run, "rb:a.rb/Acme::ERROR").value,
+        entity(&run, "rb:a.rb/Acme::ERROR").value.as_deref().cloned(),
         Some(Literal::Type(key("rb:<ruby>/StandardError")))
     );
     // A library's constant may be a value as well as a type: its text is all that is known.
     assert_eq!(
-        entity(&run, "rb:a.rb/Acme::LIB").value,
+        entity(&run, "rb:a.rb/Acme::LIB").value.as_deref().cloned(),
         Some(Literal::Unevaluated("Nokogiri".into()))
     );
     // Computed at load time: no value, and the call is the constant's own.
     let now = entity(&run, "rb:a.rb/Acme::NOW");
-    assert_eq!(now.value, None);
+    assert_eq!(now.value.as_deref().cloned(), None);
     assert!(now.traits.contains(&"TWithInvocations"));
     assert_eq!(
         from(&run, "invocation", "rb:a.rb/Acme::NOW"),
@@ -680,8 +687,8 @@ fn an_instance_variable_and_the_attr_that_exposes_it_are_one_field() {
         .model
         .edges
         .iter()
-        .filter(|e| e.kind == "access" && e.from.render() == "rb:a.rb/Order.add")
-        .map(|e| (e.to.render(), e.access, e.anchor.start))
+        .filter(|e| e.kind == "access" && e.from.render(LANG) == "rb:a.rb/Order.add")
+        .map(|e| (e.to.render(LANG), e.access, e.anchor.start))
         .collect();
     assert_eq!(
         accesses,
@@ -1085,11 +1092,11 @@ fn carries_comments_and_measures_and_says_so_in_the_traits() {
     // A parameter with a default carries it.
     let run = one("def f(mode = :fast, n: 2); end\n");
     assert_eq!(
-        entity(&run, "rb:a.rb/f#param:mode").value,
+        entity(&run, "rb:a.rb/f#param:mode").value.as_deref().cloned(),
         Some(Literal::Unevaluated(":fast".into()))
     );
     assert_eq!(
-        entity(&run, "rb:a.rb/f#param:n").value,
+        entity(&run, "rb:a.rb/f#param:n").value.as_deref().cloned(),
         Some(Literal::Number("2".into()))
     );
     assert!(entity(&run, "rb:a.rb/f#param:n").traits.contains(&"TWithValue"));
@@ -1194,15 +1201,15 @@ fn a_trace_binds_an_untyped_call_to_what_it_reached_as_a_dynamic_candidate() {
         .model
         .edges
         .iter()
-        .filter(|e| e.kind == "invocation" && e.from.render() == "rb:lib%2Fa.rb/Order.run")
+        .filter(|e| e.kind == "invocation" && e.from.render(LANG) == "rb:lib%2Fa.rb/Order.run")
         .map(|e| {
             (
-                e.to.render(),
+                e.to.render(LANG),
                 e.provenance,
                 e.anchor.start,
                 e.candidates
                     .as_ref()
-                    .map(|c| c.iter().map(Key::render).collect::<Vec<_>>()),
+                    .map(|c| c.iter().map(|key| key.render(LANG)).collect::<Vec<_>>()),
             )
         })
         .collect();

@@ -46,8 +46,26 @@ extractors/ruby/     Cargo package `codegraph-ruby` (Prism, CRuby's own parser, 
                      `trace/codegraph_trace.rb` (one Ruby file, run by the USER
                      inside a booting project) writes the trace `--trace` merges:
                      `generated` mixins, `dynamic-candidate` calls, never a key.
+extractors/python/   Cargo package `codegraph-python` (Ruff's parser as a LIBRARY,
+                     pinned to one tag + a lexical scope and import resolver + a
+                     table of the standard library distilled from typeshed and
+                     committed; nothing is run, no virtual environment or
+                     site-packages read, Python 2 files recovered) → emits
+                     model.jsonl. ONE binary: no Python to build it or to run it.
+                     The module is the FILE, keyed by its path. Only
+                     `declarations.rs` may name a `ruff_*` type (a boundary test).
+                     `trace/codegraph_trace.py` (one Python file, run by the USER
+                     around a program that still imports) writes the trace
+                     `--trace` merges: `generated` bases, `dynamic-candidate`
+                     calls, never a key.
+extractors/model-rs/ Rust crate `codegraph-model`: the model.jsonl WRITER the Rust
+                     extractors (ruby, python) share — canonical order, surrogates,
+                     the file table, JSON byte for byte as core's encoder. It
+                     holds no language and no vocabulary: kinds, traits and the id
+                     scheme stay in each extractor. A change here changes every
+                     Rust extractor's output: run each one's suite.
 extractors/metrics/  Rust crate `codegraph-metrics` (big-code-analysis 2.2.0 as a
-                     LIBRARY, five tree-sitter grammars). Not an extractor: a PASS
+                     LIBRARY, six tree-sitter grammars). Not an extractor: a PASS
                      over any extractor's model.jsonl that joins bca's function and
                      class spaces to measured entities on their anchors and adds its
                      own `metrics` keys (METAMODEL §3.8), never the extractor's.
@@ -225,10 +243,25 @@ node scripts/homebrew/render.mjs --version X.Y.Z --sums SHA256SUMS [--npm-sha256
 #   binary must reproduce fixtures/ruby. CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test --manifest-path
 #   extractors/ruby/Cargo.toml rewrites the snapshot; the core table: extractors/ruby/README.md
 
+./build.sh --python                                 # cargo build --release → extractors/python/target/release/codegraph-python
+./bin/codegraph-python --src <dir> --out model.jsonl   # needs nothing installed — no Python
+./bin/codegraph-python --src <dir> --out model.jsonl --explain-dropped   # + stderr: dropped <reason>: <file>:<line> <what>
+./bin/codegraph-python --src <dir> --import-root <dir>/lib --out model.jsonl   # a root the layout does not betray (PYTHONPATH)
+./bin/codegraph-python --src <dir> --trace <dir>/codegraph-trace.jsonl --out model.jsonl
+#   the trace, inside a project that still imports (it RUNS the project's code — the extractor never does):
+#   [CODEGRAPH_TRACE_CALLS=1] python <repo>/extractors/python/trace/codegraph_trace.py -m pytest
+#   docs/python-extractor.md: the import order, the provenance tiers, the dropped-site reasons, the audit, the oracles
+#   Rust ≥ 1.98 (the pinned Ruff tag's floor) and a C compiler to BUILD; `test.sh --python` = cargo test (the
+#   shared writer's, the extractor's, the stdlib-table generator's) + the release binary must reproduce
+#   fixtures/python. CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test --manifest-path extractors/python/Cargo.toml
+#   rewrites the snapshot; a change to extractors/model-rs also needs `test.sh --ruby`
+./bin/codegraph-python --licenses      # the embedded notice (every linked crate, typeshed's Apache-2.0/MIT);
+#   after a dependency change: node extractors/python/scripts/licenses.mjs > extractors/python/THIRD-PARTY-LICENSES.txt
+
 ./build.sh --metrics                                # cargo build --release → extractors/metrics/target/release/codegraph-metrics
 ./bin/codegraph-metrics model.jsonl [--src DIR] [--out FILE] [--audit]   # after ANY extractor; in place by default
 #   Rust ≥ 1.94 to build, nothing to run; docs/metrics.md. `test.sh --metrics` = cargo test: the join's unit
-#   tests + the five fixtures/<lang>/expected/model.metrics.jsonl byte for byte (and a re-run is the identity);
+#   tests + the six fixtures/<lang>/expected/model.metrics.jsonl byte for byte (and a re-run is the identity);
 #   CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test --manifest-path extractors/metrics/Cargo.toml rewrites them
 ./bin/codegraph-metrics model.jsonl --history [--ref REV]   # + model.history-metrics.jsonl: git history per
 #   file and per entity at the model's commit — a SIDE-CAR, never the model (PLAN §18.2); then

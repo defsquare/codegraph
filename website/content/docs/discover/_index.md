@@ -110,8 +110,9 @@ first hours of reading.
 - The `codegraph` command and the extractor of your language, both from the
   Homebrew tap: see [Install](/docs/how-to/install/). The
   [Java](/docs/reference/java-extractor/), [C#](/docs/reference/csharp-extractor/),
-  [Elixir](/docs/reference/elixir-extractor/) and [Ruby](/docs/reference/ruby-extractor/)
-  extractors are self-contained binaries; the
+  [Elixir](/docs/reference/elixir-extractor/), [Ruby](/docs/reference/ruby-extractor/)
+  and [Python](/docs/reference/python-extractor/) (from the release after
+  v0.3.0) extractors are self-contained binaries; the
   [TypeScript one](/docs/reference/typescript-extractor/) runs on Node 22. Any
   of them installs the [metrics pass](/docs/reference/metrics-pass/), which
   step 1 can use and nothing below requires.

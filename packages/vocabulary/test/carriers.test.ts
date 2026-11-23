@@ -13,7 +13,7 @@ import { graphOf as toyGraph, method, orderCorpus, pkg } from "./toy.js";
  * what the row counted from it, so a row is the sum of its carriers.
  */
 
-const FIXTURES = ["java", "csharp", "typescript", "elixir", "ruby", "unicode"] as const;
+const FIXTURES = ["java", "csharp", "typescript", "elixir", "ruby", "python", "unicode"] as const;
 
 function fixtureGraph(fixture: string): CodeGraph {
   const model = readModelFileSync(

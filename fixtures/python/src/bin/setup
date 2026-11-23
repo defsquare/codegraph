@@ -1,0 +1,3 @@
+#!/bin/sh
+# A shell script beside it: not Python, not walked.
+echo setup

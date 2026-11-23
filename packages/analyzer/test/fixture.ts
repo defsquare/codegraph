@@ -72,6 +72,19 @@ export function rubyGraph(): CodeGraph {
   return buildGraph(loadModels(rubyFixture(), { sources: ["fixtures/ruby"] }).union);
 }
 
+/** The committed M22 snapshot: real Ruff-parser output over `fixtures/python/src`. */
+const PYTHON_FIXTURE = fileURLToPath(
+  new URL("../../../fixtures/python/expected/model.jsonl", import.meta.url),
+);
+
+export function pythonFixture(): Model {
+  return readModelFileSync(PYTHON_FIXTURE);
+}
+
+export function pythonGraph(): CodeGraph {
+  return buildGraph(loadModels(pythonFixture(), { sources: ["fixtures/python"] }).union);
+}
+
 /** A minimal hand-built model, for shapes the fixture does not contain. */
 export function toyModel(
   entities: readonly Entity[],

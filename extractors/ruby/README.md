@@ -88,6 +88,12 @@ CODEGRAPH_UPDATE_SNAPSHOTS=1 cargo test --manifest-path extractors/ruby/Cargo.to
 Ruby profile, which this crate never sees, must license every record, and
 core's own encoder must write the same bytes.
 
+The bytes themselves are not written here: natural keys, canonical order and
+the JSON encoder are `codegraph-model` (`extractors/model-rs`), a path
+dependency every Rust extractor shares. This crate gives it the `rb` language,
+the header's `extractor` object and the entities and edges; `test.sh --ruby`
+runs that crate's tests too.
+
 ## The core table
 
 `data/core-rbs-<version>.tsv` lists the constants the Ruby VM defines before

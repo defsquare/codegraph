@@ -120,7 +120,7 @@ describe("operationScope stops at a scope of its own", () => {
   });
 });
 
-describe.each(["java", "csharp", "typescript", "elixir", "ruby"])("operationScope over fixtures/%s", (name) => {
+describe.each(["java", "csharp", "typescript", "elixir", "ruby", "python"])("operationScope over fixtures/%s", (name) => {
   const path = fileURLToPath(new URL(`../../../fixtures/${name}/expected/model.jsonl`, import.meta.url));
   const graph = buildGraph(loadModels(readModelFileSync(path), { sources: [name] }).union);
   const artifact = buildVocabulary(graph);

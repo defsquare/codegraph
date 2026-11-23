@@ -27,7 +27,7 @@ unchanged since.
    ```
 
    ```text
-   codegraph-metrics: 106 of 109 measured entities joined (106 exact, 0 leading, 0 contained; 3 ambiguous, 0 unjoined) over 31 files; sloc = bca ploc on 106 of 106 exact joins; 106 entities rewritten
+   codegraph-metrics: 106 of 109 measured entities joined (106 exact, 0 leading, 0 trailing, 0 contained; 3 ambiguous, 0 unjoined) over 31 files; sloc = bca ploc on 106 of 106 exact joins; 106 entities rewritten
    ```
 
    The model is rewritten through a temporary file and renamed on success, so
@@ -48,22 +48,24 @@ leaves no stale value behind.
 ## Read the report
 
 The one line on stderr is the join's account of itself. **If `exact` plus
-`leading` plus `contained` is most of the measured entities, then the model is
-measured.** What is left is what big-code-analysis opens no space for, and it is
+`leading` plus `trailing` plus `contained` is most of the measured entities, then
+the model is measured.** What is left is what big-code-analysis opens no space for, and it is
 expected, not a failure:
 
 | Count | Meaning |
 |---|---|
 | `exact` | the entity and a space cover the same lines |
 | `leading` | they end together and start apart by annotation or decorator lines only — most of a Spring corpus |
+| `trailing` | Python: they start together and end apart by the comments after a body's last statement, which tree-sitter's block runs on over and Ruff does not |
 | `contained` | one entity over several spaces: an Elixir function's clauses, a C# property's accessors. Only the additive keys are written |
 | `ambiguous` | the model and the grammar disagree on what sits there: a Ruby type declared by assignment. Nothing is written |
-| `unjoined` | no space at all: implicit constructors, Java lambdas, interface signatures, type aliases. Nothing is written |
+| `unjoined` | no space at all: implicit constructors, Java lambdas, interface signatures, type aliases, a Python class a call makes (`namedtuple(…)`). Nothing is written |
 
 **If `sloc = bca ploc` is not `N of N`, then look at the files.** On an exact
 join the extractor and big-code-analysis both count the lines holding code and
 must agree; the known exceptions are a file with syntax errors, JSX text lines in
-`.tsx`, a heredoc in Elixir and `#if` blocks in C#. Anything else is worth a
+`.tsx`, a heredoc in Elixir, `#if` blocks in C# and a Python docstring (code to
+the profile, comment to big-code-analysis). Anything else is worth a
 look.
 
 Absence is the answer for every entity the pass could not measure: no key, never
@@ -118,7 +120,7 @@ codegraph-metrics model.jsonl --src fixtures/ruby/src --history
 ```
 
 ```text
-codegraph-metrics: 106 of 109 measured entities joined (106 exact, 0 leading, 0 contained; 3 ambiguous, 0 unjoined) over 31 files; sloc = bca ploc on 106 of 106 exact joins; 0 entities rewritten
+codegraph-metrics: 106 of 109 measured entities joined (106 exact, 0 leading, 0 trailing, 0 contained; 3 ambiguous, 0 unjoined) over 31 files; sloc = bca ploc on 106 of 106 exact joins; 0 entities rewritten
 codegraph-metrics: history at 17b247076c65 (@1791932959): 27 files, 107 entities blamed → model.history-metrics.jsonl
 ```
 

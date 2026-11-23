@@ -32,6 +32,15 @@ extractors/metrics/target/
 extractors/ruby/target/
 extractors/ruby/tools/core-table/target/
 
+# Python extractor (Cargo): build output, its own and the stdlib-table tool's.
+# Both Cargo.lock files ARE committed.
+extractors/python/target/
+extractors/python/tools/stdlib-table/target/
+
+# The model writer the Rust extractors share (Cargo): build output of its own
+# tests. Its Cargo.lock IS committed, so `--locked` holds there too.
+extractors/model-rs/target/
+
 .DS_Store
 .idea/
 .vscode/

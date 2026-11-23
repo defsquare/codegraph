@@ -123,7 +123,7 @@ lexicon in full, between the kinds and the notes):
 | `rb` | 41 | 50 — `initialize to_s to_h to_proc inspect hash eql? == === <=> [] []= each coerce method_missing respond_to? included extended inherited…` | `accessor attr concern concerns ext gem gemspec klass lambda proc rake rakefile` | `file` | `file` by `/`, `class`, `module` and `constant` by `::` | — |
 | `go` | 25 | 16 — `init main String GoString Error Unwrap Is As Len Less Swap MarshalJSON UnmarshalJSON MarshalText UnmarshalText ServeHTTP` | `cfg cmd errs internal mu pkg srv svc wg` | — | — (`package order` is one identifier) | — |
 | `rust` | 52 | 21 — `main fmt drop clone eq ne partial_cmp cmp deref into_iter from_str try_from as_ref borrow_mut index_mut default poll…` | `arc buf cell ffi iter ok opt rc refcell rs rx sys tx vec` | — | — (`mod line` is one identifier) | — |
-| `python` | 35 | 78 — `self cls`, every `__dunder__` | `dict kwargs metaclass py tuple` | — | `module` by `.` | — |
+| `python` | 35 | 78 — `self cls`, every `__dunder__` | `dict kwargs metaclass py tuple` | `module` | `module` by `/` | — |
 | `php` | 82 | 17 — `__construct __destruct __call __get __set __toString __invoke __clone…` | `arr closure facade middleware php` | `codeFile` | `codeFile` by `/`, `namespace` by `\` | — |
 | `clj` | 20 | 6 — `-main -init -post-init -toString -equals -hashCode` | `coll kw ns seq sym xf xform` | — | `namespace` by `.` | — |
 
@@ -247,9 +247,9 @@ type), `operation` (`TInvocable` — a Clojure fn-var too), `parameter` or
 `local` (a `TStructural` listed in some entity's `parameters[]` or
 `localVariables[]`), `attribute` (every other `TStructural`: fields,
 constants, properties, module attributes), and `other` — a named entity no
-role trait describes (a TypeScript `namespace`, a PHP `codeFile`, a Python
-`decorator`), whose words still count. Default weights, recorded in the
-artifact and overridable with `--weights role=n,…`:
+role trait describes (a TypeScript `namespace`, a PHP `codeFile`), whose
+words still count. Default weights, recorded in the artifact and
+overridable with `--weights role=n,…`:
 
 | role | weight | why |
 |---|---|---|

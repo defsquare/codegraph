@@ -10,7 +10,7 @@ The enum qualifying *how we know* an edge exists. It is a mandatory attribute of
 | `declared` | written literally in the source | explicit `extends`, direct call |
 | `derived` | computed by analysis | Go implicit interface satisfaction, TS structural conformance, Python protocols, Rust blanket impls |
 | `dynamic-candidate` | dispatch not statically resolvable; targets are guesses | multimethods, PHP `__call`, duck typing, `dyn Trait` |
-| `generated` | produced by macro/annotation expansion | Rust `#[derive]`, Lombok, Python decorators, Clojure macros |
+| `generated` | produced by macro/annotation expansion | Rust `#[derive]`, Lombok, Clojure macros, a Python `namedtuple(…)` base (the class inherits `tuple`; no `class` writes it) |
 
 The order above is the order the header dictionary's enum declares.
 

@@ -1,0 +1,3 @@
+"""The stub of a compiled extension: alone, it answers the import."""
+
+def checksum(data: bytes) -> int: ...
