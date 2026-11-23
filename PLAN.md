@@ -1190,7 +1190,9 @@ that it cannot be detected by construction.
 2. **TypeScript** via the TS compiler API — planned in full as Phase 11
    (§14, M13): self-hosting (run codegraph on codegraph), `space: type|value`,
    declaration merging, and the `namespace`-style legacy corpus.
-3. **SCIP adapter** (one effort → Rust + TS + Python via existing indexers).
+3. **SCIP adapter** (one effort → Rust via an existing indexer; TypeScript
+   and Python have extractors of their own, §14 and §23, for which the SCIP
+   indexers are oracles).
 4. **Code city visualization** (`packages/viz`, Three.js + Vite): render the
    analyzed model as a 3D city — districts = modules, buildings = types
    (height/footprint/color mapped to documented metrics), edges as flows.
@@ -1203,6 +1205,11 @@ that it cannot be detected by construction.
    in Rust so no Ruby is needed to build or run it — planned in full as
    Phase 16 (§19, M18): open classes, mixins, and an import layer the source
    does not write.
+7. **Python** via Ruff's parser as a library plus a scope-and-import
+   resolver and a table distilled from typeshed, written in Rust so no Python
+   is needed to build or run it — planned in full as Phase 20 (§23, M22):
+   names bound statically and attributes not at all, annotations as a
+   `derived` tier, and Python 2 read from the recovered tree.
 
 Documented static limits (all languages, per profile `notes`): reflection,
 `Class.forName`/Spring XML, service loaders, pre-expansion macro code.
@@ -2729,7 +2736,7 @@ under one command-line contract (§13.5, schemas/README.md §8) exactly so
 this could be true: the app needs to know nothing about them but that
 contract and the file extensions they claim.
 
-Locked decisions, each with its reason (the delta table in §24 repeats them):
+Locked decisions, each with its reason (the delta table in §25 repeats them):
 
 - **Tauri is the shell, not a runtime.** Window, native menu, folder dialog,
   drag-and-drop, sidecar lifecycle, bundling, signing and notarization. No
@@ -3634,7 +3641,7 @@ file without one of them lying, so they do not share one:
 | will not open | degrade to the `.jsonl`, silently | a usage error naming the file; never overwritten |
 | committed / shared | never | never — the JSONL export is what is committed, diffed and handed to Specy |
 
-Locked decisions, each with its reason (the delta table in §24 repeats them):
+Locked decisions, each with its reason (the delta table in §25 repeats them):
 
 - **The db is the working copy; the JSONL becomes its deterministic export.**
   `<model>.insights.jsonl` keeps its format, its byte-determinism and its
@@ -6661,7 +6668,556 @@ suite's warm-store test (re-stamped records → 0 calls).
 
 ---
 
-## 23. Milestones
+## 23. Phase 20 — Python extractor (Ruff's parser as a library, no Python on the machine) (M22)
+
+Motivation: the sixth real extractor is the first for a language that is
+**exact about names and silent about attributes**. `import` is a statement
+with a literal name, and which binding a bare name reads is decided by the
+compiler before anything runs (the rules `symtable` implements); one dot
+later, `x.y` is a dictionary lookup at run time. Ruby (§19) wrote no import
+layer; Python writes all of it — and then nothing a receiver could be typed
+by, except, sometimes, an annotation the language records and never checks: a
+third state between the typed languages of §5–§14 and the untyped ones of
+§16–§19. Its legacy is of two kinds, and neither runs: Python 2 sources, which
+no Python 3 parses, and applications whose `requirements.txt` no longer
+resolves — and importing a module is the only way Python itself learns what a
+class is.
+
+**What is the Spoon / Roslyn / tsc of Python?** A parser and the compiler's
+scoping rules — the language binds names statically and nothing else.
+
+| Roslyn / `ts` | Python | Role |
+|---|---|---|
+| `SyntaxTree` | **Ruff's parser** (`ruff_python_parser`, astral-sh/ruff): a hand-written recursive-descent parser in Rust with a typed tree, byte offsets, error recovery, and every Python 3 grammar up to the current one in ONE build | syntax with positions — and, through recovery, the declarations of a Python 2 file |
+| `SemanticModel` / `TypeChecker`, for NAMES | the compiler's own rules, static and small: a name assigned in a function is local to it, `global`/`nonlocal` say otherwise, a class body encloses nothing, a comprehension is a scope, then the module, then `builtins` | what a bare name reads is `declared` — the same answer CPython's `symtable` gives |
+| the same, for ATTRIBUTES | **none before the program runs.** What statically stands: the module a name was imported as, the class a name is, `self` inside a class whose bases are written | binding is the interpreter's; the receiver's SHAPE decides what may be said (§23.4) |
+| the BCL ref pack / `lib.*.d.ts` / the OTP table / the RBS core table | **typeshed `stdlib/`** at a pinned commit — `builtins.pyi` and every module of `VERSIONS` — distilled to a table and embedded | what `Exception`, `os.path`, `enum.Enum` are on a machine with nothing installed |
+| `IErrorTypeSymbol` | an import neither the corpus nor the table answers | a third-party module, whichever distribution ships it — stubbed under the dotted name the source writes, never guessed |
+
+So the baseline is a **scope-and-import resolver over Ruff's tree** against a
+whitelist of what the corpus writes. It is noClasspath by construction — no
+`site-packages`, no virtual environment — and, like Ruby's, it extracts a file
+with syntax errors from the tree the parser recovered. For Python that is not
+a courtesy to broken files: it is what makes a Python 2 file an input.
+
+**This is the first extractor whose parser is not the language's own**, and
+§19 rejected tree-sitter-ruby for being exactly that. The difference is stated
+here, measured below, and then held by an oracle (§23.6): CPython's parser
+exists only inside a CPython. It reads one grammar — its own version's —
+rejects a file whole at the first error, and therefore reads no Python 2 at
+all; a model built on it would depend on which interpreter the machine has.
+Prism was CRuby's parser *and* a library; Python has no such thing, and of the
+second implementations Ruff's is the one that reads every version, recovers,
+and is run daily over most of PyPI.
+
+The alternatives, and why they are not the baseline:
+
+| Candidate | What it is | Verdict |
+|---|---|---|
+| **CPython's `ast`** (an extractor written in Python) | the language's own parser | not the baseline, for the three reasons above plus the one of §19 principle 1 (no dependable single-binary packager). It becomes the **parity oracle**: on every file CPython accepts, the model's declarations must be `ast`'s |
+| **Importing the project and introspecting** (`sys.modules`, `inspect`, `__mro__`) | the truth, after every metaclass and decorator ran | never the extractor — it runs corpus code (§5.2) and a legacy application does not import. It is the `--trace` enrichment of M22c, produced by the user inside a project that still runs |
+| **ty** (`ty_python_semantic`), **pyright**, **mypy** | type checkers with inference | enrichments and oracles, not a baseline. ty is 0.0.96 (2026-11-03) and says of itself that it has no stable API; all three need the third-party packages resolvable to type a receiver, which is what a legacy corpus lacks. Pyright, through scip-python, is the **reference oracle**. A typed-receiver pass on ty is deferred (§23.10) — its crates sit in the same repository and tag as the parser |
+| **A SCIP adapter over scip-python** — what §10 pencilled in for Python | an existing indexer | the §14 verdict on scip-typescript, verbatim: occurrences, not kinds, traits, containment or provenance; and it needs Node and an installed environment. Its output is a lower bound of this extractor's, which is what an oracle is |
+| **tree-sitter-python** | a parser with a CST | rejected as the front end — no version awareness, a third grammar — though the metrics pass already links it for measures (§18). Its tolerance of Python 2 is not needed (measured below) |
+| **Jedi, parso, LibCST, `rustpython-parser`** | editor inference; parsers | Jedi and LibCST need a Python; `rustpython-parser` is the ancestor Ruff's parser replaced, and today republishes it |
+
+**Measured before planning** (2026-11-21, a throw-away crate, nothing
+committed):
+
+| Question | Result |
+|---|---|
+| Does the parser build as a dependency? | yes, as a **git** dependency: tag `0.16.4` builds in 22 s on Rust 1.95; the closure is 60 crates, all Rust — **no bindgen, no libclang** (§19.1's trap does not exist here); a release binary of parser + visitor is 2.3 MB |
+| Is it on crates.io? | no. The crate describes itself as "an internal component crate of Ruff", version `0.0.x`. Two unofficial republications exist (`rustpython-ruff_python_parser`, `littrs-ruff-python-parser`): a third party's snapshot of someone else's code, not used |
+| What does the pin cost? | Ruff's Rust floor moves with it: `1.91` at 0.15.0, `1.95` at 0.16.0, `1.97` at 0.17.0, **`1.98` at 0.17.6** (the latest). `0.16.4` is the newest tag the Rust on this machine (1.95) builds |
+| Python 2: what survives recovery? | CPython 2.7.18's own `Lib/`, 1 612 files, parsed in 0.34 s: 590 files with syntax errors. Against `lib2to3` — the Python 2 grammar, as CPython 3.12 still ships it — on the 1 601 files it reads too: **classes 8 348 = 8 348, functions 34 934 = 34 934, import statements 8 464 = 8 464, zero files differing**; inside the 586 erroring files alone, 4 394 / 20 614 / 4 248, all equal. A hand-written file of nothing but Python 2 forms (`print` statement, `except E, e`, backticks, `<>`, `exec`, a tuple parameter): 14 errors, 2 of 2 classes, 4 of 4 functions |
+| …and what is not measured | on Python 2 the counts agree, not yet each (name, line); and what recovery does to a BODY (the calls inside a `print` statement) is unknown. Both are M22c's (§23.6) |
+| Valid Python 3: is the tree CPython's? (M22a's first step, run 2026-11-21 on tag 0.17.6) | by (file, line, kind, name), against `ast` under CPython 3.12: the 3.12 standard library, 1 757 files accepted — **85 712 declarations on each side** (13 605 classes, 60 334 functions, 11 773 import statements), none only in one; requests, 37 files, 1 131, the same. The parser decision is not reopened |
+| Does it read typeshed? | `stdlib/` as Ruff 0.16.4 vendors it (commit `6fba3ae7`): 752 `.pyi`, **zero syntax errors**, 3 240 classes, 17 290 functions, `builtins.pyi` alone 110 classes. `VERSIONS` gives each module its range, removed ones included (`asynchat: 3.0-3.11`). The table's generator needs no second grammar |
+| What did the corpus say the plan had missed? | 24 of the 1 612 files are **not UTF-8**. Prism read bytes and honoured the magic comment; this parser takes a `&str`. Decoding is the extractor's (§23.8) |
+
+Four principles, locked up front:
+
+1. **The parser without the interpreter — and without Python.** The extractor
+   never imports a corpus module, never reads a virtual environment, and is
+   written in Rust (§19 principle 1, the same three reasons: one grammar per
+   machine's interpreter, no single-binary packager, a Rust release pipeline
+   already there).
+2. **No metamodel intelligence.** It knows the Python id scheme, the kind →
+   traits table and how to write bytes. The cross-language gate
+   (`packages/core/test/fixtures-python.test.ts`) is where the two halves meet.
+3. **Byte-identity across OS and across install state.** Ruff is pinned by
+   tag and `Cargo.lock` holds its commit; the table is named by typeshed
+   commit; the header names both. An external module is keyed by the dotted
+   name the source writes, never by a path into `site-packages`.
+4. **Every provenance earns its place.** `declared` for what the source
+   writes and the scoping rules bind — a name, an import, a class named at
+   the site, `self` along written bases; `derived` for what flow or an
+   ANNOTATION says (a local assigned `Foo()`, a parameter written `repo:
+   Repo`) and for attribution to a sole library ancestor; `generated` and
+   `dynamic-candidate` for what only the trace knows (M22c).
+
+**Confirmed before M22a** (2026-11-21 — the five recommendations, each with
+the answer it was preferred to; Rust on this machine is 1.100 since):
+
+| Decision | Confirmed | The other answer |
+|---|---|---|
+| the parser | Ruff's, in Rust — the first not the language's own | CPython's `ast`, in Python: no Python 2, no partial files, a Python on every machine |
+| the pin | the newest tag when M22a starts (0.17.6 today): `rustup update stable` here, 1.95 → ≥ 1.98; CI installs stable already | `0.16.4`, which builds on today's toolchain and lacks half a year of grammar |
+| an annotated receiver (`repo: Repo` … `repo.find()`) | **`derived`**, counted apart as `annotation-typed` — the interpreter never checks an annotation, so a `declared`-only analysis must not hold it (invariant 2). M22c measures the tier against pyright and reports the agreement | `declared`: what a codebase that runs mypy in CI would say of itself |
+| standard library vs. third party | two reserved roots, `<stdlib>` and `<site>` — "which third-party packages does this module need" is the first question asked of a Python model | one root, Ruby's `<gems>`: nothing to maintain, and `os` beside `django` |
+| the writer (canonical order, JSON bytes, surrogates: ≈ 780 lines of `extractors/ruby`) | lifted into a path crate both extractors depend on — FIRST, as a pure refactor whose gate is Ruby's snapshot, byte for byte | copied: no shipped extractor is touched; two copies each held to core's bytes by the two-encoder gate |
+
+### 23.1 Toolchain and repository layout
+
+```
+extractors/python/                     Cargo package `codegraph-python`, standalone (its own [workspace])
+  Cargo.toml                           ruff_python_parser + ruff_python_ast + ruff_text_size: ONE git tag;
+                                       Cargo.lock holds the commit, every build is --locked
+  src/
+    cli.rs                             the extractor contract (schemas/README.md §8)
+    corpus.rs                          pass 0: walk (ordinal order), read as bytes, PEP 263 decoding, the import roots
+    declarations.rs                    pass 1: what one file WRITES — scopes and their bindings, defs, classes, imports,
+                                       assignments, and every SITE (a name read, an attribute and the shape of its
+                                       receiver, a base, a decorator, a raise). THE ONLY FILE THAT NAMES A ruff_* TYPE
+    scopes.rs                          the binding rules: local / global / nonlocal / free, class and comprehension scopes
+    resolve.rs                         the module table (dotted name → file), import resolution, re-export chains,
+                                       star imports, the MRO (C3), attribute lookup
+    stdlib_table.rs                    the embedded table: builtins, modules and their version ranges, classes, bases, members
+    ids.rs                             THE Python id scheme (§23.3): keys, escaping
+    extraction.rs                      passes 2–4: entities, edges, stubs
+    stats.rs                           what was dropped and why — the summary
+  tests/contract.rs                    the snapshot byte for byte, determinism (CRLF, creation order), the CLI contract
+  data/typeshed-stdlib-<commit>.tsv    the generated table, committed
+  data/stdlib-py2.txt                  the module index of the Python 2.7 Library Reference, with its URL (M22b)
+  tools/stdlib-table/                  the generator: THE SAME PARSER over `<typeshed>/stdlib/**/*.pyi` + `VERSIONS` —
+                                       a separate package, so the extractor links no generator
+  trace/codegraph_trace.py             the run-time trace (M22c): one file, standard library only
+bin/codegraph-python                   runs target/release/codegraph-python
+fixtures/python/src/                   the reference corpus: `acme_order`, `src/`-layout
+fixtures/python/expected/model.jsonl   + model.metrics.jsonl: the same model after the metrics pass (§18)
+```
+
+- **Building needs Rust at the pinned tag's floor and a C compiler** (`psm`,
+  for the parser's stack growth); running needs nothing. `rust-version` in
+  `Cargo.toml` is the tag's, so `cargo` says why an old toolchain fails.
+- **A git dependency, because there is no other.** The tag is what a human
+  reads, the lock's commit is what is built; `RUFF_TAG` in `src/lib.rs` is
+  restated for the header and pinned to `Cargo.toml` by a test (the
+  `PRISM_VERSION` shape). A bump is a deliberate change that regenerates the
+  snapshot — and may raise the Rust floor.
+- **The parser's API is internal and unversioned.** It is met in ONE file:
+  `declarations.rs` turns the tree into the extractor's own records, and a
+  boundary test keeps `ruff_` out of every other source. A bump breaks the
+  build there or nowhere.
+- **No Python anywhere in the toolchain**, the table's generator included.
+- A third-party notice: 60 crates and typeshed-derived data (Apache-2.0)
+  ship in the binary — `--licenses`, generated as `codegraph-metrics`
+  generates its own.
+
+### 23.2 Mapping table (Python profile) — and the profile corrections M22 forces
+
+`packages/core/src/profiles/python.ts` predates M10, M12 and M13; the first
+M22 commit is `feat(core): python profile v2`, data before implementation
+(invariant 8), each change with its reason:
+
+| Change | Why |
+|---|---|
+| kind `decorator` removed; edge `annotationUse` added | the TypeScript rule (§14.2): a decorator application is annotation usage, with its written `arguments`. An entity per application would be the only nameless, bodiless kind in any profile, and `edge:annotationUse>name:route` (§22.3) must mean in Python what it means in Java |
+| kind `lambda` removed | a lambda is one expression: it contributes to the invocable that writes it (the Ruby block rule, §19.2). TypeScript keeps `arrowFunction` because an arrow IS how its functions are written; `f = lambda: …` is the variable `f` |
+| `variable` is a MODULE-level binding only; `TWithLocalVariables` removed from `function` and `method` | nothing declares a Python local — its first assignment is its declaration — so a local is flow, not structure (the Ruby and Elixir shape). A module global is structure: `settings.DEBUG`, `app = Flask(__name__)`, `logger` are what other files read |
+| `TWithChildren` required on `function` and `method` | parameters and nested `def`/`class` are written in them (the Ruby `method` shape) |
+| `TChildOf` removed from `module` | the profile linked a submodule to its package's `__init__`. A namespace package (PEP 420) has none, so the tree would hold for some packages and not others; and a file is not WRITTEN in another file (invariant 5). Directories carry the nesting, as for TypeScript and Ruby |
+| `TWithInvocations`, `TWithAccesses` optional on `module` | a module body is executable — the §14.2 correction, verbatim |
+| `TMetrics` optional on `module`, `class`, `function`, `method`; `TWithValue` on `variable`, `attribute`, `parameter` | M10b, M10c |
+| edge `throws` added | `raise` sites |
+| `interfaceImplementation` stays in the profile; the extractor writes none | a Protocol is structural: conformance is a `derived` analyzer enrichment (the §14.2 decision), never mixed in |
+| lexicon: `fileKinds: ["module"]`, `qualified: { module: "/" }` (it says `"."`) | the module's name is its path (§23.3), whose extension is not a word |
+| notes rewritten: star imports, duck typing, synthesized members; new: escaping, the annotation tier, Python 2 | a star import's names ARE attributed when its target is known (below); an untyped receiver is dropped and COUNTED, never a `dynamic-candidate` from the extractor (the §13.2 decision) |
+| `lang` stays `python` | `core` owns the vocabulary; the prefix of every key |
+
+Kinds (`TComment`, `TMetrics` optional wherever it makes sense):
+
+| kind | required traits | Python construct |
+|---|---|---|
+| `module` | `TNamed, TModule, TWithChildren` | a source file, an `__init__.py` included — a package IS that file. Every reserved and external module is this kind |
+| `class` | `TNamed, TType, TWithInheritances, TWithChildren, TChildOf, TSourceAnchor` | `class`, at any depth; a `namedtuple(…)` / `NamedTuple(…)` / `TypedDict(…)` / `Enum(…)` call bound to a module name (M22b) |
+| `function` | `TNamed, TInvocable, TWithChildren, TWithParameters, TWithInvocations, TWithAccesses, TTypedEntity, TChildOf, TSourceAnchor` | `def` / `async def` in a module or a function |
+| `method` | the same | `def` directly in a class body — `@staticmethod` and `@classmethod` included |
+| `attribute` | `TNamed, TStructural, TTypedEntity, TChildOf, TSourceAnchor` | a class-level assignment or annotation, and `self.x = …` in a method: ONE entity per class and name (M22b) |
+| `variable` | `TNamed, TStructural, TTypedEntity, TChildOf` | a module-level assignment (M22b) |
+| `parameter` | `TNamed, TStructural, TTypedEntity, TChildOf` | every parameter; `*args` and `**kwargs` have names |
+
+Construct → what the model says (M22a unless marked):
+
+| Python construct | model |
+|---|---|
+| `import a.b.c`, `import a.b.c as m` | `import` file → the file `a.b.c` names, `declared` |
+| `from a.b import c` | where `a.b` binds `c` at its top level: `import` → the file of `a.b`; else where `a/b/c.py` or `a/b/c/__init__.py` exists: `import` → that file — the order Python itself tries, and the rule of the oracle (§23.6) |
+| `from . import x`, `from ..models import Y` | the same, from the importing file's own directory: arithmetic on the path, no root involved |
+| an import no corpus file answers | `import` → a stub module: `<stdlib>` when the table names it, else `<site>`, keyed by the dotted name as written |
+| a name reached through a re-export (`acme/__init__.py` writes `from .order import Order`; a file writes `from acme import Order`) | the `import` names `acme/__init__.py` — what the source writes; every `reference` and `invocation` of `Order` names the class in `acme/order.py` — what it is (the TypeScript `export … from` rule). Chains are followed to the declaration, cycle-guarded |
+| `from x import *` | the `import`; and its names are bound: `__all__` where it is a literal list, else every public top-level name — for a corpus module and for the table's (M22b) |
+| an import under `try`/`except ImportError`, under `if`, inside a function, `if TYPE_CHECKING:` | an `import` like any other, module-level (the Java fold); the last is counted `type-checking-only` (§23.10) |
+| `importlib.import_module("a.b")`, `__import__("x")` with a literal | `import`, `declared`; a computed name is dropped `computed-import` (M22b) |
+| `class A(B, C)` | `inheritance` A → B and A → C, `declared`, each anchored at its base. The order is not in the model (the profile's note stays); the lookup uses it |
+| `class A(Generic[T])`, `class A(Base[int])` | `inheritance` to the subscripted name; the arguments are `reference`s |
+| `class A(namedtuple("A", "x y"))` | `inheritance` A → `<builtins>/tuple`, **`generated`**; each field an `attribute` (M22b) — the `Struct.new` rule of §19.2 |
+| `class A(make_base())`, `six.with_metaclass(M, B)` | dropped and counted `computed-base`; the type is marked as one whose members no line lists |
+| `P = namedtuple("P", "x y")`, `NamedTuple("P", […])`, `TypedDict("T", {…})`, `Enum("Color", "RED GREEN")` at module level | a `class` named by the binding, its literal members `attribute`s (M22b) |
+| `def f`, nested `def`, `def` in a class, `async def` | a `function` / `method`; written twice under one name (a platform `if`, a redefinition): ONE entity anchored at the first |
+| `@overload` signatures and their implementation | ONE entity, anchored at the implementation (the §14.2 rule) |
+| `@property` and its `@x.setter` / `@x.deleter` | `method`s, the last two with the `setter` / `deleter` disambiguator; READING `obj.x` is an `access` to the first, not an `invocation` (the C# property rule) |
+| `@staticmethod`, `@classmethod`, `@property` | the language: they shape the entity and the lookup, and are no edge |
+| any other decorator, on a function or a class | `annotationUse` from the decorated entity to what the decorator names, with its literal `arguments` (`@app.route("/orders", methods=["GET"])`). The entity stays the `def`: what the decorator returns in its place is not in the model |
+| a class-level `x: int = 0`, `x = Column(…)`; `self.x = …` in a method; a dataclass field; an `Enum` member | an `attribute`, with its literal `value` when it has one; owned by the root-most corpus ancestor that has the name (the §19.2 field rule). A `def` of the same name in the same class wins the key: the attribute is counted, not an entity (M22b) |
+| a module-level `NAME = …` | a `variable`, with its literal `value`; read from a body, an `access`; written under `global`, an `access` that writes. A `def` or `class` of the same name wins the key (M22b) |
+| a bare name that reads a corpus class or function, not called | `reference` — `isinstance(x, Order)`, `except OrderError`, `Thread(target=run)` (M22b) |
+| an annotation: `x: Order`, `-> Order`, `Optional[Order]`, `list[Order]`, a string annotation `"Order"` | `declaredType` as written; a `reference` to each class it names (M22b). `int`, `str`, `None`, the built-in containers name nothing (the Java primitive rule) |
+| `f(…)`, `Order(…)`, `mod.f(…)`, `Order.create(…)`, `self.total()`, `cls.make()`, `super().save()` | `invocation`, **`declared`**: the callee is a name the scoping rules bind, or an attribute of a receiver whose class is WRITTEN (§23.4). `Order(…)` is `Order.__init__` where a corpus class of the MRO writes one, else the class itself |
+| `len(x)`, `print(…)`, `str(x)`, a method of a literal (`"x".upper()`) | the LANGUAGE: resolved, counted, **no edge** (the §19.2 rule: an arrow from every function to `<builtins>` says nothing) |
+| `os.getcwd()`, `json.dumps(…)` | `invocation` of the stub MODULE — the smallest degraded container a module-level function has (§14.4) |
+| `x = Order(…); x.total()`; `self.repo = Repo()` … `self.repo.find()` | `invocation` or `access`, **`derived`**: a local typed by its one assignment in the function, an attribute only ever assigned one class (M22b) |
+| `def f(repo: Repo): repo.find()`; a field `repo: Repo`; `make().find()` where `def make() -> Repo` | the same edge, **`derived`**, counted `annotation-typed` — an optional or a union with `None` unwrapped, anything wider untyped (M22b) |
+| a member nothing in the corpus declares, where exactly ONE library class stands in the MRO | `invocation` / `access` of that stub, **`derived`**, counted `ancestor-attributed` — where `Order.objects` and `self.assertEqual` land; with two, dropped `ambiguous-ancestor`, the drop naming both (M22b) |
+| the same in a class that writes `__getattr__` / `__getattribute__`, has a `metaclass=`, or a computed base | dropped `unbound-dynamic`: "nothing declares it" is no longer evidence |
+| `x.y` with `x` a bare parameter, a call's result, a subscript | dropped and counted `untyped-receiver` — the stated ceiling |
+| `raise Foo`, `raise Foo(…)`, `raise Foo(…) from e` | `throws` to Foo; `raise e` inside `except Foo as e` → Foo (the clause guarantees it); a bare `raise` nothing; any other value dropped `raise-of-a-value` (M22b) |
+| `--trace`: a base the interpreter holds and no line writes | `inheritance`, **`generated`**, anchored on the class declaration (M22c) |
+| `--trace`: a call made at a site the baseline left unresolved | ONE `invocation`, **`dynamic-candidate`**, `candidates` = every function that site was seen to enter (M22c) |
+| a docstring; else the `#` block directly above a declaration | its `comments`, the coding cookie, the shebang and `# type:` / `# noqa` / `# pylint:` / `# pragma:` directives left out; `sloc` on modules, classes and invocables, `cyclomatic` on invocables (M22b) |
+
+Explicitly NOT extracted in M22, stated in the profile `notes`: members a
+decorator or a metaclass synthesizes (a dataclass's `__init__`, a Django
+model's manager — the class's own fields ARE written and are attributes);
+monkey patching (`Order.total = total`); Protocol conformance; what a string
+names (`ForeignKey("orders.Order")`, `INSTALLED_APPS`, an entry point in
+`pyproject.toml`) — framework semantics, the M10d door; `isinstance`
+narrowing; `# type:` comments; notebooks; Cython.
+
+### 23.3 The Python id scheme (`ids.rs`)
+
+```
+module (file)      python:src%2Facme%2Forder.py                 path relative to the root, escaped
+package            python:src%2Facme%2F__init__.py              a package is its __init__ file
+reserved           python:<builtins>                            what the interpreter binds before any file runs
+standard library   python:<stdlib>%2Fos.path                    a module of the table, as the import writes it
+third party        python:<site>%2Fdjango.db.models             a module nothing here declares, as written
+missing relative   python:src%2Facme%2Fmissing.py               a relative import to a file that is not there
+class              python:src%2Facme%2Forder.py/Order           nested: Order.Line
+function           python:src%2Facme%2Forder.py/total_of        nested: total_of.helper   a local class: make.Local
+method             …/Order.total     accessors: …/Order.total#setter   …/Order.total#deleter
+parameter          …/Order.total#param:currency     …/Order.total#setter#param:value
+attribute          …/Order.lines                    variable: python:src%2Facme%2Fsettings.py/DEBUG
+stub type          python:<builtins>/ValueError     python:<stdlib>%2Fenum/Enum     python:<site>%2Fdjango.db.models/Model
+```
+
+- **The module is the file, and so is its name** (the TypeScript rule,
+  §14.3). The dotted name is not the key because it is not unique —
+  `conftest`, `setup`, `__main__`, `tests.test_models` recur across one
+  repository — and not the name because it depends on which directory is
+  taken for a root, which is an inference (§23.4). A key must not move when a
+  heuristic does.
+- **No arity, no `static` disambiguator.** Python has no overloading, and a
+  class holds one member per name whatever decorates it. The only names the
+  language lets coexist are an accessor's: the disambiguator is the word the
+  source writes after the dot (`@total.setter`).
+- **Escaping, the Ruby rule (§19.3).** `/`, `#`, `%` percent-encoded in every
+  path segment, and `<` so that no walked path can spell a reserved module.
+  A NAME is an identifier and needs none — `.` cannot occur in one, so it is
+  the nesting separator unescaped. Identifiers are NFKC-normalized, as the
+  language normalizes them (the parser does it; a test pins a ligature and
+  its expansion to one key).
+- **An external module is named as the import writes it**, one stub module
+  per dotted name: `django.db` and `django.db.models` are two, as `zod` and
+  `zod/v4` are (§14.3). Which DISTRIBUTION ships a module is written nowhere
+  in the source (`yaml` is PyYAML's), and is not guessed.
+- **A stub's symbol is the name as written at the site**, under the module it
+  was imported from — not where typeshed, or the library, really declares it
+  (`collections.abc.Mapping`, whatever re-exports it).
+
+### 23.4 Stub discipline, the import resolver, the receiver
+
+**The module table and its roots.** A dotted name is a path below a root, and
+Python finds roots in `sys.path`, which no source writes. So:
+
+- **A relative import needs no root** — it is resolved from the importing
+  file's directory, exactly.
+- **A regular package names its own root**: from a file, climb while the
+  directory holds an `__init__.py`; the first directory that does not is the
+  root of that file's dotted name. This is what mypy does, it needs no
+  configuration, and it is exact for `src/` and flat layouts alike.
+- An absolute import is looked up in every root so found, plus the corpus
+  root, plus each `--import-root`; the root NEAREST the importing file wins,
+  and a tie is dropped and counted `ambiguous-root`. A hit that crosses a
+  directory with no `__init__.py` (a namespace package) is counted on its
+  own; so is `implicit-relative` — an absolute import answered only by a
+  sibling of the importing file, which is Python 2's rule inside a package
+  and Python 3's for a script's directory.
+- The corpus answers before the table: a corpus `logging/` at a root shadows
+  the standard library, as it does on `sys.path`.
+- `acme.py` beside `acme/__init__.py`: the package wins, as in Python.
+
+Each of these is a fact about the LAYOUT, not about the language, and is
+named as one on stderr under its own counter (the §14.4 and §19.2 precedent).
+
+**Names.** Pass 1 records every scope's bindings; a name read is looked up as
+the compiler would — the enclosing function scopes (never a class body), the
+module, `builtins`:
+
+| The resolver says | The model says |
+|---|---|
+| bound by a corpus `def`, `class` or assignment — in this file, or through an import chain | the declaration |
+| bound by an import of a module the table has, or a name of it | a stub below `<stdlib>`: a class the table lists is a stub type; a function or a value folds to the stub MODULE (§14.4) |
+| a name of `builtins` | a stub below `<builtins>` ONLY as a base, a `raise` or an `except` target; called or annotated, it is the language: no entity, no edge |
+| bound by an import nothing answers | a stub below `<site>`: a stub CLASS on evidence — a site inherits from it, raises or catches it, or annotates with it — else the stub module |
+| bound only by a star import of ONE unknown module | that module's, `derived`, counted `star-attributed` (the Elixir `import-attributed` rule); with two, dropped |
+| bound by nothing | dropped and counted `unbound-name` — never a guess |
+| a module bound more than one way (`try: import json` / `except: json = None`) | the first binding in source order that names a declaration; counted `rebound-name` |
+
+Resolvability is not membership, and neither is presence on disk: a virtual
+environment below the root is not corpus. It is recognised by what it IS — a
+directory holding `pyvenv.cfg` — not by a name; `site-packages`,
+`__pycache__`, `node_modules` and dot-directories are skipped by name. Code a
+repository vendors (`_vendor/`) is written there and is corpus.
+
+**Attributes: the shape of the receiver decides everything** (the §19.4
+table, for a language with annotations):
+
+| Receiver | Looked up in | Provenance |
+|---|---|---|
+| a module (`import a.b` … `a.b.f`, `import x as m` … `m.f`) | that module's top-level bindings, through re-exports; a submodule where a component names one | `declared` |
+| a class named at the site (`Order.create`, `Order.MAX`) | its MRO | `declared` |
+| `self` / `cls` — the first parameter of a method, by what decorates it — and `super()` | the enclosing class's MRO; `super()` from the next class in it | `declared` |
+| a local assigned `Foo(…)` once in the function; an attribute only ever assigned one class | that class's MRO | **`derived`** — flow |
+| a parameter, attribute or call result ANNOTATED with a class | that class's MRO | **`derived`** — written, and unchecked |
+| a literal | the literal's class | the language: no edge |
+| anything else | nothing | dropped, `untyped-receiver` |
+
+The MRO is C3 over the bases that resolve; a base that does not (a call, a
+`<site>` stub) ends the certain part of the chain, and says which library
+could answer what the corpus does not. What answers decides the edge, as in
+§19.4: a corpus `def` → `invocation`; a `@property` or an attribute →
+`access`; nothing, and one library ancestor → the `derived` attribution;
+two → `ambiguous-ancestor`; none → `unbound-self-call`; a class with
+`__getattr__`, a metaclass or a computed base → `unbound-dynamic`.
+
+### 23.5 The extractor command-line contract, plus three flags
+
+Same flag shape and exit codes as every extractor (`schemas/README.md §8`).
+Its own: `--import-root <dir>` (repeatable — a root no `__init__.py`
+betrays, as `PYTHONPATH` would name it; it changes how imports resolve and no
+key), `--explain-dropped` (the §19.5 listing: `dropped <reason>: <file>:<line>
+<what>`, no byte of the model changed), and `--trace <file>` (M22c).
+`stdout` carries nothing but `--help` / `--version`:
+
+```
+syntax errors (recovered, n): src/acme_order/legacy/report.py
+decoded (not UTF-8, n): src/acme_order/legacy/latin.py (iso-8859-1)
+RESOLUTION SUMMARY
+  files           : n (with syntax errors: n; not UTF-8: n)
+  sites           : n
+  resolved        : n (corpus n, <stdlib> n, <site> n, the language n)
+  unresolved      : n
+  resolution rate : n %
+  untyped-receiver (dropped)  : n
+  unbound-self-call (dropped) : n
+  …
+  annotation-typed            : n
+  ancestor-attributed         : n
+  imports         : n (relative n; by package root n, by namespace package n, implicit-relative n;
+                       <stdlib> n, <site> n; type-checking-only n)
+  entities        : n (stubs: n)
+  edges           : n (self-edges dropped: n)
+```
+
+A **site** is a name read, an attribute, a base, a decorator, an annotation's
+class, a `raise`; the rate is over the sites that named something, the
+language included. The drops ARE the list the counts are derived from
+(`listed == counted`, a contract test — the §19.8 guard, from the start).
+
+**`--trace <file>` (M22c)** merges what `trace/codegraph_trace.py` wrote from
+inside the running program: `python <repo>/extractors/python/trace/
+codegraph_trace.py -m pytest`, or a script in `-m`'s place. One file,
+standard library only, Python ≥ 3.8 (`sys.monitoring` from 3.12,
+`sys.setprofile` before); it runs the PROJECT's code, which the extractor
+never does. At exit it reads `sys.modules` for what lives under the root —
+each class's bases, each function's file and first line — and, with
+`CODEGRAPH_TRACE_CALLS=1`, the calls it saw. JSONL, names and positions,
+**never a key**. Merged after the baseline, under §19.5's three rules: a base
+no line writes is a `generated` `inheritance`; a call at an unresolved site
+is one `dynamic-candidate` `invocation`; a function the interpreter holds on
+a line with no `def` is counted and gets no entity. No entity is added and no
+edge of the source changes: a tested property.
+
+### 23.6 Validation (the M2 gate, replayed a sixth time)
+
+- **Walking skeleton first** (M22a): one corpus in, `codegraph validate`
+  green, snapshot committed, the core gate (parses as a `Model`;
+  byte-identical to core's encoder; ZERO profile issues; closed; no
+  self-edges; the stub-discipline evidence by id).
+- **The fixture corpus** `fixtures/python/src` — `acme_order`, `src/`-layout,
+  each file pinning one hazard (its README lists them). M22a: a regular
+  package and a namespace package; a re-export chain through two
+  `__init__.py`; relative imports one and two levels up; `from a import b`
+  where `b` is a name and where it is a submodule; a missing relative import;
+  an import by sibling; two `conftest.py`; `acme.py` beside `acme/`; a
+  diamond; a built-in exception, a `<stdlib>` base and a `<site>` base; a
+  nested class, a nested function, a class in a function; every parameter
+  shape; a `def` written twice; a Python 2 file; a file with a real syntax
+  error; a Latin-1 file with its cookie and one with a BOM; a `#` in a file
+  name; a non-ASCII identifier and its NFKC twin; a directory holding
+  `pyvenv.cfg` that must not appear. M22b adds what a body says: every
+  receiver shape of §23.4 with its provenance; an annotated parameter, an
+  optional, a string annotation; `__all__` and a star import, one unknown and
+  two; `property` with its setter, `@overload`, a decorator with arguments;
+  a dataclass, both spellings of a named tuple, an `Enum`; `global` and
+  `nonlocal`, a comprehension's scope, a lambda that is no entity;
+  attribution to one library ancestor and the refusal with two; a class with
+  `__getattr__`; `raise` in each of its forms; `importlib.import_module`
+  literal and computed; `match`, a walrus, a PEP 695 `class A[T]`; a `.pyi`
+  beside its `.py` and one alone; a shebang script with no extension.
+- **The metrics pass** (§18): `python` joins the five features of
+  big-code-analysis 2.2.0 — it has the grammar — and `"python" =>
+  LANG::Python` the join; a sixth `model.metrics.jsonl`, hand-counted on one
+  function, the witness `sloc = ploc` stated with whatever it does not join.
+- **Extractor-side tests** (cargo): the walker, the scopes, the resolver and
+  the writer as unit tables; `tests/contract.rs` holds the library to the
+  snapshot byte for byte, to a CRLF copy created in reverse order, and to the
+  CLI contract.
+- **The audit (M22c)**, five corpora, each model `validate`-clean, reported
+  as §19.6's table (files, sites, resolved, entities and stubs, edges, time):
+
+  | corpus | what it is there to measure |
+  |---|---|
+  | requests | a plain library: the import resolver, a flat layout |
+  | Django | metaclasses and strings: the ceiling, and where `ancestor-attributed` and `unbound-dynamic` land |
+  | Zulip (a Django application under mypy) | the annotation tier at its best, on application code |
+  | CPython 3.x `Lib/` | a corpus that IS the table: every import must resolve to a corpus file and none to `<stdlib>` — the §19.4 misreading, measured |
+  | CPython 2.7.18 `Lib/` | Python 2 from the recovered tree: declarations by name and line, and what a body loses |
+
+- **The oracles (M22c)** — each run in a container, since the extractor's
+  build machine needs no Python and must not be trusted to have the right one:
+  1. **Parity with CPython's `ast`** — the oracle this language needs and
+     Ruby did not. On every file of the audit CPython accepts, each
+     `ClassDef`, `FunctionDef`, `AsyncFunctionDef` and import statement, by
+     (file, line, name), against the model's entities and import sites; the
+     only differences allowed are the stated folds (a redefinition, an
+     overload). For the Python 2 corpus, `lib2to3` under CPython 3.12 stands
+     in — the count parity already measured, now by name and line.
+  2. **The import graph, against grimp** (the engine of import-linter, which
+     reads imports statically as Packwerk read constants): on Django, the
+     module → module edges of both, each difference classified.
+  3. **References, against pyright** (scip-python, on a corpus with its
+     environment installed): for every site where the model wrote an edge,
+     does pyright name the same definition? Reported PER PROVENANCE:
+     `declared` must agree up to documented rules — a disagreement is a bug —
+     and the `derived` tiers are measured (`annotation-typed`, flow-typed,
+     `ancestor-attributed`), which is the evidence the annotation decision
+     above is confirmed or reversed on. And the converse: what pyright
+     resolves that the baseline dropped — the ceiling, with its cause.
+  4. **Import time** (the trace on requests' own tests): of the functions the
+     model declares in the files that were imported, how many the interpreter
+     holds on the same line; how many it holds that no line writes; of the
+     calls observed, how many are edges the baseline wrote.
+
+### 23.7 Distribution
+
+One binary per platform from a runner of its own OS, the `ruby-native` shape
+(§19.7) without its `libclang-dev` step: `codegraph-python-<rid>`, each
+re-extracting the fixture and `cmp`ed with the snapshot; `python` in the
+release job's copy loop; the `python` row of `BINARY_EXTRACTORS` in
+`scripts/homebrew/render.mjs` (so `Formula/codegraph-python.rb` depends on the
+pass like every extractor) with its `render.test.mjs` case; the `python` row
+of the app's catalogue (`extensions: [".py", ".pyi", ".pyw"]`) with its
+discovery test. All of it is M22c; M22a ships `bin/codegraph-python` over
+`target/release/`. A release that renders the tap then needs the four
+`codegraph-python-<rid>` sums: the job, the loop and the row land together.
+
+### 23.8 Hazards, each with the test that pins it
+
+| Hazard | Where it shows | Guard |
+|---|---|---|
+| the parser takes a `&str`; a source need not be UTF-8 | 24 of the 1 612 files of CPython 2.7's `Lib/` | pass 0 reads bytes, honours a BOM and the PEP 263 cookie of the first two lines, decodes UTF-8, Latin-1, ASCII and cp1252 itself; any other encoding is read lossily (U+FFFD) and COUNTED. The file is never rejected |
+| Python has three line endings: `\n`, `\r\n` and a lone `\r` | a 2003 file saved on a Mac | lines are the parser's, not a count of `\n` (§19.8's rule is wrong here); a fixture file with lone `\r`, and the CRLF determinism test |
+| the parser recurses | a generated module of one 10 000-term expression | the crate's `stacker` feature, and the walker on a thread with a stated stack; a test at the depth that overflows without them |
+| a git dependency on a tag someone else can move | a rebuild fetches other code | `Cargo.lock`'s commit, `--locked` everywhere, `RUFF_TAG` pinned to `Cargo.toml` by a test |
+| the parser's API is internal, version `0.0.x` | a bump renames a node | one file names `ruff_` types (a boundary test); a bump is a reviewed change that regenerates the snapshot |
+| Ruff's Rust floor rises about every six weeks | a bump fails on a machine one release behind | `rust-version` is the tag's; CI builds on stable; README names the floor |
+| identifiers are NFKC-normalized by the language | `ﬁle` and `file` are one name | the parser normalizes; a test with the pair |
+| one dotted name in two places | two `conftest.py`, two `tests/` | the key is the path; the resolver takes the nearest root and counts a tie |
+| a corpus module named like a standard one | `logging/`, `types.py`, `queue.py` at a root | the corpus answers first; CPython's own `Lib/` in the audit is the limit case |
+| `if TYPE_CHECKING:` imports | a cycle the Cycles tab shows and the program never has — the idiom exists to break it | written, so emitted; counted `type-checking-only`, the count in the profile note; the mark itself deferred (§23.10) |
+| setuptools' `build/lib/` | every module twice | measured on the audit before a rule is written; no directory is skipped on its name alone |
+| a re-export or a star import that loops | `a/__init__` from `b`, `b` from `a` | fixed point with a visited set; a fixture pair |
+| a conditional definition | `if sys.platform == "win32": def f` … `else: def f` | one entity anchored at the first; both bodies' edges are its own |
+| an attribute and a `def` of one name | `self.total = 0` beside `def total` | the `def` holds the key; the attribute is counted |
+| a virtual environment inside the root | 40 000 files that are not the corpus | `pyvenv.cfg`, not a directory name |
+| canonical order, JSON bytes, `\` separators, enumeration order, symlinked directory cycles | as §19.8 | the same guards, from the shared writer |
+| a trace that names what the model does not hold | a function a decorator made | counted, never an entity: the entities with and without a trace are the same lines |
+
+### 23.9 Milestone split
+
+- **M22a — profile v2 + skeleton + contract.** The writer lifted out of
+  `extractors/ruby` (Ruby's snapshot unchanged, byte for byte);
+  `feat(core): python profile v2` (§23.2) and the registry test;
+  `extractors/python/` on the pinned parser with the embedded table and its
+  generator; the walking skeleton — files and their decoding, the import
+  roots, classes, functions, methods and parameters at every nesting,
+  imports (absolute, relative, the submodule rule, re-export chains), bases,
+  the three stub roots — → `fixtures/python/expected/model.jsonl`
+  byte-identical to core's encoder and profile-valid with zero issues; the
+  core gate; `bin/codegraph-python`; `build.sh --python` / `test.sh
+  --python` with the release-binary `cmp`; `python-test` in CI. *First
+  step, before any of it:* the parity script of §23.6 on the fixture and on
+  requests — if `ast` and the recovered tree part on valid Python 3, the
+  parser decision is reopened here, not in M22c.
+- **M22b — the model.** `attribute` and `variable`; scopes and the name
+  tiers; the receiver table of §23.4 with its provenances; star imports;
+  `annotationUse`, `access`, `reference`, `throws`; synthetic classes;
+  annotations and `declaredType`; comments; `sloc` + `cyclomatic`, literals;
+  the Python 2 module list; `.pyi` and shebang files; `python` in the
+  metrics pass and a sixth `model.metrics.jsonl`; the full fixture with its
+  README; the fixture in every per-fixture suite (core, analyzer
+  conformance, city, navigator, vocabulary, CLI `validate`, and M21a's
+  goldens if they exist by then); every CLI command verified on it; city and
+  navigator screenshots reviewed.
+- **M22c — audit + oracles + distribution.** The five corpora and the four
+  oracles of §23.6; the trace file and `--trace`; the defects found named in
+  the profile notes with their counts; the annotation decision confirmed or
+  reversed on the pyright numbers; binaries on four Unix runners, the
+  registry entry, the formula; `--licenses`; `docs/python-extractor.md`, the
+  website's extractor, install and profile pages (the last is generated),
+  README, CLAUDE.md.
+
+Definition of done: `fixtures/python/expected/model.jsonl` byte-identical to
+core's encoder and profile-valid with zero issues; the same bytes from the
+binary on every runner; declarations equal to CPython's `ast` on every file
+it accepts, up to the stated folds; the import graph equal to grimp's on
+Django up to the documented differences; `declared` edges agreeing with
+pyright up to documented rules, the `derived` tiers measured; the audit
+numbers in the profile notes; `./test.sh` and CI green with the Python
+fixture in every per-fixture suite.
+
+### 23.10 Deferred, explicitly
+
+- **A typed-receiver pass on ty**, when it has an API to pin: the largest
+  single gain left (`untyped-receiver` is the ceiling), from crates of the
+  same repository and tag — `derived`, behind a flag, never the baseline.
+- **A mark on a type-only import** (`if TYPE_CHECKING:`): a core change — the
+  import edge has no place for it, and Python declares no `space` — to make
+  when the audit's count says what the Cycles tab is being shown.
+- **A PyPI wheel** of the binary (`uvx codegraph-python`; the channel Ruff
+  itself uses, and this language's npm): not while npm's trusted publishing
+  fails behind a green job (v0.2.0, v0.3.0) — a second registry of the same
+  shape is not added on top of a red one.
+- Framework semantics (Django's string references and `INSTALLED_APPS`,
+  FastAPI's `Depends`, entry points) — M10d's door, per framework.
+- Notebooks (the parser reads cells), `# type:` comments, `isinstance`
+  narrowing, a literal monkey patch as `attachedTo`, `ABC.register` as a
+  declared `interfaceImplementation`, roots read from `pyproject.toml`, a
+  Windows binary, Cython (not Python's grammar).
+
+## 24. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -6714,8 +7270,11 @@ suite's warm-store test (re-stamped records → 0 calls).
 | M21b | Generalized walk — selectors and selection | ✅ (2026-11-22, branch `feat/walk-generalized`) steps 3–4: `selectors.ts` in `@codegraph/analyzer` (id, kind, trait, lang, name, module, file, `edge`, `edge-in`, and/or/not in the JSON form; edges read through the view; core's vocabulary or a usage error); the five selection rules of §22.3 as properties; `--scope` ≡ `--include id:` byte for byte |
 | M21c | Generalized walk — definitions and their store | ✅ (2026-11-22, branch `feat/walk-generalized`) steps 5–6: `codegraph.walk/1` (defaults, field grammar → Zod → strict schema, entity instructions) compiled to a spec whose fingerprint hashes what the definition says — and nothing for the built-in; one store per walk (`<model>.N.walk.db` + export), no migration, a foreign name refused, a changed digest said before the spend; round trip the identity |
 | M21d | Generalized walk — `codegraph walk` | ✅ (2026-11-22, branch `feat/walk-generalized`; live on PetClinic through Claude Code: 83 calls, 0 failed, 200 779 + 43 814 tokens, $0.94, a second run 0 calls; the estimate 12.4 % above the billed input and, on the guessed 500 per block, 5.3 % below the billed output — replaced by the run's means, operation 500, type 620, §22.5) steps 7–8: one shared runner under `walk` and `explain`, `explain` configurable (`--include`/`--exclude`/`--levels`/`--closure`/`--instructions`/`--walk`) with its blocks untouched, `insights --walk`; a live filtered walk on PetClinic measured against its estimate; docs with schema-checked examples |
+| M22a | Python extractor — profile v2 + skeleton | §23.9: the parity script run first (CPython's `ast` against the recovered tree, on the fixture and on requests); `python` profile v2 in core (`decorator` and `lambda` no longer kinds, `annotationUse` and `throws` added, the module's name its path) and the registry test; `extractors/python/` in Rust on Ruff's parser pinned by tag, the typeshed table embedded and its generator beside it; the walking skeleton — decoding, import roots, classes / functions / methods / parameters at every nesting, absolute and relative imports with the submodule rule and re-export chains, bases, the stub roots `<builtins>` / `<stdlib>` / `<site>` — → `fixtures/python/expected/model.jsonl` byte-identical to core's encoder, profile-valid with zero issues; the core gate; `bin/codegraph-python`, `build.sh --python`, `test.sh --python` with the release-binary `cmp`; `python-test` in CI |
+| M22b | Python extractor — model | `attribute` and `variable`; scopes and the name tiers of §23.4; every receiver shape with its provenance (`declared` where the class is written, `derived` for flow, for an annotation and for a sole library ancestor); star imports bound; `annotationUse` with written arguments, `access`, `reference`, `throws`; synthetic classes; `declaredType`; comments, `sloc` + `cyclomatic`, literals; `.pyi` and shebang files; `python` in the metrics pass and a sixth `model.metrics.jsonl`; the full fixture in every per-fixture suite; every CLI command verified on it; city and navigator screenshots reviewed |
+| M22c | Python extractor — audit + oracles + distribution | requests, Django, Zulip, CPython 3.x `Lib/` and CPython 2.7.18 `Lib/` audited `validate`-clean; declarations equal to CPython's `ast` up to the stated folds; the import graph against grimp on Django; references against pyright per provenance, the annotation decision confirmed or reversed on those numbers; `trace/codegraph_trace.py` and `--trace`; binaries on four Unix runners, the registry entry, the formula, `--licenses`; `docs/python-extractor.md`, the website pages, README, CLAUDE.md |
 
-## 24. Decisions made in this plan (deltas vs. the design doc)
+## 25. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|
@@ -6838,3 +7397,10 @@ suite's warm-store test (re-stamped records → 0 calls).
 | Port and adapters (M20) | `LlmClient` is the port; OpenRouter, Cloudflare AI Gateway and Claude Code are adapters behind it, each holding its transport behind one function; the Anthropic API is a named empty slot (§21.6), not a stub | the walk, the store and the CLI never learn a provider; a fourth adapter is one file and one entry in `providers.ts` |
 | Claude Code as a subprocess (M20) | the user's own `claude` binary in headless mode — `--safe-mode` (not `--bare`, which drops OAuth), tools off, no session, the system prompt replaced, the user prompt on stdin | the installation, login and version are the user's; no second SDK enters the workspace; argv has a 128 KB per-argument limit |
 | Provider precedence (M20) | `auto` takes the single configured provider; with several, OpenRouter, then Cloudflare, then Claude Code, the reason naming the flag for the others; `--model` defaults per provider (`sonnet` on Claude Code) | an exported key is a deliberate act, an installed CLI is ambient; `openai/gpt-5.6-luna` means nothing to Claude Code |
+| Python front end (M22) | Ruff's parser (`ruff_python_parser`, a git dependency pinned by tag, its commit in `Cargo.lock`) plus the compiler's scoping rules, an import resolver and a table distilled from typeshed `stdlib/`; CPython's `ast`, grimp and pyright as ORACLES; importing the project only as the `--trace` enrichment; ty deferred until it has an API to pin | Python binds names before it runs and nothing else. CPython's parser exists only inside a CPython: one grammar per interpreter, a file rejected whole at its first error, no Python 2 — while the recovered tree, measured on CPython 2.7.18's `Lib/` against `lib2to3`, holds every class, function and import statement (8 348 / 34 934 / 8 464, no file differing). The first parser here that is not the language's own, and so the first held by a parity oracle |
+| Python extractor host (M22) | written in Rust; no Python to build or to run, the table's generator included (the same parser reads typeshed's 752 stubs with no error) | the §19 reasons, unchanged: an extractor in Python reads whichever grammar the machine's interpreter has, Python has no dependable single-binary packager, and the repository ships one Rust binary per platform. No bindgen this time: the closure is 60 Rust crates |
+| Python module identity (M22) | the module is the file, keyed AND named by its path; a package is its `__init__.py`; no parent link between modules | a dotted name is not unique in a repository (`conftest`, `tests.test_models`) and depends on which directory is taken for a root — an inference, and a key must not move when a heuristic does. A namespace package has no `__init__` to be a parent, and a file is not written in another file (invariant 5) |
+| Python import roots (M22) | relative imports by path arithmetic; a regular package names its own root (climb while `__init__.py`); the nearest root wins, a tie is dropped; namespace-package hits and `implicit-relative` counted on their own; `--import-root` for what no file betrays | `sys.path` is written nowhere. Each rule is a fact about the layout, not the language, and is counted as one (the §14.4 and §19.2 precedent) so a rate never hides which half resolved |
+| Python external keys (M22) | `<builtins>` (what the interpreter binds before any file runs), `<stdlib>` (every module of typeshed's `VERSIONS` at a pinned commit, removed ones included, plus the Python 2.7 module index), `<site>` (everything else), a module named by the dotted name as written | unlike Ruby's default gems, the union of `VERSIONS` only grows, so keys do not move with the interpreter; and standard library against third party is the first cut a Python reader makes. A distribution's name is written nowhere in the source and is not guessed |
+| Python call provenance (M22b) | `declared` when a name is bound by the scoping rules, or an attribute's receiver is a module, a class named at the site, or `self` along written bases; `derived` for flow, for an ANNOTATED receiver (counted `annotation-typed`), and for attribution to a sole library ancestor; an untyped receiver is dropped, never guessed | invariant 2: the interpreter never checks an annotation, so a `declared`-only analysis must not hold what it says. The tier is counted apart and measured against pyright in M22c — the decision is made to be reversible on numbers |
+| Python profile corrections (M22a) | `decorator` → an `annotationUse` edge; `lambda` and function locals are not entities; `variable` is a module-level binding; `throws` added; `interfaceImplementation` kept and never written by the extractor | the decisions M10c, M13 and M18 took after the profile was written: a decorator application is annotation usage with arguments, a lambda contributes to what writes it, a local is flow. A module global is structure — it is what other files read |
