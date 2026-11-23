@@ -118,23 +118,34 @@ counts the script prints.
 
 ## The metamodel diagrams are generated, and inlined
 
-`assets/diagrams/traits-metamodel.svg` is the trait vocabulary of
-`METAMODEL.md` §3, drawn by `scripts/traits-diagram.mjs` in the style of the
-Specy metamodel diagrams: the entity in the middle, the seven trait families
-around it, one box per trait saying what it contributes, a dashed box for a
-marker. To regenerate it after the vocabulary or a label changes:
+Two diagrams restate `METAMODEL.md` in the style of the Specy metamodel
+diagrams, one sheet each, drawn by one kit (`scripts/diagram-kit.mjs`: the
+grid, the palette, the font metrics, the boxes and connectors):
+
+- `assets/diagrams/traits-metamodel.svg` (§3), by `scripts/traits-diagram.mjs`:
+  the entity in the middle, the seven trait families around it, one box per
+  trait saying what it contributes, a dashed box for a marker.
+- `assets/diagrams/edges-metamodel.svg` (§4), by `scripts/edges-diagram.mjs`:
+  the edge in the middle, its eleven kinds in four families by what they
+  connect, its four provenance values (a dashed one an inference, as every
+  rendering draws it), the entities at its ends, its anchor and its profile.
+
+To regenerate one after the vocabulary or a label changes:
 
 ```bash
 node scripts/traits-diagram.mjs > assets/diagrams/traits-metamodel.svg
-pnpm --filter @codegraph/website test    # node --test scripts/traits-diagram.test.mjs
+node scripts/edges-diagram.mjs > assets/diagrams/edges-metamodel.svg
+pnpm --filter @codegraph/website test    # node --test scripts/*-diagram.test.mjs
 ```
 
-The test is what keeps a committed drawing honest. It fails when the file is
-not the script's output, when the boxes are not exactly the traits and trait
-keys of `schemas/` (the committed contract `core` generates), and when a box
-links to a heading its page no longer has.
+The tests are what keep a committed drawing honest. Each fails when its file
+is not the script's output, when the boxes are not exactly the vocabulary and
+record keys of `schemas/` (the committed contract `core` generates), and when
+a box links to a heading its page no longer has; the edges test also fails
+when a kind is drawn in a family whose section of the edges page does not list
+it.
 
-A page embeds it with `{{< metamodel-diagram "traits-metamodel" >}}`, which
+A page embeds one with `{{< metamodel-diagram "traits-metamodel" >}}`, which
 **inlines** the SVG rather than pointing an `<img>` at it: every box is a link
 to its section, and the hover and focus states are rules in the SVG's own
 stylesheet — neither exists inside an `<img>`. The figure opts out of Hextra's

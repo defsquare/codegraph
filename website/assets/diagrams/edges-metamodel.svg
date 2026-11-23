@@ -1,0 +1,176 @@
+<svg class="mm-diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 1678" role="group" aria-label="The edges of the Codegraph metamodel">
+<desc>An edge connects two entities and is stored once, outgoing. Its 11 kinds, in 4 families by what they connect, each with its ends and the attributes it adds; its 4 provenance values, a dashed one an inference.</desc>
+<defs><style>@import url(&quot;https://fonts.googleapis.com/css2?family=EB+Garamond:wght@700&amp;display=swap&quot;);@font-face{font-family:&quot;IBM Plex Sans Condensed&quot;;font-style:normal;font-weight:400;font-display:swap;src:url(&quot;/fonts/IBMPlexSansCondensed-Regular.ttf&quot;) format(&quot;truetype&quot;)}@font-face{font-family:&quot;IBM Plex Sans Condensed&quot;;font-style:normal;font-weight:700;font-display:swap;src:url(&quot;/fonts/IBMPlexSansCondensed-Bold.ttf&quot;) format(&quot;truetype&quot;)}.mm-b{font-family:&quot;IBM Plex Sans Condensed&quot;,&quot;Arial Narrow&quot;,&quot;Liberation Sans Narrow&quot;,Arial,Helvetica,sans-serif;font-weight:700;fill:#1b2935}.mm-r{font-family:&quot;IBM Plex Sans Condensed&quot;,&quot;Arial Narrow&quot;,&quot;Liberation Sans Narrow&quot;,Arial,Helvetica,sans-serif;font-weight:400;fill:#1b2935}.mm-t{font-family:&quot;EB Garamond&quot;,Garamond,&quot;Times New Roman&quot;,Times,serif;font-weight:700;fill:#1c2631}.mm-c{fill:none;stroke:#e46765;stroke-linecap:round;stroke-linejoin:round}.mm-diagram a{text-decoration:none;cursor:pointer;outline:none}.mm-node path,.mm-group rect,.mm-diagram a text{transition:stroke .15s,fill .15s}.mm-node:hover path,.mm-node:focus-visible path{stroke:#e46863;stroke-width:3;fill:#fff}.mm-group:hover rect,.mm-group:focus-visible rect{stroke:#e46863;stroke-width:3}.mm-node:hover text,.mm-node:focus-visible text,.mm-group:hover text,.mm-group:focus-visible text,.mm-link:hover text,.mm-link:focus-visible text{fill:#e46863}.mm-logo:focus-visible{outline:2px solid #e46863;outline-offset:4px}</style>
+<filter id="mm-shadow" x="-5%" y="-15%" width="112%" height="132%"><feDropShadow dx="6" dy="6" stdDeviation="3.5" flood-color="#000" flood-opacity="0.4"/></filter></defs>
+<rect width="1320" height="1678" fill="#ebebeb"/>
+<rect x="11.5" y="10.5" width="1297" height="1657" fill="none" stroke="#1e2d3b" stroke-width="3" stroke-dasharray="11 8.634"/>
+<rect x="260" y="35.5" width="800" height="159" rx="27" fill="#fff" stroke="#1c2631" stroke-width="3" filter="url(#mm-shadow)"/>
+<text class="mm-t" font-size="63.1" text-anchor="middle" x="660" y="101">Codegraph Metamodel</text>
+<text class="mm-t" font-size="63.1" text-anchor="middle" x="660" y="170">Edges</text>
+<g class="mm-groups">
+<a href="/docs/reference/metamodel/edges/#modularity" class="mm-group" aria-label="Modularity: 2 edge kinds">
+<rect x="46" y="820" width="384" height="298" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="68" y="857" textLength="144.7" lengthAdjust="spacingAndGlyphs">MODULARITY</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#types" class="mm-group" aria-label="Types: 4 edge kinds">
+<rect x="46" y="250" width="384" height="486" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="68" y="287" textLength="69.7" lengthAdjust="spacingAndGlyphs">TYPES</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#behavior" class="mm-group" aria-label="Behavior: 3 edge kinds">
+<rect x="890" y="250" width="384" height="486" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="912" y="287" textLength="115.5" lengthAdjust="spacingAndGlyphs">BEHAVIOR</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#references" class="mm-group" aria-label="References: 2 edge kinds">
+<rect x="890" y="820" width="384" height="298" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="912" y="857" textLength="142.3" lengthAdjust="spacingAndGlyphs">REFERENCES</text>
+</a>
+<a href="/docs/reference/metamodel/provenance/" class="mm-group" aria-label="Provenance: 4 values">
+<rect x="468" y="250" width="384" height="486" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="490" y="287" textLength="149.3" lengthAdjust="spacingAndGlyphs">PROVENANCE</text>
+</a>
+</g>
+<g class="mm-edges">
+<path class="mm-c" stroke-width="2.5" d="M544.8,845 C544.8,790.5 353.2,790.5 353.2,736"/>
+<path class="mm-c" stroke-width="2.5" d="M660,845 C660,790.5 660,790.5 660,736"/>
+<path class="mm-c" stroke-width="2.5" d="M775.2,845 C775.2,790.5 966.8,790.5 966.8,736"/>
+<path class="mm-c" stroke-width="2.5" d="M500,969 C465,969 465,969 430,969"/>
+<path class="mm-c" stroke-width="2.5" d="M820,969 C855,969 855,969 890,969"/>
+<path class="mm-c" stroke-width="2.5" d="M519.2,1093 C519.2,1147.5 153,1147.5 153,1202"/>
+<path class="mm-c" stroke-width="2.5" d="M564,1093 C564,1147.5 374,1147.5 374,1202"/>
+<path class="mm-c" stroke-width="2.5" d="M660,1093 C660,1147.5 660,1147.5 660,1202"/>
+<path class="mm-c" stroke-width="2.5" d="M775.2,1093 C775.2,1147.5 980,1147.5 980,1202"/>
+</g>
+<g class="mm-cards">
+<text class="mm-r" font-size="28.65" x="298" y="768" textLength="45.2" lengthAdjust="spacingAndGlyphs">0..1</text>
+<text class="mm-r" font-size="28.65" x="670" y="768" textLength="15.5" lengthAdjust="spacingAndGlyphs">1</text>
+<text class="mm-r" font-size="28.65" x="976.8" y="768" textLength="45.2" lengthAdjust="spacingAndGlyphs">0..1</text>
+<text class="mm-r" font-size="28.65" x="440" y="960" textLength="45.2" lengthAdjust="spacingAndGlyphs">0..1</text>
+<text class="mm-r" font-size="28.65" x="834.8" y="960" textLength="45.2" lengthAdjust="spacingAndGlyphs">0..1</text>
+<text class="mm-r" font-size="28.65" x="66.5" y="1191" textLength="76.5" lengthAdjust="spacingAndGlyphs">from 1</text>
+<text class="mm-r" font-size="28.65" x="318.9" y="1191" textLength="45.1" lengthAdjust="spacingAndGlyphs">to 1</text>
+<text class="mm-r" font-size="28.65" x="670" y="1191" textLength="15.5" lengthAdjust="spacingAndGlyphs">1</text>
+<text class="mm-r" font-size="28.65" x="990" y="1191" textLength="15.5" lengthAdjust="spacingAndGlyphs">1</text>
+</g>
+<g class="mm-nodes">
+<a href="/docs/reference/metamodel/edges/#attributes" class="mm-node" aria-label="Edge">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M507.5,845 Q500,845 500,852.5 L500,1085.5 Q500,1093 507.5,1093 L812.5,1093 Q820,1093 820,1085.5 L820,852.5 Q820,845 812.5,845 Z"/>
+<text class="mm-b" font-size="45.1" x="612.5" y="906" textLength="95" lengthAdjust="spacingAndGlyphs">Edge</text>
+<text class="mm-r" font-size="21.5" x="592" y="939" textLength="135.9" lengthAdjust="spacingAndGlyphs">edge: EdgeKind</text>
+<text class="mm-r" font-size="21.5" x="585.7" y="967" textLength="148.5" lengthAdjust="spacingAndGlyphs">from, to: EntityId</text>
+<text class="mm-r" font-size="21.5" x="552.4" y="995" textLength="215.2" lengthAdjust="spacingAndGlyphs">provenance: Provenance</text>
+<text class="mm-r" font-size="21.5" x="563.4" y="1023" textLength="193.2" lengthAdjust="spacingAndGlyphs">anchor: SourceAnchor</text>
+<text class="mm-r" font-size="21.5" x="561.4" y="1051" textLength="197.2" lengthAdjust="spacingAndGlyphs">candidates?: EntityId[]</text>
+<text class="mm-r" font-size="21.5" x="580.2" y="1079" textLength="159.5" lengthAdjust="spacingAndGlyphs">sourceFile?: string</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#rules" class="mm-node" aria-label="Entity: the rules on an edge's ends">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,1202 Q68,1202 68,1209.5 L68,1308.5 Q68,1316 75.5,1316 L400.5,1316 Q408,1316 408,1308.5 L408,1209.5 Q408,1202 400.5,1202 Z"/>
+<text class="mm-b" font-size="28.65" x="201.7" y="1242" textLength="72.5" lengthAdjust="spacingAndGlyphs">Entity</text>
+<text class="mm-r" font-size="21.5" x="100.7" y="1270" textLength="274.6" lengthAdjust="spacingAndGlyphs">from ≠ to, each known or a stub</text>
+<text class="mm-r" font-size="21.5" x="122.7" y="1298" textLength="230.5" lengthAdjust="spacingAndGlyphs">stored once: outgoing only</text>
+</a>
+<a href="/docs/reference/profiles/" class="mm-node" aria-label="Language Profile">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M497.5,1202 Q490,1202 490,1209.5 L490,1308.5 Q490,1316 497.5,1316 L822.5,1316 Q830,1316 830,1308.5 L830,1209.5 Q830,1202 822.5,1202 Z"/>
+<text class="mm-b" font-size="28.65" x="557.3" y="1242" textLength="205.4" lengthAdjust="spacingAndGlyphs">Language Profile</text>
+<text class="mm-r" font-size="21.5" x="520.1" y="1270" textLength="279.7" lengthAdjust="spacingAndGlyphs">licenses, per language, the edge</text>
+<text class="mm-r" font-size="21.5" x="555" y="1298" textLength="209.9" lengthAdjust="spacingAndGlyphs">kinds its extractor emits</text>
+</a>
+<a href="/docs/reference/metamodel/identity/#sourceanchor" class="mm-node" aria-label="SourceAnchor">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M919.5,1202 Q912,1202 912,1209.5 L912,1284.5 Q912,1292 919.5,1292 L1244.5,1292 Q1252,1292 1252,1284.5 L1252,1209.5 Q1252,1202 1244.5,1202 Z"/>
+<text class="mm-b" font-size="28.65" x="996.2" y="1246" textLength="171.6" lengthAdjust="spacingAndGlyphs">SourceAnchor</text>
+<text class="mm-r" font-size="21.5" x="943.1" y="1274" textLength="277.8" lengthAdjust="spacingAndGlyphs">file and span: where it is written</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#modularity" class="mm-node" tabindex="-1" aria-label="import (Modularity)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,876 Q68,876 68,883.5 L68,958.5 Q68,966 75.5,966 L400.5,966 Q408,966 408,958.5 L408,883.5 Q408,876 400.5,876 Z"/>
+<text class="mm-b" font-size="28.65" x="197.4" y="920" textLength="81.3" lengthAdjust="spacingAndGlyphs">import</text>
+<text class="mm-r" font-size="21.5" x="160.3" y="948" textLength="155.4" lengthAdjust="spacingAndGlyphs">Module → Module</text>
+<circle cx="388" cy="896" r="7" fill="#e46765"/>
+</a>
+<a href="/docs/reference/metamodel/edges/#modularity" class="mm-node" tabindex="-1" aria-label="fileInclude (Modularity)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,982 Q68,982 68,989.5 L68,1064.5 Q68,1072 75.5,1072 L400.5,1072 Q408,1072 408,1064.5 L408,989.5 Q408,982 400.5,982 Z"/>
+<text class="mm-b" font-size="28.65" x="171.1" y="1026" textLength="133.7" lengthAdjust="spacingAndGlyphs">fileInclude</text>
+<text class="mm-r" font-size="21.5" x="148.5" y="1054" textLength="178.9" lengthAdjust="spacingAndGlyphs">CodeFile → CodeFile</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#types" class="mm-node" tabindex="-1" aria-label="inheritance (Types)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,306 Q68,306 68,313.5 L68,388.5 Q68,396 75.5,396 L400.5,396 Q408,396 408,388.5 L408,313.5 Q408,306 400.5,306 Z"/>
+<text class="mm-b" font-size="28.65" x="168.5" y="350" textLength="139" lengthAdjust="spacingAndGlyphs">inheritance</text>
+<text class="mm-r" font-size="21.5" x="182.4" y="378" textLength="111.3" lengthAdjust="spacingAndGlyphs">Type → Type</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#types" class="mm-node" tabindex="-1" aria-label="interfaceImplementation (Types)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,412 Q68,412 68,419.5 L68,494.5 Q68,502 75.5,502 L400.5,502 Q408,502 408,494.5 L408,419.5 Q408,412 400.5,412 Z"/>
+<text class="mm-b" font-size="28.65" x="83.9" y="456" textLength="308.2" lengthAdjust="spacingAndGlyphs">interfaceImplementation</text>
+<text class="mm-r" font-size="21.5" x="100.5" y="484" textLength="274.9" lengthAdjust="spacingAndGlyphs">Type → interface, trait, protocol</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#types" class="mm-node" tabindex="-1" aria-label="embedding (Types)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,518 Q68,518 68,525.5 L68,600.5 Q68,608 75.5,608 L400.5,608 Q408,608 408,600.5 L408,525.5 Q408,518 400.5,518 Z"/>
+<text class="mm-b" font-size="28.65" x="169.6" y="562" textLength="136.8" lengthAdjust="spacingAndGlyphs">embedding</text>
+<text class="mm-r" font-size="21.5" x="182.4" y="590" textLength="111.3" lengthAdjust="spacingAndGlyphs">Type → Type</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#types" class="mm-node" tabindex="-1" aria-label="traitUsage (Types)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,624 Q68,624 68,631.5 L68,706.5 Q68,714 75.5,714 L400.5,714 Q408,714 408,706.5 L408,631.5 Q408,624 400.5,624 Z"/>
+<text class="mm-b" font-size="28.65" x="174.4" y="668" textLength="127.1" lengthAdjust="spacingAndGlyphs">traitUsage</text>
+<text class="mm-r" font-size="21.5" x="121.6" y="696" textLength="232.8" lengthAdjust="spacingAndGlyphs">Type → trait, mixin module</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#behavior" class="mm-node" tabindex="-1" aria-label="invocation (Behavior)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M919.5,306 Q912,306 912,313.5 L912,412.5 Q912,420 919.5,420 L1244.5,420 Q1252,420 1252,412.5 L1252,313.5 Q1252,306 1244.5,306 Z"/>
+<text class="mm-b" font-size="28.65" x="1018.5" y="346" textLength="127.1" lengthAdjust="spacingAndGlyphs">invocation</text>
+<text class="mm-r" font-size="21.5" x="982.5" y="374" textLength="199" lengthAdjust="spacingAndGlyphs">Invocable → Invocable</text>
+<text class="mm-r" font-size="21.5" x="983.4" y="402" textLength="197.2" lengthAdjust="spacingAndGlyphs">candidates?: EntityId[]</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#behavior" class="mm-node" tabindex="-1" aria-label="access (Behavior)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M919.5,436 Q912,436 912,443.5 L912,542.5 Q912,550 919.5,550 L1244.5,550 Q1252,550 1252,542.5 L1252,443.5 Q1252,436 1244.5,436 Z"/>
+<text class="mm-b" font-size="28.65" x="1040.9" y="476" textLength="82.2" lengthAdjust="spacingAndGlyphs">access</text>
+<text class="mm-r" font-size="21.5" x="982.4" y="504" textLength="199.2" lengthAdjust="spacingAndGlyphs">Invocable → Structural</text>
+<text class="mm-r" font-size="21.5" x="976.7" y="532" textLength="210.6" lengthAdjust="spacingAndGlyphs">isRead, isWrite: boolean</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#behavior" class="mm-node" tabindex="-1" aria-label="throws (Behavior)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M919.5,566 Q912,566 912,573.5 L912,648.5 Q912,656 919.5,656 L1244.5,656 Q1252,656 1252,648.5 L1252,573.5 Q1252,566 1244.5,566 Z"/>
+<text class="mm-b" font-size="28.65" x="1039.5" y="610" textLength="85" lengthAdjust="spacingAndGlyphs">throws</text>
+<text class="mm-r" font-size="21.5" x="961.4" y="638" textLength="241.3" lengthAdjust="spacingAndGlyphs">Invocable → exception type</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#references" class="mm-node" tabindex="-1" aria-label="reference (References)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M919.5,876 Q912,876 912,883.5 L912,958.5 Q912,966 919.5,966 L1244.5,966 Q1252,966 1252,958.5 L1252,883.5 Q1252,876 1244.5,876 Z"/>
+<text class="mm-b" font-size="28.65" x="1023.1" y="920" textLength="117.9" lengthAdjust="spacingAndGlyphs">reference</text>
+<text class="mm-r" font-size="21.5" x="1022.4" y="948" textLength="119.2" lengthAdjust="spacingAndGlyphs">Entity → Type</text>
+</a>
+<a href="/docs/reference/metamodel/edges/#references" class="mm-node" tabindex="-1" aria-label="annotationUse (References)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M919.5,982 Q912,982 912,989.5 L912,1088.5 Q912,1096 919.5,1096 L1244.5,1096 Q1252,1096 1252,1088.5 L1252,989.5 Q1252,982 1244.5,982 Z"/>
+<text class="mm-b" font-size="28.65" x="993.1" y="1022" textLength="177.8" lengthAdjust="spacingAndGlyphs">annotationUse</text>
+<text class="mm-r" font-size="21.5" x="975.2" y="1050" textLength="213.6" lengthAdjust="spacingAndGlyphs">Entity → annotation type</text>
+<text class="mm-r" font-size="21.5" x="949.4" y="1078" textLength="265.3" lengthAdjust="spacingAndGlyphs">arguments: NamedArgument[]</text>
+</a>
+<a href="/docs/reference/metamodel/provenance/" class="mm-node" tabindex="-1" aria-label="declared (Provenance)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M497.5,306 Q490,306 490,313.5 L490,388.5 Q490,396 497.5,396 L822.5,396 Q830,396 830,388.5 L830,313.5 Q830,306 822.5,306 Z"/>
+<text class="mm-b" font-size="28.65" x="606.4" y="350" textLength="107.3" lengthAdjust="spacingAndGlyphs">declared</text>
+<text class="mm-r" font-size="21.5" x="570.3" y="378" textLength="179.4" lengthAdjust="spacingAndGlyphs">written in the source</text>
+</a>
+<a href="/docs/reference/metamodel/provenance/" class="mm-node" tabindex="-1" aria-label="derived (Provenance)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" stroke-dasharray="9 6" d="M497.5,412 Q490,412 490,419.5 L490,494.5 Q490,502 497.5,502 L822.5,502 Q830,502 830,494.5 L830,419.5 Q830,412 822.5,412 Z"/>
+<text class="mm-b" font-size="28.65" x="613.7" y="456" textLength="92.7" lengthAdjust="spacingAndGlyphs">derived</text>
+<text class="mm-r" font-size="21.5" x="565.4" y="484" textLength="189.2" lengthAdjust="spacingAndGlyphs">computed by analysis</text>
+</a>
+<a href="/docs/reference/metamodel/provenance/" class="mm-node" tabindex="-1" aria-label="dynamic-candidate (Provenance)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" stroke-dasharray="9 6" d="M497.5,518 Q490,518 490,525.5 L490,600.5 Q490,608 497.5,608 L822.5,608 Q830,608 830,600.5 L830,525.5 Q830,518 822.5,518 Z"/>
+<text class="mm-b" font-size="28.65" x="541.8" y="562" textLength="236.4" lengthAdjust="spacingAndGlyphs">dynamic-candidate</text>
+<text class="mm-r" font-size="21.5" x="533.9" y="590" textLength="252.2" lengthAdjust="spacingAndGlyphs">unresolved dispatch: a guess</text>
+</a>
+<a href="/docs/reference/metamodel/provenance/" class="mm-node" tabindex="-1" aria-label="generated (Provenance)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" stroke-dasharray="9 6" d="M497.5,624 Q490,624 490,631.5 L490,706.5 Q490,714 497.5,714 L822.5,714 Q830,714 830,706.5 L830,631.5 Q830,624 822.5,624 Z"/>
+<text class="mm-b" font-size="28.65" x="597.9" y="668" textLength="124.3" lengthAdjust="spacingAndGlyphs">generated</text>
+<text class="mm-r" font-size="21.5" x="524.9" y="696" textLength="270.2" lengthAdjust="spacingAndGlyphs">macro or annotation expansion</text>
+</a>
+</g>
+<g class="mm-legend">
+<a href="/docs/reference/metamodel/edges/#modularity" class="mm-link" aria-label="import: the first-class layer, comparable across languages">
+<circle cx="497.2" cy="1382" r="7" fill="#e46765"/>
+<text class="mm-r" font-size="21.5" x="533.2" y="1389" textLength="240.8" lengthAdjust="spacingAndGlyphs">import: the first-class layer,</text>
+<text class="mm-r" font-size="21.5" x="533.2" y="1416" textLength="258.8" lengthAdjust="spacingAndGlyphs">comparable across languages</text>
+</a>
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M481.2,1443 Q475.2,1443 475.2,1449 L475.2,1465 Q475.2,1471 481.2,1471 L513.2,1471 Q519.2,1471 519.2,1465 L519.2,1449 Q519.2,1443 513.2,1443 Z"/>
+<text class="mm-r" font-size="21.5" x="533.2" y="1464" textLength="203.7" lengthAdjust="spacingAndGlyphs">fact: the source says so</text>
+<a href="/docs/reference/metamodel/provenance/#consequences" class="mm-link" aria-label="inference: every rendering dashes it">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" stroke-dasharray="9 6" d="M481.2,1491 Q475.2,1491 475.2,1497 L475.2,1513 Q475.2,1519 481.2,1519 L513.2,1519 Q519.2,1519 519.2,1513 L519.2,1497 Q519.2,1491 513.2,1491 Z"/>
+<text class="mm-r" font-size="21.5" x="533.2" y="1512" textLength="311.6" lengthAdjust="spacingAndGlyphs">inference: every rendering dashes it</text>
+</a>
+</g>
+<a href="/" class="mm-logo" aria-label="Codegraph"><g transform="translate(539,1573)"><g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"><g><text font-family="Helvetica-Bold, Helvetica, Arial, &quot;Liberation Sans&quot;, &quot;Nimbus Sans&quot;, sans-serif" font-size="40" font-weight="bold" fill="#1A2A36"><tspan x="19.9140625" y="39" textLength="204.484" lengthAdjust="spacingAndGlyphs">codegraph</tspan></text><g transform="translate(227.000000, 0.000000)" fill="#F65E5E"><path d="M15,0 L15,7 L15,48 L14.999,48 L15,49 L-1.77635684e-15,49 L-1.77635684e-15,42 L8,42 L7.999,7 L-1.77635684e-15,7 L-1.77635684e-15,0 L15,0 Z"></path></g><g fill="#F65E5E"><path d="M-8.8817842e-16,0 L15,8.8817842e-16 L15,7 L6.999,6.999 L7,42 L15,42 L15,49 L0,49 L-8.8817842e-16,0 Z"></path></g></g></g></g></a>
+</svg>

@@ -9,7 +9,7 @@
     "build": "pnpm run viz && if command -v hugo >/dev/null 2>&1; then hugo --minify --gc; else echo 'hugo not installed: website build skipped' >&2; fi",
     "dev": "pnpm run viz && hugo server -D --port 1314",
     "typecheck": "true",
-    "test": "node --test scripts/traits-diagram.test.mjs"
+    "test": "node --test scripts/traits-diagram.test.mjs scripts/edges-diagram.test.mjs"
   },
   "devDependencies": {
     "@codegraph/viz": "workspace:*"
