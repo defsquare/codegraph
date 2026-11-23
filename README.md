@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)"
-            srcset="website/static/img/codegraph-logo-long-white-text-red-brackets.svg">
+            srcset="website/static/img/codegraph-logo-long-dark-blue-text-red-brackets.svg">
     <img src="website/static/img/codegraph-logo-long-dark-blue-text-red-brackets.svg"
          alt="Codegraph" width="340">
   </picture>
