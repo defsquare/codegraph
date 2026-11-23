@@ -1,6 +1,6 @@
 {
   "name": "@codegraph/vocabulary",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "license": "MIT",
   "type": "module",
   "description": "Codegraph vocabulary: the words of a model's names, classified and weighted by the role of what carries them",

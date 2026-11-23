@@ -4,7 +4,7 @@ linkTitle: Python extractor
 weight: 14
 ---
 
-`codegraph-python` 0.3.0 — the Python extractor on Ruff's parser. A Cargo package in `extractors/python/`, built as one binary with the parser linked in and a table of the standard library distilled from typeshed embedded, so it needs **nothing installed, Python least of all**, and it runs nothing: no module is imported, no virtual environment or `site-packages` is read. **Every `*.py`, `*.pyw` and `*.pyi` under the roots is parsed**, with any extensionless file whose first line is a `python` shebang; imports resolve against the roots the layout implies, then the embedded table; a file with syntax errors — a whole Python 2 file included — is still extracted from the tree Ruff recovered. It emits [`model.jsonl`](/docs/reference/model-jsonl/) and nothing else: all trait, profile and validation logic lives in `@codegraph/core`.
+`codegraph-python` 0.4.0 — the Python extractor on Ruff's parser. A Cargo package in `extractors/python/`, built as one binary with the parser linked in and a table of the standard library distilled from typeshed embedded, so it needs **nothing installed, Python least of all**, and it runs nothing: no module is imported, no virtual environment or `site-packages` is read. **Every `*.py`, `*.pyw` and `*.pyi` under the roots is parsed**, with any extensionless file whose first line is a `python` shebang; imports resolve against the roots the layout implies, then the embedded table; a file with syntax errors — a whole Python 2 file included — is still extracted from the tree Ruff recovered. It emits [`model.jsonl`](/docs/reference/model-jsonl/) and nothing else: all trait, profile and validation logic lives in `@codegraph/core`.
 
 **Built, not released yet**: the formula and the release assets ship from the release after v0.3.0.
 
@@ -64,7 +64,7 @@ Python binds names when the program runs, so the extractor does the part that is
 - **An import names a file, in the order Python tries.** An absolute import is looked up in the roots the layout implies — a regular package names its own, climbing while the directory holds an `__init__.py` — plus the corpus root and each `--import-root`; the nearest root wins, a tie is dropped (`ambiguous-root`), and for a name the standard library holds only the importing file's own root, the corpus root and an `--import-root` can shadow it. Then the file that is not there below a corpus package, then the standard library's table, then a sibling inside a package (Python 2's implicit relative import), then `<site>`. The header names the table's typeshed commit and the Ruff tag:
 
   ```json
-  {"name":"codegraph-python","version":"0.3.0","ruff":"0.17.6","typeshed":"2e4d4dcf657f82305709bbe3e86bca4d27d4dd46"}
+  {"name":"codegraph-python","version":"0.4.0","ruff":"0.17.6","typeshed":"2e4d4dcf657f82305709bbe3e86bca4d27d4dd46"}
   ```
 
 - **A re-export is an import of what the source writes**, while every `reference` and `invocation` names what the name is: `from acme import Order` imports `acme/__init__.py` and references `acme/order.py`'s class. `from x import *` binds `__all__` where it is one literal list never grown, else every public top-level name.

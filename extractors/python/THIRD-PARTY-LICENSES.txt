@@ -1,4 +1,4 @@
-Third-party software and data in codegraph-python 0.3.0
+Third-party software and data in codegraph-python 0.4.0
 
 This binary is built from the 75 crates below, unmodified (build scripts and
 macros among them), and embeds the data listed first.

@@ -125,7 +125,7 @@ version = "0.0.0"
 
 [[package]]
 name = "codegraph-python"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "codegraph-model",
  "ruff_python_ast",

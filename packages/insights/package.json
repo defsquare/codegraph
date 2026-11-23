@@ -1,6 +1,6 @@
 {
   "name": "@codegraph/insights",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "license": "MIT",
   "type": "module",
   "description": "Codegraph insights: the bottom-up walk of a model that feeds an LLM each unit's source and its dependencies' explanations, and the side-car artifact holding the explanations — pure computation, no network",

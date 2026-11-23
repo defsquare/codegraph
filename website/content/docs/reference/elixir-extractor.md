@@ -4,7 +4,7 @@ linkTitle: Elixir extractor
 weight: 12
 ---
 
-`codegraph-elixir` 0.3.0 — the Elixir extractor on the compiler's own parser. A Mix project in `extractors/elixir/`, built into an **escript** and released as one binary that carries its runtime. It is the parser as a library: **every `*.ex` and `*.exs` under the roots is parsed with `Code.string_to_quoted/2`**, names resolve through a lexical scope and a table of what the BEAM ships, nothing is compiled, no `deps/` is read, and a file the parser rejects is skipped and counted. It emits [`model.jsonl`](/docs/reference/model-jsonl/) and nothing else: all trait, profile and validation logic lives in `@codegraph/core`.
+`codegraph-elixir` 0.4.0 — the Elixir extractor on the compiler's own parser. A Mix project in `extractors/elixir/`, built into an **escript** and released as one binary that carries its runtime. It is the parser as a library: **every `*.ex` and `*.exs` under the roots is parsed with `Code.string_to_quoted/2`**, names resolve through a lexical scope and a table of what the BEAM ships, nothing is compiled, no `deps/` is read, and a file the parser rejects is skipped and counted. It emits [`model.jsonl`](/docs/reference/model-jsonl/) and nothing else: all trait, profile and validation logic lives in `@codegraph/core`.
 
 ```bash
 brew install defsquare/tap/codegraph-elixir     # Erlang and Elixir inside; Apple silicon, or the release's codegraph-elixir-linux-x64
@@ -59,7 +59,7 @@ Exit codes: `0` success · `1` failure · `2` bad usage · `3` an extraction pas
 - **An OTP table, embedded at build time.** Every module and export of the Elixir and Erlang/OTP the extractor was built with — `Enum` and `:ets` side by side, one VM — the way the Java image carries the API distilled from `ct.sym`. A module in the table is a stub below `<otp>`; a module nothing declares is a stub below `<deps>`; a module declared under the roots is corpus. Membership is never decided by a name prefix. The header names the versions the table was made from:
 
   ```json
-  {"name":"codegraph-elixir","version":"0.3.0","elixir":"1.18.4","otp":"27"}
+  {"name":"codegraph-elixir","version":"0.4.0","elixir":"1.18.4","otp":"27"}
   ```
 
 - **What it cannot see is code that exists only after macro expansion**: what `use Ecto.Schema` injects, a Phoenix router's routes, the `assert` of `use ExUnit.Case`. A local call in a module that `use`s a foreign module is counted as `local_injected` and never guessed; the [`--trace`](#--trace-file-the-compiler-as-the-second-reader) enrichment recovers those from the compiler itself.

@@ -54,7 +54,7 @@ contractual (single-pass streaming): `header → files → entities → edges �
 
 ```jsonc
 {"t":"header","schemaVersion":"1.0.0","lang":"java",
- "extractor":{"name":"codegraph-spoon","version":"0.3.0","noClasspath":true},
+ "extractor":{"name":"codegraph-spoon","version":"0.4.0","noClasspath":true},
  "root":"/work/fineract",
  // optional (M10a): where the analyzed root lives in a hosted repository.
  "repository":{"remote":"https://github.com/apache/fineract",

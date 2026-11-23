@@ -1,6 +1,6 @@
 {
   "name": "@codegraph/navigator",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "license": "MIT",
   "type": "module",
   "description": "Codegraph navigator model: the browsable tree of a model plus per-node dependency detail rows",

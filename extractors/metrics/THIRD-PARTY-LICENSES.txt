@@ -1,4 +1,4 @@
-Third-party software in codegraph-metrics 0.3.0
+Third-party software in codegraph-metrics 0.4.0
 
 This binary links the crates below, unmodified. Those under the Mozilla Public
 License 2.0 are available in source form at:
