@@ -4,7 +4,8 @@
 //   1. `codegraph --version` prints packages/cli/package.json's version — the
 //      asset path of version.ts, not the fallback;
 //   2. `codegraph analyze` on the Java fixture is byte-identical to what the
-//      ESM build prints — one CLI, two builds;
+//      ESM build prints — one CLI, two builds; so is `codegraph query`, which
+//      runs on the SQLite inside the image, and it still refuses a write;
 //   3. `codegraph serve --app` under the fake extractor answers the page from
 //      the image's assets (index.html and the script it references), opens
 //      fixtures/java/src, and hands out /<token>/navigator.json and city.json;
@@ -52,6 +53,20 @@ for (const report of ["deps", "cycles", "coupling"]) {
     `analyze --report ${report} is byte-identical to the ESM build (${fromImage.stdout.length} bytes)`,
     `image exit ${fromImage.status}: ${fromImage.stderr.slice(0, 300)}`,
   );
+}
+
+// 2b. query: the SQLite inside the image answers, byte-identical to the ESM build
+{
+  const args = ["query", fixture, "SELECT kind, count(*) AS n FROM node WHERE is_stub = 0 GROUP BY kind ORDER BY n DESC, kind", "--json"];
+  const fromImage = spawnSync(image, args, { encoding: "utf8", cwd: ROOT });
+  const fromEsm = spawnSync(process.execPath, [join(CLI_DIR, "dist", "index.js"), ...args], { encoding: "utf8", cwd: ROOT });
+  check(
+    fromImage.status === 0 && fromImage.stdout === fromEsm.stdout && fromImage.stdout.includes("codegraph.queryResult/1"),
+    `query --json is byte-identical to the ESM build (${fromImage.stdout.length} bytes)`,
+    `image exit ${fromImage.status}: ${fromImage.stderr.slice(0, 300)}`,
+  );
+  const refused = spawnSync(image, ["query", fixture, "VACUUM INTO 'sea-smoke-must-not-exist.db'"], { encoding: "utf8", cwd: ROOT });
+  check(refused.status === 2 && refused.stdout === "", "query refuses a statement that writes (exit 2)", `exit ${refused.status}: ${refused.stderr.slice(0, 200)}`);
 }
 
 // 3. serve --app from the image's own assets

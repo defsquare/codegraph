@@ -72,6 +72,11 @@ const SUCCESS_CASES: readonly Case[] = [
     argv: ["export", FIXTURE, "--format", "csv", "--level", "type", "--declared-only"],
     expected: EXIT.OK,
   },
+  { why: "a query over the store", argv: ["query", FIXTURE, "SELECT kind, count(*) AS n FROM node GROUP BY kind"], expected: EXIT.OK },
+  { why: "a query with a bound parameter, as json", argv: ["query", FIXTURE, "SELECT id FROM node WHERE kind = :kind", "--param", "kind=package", "--json"], expected: EXIT.OK },
+  // No row is an answer, not a failure: the header and "0 rows." on stderr.
+  { why: "a query that finds nothing", argv: ["query", FIXTURE, "SELECT id FROM node WHERE 0", "--csv"], expected: EXIT.OK },
+  { why: "the helper views' SQL", argv: ["query", "--views"], expected: EXIT.OK },
   { why: "the corpus's words", argv: ["vocabulary", FIXTURE], expected: EXIT.OK },
   {
     why: "the words per type, as json",
@@ -132,6 +137,15 @@ const USAGE_CASES: readonly Case[] = [
     expected: EXIT.USAGE,
   },
   { why: "a positional profiles does not take", argv: ["profiles", FIXTURE], expected: EXIT.USAGE },
+  // A statement SQLite or the read-only rule refuses is a mistake in what was
+  // typed: never a bug in codegraph (1), never a finding about the model (3).
+  { why: "a query with no statement", argv: ["query", FIXTURE], expected: EXIT.USAGE },
+  { why: "a query that writes", argv: ["query", FIXTURE, "DELETE FROM entity"], expected: EXIT.USAGE },
+  { why: "a query that copies the store to a file", argv: ["query", FIXTURE, "VACUUM INTO '/tmp/codegraph-must-not-exist.db'"], expected: EXIT.USAGE },
+  { why: "two statements in one query", argv: ["query", FIXTURE, "SELECT 1; SELECT 2"], expected: EXIT.USAGE },
+  { why: "a query SQLite cannot compile", argv: ["query", FIXTURE, "SELECT nope FROM node"], expected: EXIT.USAGE },
+  { why: "a query parameter nobody gave", argv: ["query", FIXTURE, "SELECT id FROM node WHERE id = :id"], expected: EXIT.USAGE },
+  { why: "a query on a model that is not there", argv: ["query", "/no/such/directory/model.jsonl", "SELECT 1"], expected: EXIT.USAGE },
   { why: "an unknown language", argv: ["profiles", "--lang", "klingon"], expected: EXIT.USAGE },
   { why: "an unknown word class", argv: ["vocabulary", FIXTURE, "--class", "nouns"], expected: EXIT.USAGE },
   { why: "an unknown role to weigh", argv: ["vocabulary", FIXTURE, "--weights", "class=8"], expected: EXIT.USAGE },
@@ -184,6 +198,7 @@ const FINDING_CASES: readonly Case[] = [
     expected: EXIT.FINDINGS,
   },
   { why: "the words of a model with a self edge", argv: ["vocabulary", models.selfEdge], expected: EXIT.FINDINGS },
+  { why: "a query on a file that is not a model", argv: ["query", models.malformedJson, "SELECT 1"], expected: EXIT.FINDINGS },
 ];
 
 /**
