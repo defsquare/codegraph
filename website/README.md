@@ -30,6 +30,9 @@ one deployment.
 | `layouts/_partials/landing/` | the landing's four partials, namespaced |
 | `assets/css/colors_and_type.css` | the design system's token layer, copied from the Defsquare Design System project |
 | `assets/css/landing.css` | layout only — every colour, size and space is a token |
+| `assets/css/custom.css` | the documentation's additions to Hextra (the theme's own hook); the landing never loads it |
+| `assets/diagrams/` | the generated metamodel diagrams, inlined by the `metamodel-diagram` shortcode |
+| `layouts/_shortcodes/` | the documentation's own shortcodes |
 | `static/fonts/` | IBM Plex Sans Condensed, self-hosted. EB Garamond and Fira Code come from Google Fonts, as the design system specifies |
 | `static/city/` | the live cities: one laid-out `<corpus>-city.json` per corpus (committed) beside the `@codegraph/viz` bundle `pnpm run viz` copies in (gitignored). `/city/?src=<corpus>-city.json` opens one; the landing's corpora tabs embed them in iframes |
 | `static/img/` | the codegraph logo (four variants), the generated city, the Defsquare logo, the favicon |
@@ -112,6 +115,39 @@ node scripts/city-svg.mjs city.json > static/img/gson-city.svg   # counts on std
 
 Then update the caption and the `alt` text in `content/_index.md` with the
 counts the script prints.
+
+## The metamodel diagrams are generated, and inlined
+
+`assets/diagrams/traits-metamodel.svg` is the trait vocabulary of
+`METAMODEL.md` §3, drawn by `scripts/traits-diagram.mjs` in the style of the
+Specy metamodel diagrams: the entity in the middle, the seven trait families
+around it, one box per trait saying what it contributes, a dashed box for a
+marker. To regenerate it after the vocabulary or a label changes:
+
+```bash
+node scripts/traits-diagram.mjs > assets/diagrams/traits-metamodel.svg
+pnpm --filter @codegraph/website test    # node --test scripts/traits-diagram.test.mjs
+```
+
+The test is what keeps a committed drawing honest. It fails when the file is
+not the script's output, when the boxes are not exactly the traits and trait
+keys of `schemas/` (the committed contract `core` generates), and when a box
+links to a heading its page no longer has.
+
+A page embeds it with `{{< metamodel-diagram "traits-metamodel" >}}`, which
+**inlines** the SVG rather than pointing an `<img>` at it: every box is a link
+to its section, and the hover and focus states are rules in the SVG's own
+stylesheet — neither exists inside an `<img>`. The figure opts out of Hextra's
+prose typography with `not-prose`, and its card is styled in
+`assets/css/custom.css`, the hook Hextra concatenates after its own sheet.
+
+The same file is the image of `METAMODEL.md` on GitHub, where it *is* an
+`<img>` and no webfont loads. So it follows the logo's rule, above: every label
+carries `textLength`, the width the script measured in the real face (it reads
+the advance widths from `static/fonts/*.ttf` itself, no dependency), which is a
+no-op where IBM Plex Sans Condensed loads and fits the fallback's glyphs to the
+same boxes where it does not. A character the face has no glyph for stops the
+script, as does a label wider than its box.
 
 ## Links between the two halves
 

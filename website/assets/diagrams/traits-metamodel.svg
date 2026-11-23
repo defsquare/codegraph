@@ -1,0 +1,185 @@
+<svg class="mm-diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 1532" role="group" aria-label="The traits of the Codegraph metamodel">
+<desc>An entity composes traits. The 19 traits of the closed vocabulary, in 7 families, each with the attributes it contributes; a dashed box is a marker trait, which contributes none.</desc>
+<defs><style>@import url(&quot;https://fonts.googleapis.com/css2?family=EB+Garamond:wght@700&amp;display=swap&quot;);@font-face{font-family:&quot;IBM Plex Sans Condensed&quot;;font-style:normal;font-weight:400;font-display:swap;src:url(&quot;/fonts/IBMPlexSansCondensed-Regular.ttf&quot;) format(&quot;truetype&quot;)}@font-face{font-family:&quot;IBM Plex Sans Condensed&quot;;font-style:normal;font-weight:700;font-display:swap;src:url(&quot;/fonts/IBMPlexSansCondensed-Bold.ttf&quot;) format(&quot;truetype&quot;)}.mm-b{font-family:&quot;IBM Plex Sans Condensed&quot;,&quot;Arial Narrow&quot;,&quot;Liberation Sans Narrow&quot;,Arial,Helvetica,sans-serif;font-weight:700;fill:#1b2935}.mm-r{font-family:&quot;IBM Plex Sans Condensed&quot;,&quot;Arial Narrow&quot;,&quot;Liberation Sans Narrow&quot;,Arial,Helvetica,sans-serif;font-weight:400;fill:#1b2935}.mm-t{font-family:&quot;EB Garamond&quot;,Garamond,&quot;Times New Roman&quot;,Times,serif;font-weight:700;fill:#1c2631}.mm-c{fill:none;stroke:#e46765;stroke-linecap:round;stroke-linejoin:round}.mm-diagram a{text-decoration:none;cursor:pointer;outline:none}.mm-node path,.mm-group rect,.mm-diagram a text{transition:stroke .15s,fill .15s}.mm-node:hover path,.mm-node:focus-visible path{stroke:#e46863;stroke-width:3;fill:#fff}.mm-group:hover rect,.mm-group:focus-visible rect{stroke:#e46863;stroke-width:3}.mm-node:hover text,.mm-node:focus-visible text,.mm-group:hover text,.mm-group:focus-visible text,.mm-link:hover text,.mm-link:focus-visible text{fill:#e46863}.mm-logo:focus-visible{outline:2px solid #e46863;outline-offset:4px}</style>
+<filter id="mm-shadow" x="-5%" y="-15%" width="112%" height="132%"><feDropShadow dx="6" dy="6" stdDeviation="3.5" flood-color="#000" flood-opacity="0.4"/></filter></defs>
+<rect width="1320" height="1532" fill="#ebebeb"/>
+<rect x="11.5" y="10.5" width="1297" height="1511" fill="none" stroke="#1e2d3b" stroke-width="3" stroke-dasharray="11 8.634"/>
+<rect x="260" y="35.5" width="800" height="159" rx="27" fill="#fff" stroke="#1c2631" stroke-width="3" filter="url(#mm-shadow)"/>
+<text class="mm-t" font-size="63.1" text-anchor="middle" x="660" y="101">Codegraph Metamodel</text>
+<text class="mm-t" font-size="63.1" text-anchor="middle" x="660" y="170">Traits</text>
+<g class="mm-groups">
+<a href="/docs/reference/metamodel/traits/#base" class="mm-group" aria-label="Base: 3 traits">
+<rect x="46" y="250" width="384" height="380" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="68" y="287" textLength="57.6" lengthAdjust="spacingAndGlyphs">BASE</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#containment-and-attachment" class="mm-group" aria-label="Containment &amp; attachment: 3 traits">
+<rect x="468" y="250" width="384" height="380" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="490" y="287" textLength="338.2" lengthAdjust="spacingAndGlyphs">CONTAINMENT &amp; ATTACHMENT</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#structure" class="mm-group" aria-label="Structure: 3 traits">
+<rect x="890" y="250" width="384" height="380" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="912" y="287" textLength="129.4" lengthAdjust="spacingAndGlyphs">STRUCTURE</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#modularity" class="mm-group" aria-label="Modularity: 1 trait">
+<rect x="46" y="714" width="384" height="192" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="68" y="751" textLength="144.7" lengthAdjust="spacingAndGlyphs">MODULARITY</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#measures" class="mm-group" aria-label="Measures: 1 trait">
+<rect x="890" y="714" width="384" height="192" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="912" y="751" textLength="118.5" lengthAdjust="spacingAndGlyphs">MEASURES</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#types" class="mm-group" aria-label="Types: 4 traits">
+<rect x="46" y="990" width="384" height="486" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="68" y="1027" textLength="69.7" lengthAdjust="spacingAndGlyphs">TYPES</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#behavior" class="mm-group" aria-label="Behavior: 4 traits">
+<rect x="890" y="990" width="384" height="486" rx="14" fill="#dedede" stroke="#1b2935" stroke-width="2"/>
+<text class="mm-b" font-size="22" letter-spacing="1.6" x="912" y="1027" textLength="115.5" lengthAdjust="spacingAndGlyphs">BEHAVIOR</text>
+</a>
+</g>
+<g class="mm-edges">
+<path class="mm-c" stroke-width="2.5" d="M660,756 C660,693 660,693 660,630"/>
+<path class="mm-c" stroke-width="2.5" d="M544.8,756 C544.8,693 353.2,693 353.2,630"/>
+<path class="mm-c" stroke-width="2.5" d="M775.2,756 C775.2,693 966.8,693 966.8,630"/>
+<path class="mm-c" stroke-width="2.5" d="M500,810 C465,810 465,810 430,810"/>
+<path class="mm-c" stroke-width="2.5" d="M820,810 C855,810 855,810 890,810"/>
+<path class="mm-c" stroke-width="2.5" d="M544.8,864 C544.8,927 353.2,927 353.2,990"/>
+<path class="mm-c" stroke-width="2.5" d="M775.2,864 C775.2,927 966.8,927 966.8,990"/>
+<path class="mm-c" stroke-width="2.5" d="M660,864 C660,927 660,927 660,990"/>
+</g>
+<g class="mm-cards">
+<text class="mm-r" font-size="28.65" x="670" y="662" textLength="45.2" lengthAdjust="spacingAndGlyphs">0..3</text>
+<text class="mm-r" font-size="28.65" x="298" y="662" textLength="45.2" lengthAdjust="spacingAndGlyphs">0..3</text>
+<text class="mm-r" font-size="28.65" x="976.8" y="662" textLength="45.2" lengthAdjust="spacingAndGlyphs">0..3</text>
+<text class="mm-r" font-size="28.65" x="440" y="801" textLength="45.2" lengthAdjust="spacingAndGlyphs">0..1</text>
+<text class="mm-r" font-size="28.65" x="834.8" y="801" textLength="45.2" lengthAdjust="spacingAndGlyphs">0..1</text>
+<text class="mm-r" font-size="28.65" x="298" y="979" textLength="45.2" lengthAdjust="spacingAndGlyphs">0..4</text>
+<text class="mm-r" font-size="28.65" x="976.8" y="979" textLength="45.2" lengthAdjust="spacingAndGlyphs">0..4</text>
+<text class="mm-r" font-size="28.65" x="670" y="979" textLength="15.5" lengthAdjust="spacingAndGlyphs">1</text>
+</g>
+<g class="mm-nodes">
+<a href="/docs/reference/metamodel/#entity" class="mm-node" aria-label="Entity">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M507.5,756 Q500,756 500,763.5 L500,856.5 Q500,864 507.5,864 L812.5,864 Q820,864 820,856.5 L820,763.5 Q820,756 812.5,756 Z"/>
+<text class="mm-b" font-size="45.1" x="602.9" y="817" textLength="114.1" lengthAdjust="spacingAndGlyphs">Entity</text>
+<text class="mm-r" font-size="21.5" x="530" y="850" textLength="259.9" lengthAdjust="spacingAndGlyphs">{ id, kind, traits[], …trait keys }</text>
+</a>
+<a href="/docs/reference/metamodel/profiles/#validation" class="mm-node" aria-label="Language Profile">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M497.5,990 Q490,990 490,997.5 L490,1096.5 Q490,1104 497.5,1104 L822.5,1104 Q830,1104 830,1096.5 L830,997.5 Q830,990 822.5,990 Z"/>
+<text class="mm-b" font-size="28.65" x="557.3" y="1030" textLength="205.4" lengthAdjust="spacingAndGlyphs">Language Profile</text>
+<text class="mm-r" font-size="21.5" x="526.7" y="1058" textLength="266.6" lengthAdjust="spacingAndGlyphs">licenses, per kind, the traits an</text>
+<text class="mm-r" font-size="21.5" x="529.1" y="1086" textLength="261.8" lengthAdjust="spacingAndGlyphs">entity must and may compose</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#base" class="mm-node" tabindex="-1" aria-label="TNamed (Base)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,306 Q68,306 68,313.5 L68,388.5 Q68,396 75.5,396 L400.5,396 Q408,396 408,388.5 L408,313.5 Q408,306 400.5,306 Z"/>
+<text class="mm-b" font-size="28.65" x="187" y="350" textLength="102.1" lengthAdjust="spacingAndGlyphs">TNamed</text>
+<text class="mm-r" font-size="21.5" x="183.7" y="378" textLength="108.7" lengthAdjust="spacingAndGlyphs">name: string</text>
+<circle cx="388" cy="326" r="7" fill="#e46765"/>
+</a>
+<a href="/docs/reference/metamodel/traits/#base" class="mm-node" tabindex="-1" aria-label="TSourceAnchor (Base)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,412 Q68,412 68,419.5 L68,494.5 Q68,502 75.5,502 L400.5,502 Q408,502 408,494.5 L408,419.5 Q408,412 400.5,412 Z"/>
+<text class="mm-b" font-size="28.65" x="144.7" y="456" textLength="186.7" lengthAdjust="spacingAndGlyphs">TSourceAnchor</text>
+<text class="mm-r" font-size="21.5" x="141.4" y="484" textLength="193.2" lengthAdjust="spacingAndGlyphs">anchor: SourceAnchor</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#base" class="mm-node" tabindex="-1" aria-label="TComment (Base)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,518 Q68,518 68,525.5 L68,600.5 Q68,608 75.5,608 L400.5,608 Q408,608 408,600.5 L408,525.5 Q408,518 400.5,518 Z"/>
+<text class="mm-b" font-size="28.65" x="171.7" y="562" textLength="132.6" lengthAdjust="spacingAndGlyphs">TComment</text>
+<text class="mm-r" font-size="21.5" x="155.8" y="590" textLength="164.4" lengthAdjust="spacingAndGlyphs">comments: string[]</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#containment-and-attachment" class="mm-node" tabindex="-1" aria-label="TWithChildren (Containment &amp; attachment)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" stroke-dasharray="9 6" d="M497.5,306 Q490,306 490,313.5 L490,388.5 Q490,396 497.5,396 L822.5,396 Q830,396 830,388.5 L830,313.5 Q830,306 822.5,306 Z"/>
+<text class="mm-b" font-size="28.65" x="571.4" y="350" textLength="177.3" lengthAdjust="spacingAndGlyphs">TWithChildren</text>
+<text class="mm-r" font-size="21.5" x="532.9" y="378" textLength="254.2" lengthAdjust="spacingAndGlyphs">children: derived from parent</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#containment-and-attachment" class="mm-node" tabindex="-1" aria-label="TChildOf (Containment &amp; attachment)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M497.5,412 Q490,412 490,419.5 L490,494.5 Q490,502 497.5,502 L822.5,502 Q830,502 830,494.5 L830,419.5 Q830,412 822.5,412 Z"/>
+<text class="mm-b" font-size="28.65" x="606.6" y="456" textLength="106.8" lengthAdjust="spacingAndGlyphs">TChildOf</text>
+<text class="mm-r" font-size="21.5" x="591.5" y="484" textLength="137.1" lengthAdjust="spacingAndGlyphs">parent: EntityId</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#containment-and-attachment" class="mm-node" tabindex="-1" aria-label="TAttachedTo (Containment &amp; attachment)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M497.5,518 Q490,518 490,525.5 L490,600.5 Q490,608 497.5,608 L822.5,608 Q830,608 830,600.5 L830,525.5 Q830,518 822.5,518 Z"/>
+<text class="mm-b" font-size="28.65" x="582" y="562" textLength="156" lengthAdjust="spacingAndGlyphs">TAttachedTo</text>
+<text class="mm-r" font-size="21.5" x="570.6" y="590" textLength="178.8" lengthAdjust="spacingAndGlyphs">attachedTo: EntityId</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#structure" class="mm-node" tabindex="-1" aria-label="TStructural (Structure)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" stroke-dasharray="9 6" d="M919.5,306 Q912,306 912,313.5 L912,388.5 Q912,396 919.5,396 L1244.5,396 Q1252,396 1252,388.5 L1252,313.5 Q1252,306 1244.5,306 Z"/>
+<text class="mm-b" font-size="28.65" x="1012.6" y="350" textLength="138.7" lengthAdjust="spacingAndGlyphs">TStructural</text>
+<text class="mm-r" font-size="21.5" x="944.3" y="378" textLength="275.5" lengthAdjust="spacingAndGlyphs">value holder, target of accesses</text>
+<circle cx="1232" cy="326" r="7" fill="#e46765"/>
+</a>
+<a href="/docs/reference/metamodel/traits/#structure" class="mm-node" tabindex="-1" aria-label="TWithAccesses (Structure)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" stroke-dasharray="9 6" d="M919.5,412 Q912,412 912,419.5 L912,494.5 Q912,502 919.5,502 L1244.5,502 Q1252,502 1252,494.5 L1252,419.5 Q1252,412 1244.5,412 Z"/>
+<text class="mm-b" font-size="28.65" x="989" y="456" textLength="185.9" lengthAdjust="spacingAndGlyphs">TWithAccesses</text>
+<text class="mm-r" font-size="21.5" x="1013.2" y="484" textLength="137.6" lengthAdjust="spacingAndGlyphs">→ access edges</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#structure" class="mm-node" tabindex="-1" aria-label="TWithValue (Structure)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M919.5,518 Q912,518 912,525.5 L912,600.5 Q912,608 919.5,608 L1244.5,608 Q1252,608 1252,600.5 L1252,525.5 Q1252,518 1244.5,518 Z"/>
+<text class="mm-b" font-size="28.65" x="1010.5" y="562" textLength="143.1" lengthAdjust="spacingAndGlyphs">TWithValue</text>
+<text class="mm-r" font-size="21.5" x="1026" y="590" textLength="112" lengthAdjust="spacingAndGlyphs">value: Literal</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#modularity" class="mm-node" tabindex="-1" aria-label="TModule (Modularity)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,770 Q68,770 68,777.5 L68,876.5 Q68,884 75.5,884 L400.5,884 Q408,884 408,876.5 L408,777.5 Q408,770 400.5,770 Z"/>
+<text class="mm-b" font-size="28.65" x="185.7" y="810" textLength="104.5" lengthAdjust="spacingAndGlyphs">TModule</text>
+<text class="mm-r" font-size="21.5" x="159.6" y="838" textLength="156.9" lengthAdjust="spacingAndGlyphs">definedIn: string[]</text>
+<text class="mm-r" font-size="21.5" x="170.4" y="866" textLength="135.2" lengthAdjust="spacingAndGlyphs">isStub: boolean</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#measures" class="mm-node" tabindex="-1" aria-label="TMetrics (Measures)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M919.5,770 Q912,770 912,777.5 L912,876.5 Q912,884 919.5,884 L1244.5,884 Q1252,884 1252,876.5 L1252,777.5 Q1252,770 1244.5,770 Z"/>
+<text class="mm-b" font-size="28.65" x="1029.5" y="810" textLength="105.1" lengthAdjust="spacingAndGlyphs">TMetrics</text>
+<text class="mm-r" font-size="21.5" x="937.7" y="838" textLength="288.6" lengthAdjust="spacingAndGlyphs">metrics: Record&lt;string, number&gt;</text>
+<text class="mm-r" font-size="21.5" x="964.7" y="866" textLength="234.6" lengthAdjust="spacingAndGlyphs">measured, never defaulted</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#types" class="mm-node" tabindex="-1" aria-label="TType (Types)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,1046 Q68,1046 68,1053.5 L68,1128.5 Q68,1136 75.5,1136 L400.5,1136 Q408,1136 408,1128.5 L408,1053.5 Q408,1046 400.5,1046 Z"/>
+<text class="mm-b" font-size="28.65" x="200.6" y="1090" textLength="74.7" lengthAdjust="spacingAndGlyphs">TType</text>
+<text class="mm-r" font-size="21.5" x="170.4" y="1118" textLength="135.2" lengthAdjust="spacingAndGlyphs">isStub: boolean</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#types" class="mm-node" tabindex="-1" aria-label="TWithInheritances (Types)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" stroke-dasharray="9 6" d="M75.5,1152 Q68,1152 68,1159.5 L68,1234.5 Q68,1242 75.5,1242 L400.5,1242 Q408,1242 408,1234.5 L408,1159.5 Q408,1152 400.5,1152 Z"/>
+<text class="mm-b" font-size="28.65" x="123.4" y="1196" textLength="229.1" lengthAdjust="spacingAndGlyphs">TWithInheritances</text>
+<text class="mm-r" font-size="21.5" x="149.8" y="1224" textLength="176.4" lengthAdjust="spacingAndGlyphs">→ inheritance edges</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#types" class="mm-node" tabindex="-1" aria-label="TWithImplements (Types)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" stroke-dasharray="9 6" d="M75.5,1258 Q68,1258 68,1265.5 L68,1340.5 Q68,1348 75.5,1348 L400.5,1348 Q408,1348 408,1340.5 L408,1265.5 Q408,1258 400.5,1258 Z"/>
+<text class="mm-b" font-size="28.65" x="127" y="1302" textLength="222" lengthAdjust="spacingAndGlyphs">TWithImplements</text>
+<text class="mm-r" font-size="21.5" x="89.4" y="1330" textLength="297.1" lengthAdjust="spacingAndGlyphs">→ interfaceImplementation edges</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#types" class="mm-node" tabindex="-1" aria-label="TTypedEntity (Types)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M75.5,1364 Q68,1364 68,1371.5 L68,1446.5 Q68,1454 75.5,1454 L400.5,1454 Q408,1454 408,1446.5 L408,1371.5 Q408,1364 400.5,1364 Z"/>
+<text class="mm-b" font-size="28.65" x="156.5" y="1408" textLength="163" lengthAdjust="spacingAndGlyphs">TTypedEntity</text>
+<text class="mm-r" font-size="21.5" x="133.9" y="1436" textLength="208.1" lengthAdjust="spacingAndGlyphs">declaredType?: EntityId</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#behavior" class="mm-node" tabindex="-1" aria-label="TInvocable (Behavior)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M919.5,1046 Q912,1046 912,1053.5 L912,1128.5 Q912,1136 919.5,1136 L1244.5,1136 Q1252,1136 1252,1128.5 L1252,1053.5 Q1252,1046 1244.5,1046 Z"/>
+<text class="mm-b" font-size="28.65" x="1013.5" y="1090" textLength="137" lengthAdjust="spacingAndGlyphs">TInvocable</text>
+<text class="mm-r" font-size="21.5" x="1011.3" y="1118" textLength="141.4" lengthAdjust="spacingAndGlyphs">signature: string</text>
+<circle cx="1232" cy="1066" r="7" fill="#e46765"/>
+</a>
+<a href="/docs/reference/metamodel/traits/#behavior" class="mm-node" tabindex="-1" aria-label="TWithParameters (Behavior)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M919.5,1152 Q912,1152 912,1159.5 L912,1234.5 Q912,1242 919.5,1242 L1244.5,1242 Q1252,1242 1252,1234.5 L1252,1159.5 Q1252,1152 1244.5,1152 Z"/>
+<text class="mm-b" font-size="28.65" x="974" y="1196" textLength="215.9" lengthAdjust="spacingAndGlyphs">TWithParameters</text>
+<text class="mm-r" font-size="21.5" x="985.6" y="1224" textLength="192.9" lengthAdjust="spacingAndGlyphs">parameters: EntityId[]</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#behavior" class="mm-node" tabindex="-1" aria-label="TWithLocalVariables (Behavior)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M919.5,1258 Q912,1258 912,1265.5 L912,1340.5 Q912,1348 919.5,1348 L1244.5,1348 Q1252,1348 1252,1340.5 L1252,1265.5 Q1252,1258 1244.5,1258 Z"/>
+<text class="mm-b" font-size="28.65" x="955.2" y="1302" textLength="253.6" lengthAdjust="spacingAndGlyphs">TWithLocalVariables</text>
+<text class="mm-r" font-size="21.5" x="974.5" y="1330" textLength="214.9" lengthAdjust="spacingAndGlyphs">localVariables: EntityId[]</text>
+</a>
+<a href="/docs/reference/metamodel/traits/#behavior" class="mm-node" tabindex="-1" aria-label="TWithInvocations (Behavior)">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" stroke-dasharray="9 6" d="M919.5,1364 Q912,1364 912,1371.5 L912,1446.5 Q912,1454 919.5,1454 L1244.5,1454 Q1252,1454 1252,1446.5 L1252,1371.5 Q1252,1364 1244.5,1364 Z"/>
+<text class="mm-b" font-size="28.65" x="973.4" y="1408" textLength="217.2" lengthAdjust="spacingAndGlyphs">TWithInvocations</text>
+<text class="mm-r" font-size="21.5" x="997.9" y="1436" textLength="168.2" lengthAdjust="spacingAndGlyphs">→ invocation edges</text>
+</a>
+</g>
+<g class="mm-legend">
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" d="M481.5,1156 Q475.5,1156 475.5,1162 L475.5,1178 Q475.5,1184 481.5,1184 L513.5,1184 Q519.5,1184 519.5,1178 L519.5,1162 Q519.5,1156 513.5,1156 Z"/>
+<text class="mm-r" font-size="21.5" x="533.5" y="1177" textLength="299.4" lengthAdjust="spacingAndGlyphs">contributes attributes to the entity</text>
+<path fill="#fbfbfb" stroke="#1b2935" stroke-width="2" stroke-dasharray="9 6" d="M481.5,1204 Q475.5,1204 475.5,1210 L475.5,1226 Q475.5,1232 481.5,1232 L513.5,1232 Q519.5,1232 519.5,1226 L519.5,1210 Q519.5,1204 513.5,1204 Z"/>
+<text class="mm-r" font-size="21.5" x="533.5" y="1225" textLength="279.2" lengthAdjust="spacingAndGlyphs">marker: contributes no attribute</text>
+<a href="/docs/reference/metamodel/traits/#the-composition-that-motivates-the-design" class="mm-link" aria-label="example, a Clojure fn-var: TNamed + TStructural + TInvocable">
+<circle cx="497.5" cy="1266" r="7" fill="#e46765"/>
+<text class="mm-r" font-size="21.5" x="533.5" y="1273" textLength="224.1" lengthAdjust="spacingAndGlyphs">example, a Clojure fn-var:</text>
+<text class="mm-r" font-size="21.5" x="533.5" y="1300" textLength="311" lengthAdjust="spacingAndGlyphs">TNamed + TStructural + TInvocable</text>
+</a>
+</g>
+<a href="/" class="mm-logo" aria-label="Codegraph"><g transform="translate(539,1427)"><g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"><g><text font-family="Helvetica-Bold, Helvetica, Arial, &quot;Liberation Sans&quot;, &quot;Nimbus Sans&quot;, sans-serif" font-size="40" font-weight="bold" fill="#1A2A36"><tspan x="19.9140625" y="39" textLength="204.484" lengthAdjust="spacingAndGlyphs">codegraph</tspan></text><g transform="translate(227.000000, 0.000000)" fill="#F65E5E"><path d="M15,0 L15,7 L15,48 L14.999,48 L15,49 L-1.77635684e-15,49 L-1.77635684e-15,42 L8,42 L7.999,7 L-1.77635684e-15,7 L-1.77635684e-15,0 L15,0 Z"></path></g><g fill="#F65E5E"><path d="M-8.8817842e-16,0 L15,8.8817842e-16 L15,7 L6.999,6.999 L7,42 L15,42 L15,49 L0,49 L-8.8817842e-16,0 Z"></path></g></g></g></g></a>
+</svg>

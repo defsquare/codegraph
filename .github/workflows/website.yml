@@ -39,6 +39,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # the generated diagrams are committed: one that is stale against its
+      # generator, or links to a heading a page no longer has, fails here
+      # (ci.yml runs the same test when schemas/ — the vocabulary — changes)
+      - run: pnpm --filter @codegraph/website test
       # builds the viz bundle into static/city/ (the live city at /city/), then hugo
       - run: pnpm --filter @codegraph/website build
       - uses: actions/upload-artifact@v4

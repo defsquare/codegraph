@@ -1,0 +1,46 @@
+/* The documentation's additions to Hextra, through the theme's own hook: Hextra
+   concatenates this file after its stylesheet. The landing page never loads it. */
+
+/* A generated metamodel diagram, inlined by the metamodel-diagram shortcode.
+   The card stays light in the dark theme: the drawing carries its own ground,
+   as a printed figure does, and its inks are chosen against that ground. The
+   hover and focus states of the boxes are in the SVG's own stylesheet, so the
+   file behaves the same when it is opened alone. */
+.mm-figure {
+  margin: 1.5rem 0 2rem;
+  padding: 0.35rem;
+  border-radius: 12px;
+  background: #ebebeb;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.06),
+    0 10px 28px rgb(0 0 0 / 0.12);
+}
+/* Below the width at which its labels stop being readable the drawing keeps
+   its size and the card scrolls, rather than shrinking into a thumbnail. */
+.mm-figure__canvas {
+  overflow-x: auto;
+  border-radius: 9px;
+}
+.mm-figure .mm-diagram {
+  display: block;
+  width: 100%;
+  min-width: 38rem;
+  height: auto;
+}
+.mm-figure figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1.5rem;
+  padding: 0.5rem 0.75rem 0.35rem;
+  font-size: 0.8rem;
+  color: #4a5967;
+}
+.mm-figure figcaption a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.mm-figure figcaption a:hover {
+  color: #c2413f;
+}
