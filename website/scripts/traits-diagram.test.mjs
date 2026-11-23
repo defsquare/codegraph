@@ -4,13 +4,13 @@
 // file (against its generator), and its links (against the pages' headings).
 //   node --test scripts/traits-diagram.test.mjs     (pnpm --filter @codegraph/website test)
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { site } from "./diagram-kit.mjs";
+import { assertLinksResolve } from "./doc-pages.mjs";
 import { FAMILIES, render } from "./traits-diagram.mjs";
 
-const site = join(dirname(fileURLToPath(import.meta.url)), "..");
 const schema = (name) => JSON.parse(readFileSync(join(site, "..", "schemas", `${name}.record.schema.json`), "utf8"));
 const traits = FAMILIES.flatMap((family) => family.traits);
 
@@ -46,17 +46,6 @@ test("the SVG survives being an <img>: no bare ampersand, no label left unpinned
 });
 
 test("every box links to a heading that exists", () => {
-  // Hugo's default heading ids (GitHub's rule): lowercase, punctuation dropped, a hyphen per space.
-  const anchor = (heading) => heading.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "").trim().replace(/\s/g, "-");
-  const hrefs = [...render().matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]);
+  const hrefs = assertLinksResolve(render(), assert);
   assert.equal(hrefs.length, 1 + 1 + 1 + FAMILIES.length + traits.length + 1, "entity, profile, example, families, traits, logo");
-  for (const href of new Set(hrefs)) {
-    if (href === "/") continue;
-    const [path, fragment] = href.split("#");
-    const page = join(site, "content", path);
-    const file = [join(page, "_index.md"), `${page.replace(/\/$/, "")}.md`].find((candidate) => existsSync(candidate));
-    assert.ok(file, `${href}: no page`);
-    const headings = readFileSync(file, "utf8").split("\n").filter((line) => /^#{1,6} /.test(line)).map((line) => anchor(line.replace(/^#+ /, "")));
-    assert.ok(headings.includes(fragment), `${href}: no such heading in ${file}`);
-  }
 });
