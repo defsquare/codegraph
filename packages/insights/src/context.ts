@@ -15,6 +15,7 @@ import type { Unit } from "./order.js";
 import type { RecordSource, RecordSummary } from "./records.js";
 import type { Level, WordEntry } from "./schema.js";
 import type { SourceReader, SourceSlice } from "./source.js";
+import type { WalkSpec } from "./spec.js";
 import type { UnitSet } from "./units.js";
 
 /**
@@ -37,12 +38,13 @@ import type { UnitSet } from "./units.js";
  * and a re-run that reuses everything never touches one. The fingerprint
  * reads neither (it hashes part IDS), which is what makes that sound.
  *
- * WORDS (PLAN.md §20.3). A member asks the model to define the words of its
- * names: its own, an operation's parameters', a type's fields'. They are
- * GIVEN, split by the injected `Speller` (the CLI hands `@codegraph/vocabulary`'s
- * in), so this package runs no splitter. A module is also shown what its types
- * said of the words they spell, heaviest first, cut at `terms`: read like a
- * summary, when the prompt renders, and never hashed.
+ * WORDS (PLAN.md §20.3), when the walk's spec asks them. A member asks the
+ * model to define the words of its names: its own, an operation's
+ * parameters', a type's fields'. They are GIVEN, split by the injected
+ * `Speller` (the CLI hands `@codegraph/vocabulary`'s in), so this package runs
+ * no splitter. A module is also shown what its types said of the words they
+ * spell, heaviest first, cut at `terms`: read like a summary, when the prompt
+ * renders, and never hashed. A spec without words collects none.
  */
 
 /** What a unit's names spell, injected: `@codegraph/vocabulary` through the CLI, a toy in tests. */
@@ -82,9 +84,9 @@ export interface DependencySummary {
   readonly id: EntityId;
   readonly level: Level;
   readonly name: string;
-  /** The record's `description`; empty when `missing`. */
+  /** What the spec quotes of the record (`RecordSummary.description`); empty when `missing`. */
   readonly summary: string;
-  /** The type record's concept / the operation's owner / the module's hint — the Specy word. */
+  /** The label the spec quotes beside it, if any. */
   readonly concept: string | undefined;
   readonly missing: boolean;
   readonly children: readonly DependencySummary[];
@@ -117,6 +119,8 @@ export interface FieldSummary {
 export interface MemberPack {
   readonly id: EntityId;
   readonly level: Level;
+  /** The `lang` of the model that declares it — a profile code (`java`, `ts`, `rb`…), its source fence's info string. Never hashed. */
+  readonly lang: string | undefined;
   readonly kind: string;
   readonly name: string;
   readonly signature: string | undefined;
@@ -146,6 +150,8 @@ export interface MemberPack {
 
 export interface ContextPack {
   readonly unit: Unit;
+  /** The walk this pack is built for: its prompt and its hashes are the spec's to complete. */
+  readonly spec: WalkSpec;
   readonly level: Level;
   readonly members: readonly MemberPack[];
   /** Dependencies OTHER than the unit's own parts (calls, type dependencies, imports). */
@@ -172,6 +178,21 @@ export interface ContextEnv {
   readonly speller: Speller;
   /** A module's glossary keeps its heaviest `terms` words. */
   readonly terms: number;
+  /** The walk: what is asked of every unit and what is kept of the answer. */
+  readonly spec: WalkSpec;
+}
+
+/** Each id's model `lang`, first declaration first — as `buildGraph` reads a union. One pass per graph. */
+const LANGS = new WeakMap<CodeGraph, ReadonlyMap<EntityId, string>>();
+
+function langOf(graph: CodeGraph, id: EntityId): string | undefined {
+  let langs = LANGS.get(graph);
+  if (langs === undefined) {
+    const map = new Map<EntityId, string>();
+    for (const model of graph.union.models) for (const entity of model.entities) if (!map.has(entity.id)) map.set(entity.id, model.lang);
+    LANGS.set(graph, (langs = map));
+  }
+  return langs.get(id);
 }
 
 function displayName(graph: CodeGraph, id: EntityId): string {
@@ -259,8 +280,9 @@ function commentsOf(graph: CodeGraph, id: EntityId): readonly string[] {
   return Array.isArray(value) ? value.filter((c): c is string => typeof c === "string") : [];
 }
 
-/** The identifiers among `ids` that spell a word to define, in order, each identifier once. */
+/** The identifiers among `ids` that spell a word to define, in order, each identifier once; none for a walk without words. */
 function namesOf(env: ContextEnv, ids: readonly EntityId[]): NameWords[] {
+  if (env.spec.words === undefined) return [];
   const names: NameWords[] = [];
   const seen = new Set<string>();
   for (const id of ids) {
@@ -291,6 +313,7 @@ function typeNames(env: ContextEnv, dossier: TypeDossier): NameWords[] {
  * asks, and decides which are asked (`glossaryAsked`).
  */
 function glossaryOf(env: ContextEnv, types: readonly TypeDossier[], moduleId: EntityId): GlossaryWord[] {
+  if (env.spec.words === undefined) return [];
   const spelledBy = new Map<string, EntityId[]>();
   for (const t of types) {
     for (const word of new Set(typeNames(env, t).flatMap((n) => n.words))) spelledBy.set(word, [...(spelledBy.get(word) ?? []), t.id]);
@@ -330,6 +353,7 @@ function operationPack(env: ContextEnv, id: EntityId, fact: OperationFact, dossi
   return {
     id,
     level: "operation",
+    lang: langOf(env.graph, id),
     kind: fact.kind,
     name: fact.name ?? (fact.kind === "constructor" ? `${dossier.name ?? "constructor"}` : id),
     signature: fact.signature,
@@ -382,6 +406,7 @@ function typePack(env: ContextEnv, dossier: TypeDossier): MemberPack {
   return {
     id: dossier.id,
     level: "type",
+    lang: langOf(env.graph, dossier.id),
     kind: dossier.kind,
     name: dossier.name ?? dossier.id,
     signature: undefined,
@@ -427,6 +452,7 @@ function modulePack(env: ContextEnv, module: ModuleFact): MemberPack {
   return {
     id: module.id,
     level: "module",
+    lang: langOf(env.graph, module.id),
     kind: env.graph.entity(module.id)?.kind ?? "module",
     name: module.name ?? module.id,
     signature: undefined,
@@ -501,6 +527,7 @@ export function contextPackFor(unit: Unit, env: ContextEnv): ContextPack {
   });
   return {
     unit,
+    spec: env.spec,
     level: unit.level,
     members,
     dependencies,

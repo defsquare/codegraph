@@ -29,9 +29,10 @@ import { cliVersion } from "./version.js";
  * SYNC BY DEFAULT, ASYNC BY EXCEPTION. Every command that reads a model and
  * writes an artifact is synchronous all the way down (see core's jsonl-file.ts
  * for why), and `run` returns a plain number for them — the 700+ in-process
- * tests depend on that. The one command that awaits a network client
- * (`explain`) returns a promise instead, and `run` settles it through the same
- * exit-code mapping, so a rejected promise is never an unhandled rejection.
+ * tests depend on that. The two commands that await a network client
+ * (`explain`, and `walk` on the same runner) return a promise instead, and `run`
+ * settles it through the same exit-code mapping, so a rejected promise is never
+ * an unhandled rejection.
  */
 export function run(argv: readonly string[], io: IoSink): ExitCode | Promise<ExitCode> {
   let invocation: Invocation;
@@ -112,6 +113,9 @@ function dispatch(invocation: Invocation, io: IoSink): ExitCode | Promise<ExitCo
           // Loaded on demand: this command pulls in the insights package and
           // the provider SDK, and `codegraph --help` must not pay for them.
           return import("./commands/explain.js").then((m) => m.explainCommand(invocation.options, io));
+        case "walk":
+          // Lazy for the same reason: explain's runner, on a definition of the user's.
+          return import("./commands/walk.js").then((m) => m.walkCommand(invocation.options, io));
         case "insights":
           // Static, unlike `explain`: a reader needs the insights package but no provider SDK.
           return insightsCommand(invocation.options, io);

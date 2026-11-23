@@ -18,8 +18,28 @@ export type { Fetcher } from "./lookup.js";
  * analyzer and the SQLite loader; not even a type import may tie the browser
  * bundle to it. The answer's `kind` is a literal here and `insight.test.ts`
  * pins it to the package's constant, as `guard.ts` does for the artifact.
+ *
+ * A WALK'S ANSWER (PLAN.md §22.5) comes from `serve --insights <model>.N.walk.db`:
+ * the same envelope with `walk`, the walk's name, beside the status — told from
+ * explain's by that key, never by the block's shape. Its block is read
+ * generically (`walkFields`): the page holds no definition, so a field is shown
+ * by what its value is.
  */
 export const INSIGHT_ANSWER_KIND = "codegraph.insight/1";
+
+/** A generic block's own keys, `@codegraph/insights`' `WALK_BLOCK_KEYS` restated (a test pins them): the rest are the walk's fields. */
+export const WALK_BLOCK_KEYS = ["answer", "description", "confidence"] as const;
+
+/** A field's value as shown: text (a scalar, an enum's value, nothing as a dash), a list, or an object's fields by name. */
+export type WalkValue =
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "list"; readonly items: readonly WalkValue[] }
+  | { readonly kind: "fields"; readonly fields: readonly WalkField[] };
+
+export interface WalkField {
+  readonly name: string;
+  readonly value: WalkValue;
+}
 
 export type Insight =
   | { readonly status: "none" }
@@ -36,7 +56,28 @@ export type Insight =
       readonly concept: string | undefined;
       readonly block: Readonly<Record<string, unknown>>;
     }
-  | { readonly status: "failed"; readonly id: string; readonly model: string | undefined; readonly attempts: number | undefined; readonly reason: string };
+  | {
+      /** A walk's record: its answer and its fields, not explain's reading. */
+      readonly status: "answered";
+      readonly id: string;
+      readonly walk: string;
+      readonly level: string;
+      readonly origin: string;
+      readonly model: string | undefined;
+      readonly confidence: number | undefined;
+      readonly answer: string | undefined;
+      readonly description: string;
+      readonly fields: readonly WalkField[];
+    }
+  | {
+      readonly status: "failed";
+      readonly id: string;
+      /** The walk that failed it; undefined: explain. */
+      readonly walk: string | undefined;
+      readonly model: string | undefined;
+      readonly attempts: number | undefined;
+      readonly reason: string;
+    };
 
 const NONE: Insight = { status: "none" };
 
@@ -49,12 +90,29 @@ export function parseInsightAnswer(json: unknown): Insight {
   if (!isObject(json) || json["kind"] !== INSIGHT_ANSWER_KIND) return NONE;
   const id = stringOf(json["id"]);
   if (id === undefined) return NONE;
+  // Present only on a walk's store; a `walk` that is no name is an answer this page cannot place.
+  const walk = json["walk"];
+  if (walk !== undefined && typeof walk !== "string") return NONE;
   if (json["status"] === "explained") {
     const record = json["record"];
     if (!isObject(record) || !isObject(record["block"])) return NONE;
     const block = record["block"];
     const description = stringOf(block["description"]);
     if (description === undefined) return NONE;
+    if (walk !== undefined) {
+      return {
+        status: "answered",
+        id,
+        walk,
+        level: stringOf(record["level"]) ?? "",
+        origin: stringOf(record["origin"]) ?? "llm",
+        model: stringOf(record["model"]),
+        confidence: numberOf(block["confidence"]),
+        answer: stringOf(block["answer"]),
+        description,
+        fields: walkFields(block),
+      };
+    }
     return {
       status: "explained",
       id,
@@ -75,6 +133,7 @@ export function parseInsightAnswer(json: unknown): Insight {
     return {
       status: "failed",
       id,
+      walk,
       model: stringOf(failure["model"]),
       attempts: numberOf(failure["attempts"]),
       reason: `${stringOf(reason["kind"]) ?? "error"}${status === undefined ? "" : ` ${status}`}: ${stringOf(reason["message"]) ?? ""}`,
@@ -198,4 +257,25 @@ export function blockFacts(block: Readonly<Record<string, unknown>>): BlockFact[
         : valuesOf(value);
     return values.length === 0 ? [] : [{ label: labelOf(key), values }];
   });
+}
+
+const SHOWN_APART: ReadonlySet<string> = new Set(WALK_BLOCK_KEYS);
+
+/** A value as what it is: nothing (null, an empty string) a dash, a boolean or a number its value, a list each item, an object its fields. */
+function walkValue(value: unknown): WalkValue {
+  if (Array.isArray(value)) return { kind: "list", items: value.map(walkValue) };
+  if (isObject(value)) return { kind: "fields", fields: Object.entries(value).map(([name, part]) => ({ name, value: walkValue(part) })) };
+  if (value === null || value === undefined || value === "") return { kind: "text", text: "—" };
+  if (typeof value === "string") return { kind: "text", text: value };
+  if (typeof value === "number" || typeof value === "boolean") return { kind: "text", text: String(value) };
+  return { kind: "text", text: JSON.stringify(value) };
+}
+
+/**
+ * A walk's block as its FIELDS, by name, in block order — the order the walk
+ * wrote them — less its own keys (answer, description, confidence), which the
+ * panel shows apart. Nothing is dropped: `false` is an answer.
+ */
+export function walkFields(block: Readonly<Record<string, unknown>>): WalkField[] {
+  return Object.entries(block).flatMap(([name, value]) => (SHOWN_APART.has(name) ? [] : [{ name, value: walkValue(value) }]));
 }

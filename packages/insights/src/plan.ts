@@ -1,20 +1,21 @@
 import { contextPackFor, type ContextEnv, type ContextPack } from "./context.js";
 import { chainOf, fingerprintOf } from "./fingerprint.js";
 import type { Unit, WalkPlan } from "./order.js";
-import { estimateCompletionTokens, estimateTokens, renderPrompts, type Prompt } from "./prompt.js";
+import { estimateTokens, renderPrompts, type Prompt } from "./prompt.js";
 import { sourceOf, type RecordSource } from "./records.js";
-import { responseJsonSchema, type FailureRecord, type InsightRecord, type Level } from "./schema.js";
-import type { TemplateKind } from "./units.js";
+import { strictJsonSchema, type FailureRecord, type Level, type WalkRecord } from "./schema.js";
+import { responseSchemaOf } from "./spec.js";
+import type { TemplateKind, UnitSet } from "./units.js";
 
 /**
  * THE RUN PLAN: what a run will do before it spends anything. Every unit in
  * walk order gets a status —
  *
- *   template     a trivial member; the block is computed, no model call
+ *   template     a trivial member, when the spec templates them; the block is computed, no model call
  *   reuse        every member already has a record with THIS fingerprint
  *                (or with the stamp from before the split, `stampedBeforeSplit`)
- *   skip-scope   outside `--scope` and not reusable; dependents see it as
- *                NOT EXPLAINED
+ *   skip-scope   outside the selection (`inScope`, selection.ts) and not
+ *                reusable; dependents see it as NOT EXPLAINED
  *   skip-budget  `--max-calls` is spent; this and every later call is skipped,
  *                so what does run is always a dependency-consistent prefix
  *   llm          a model call (several, for a cycle larger than `--max-scc`)
@@ -104,22 +105,14 @@ export interface UnitHashes {
   readonly chain: string;
 }
 
-/**
- * Whether a unit's prompt shows a dependency's words — then it hashes that
- * dependency's whole fingerprint, else its chain. Only a module does, of its
- * types: it reconciles their entries into its glossary (context.ts). A caller
- * sees a callee's summary and concept, a type its operations', never words.
- */
-export function readsWordsOf(unit: Level, dependency: Level): boolean {
-  return unit === "module" && dependency === "type";
-}
-
 /** A unit's dependencies as already hashed, in `unit.deps` order. */
 export function dependenciesOf(unit: Unit, hashes: ReadonlyMap<string, UnitHashes>): readonly UnitHashes[] {
   return unit.deps.map((d) => hashes.get(d) ?? { level: unit.level, fingerprint: "", chain: "" });
 }
 
+/** Every input but the dependencies' hashes and the words; the spec's own (`walk`) only when it gives one. */
 function inputsOf(pack: ContextPack, model: string, depth: number, missingDependencies: readonly string[]) {
+  const walk = pack.spec.fingerprint?.(pack);
   return {
     level: pack.level,
     members: pack.unit.members,
@@ -134,10 +127,15 @@ function inputsOf(pack: ContextPack, model: string, depth: number, missingDepend
     // also a failed one — the record carries the run-time value.
     missingDependencies: [...missingDependencies].sort(),
     depth,
+    ...(walk === undefined ? {} : { walk }),
   };
 }
 
-/** A unit's hashes from its pack and its dependencies' hashes. */
+/**
+ * A unit's hashes from its pack and its dependencies' hashes. It hashes a
+ * dependency's whole fingerprint where its prompt shows that dependency's
+ * words (the spec's `words.reads`), else the dependency's chain.
+ */
 export function unitHashes(
   pack: ContextPack,
   model: string,
@@ -146,11 +144,12 @@ export function unitHashes(
   missingDependencies: readonly string[],
 ): UnitHashes {
   const inputs = inputsOf(pack, model, depth, missingDependencies);
+  const reads = (dependency: Level): boolean => pack.spec.words?.reads(pack.level, dependency) ?? false;
   return {
     level: pack.level,
     fingerprint: fingerprintOf({
       ...inputs,
-      dependencyFingerprints: dependencies.map((d) => (readsWordsOf(pack.level, d.level) ? d.fingerprint : d.chain)).sort(),
+      dependencyFingerprints: dependencies.map((d) => (reads(d.level) ? d.fingerprint : d.chain)).sort(),
       words: pack.words,
     }),
     chain: chainOf({ ...inputs, dependencyFingerprints: dependencies.map((d) => d.chain).sort() }),
@@ -191,18 +190,24 @@ export function retryScope(failures: readonly FailureRecord[], walk: WalkPlan): 
   return (unit) => failed.has(unit.id) || unit.deps.some((dep) => failed.has(dep));
 }
 
-function templateOf(env: PlanEnv, unit: Unit): TemplateKind | undefined {
+/** A trivial member's unit (units.ts classifies): one operation, alone. A spec templates it (below) or a selection may skip it. */
+export function trivialKindOf(unit: Unit, units: UnitSet): TemplateKind | undefined {
   if (unit.level !== "operation" || unit.members.length !== 1) return undefined;
-  return env.units.operations.get(unit.members[0] ?? "")?.template;
+  return units.operations.get(unit.members[0] ?? "")?.template;
+}
+
+/** A trivial member's template kind — only for a spec that templates them; any other asks it. */
+function templateOf(env: PlanEnv, unit: Unit): TemplateKind | undefined {
+  return env.spec.template === undefined ? undefined : trivialKindOf(unit, env.units);
 }
 
 export function planRun(
   walk: WalkPlan,
-  existing: RecordSource | ReadonlyMap<string, InsightRecord>,
+  existing: RecordSource | ReadonlyMap<string, WalkRecord>,
   env: PlanEnv,
   options: PlanOptions,
 ): RunPlan {
-  const records = sourceOf(existing);
+  const records = sourceOf(existing, env.spec);
   const contextEnv: ContextEnv = { ...env, records, depth: options.depth, maxLines: options.maxLines, terms: options.terms };
   const hashes = new Map<string, UnitHashes>();
   const before = new Map<string, string>();
@@ -219,7 +224,7 @@ export function planRun(
     if (!overhead.schema) return overhead.perCall;
     const key = `${level}/${shape}`;
     let tokens = schemaTokens.get(key);
-    if (tokens === undefined) schemaTokens.set(key, (tokens = estimateTokens(JSON.stringify(responseJsonSchema(level, shape)))));
+    if (tokens === undefined) schemaTokens.set(key, (tokens = estimateTokens(JSON.stringify(strictJsonSchema(responseSchemaOf(env.spec, level, shape))))));
     return overhead.perCall + tokens;
   };
   let budget = options.maxCalls ?? Number.POSITIVE_INFINITY;
@@ -267,7 +272,7 @@ export function planRun(
       }
     }
     const promptTokens = prompts.reduce((sum, p) => sum + estimateTokens(p.system) + estimateTokens(p.user) + overheadOf(unit.level, p.shape), 0);
-    const completionTokens = prompts.reduce((sum, p) => sum + estimateCompletionTokens(unit.level, p.memberIds.length, p.asked), 0);
+    const completionTokens = prompts.reduce((sum, p) => sum + env.spec.completionTokens(unit.level, p.memberIds.length, p.asked), 0);
     statusOf.set(unit.id, status);
     byStatus[status] += 1;
     byLevel[unit.level].calls += prompts.length;

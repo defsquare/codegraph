@@ -4,9 +4,10 @@ linkTitle: Explain cost
 weight: 11
 ---
 
-`explain` is the only command that costs money and needs a network. Everything
-here is about knowing what a run will cost before you start it, and bounding it
-once you do.
+`explain` costs money and needs a network — it and [`walk`](/docs/reference/cli/walk/),
+which runs on the same engine, are the only commands that do. Everything here is
+about knowing what a run will cost before you start it, and bounding it once you
+do; every flag below but `--scope` works on `walk` as well.
 
 **Before you start:** a `model.jsonl` and the source tree its anchors point into.
 No API key is needed for `--dry-run` or `--estimate`.
@@ -26,7 +27,7 @@ explain plan: 77 units in 8 layers
   models: openai/gpt-5.6-luna (operations), openai/gpt-5.6-luna (types, modules); depth 1
   total: 68 calls, ~114136 prompt tokens in, ~52415 completion tokens out
 
-llm         L0 operation java:com.acme.order.adapter/LedgerAdapter.<init>() calls=1 ~1461tok
+llm         L0 operation java:com.acme.order.adapter/LedgerAdapter.<init>() calls=1 ~1599tok
 template    L0 operation java:com.acme.order.legacy/List.head()
 ```
 
@@ -70,14 +71,35 @@ were skipped.
 codegraph explain model.jsonl --src src/main/java --scope java:com.acme.order.legacy
 ```
 
-`--scope` takes comma-separated module or type ids and explains only what is
-inside them. Dependencies outside the scope are reused when they already have a
-record and are never called. The estimate follows the scope:
+`--scope` takes comma-separated module or type ids and explains only the units
+whose member, nearest type or nearest module is one of them — a sub-package is
+not reached through its parent. Dependencies outside the scope are reused when
+they already have a record and are never called. The estimate follows the scope:
 
 ```text
   calls: 3 (template 9, reuse 0, skipped 65)
-  total            3          4 305          2 000
+  total            3          4 884          2 505
 ```
+
+`--scope a,b` is `--include id:a --include id:b`. The other selection flags take
+[selector terms](/docs/reference/walk-definition/#selectors) — a sub-tree, a file
+glob, an edge — and say what they leave out:
+
+```bash
+codegraph explain fixtures/java/expected/model.jsonl --src fixtures/java/src \
+  --exclude 'file:**/legacy/**' --levels operation,type --estimate
+```
+
+```text
+  calls: 63 (template 9, reuse 0, skipped 5)
+  selection: 1 dependency of the selection is not walked (1 excluded); without a record, shown as NOT EXPLAINED
+```
+
+`--include` and `--exclude` repeat, `--exclude` wins, `--levels` keeps the levels
+named, and `--closure dependencies` asks what the selection depends on as well.
+The `selection:` line counts the dependencies left out — each reaches its
+dependents' prompts as NOT EXPLAINED — and, when there are some, what the next
+`--closure` would add.
 
 **Combine them:** scope to one package, estimate, then run. That is the cheapest
 way to see whether the output is worth paying for on the rest of the corpus.
@@ -140,9 +162,9 @@ new accounts 20 requests a minute. On a 429 the client obeys the provider's
 
 ## Re-run only what changed
 
-Explanations go to `<model>.insights.jsonl` beside the model — never into
-`model.jsonl` or `model.db`. Records are appended to a `.journal` as they arrive
-and the sorted side-car is rewritten at every layer, so an interrupted run
+Explanations go to `<model>.insights.db` beside the model, every finished unit
+committed as it arrives, and to its export `<model>.insights.jsonl`, written when
+the run ends — never into `model.jsonl` or `model.db`. An interrupted run
 resumes where it stopped.
 
 A re-run reuses every unit whose fingerprint still matches. Because the
@@ -160,6 +182,12 @@ codegraph explain model.jsonl --src src/main/java --force
 `--force` re-explains everything, ignoring matching fingerprints. Use it when the
 prompt or the model changed in a way the fingerprint does not see.
 
+`--instructions TEXT` (or `@FILE`) adds a paragraph to every prompt. It is part
+of every fingerprint it reaches, so it re-explains every unit a model is asked
+about — the templated ones stay as they are — and on a store that already holds
+explanations, the plan's first line says how many records that replaces before
+anything is spent.
+
 {{< callout type="info" >}}
 `--dry-run` and `--estimate` make no call and need no key, so they are safe in
 CI. `--json` prints the same information as a machine-readable object.
@@ -168,6 +196,7 @@ CI. `--json` prints the same information as a machine-readable object.
 ## Related
 
 - [Explaining a package with a language model](/docs/tutorials/explain/)
+- [Ask your own question of the code](/docs/how-to/walk-your-question/)
 - [`codegraph explain`](/docs/reference/cli/explain/)
 - [Environment variables](/docs/reference/environment/)
 - [Explaining bottom-up](/docs/explanation/explaining-bottom-up/)

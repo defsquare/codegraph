@@ -131,6 +131,8 @@ describe("no ANSI colour anywhere (decision 4)", () => {
     ["export", FIXTURE, "--format", "dot"],
     ["export", FIXTURE, "--format", "plantuml"],
     ["explain", FIXTURE, "--dry-run"],
+    ["walk", FIXTURE, "--no-cache", "--prompt", "Why?", "--dry-run"],
+    ["walk", "--print-definition"],
     ["vocabulary", FIXTURE],
     ["frobnicate"],
   ];
@@ -166,6 +168,15 @@ describe("reporting commands keep their framing off stdout", () => {
     const result = runCli(["vocabulary", FIXTURE, "--level", "module", "--json"]);
     expect(result.code, describeResult(result)).toBe(EXIT.OK);
     expect(() => parseJsonArtifact(result.stdout, "vocabulary --json stdout")).not.toThrow();
+  });
+
+  it("walk --dry-run --json puts exactly one JSON object on stdout, and --print-definition one definition", () => {
+    const plan = runCli(["walk", FIXTURE, "--no-cache", "--prompt", "Why?", "--dry-run", "--json"]);
+    expect(plan.code, describeResult(plan)).toBe(EXIT.OK);
+    expect(parseJsonArtifact(plan.stdout, "walk --dry-run --json stdout")["kind"]).toBe("codegraph.walkPlan/1");
+    const definition = runCli(["walk", "--print-definition"]);
+    expect(parseJsonArtifact(definition.stdout, "walk --print-definition stdout")["kind"]).toBe("codegraph.walk/1");
+    expect(definition.stderr).toBe("");
   });
 
   it("profiles --json puts exactly one JSON object on stdout", () => {

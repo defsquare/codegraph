@@ -11,6 +11,9 @@ import {
 import type { Speller } from "../src/context.js";
 import { collectUnits, type UnitSet } from "../src/units.js";
 
+/** The walk the suites run unless they say otherwise: explain's, handed over as the CLI hands it. */
+export { EXPLAIN_WALK as EXPLAIN } from "../src/explain-spec.js";
+
 /** The committed Java snapshot — real Spoon output, with Javadoc and metrics. */
 export const FIXTURE = fileURLToPath(new URL("../../../fixtures/java/expected/model.jsonl", import.meta.url));
 export const FIXTURE_SRC = fileURLToPath(new URL("../../../fixtures/java/src", import.meta.url));

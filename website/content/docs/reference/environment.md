@@ -4,13 +4,13 @@ linkTitle: Environment
 weight: 8
 ---
 
-Every environment variable the workspace reads, by subsystem: the `explain` command's provider resolution (and the Claude Code it may run), the desktop daemon, and the two Vite dev servers. One more is read only by a test.
+Every environment variable the workspace reads, by subsystem: the provider resolution of `explain` and `walk` (and the Claude Code it may run), the desktop daemon, and the two Vite dev servers. One more is read only by a test.
 
-`process.env` is read in six places at runtime — `packages/cli/src/commands/explain.ts` (the real seam hands it to the discovery and the resolution below), `packages/llm/src/claude-code.ts` (the environment a `claude -p` child inherits when the caller hands none), `packages/cli/src/app/store.ts` (the desktop daemon's data directory: `APPDATA` on Windows, `XDG_DATA_HOME` elsewhere), `packages/cli/src/app/jobs.ts` (the parent environment an extractor job is spawned with, plus the registry entry's own), `packages/viz/vite.config.ts` and `packages/navigator-ui/vite.config.ts` — and in one test, the opt-in corpus suite `packages/insights/test/cycles.test.ts`. `packages/llm/src/claude-code-discovery.ts` reads `process.platform`, not the environment, when no platform is passed in.
+`process.env` is read in six places at runtime — `packages/cli/src/commands/walk-run.ts` (the runner `explain` and `walk` share: its real seam hands it to the discovery and the resolution below), `packages/llm/src/claude-code.ts` (the environment a `claude -p` child inherits when the caller hands none), `packages/cli/src/app/store.ts` (the desktop daemon's data directory: `APPDATA` on Windows, `XDG_DATA_HOME` elsewhere), `packages/cli/src/app/jobs.ts` (the parent environment an extractor job is spawned with, plus the registry entry's own), `packages/viz/vite.config.ts` and `packages/navigator-ui/vite.config.ts` — and in one test, the opt-in corpus suite `packages/insights/test/cycles.test.ts`. `packages/llm/src/claude-code-discovery.ts` reads `process.platform`, not the environment, when no platform is passed in.
 
 ## Model provider
 
-Read by [`explain`](/docs/reference/cli/explain/), which passes `process.env` into the Claude Code discovery (`packages/llm/src/claude-code-discovery.ts`) and the provider resolution (`packages/llm/src/providers.ts`). Nothing else in the workspace talks to a model provider: `serve` and the desktop daemon open sockets to serve pages, and the daemon's jobs, `scm` and `snapshots` spawn extractors and `git`, but no other code sends a prompt anywhere. A variable that is set but blank counts as absent.
+Read by [`explain`](/docs/reference/cli/explain/) and [`walk`](/docs/reference/cli/walk/), whose shared runner passes `process.env` into the Claude Code discovery (`packages/llm/src/claude-code-discovery.ts`) and the provider resolution (`packages/llm/src/providers.ts`). Nothing else in the workspace talks to a model provider: `serve` and the desktop daemon open sockets to serve pages, and the daemon's jobs, `scm` and `snapshots` spawn extractors and `git`, but no other code sends a prompt anywhere. A variable that is set but blank counts as absent.
 
 | Variable | Provider | Required | What it does |
 |---|---|---|---|
@@ -57,4 +57,4 @@ Without the variable the app falls back to `?src=URL`, drag and drop, or a file 
 
 ## Not environment variables
 
-`JAVA_HOME` matters only to the [Java extractor](/docs/reference/java-extractor/), which is an ordinary JVM program: non-interactive shells do not source sdkman, so a JDK has to be on `PATH` explicitly. `PATH` is also where `explain` looks for `claude` (above), and `HOME`, `USERPROFILE` and `APPDATA` only name the install locations it searches next.
+`JAVA_HOME` matters only to the [Java extractor](/docs/reference/java-extractor/), which is an ordinary JVM program: non-interactive shells do not source sdkman, so a JDK has to be on `PATH` explicitly. `PATH` is also where `explain` and `walk` look for `claude` (above), and `HOME`, `USERPROFILE` and `APPDATA` only name the install locations it searches next.

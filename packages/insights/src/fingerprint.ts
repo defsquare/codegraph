@@ -15,10 +15,16 @@ import { PROMPT_VERSION, type Level } from "./schema.js";
  *
  * TWO HASHES PER UNIT. The fingerprint is stored on its records; the CHAIN is
  * the same hash without the words asked, and is what a dependent hashes of a
- * dependency whose words its prompt never shows (plan.ts `readsWordsOf`). So a
+ * dependency whose words its prompt never shows (the spec's `words.reads`). So a
  * lexicon correction re-explains the units whose words moved and the modules
  * that reconcile them — not every caller above them. Never stored.
+ *
+ * THE WALK'S OWN INPUT (PLAN.md §22.1) is `walk`: what a spec says it asks
+ * beyond the engine's inputs. Explain's spec says nothing, so the key is
+ * ABSENT — not null — and every fingerprint ever stored keeps its bytes.
  */
+
+export type JsonValue = string | number | boolean | null | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
 export interface FingerprintInputs {
   readonly level: Level;
@@ -44,6 +50,8 @@ export interface FingerprintInputs {
    * chain: only a module's fingerprint carries its types' (theirs, whole).
    */
   readonly words: readonly { readonly names: readonly { readonly identifier: string; readonly words: readonly string[] }[]; readonly glossary: readonly string[] }[];
+  /** The spec's fingerprint input (`WalkSpec.fingerprint`); hashed by the chain too. Absent when the spec gives none. */
+  readonly walk?: JsonValue;
 }
 
 /** JSON with object keys sorted at every level, so equal values hash equal. */

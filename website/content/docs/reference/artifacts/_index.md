@@ -15,6 +15,7 @@ The files codegraph writes that are not the interchange model. Each is a **deriv
 | [`<model>.history-metrics.jsonl`](/docs/reference/artifacts/history-metrics-jsonl/) | [`codegraph-metrics --history`](/docs/reference/metrics-pass/) | `codegraph.history-metrics/1` | JSONL, section-ordered |
 | [`domain-facts.json`](/docs/reference/artifacts/domain-facts/) | [`domain-facts`](/docs/reference/cli/domain-facts/) | `codegraph.domainFacts/1` | one JSON document |
 | [`<model>.insights.jsonl`](/docs/reference/artifacts/insights-jsonl/) | [`explain`](/docs/reference/cli/explain/) | `codegraph.insights/1` | JSONL, header/records/trailer |
+| [`<model>.N.walk.jsonl`](/docs/reference/artifacts/insights-jsonl/#a-walks-side-car) | [`walk`](/docs/reference/cli/walk/) | `codegraph.walkRecords/1` | JSONL, header/records/trailer |
 
 Two more files are not artifacts in this sense: [`model.jsonl`](/docs/reference/model-jsonl/) is the interchange contract, and [`model.db`](/docs/reference/model-db/) is a derived, disposable cache.
 
@@ -27,4 +28,4 @@ Two more files are not artifacts in this sense: [`model.jsonl`](/docs/reference/
 
 ## Determinism
 
-Two runs over one unchanged model produce byte-identical artifacts. Arrays are sorted (never `Set`s, which do not survive `JSON.stringify`), dimensions are rounded to a fixed number of decimals, and no artifact body carries a timestamp. The one exception is stated where it applies: the `insights.jsonl` trailer carries `generatedAt`, and nothing else in that file does.
+Two runs over one unchanged model produce byte-identical artifacts. Arrays are sorted (never `Set`s, which do not survive `JSON.stringify`), dimensions are rounded to a fixed number of decimals, and no artifact body carries a timestamp. The one exception is stated where it applies: the `insights.jsonl` trailer — and a walk's — carries `generatedAt`, and nothing else in that file does.

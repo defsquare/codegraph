@@ -1,22 +1,28 @@
 import {
+  EXPLAIN_WALK_NAME,
   WORD_CONCERNS,
   answerInsight,
   concernsReport,
   polysemyReport,
   typesDisagree,
+  walkStorePathFor,
   wordReport,
   wordsAbsence,
   type FailureRecord,
   type GlossaryEntry,
   type InsightRecord,
   type InsightRow,
+  type InsightStats,
   type InsightsStore,
   type RunRow,
+  type StoreHeader,
+  type WalkRecord,
+  type WalkRecordsHeader,
 } from "@codegraph/insights";
 import type { InsightsOptions } from "../args.js";
 import { EXIT, UsageError, type ExitCode } from "../exit.js";
 import { errLine, outLine, type IoSink } from "../io.js";
-import { openInsightsReader, storePathForModel } from "../insights-paths.js";
+import { openStoreReader, storePathForModel } from "../insights-paths.js";
 
 /**
  * `codegraph insights [model.jsonl] [--id ID | --level … --concept … | --failures | --runs] [--json]`
@@ -36,33 +42,71 @@ import { openInsightsReader, storePathForModel } from "../insights-paths.js";
  * `--concerns`: M19c's readers, `glossary.ts`), what is owed (`--failures`),
  * the ledger (`--runs`). stdout is the answer; `--json` makes it one kind-tagged
  * document.
+ *
+ * A WALK'S STORE (`--walk N`, PLAN.md §22.5) is read the same way, with no
+ * definition: its summary, lists, `--id` (the block by name), `--failures` and
+ * `--runs` in the walk's words; what only explain's blocks carry — a concept,
+ * words — is answered "none", never an empty table. `--store FILE` alone reads
+ * whichever walk's store the file's header names; no flag is explain's store.
  */
 export function insightsCommand(options: InsightsOptions, io: IoSink): ExitCode {
-  const path = options.store ?? storePathForModel(options.model);
-  const store = openInsightsReader(path, "--store");
+  // No --walk: explain's store beside the model, or with --store FILE whichever walk's the file is.
+  const walk = options.walk ?? (options.store === undefined ? EXPLAIN_WALK_NAME : undefined);
+  const path = options.store ?? (walk === undefined || walk === EXPLAIN_WALK_NAME ? storePathForModel(options.model) : walkStorePathFor(options.model, walk));
+  const reading = openStoreReader(path, walk, "--store");
   try {
-    switch (options.mode) {
-      case "summary":
-        return summary(store, path, options, io);
-      case "list":
-        return list(store, options, io);
-      case "one":
-        return one(store, options.id ?? "", path, options, io);
-      case "word":
-        return word(store, options.word ?? "", options, io);
-      case "glossary":
-        return glossary(store, options.glossary ?? "", path, options, io);
-      case "polysemy":
-        return polysemy(store, options, io);
-      case "concerns":
-        return concerns(store, options, io);
-      case "failures":
-        return failures(store, options, io);
-      case "runs":
-        return runs(store, options, io);
-    }
+    return reading.walk === undefined ? explainAnswer(reading.store, path, options, io) : walkAnswer(reading.store, reading.walk, path, options, io);
   } finally {
-    store.close();
+    reading.store.close();
+  }
+}
+
+/** Any walk's store, explain's included: what the generic questions read. */
+type AnyStore = InsightsStore<WalkRecord, StoreHeader>;
+
+function explainAnswer(store: InsightsStore, path: string, options: InsightsOptions, io: IoSink): ExitCode {
+  switch (options.mode) {
+    case "summary":
+      return summary(store, path, options, io);
+    case "list":
+      return list(store, options, io);
+    case "one":
+      return one(store, options.id ?? "", path, options, io);
+    case "word":
+      return word(store, options.word ?? "", options, io);
+    case "glossary":
+      return glossary(store, options.glossary ?? "", path, options, io);
+    case "polysemy":
+      return polysemy(store, options, io);
+    case "concerns":
+      return concerns(store, options, io);
+    case "failures":
+      return failures(store, options, io);
+    case "runs":
+      return runs(store, options, io);
+  }
+}
+
+function walkAnswer(store: InsightsStore<WalkRecord, WalkRecordsHeader>, walk: string, path: string, options: InsightsOptions, io: IoSink): ExitCode {
+  switch (options.mode) {
+    case "summary":
+      return walkSummary(store, walk, path, options, io);
+    case "list":
+      return options.concept === undefined ? list(store, options, io) : none(walk, "--concept", options, io);
+    case "one":
+      return walkOne(store, walk, options.id ?? "", path, options, io);
+    case "word":
+      return none(walk, "--word", options, io);
+    case "glossary":
+      return none(walk, "--glossary", options, io);
+    case "polysemy":
+      return none(walk, "--polysemy", options, io);
+    case "concerns":
+      return none(walk, "--concerns", options, io);
+    case "failures":
+      return failures(store, options, io);
+    case "runs":
+      return runs(store, options, io, "answered");
   }
 }
 
@@ -83,19 +127,57 @@ function summary(store: InsightsStore, path: string, options: InsightsOptions, i
     `  ${plural(stats.records, "record")}: ${plural(byLevel.operation, "operation")}, ${plural(byLevel.type, "type")}, ${plural(byLevel.module, "module")} ` +
       `(${byOrigin.llm} explained, ${byOrigin.template} templated)`,
   );
-  if (header !== undefined) {
-    lines.push(`  models: ${header.models.leaf} (operations), ${header.models.rollup} (types, modules); depth ${header.depth}${header.provider === undefined ? "" : `; provider ${header.provider}`}`);
-  }
+  if (header !== undefined) lines.push(modelsLine(header));
   const concepts = Object.entries(stats.byConcept);
   if (concepts.length > 0) lines.push(`  concepts: ${concepts.map(([name, count]) => `${name} ${count}`).join(", ")}`);
-  lines.push(stats.failures === 0 ? "  nothing owed: every unit asked for has a record" : `  ${plural(stats.failures, "failure")} owed — 'codegraph insights --failures' lists them, 'codegraph explain --retry-failed' redoes them`);
-  lines.push(`  these records cost ${stats.usage.promptTokens} prompt + ${stats.usage.completionTokens} completion tokens${usd(stats.usage.cost)} (their own usage; failed and replaced calls are in the ledger only)`);
-  lines.push(`  ledger: ${ledgerTotal(ledger)}`);
+  lines.push(stats.failures === 0 ? NOTHING_OWED : `  ${plural(stats.failures, "failure")} owed — 'codegraph insights --failures' lists them, 'codegraph explain --retry-failed' redoes them`);
+  lines.push(costLine(stats), `  ledger: ${ledgerTotal(ledger)}`);
   if (stats.withoutWords > 0) {
     lines.push(`  ${stats.withoutWords} explained under prompt 1, before words were asked: the next 'codegraph explain' re-explains them`);
   }
+  lines.push(...openLines(ledger));
+  outLine(io, lines.join("\n"));
+  return EXIT.OK;
+}
+
+const NOTHING_OWED = "  nothing owed: every unit asked for has a record";
+
+function modelsLine(header: StoreHeader): string {
+  return `  models: ${header.models.leaf} (operations), ${header.models.rollup} (types, modules); depth ${header.depth}${header.provider === undefined ? "" : `; provider ${header.provider}`}`;
+}
+
+function costLine(stats: InsightStats): string {
+  return `  these records cost ${stats.usage.promptTokens} prompt + ${stats.usage.completionTokens} completion tokens${usd(stats.usage.cost)} (their own usage; failed and replaced calls are in the ledger only)`;
+}
+
+function openLines(ledger: readonly RunRow[]): string[] {
   const open = ledger.filter((run) => run.finishedAt === undefined);
-  if (open.length > 0) lines.push(`  ${plural(open.length, "run")} never finished (still going, or killed): its records are kept`);
+  return open.length === 0 ? [] : [`  ${plural(open.length, "run")} never finished (still going, or killed): its records are kept`];
+}
+
+/** A walk's summary: whose store, under which definition, how many answers — and nothing of concepts or words. */
+function walkSummary(store: InsightsStore<WalkRecord, WalkRecordsHeader>, walk: string, path: string, options: InsightsOptions, io: IoSink): ExitCode {
+  const stats = store.stats();
+  const header = store.header();
+  const ledger = store.runs();
+  if (options.json) {
+    outLine(io, JSON.stringify({ kind: "codegraph.insightsSummary/1", walk, store: path, header: header ?? null, stats, runs: ledger }));
+    return EXIT.OK;
+  }
+  const { byLevel, byOrigin } = stats;
+  const lines = [
+    `insights: ${path}`,
+    header === undefined ? `  walk: ${walk}` : `  walk: ${walk}, version ${header.walk.version} (definition ${header.walk.digest.slice(0, 12)})`,
+    `  ${plural(stats.records, "record")}: ${plural(byLevel.operation, "operation")}, ${plural(byLevel.type, "type")}, ${plural(byLevel.module, "module")} ` +
+      `(${byOrigin.llm} answered${byOrigin.template === 0 ? "" : `, ${byOrigin.template} templated`})`,
+  ];
+  if (header !== undefined) lines.push(modelsLine(header));
+  lines.push(
+    stats.failures === 0
+      ? NOTHING_OWED
+      : `  ${plural(stats.failures, "failure")} owed — 'codegraph insights --walk ${walk} --failures' lists them, 'codegraph walk … --retry-failed' under the same definition redoes them`,
+  );
+  lines.push(costLine(stats), `  ledger: ${ledgerTotal(ledger)}`, ...openLines(ledger));
   outLine(io, lines.join("\n"));
   return EXIT.OK;
 }
@@ -116,7 +198,7 @@ function ledgerTotal(ledger: readonly RunRow[]): string {
   return `${plural(ledger.length, "run")}, ${plural(calls, "call")}, ${prompt} prompt + ${completion} completion tokens${usd(cost)}`;
 }
 
-function list(store: InsightsStore, options: InsightsOptions, io: IoSink): ExitCode {
+function list(store: AnyStore, options: InsightsOptions, io: IoSink): ExitCode {
   const rows = store.query({
     ...(options.level === undefined ? {} : { level: options.level }),
     ...(options.concept === undefined ? {} : { concept: options.concept }),
@@ -188,6 +270,83 @@ function typeConcept(record: InsightRecord): string | undefined {
 
 function failureReason(failure: FailureRecord): string {
   return `${failure.reason.kind}${failure.reason.status === undefined ? "" : ` ${failure.reason.status}`}: ${failure.reason.message}`;
+}
+
+function walkOne(store: InsightsStore<WalkRecord, WalkRecordsHeader>, walk: string, id: string, path: string, options: InsightsOptions, io: IoSink): ExitCode {
+  // The page's answer too (`answerInsight`), naming the walk.
+  const answer = answerInsight(store, id, walk);
+  switch (answer.status) {
+    case "explained":
+      outLine(io, options.json ? JSON.stringify(answer.record) : walkRecordText(answer.record, walk));
+      return EXIT.OK;
+    case "failed":
+      errLine(io, `${id} is not answered by the walk "${walk}": ${failureReason(answer.failure)} (${plural(answer.failure.attempts, "attempt")}, model ${answer.failure.model}).`);
+      errLine(io, "Once the cause is dealt with: codegraph walk … --retry-failed, under the same definition");
+      return EXIT.FINDINGS;
+    case "unknown":
+      throw new UsageError(
+        `no record of the walk "${walk}" for '${id}' in ${path}`,
+        `Ids are the model's rendered entity ids. 'codegraph insights --walk ${walk} --level type' lists what the store holds.`,
+      );
+  }
+}
+
+/** The envelope, then the block BY NAME in its order — the answer, the declared fields, the description — read as stored. */
+function walkRecordText(record: WalkRecord, walk: string): string {
+  const confidence = record.block["confidence"];
+  const usage = record.usage === undefined ? undefined : `${record.usage.promptTokens} + ${record.usage.completionTokens} tokens${usd(record.usage.cost)}`;
+  return [
+    record.id,
+    `  ${[`${record.level} (${record.kind})`, `walk ${walk}`, typeof confidence === "number" ? `confidence ${confidence.toFixed(2)}` : undefined].filter((part) => part !== undefined).join(" · ")}`,
+    `  ${[record.file, record.origin, record.model, usage].filter((part) => part !== undefined).join(" · ")}`,
+    "",
+    ...Object.entries(record.block).flatMap(([name, value]) => (name === "confidence" ? [] : valueLines(name, value, ""))),
+  ].join("\n");
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** A value says nothing — null, empty — as a dash; a string keeps its lines, the next ones indented under it. */
+function scalarLines(value: unknown): string[] {
+  if (value === null || value === undefined || value === "") return ["—"];
+  return (typeof value === "string" ? value : typeof value === "number" || typeof value === "boolean" ? String(value) : JSON.stringify(value)).split("\n");
+}
+
+/** `name: value`; a list one `- item` a line, an object its fields one level in. */
+function valueLines(name: string, value: unknown, indent: string): string[] {
+  if (Array.isArray(value) || isObject(value)) {
+    const inner = Array.isArray(value) ? value.flatMap((item) => itemLines(item, `${indent}  `)) : Object.entries(value).flatMap(([key, part]) => valueLines(key, part, `${indent}  `));
+    return inner.length === 0 ? [`${indent}${name}: —`] : [`${indent}${name}:`, ...inner];
+  }
+  const [first = "", ...rest] = scalarLines(value);
+  return [`${indent}${name}: ${first}`, ...rest.map((line) => `${indent}  ${line}`)];
+}
+
+/** `- item`; an object item's first field on the dash's line, the others aligned under it. */
+function itemLines(item: unknown, indent: string): string[] {
+  const inner = isObject(item)
+    ? Object.entries(item).flatMap(([key, part]) => valueLines(key, part, `${indent}  `))
+    : Array.isArray(item)
+      ? item.flatMap((part) => itemLines(part, `${indent}  `))
+      : scalarLines(item).map((line) => `${indent}  ${line}`);
+  const [first, ...rest] = inner;
+  return first === undefined ? [`${indent}- —`] : [`${indent}- ${first.slice(indent.length + 2)}`, ...rest];
+}
+
+/** What only explain's blocks carry, asked of a walk's store: the question has no answer there, and says so. */
+const NONE = {
+  "--concept": ["concept", "concepts"],
+  "--word": ["words", "words"],
+  "--glossary": ["words", "glossaries"],
+  "--polysemy": ["words", "words"],
+  "--concerns": ["words", "words"],
+} as const;
+
+function none(walk: string, asked: keyof typeof NONE, options: InsightsOptions, io: IoSink): ExitCode {
+  const [what, explains] = NONE[asked];
+  if (options.json) outLine(io, JSON.stringify({ kind: "codegraph.insightsNone/1", walk, asked, none: `a walk's blocks carry no ${what}` }));
+  else errLine(io, `none: a walk's blocks carry no ${what} — the walk "${walk}" answers its own fields; explain's ${explains} are read by 'codegraph insights ${asked} …' without --walk.`);
+  return EXIT.OK;
 }
 
 /** What every word answer is blind to, on stderr, where a pipe does not read it. */
@@ -270,7 +429,7 @@ function concerns(store: InsightsStore, options: InsightsOptions, io: IoSink): E
   return EXIT.OK;
 }
 
-function failures(store: InsightsStore, options: InsightsOptions, io: IoSink): ExitCode {
+function failures(store: AnyStore, options: InsightsOptions, io: IoSink): ExitCode {
   const owed = store.failures();
   if (options.json) {
     outLine(io, JSON.stringify({ kind: "codegraph.insightsFailures/1", failures: owed }));
@@ -289,7 +448,7 @@ function failures(store: InsightsStore, options: InsightsOptions, io: IoSink): E
   return EXIT.OK;
 }
 
-function runs(store: InsightsStore, options: InsightsOptions, io: IoSink): ExitCode {
+function runs(store: AnyStore, options: InsightsOptions, io: IoSink, did = "explained"): ExitCode {
   const ledger = store.runs();
   if (options.json) {
     outLine(io, JSON.stringify({ kind: "codegraph.insightsRuns/1", runs: ledger }));
@@ -299,13 +458,14 @@ function runs(store: InsightsStore, options: InsightsOptions, io: IoSink): ExitC
     errLine(io, "no run recorded (the store was imported from a side-car).");
     return EXIT.OK;
   }
-  outLine(io, ledger.map(runLine).join("\n"));
+  outLine(io, ledger.map((run) => runLine(run, did)).join("\n"));
   return EXIT.OK;
 }
 
-function runLine(run: RunRow): string {
+/** `did`: what a model call made — explain's "explained", a walk's "answered". */
+function runLine(run: RunRow, verb: string): string {
   const models = run.models.leaf === run.models.rollup ? run.models.leaf : `${run.models.leaf}, ${run.models.rollup}`;
-  const did = run.counts === undefined ? "never finished" : `${run.counts.llm} explained, ${run.counts.template} templated, ${run.counts.reused} reused, ${run.counts.failed} failed`;
+  const did = run.counts === undefined ? "never finished" : `${run.counts.llm} ${verb}, ${run.counts.template} templated, ${run.counts.reused} reused, ${run.counts.failed} failed`;
   const spent = run.usage === undefined ? "" : `${plural(run.counts?.calls ?? 0, "call")}, ${run.usage.promptTokens} + ${run.usage.completionTokens} tokens${usd(run.usage.cost)}`;
   return [`#${run.id}`, `${run.startedAt} → ${run.finishedAt ?? "…"}`, models, `${did}${run.aborted === undefined ? "" : ` (${run.aborted})`}`, spent].join("\t");
 }

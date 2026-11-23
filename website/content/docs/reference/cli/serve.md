@@ -37,11 +37,23 @@ codegraph serve --app [--data-dir DIR] [--extractors FILE] [--port N] [--host AD
 | `--internal-only` | Drop stub (external) entities and every edge touching one. | — |
 | `--declared-only` | Keep only `declared` facts; drop derived and dynamic-candidate edges. | — |
 | `--no-cache` | Read the model.jsonl directly; never build or reuse a sibling model.db. | — |
-| `--insights FILE` | The insights store behind the page's explanation panel and the Vocabulary tab's glossary (what 'codegraph explain' wrote). With none, or one an older codegraph wrote that no 'codegraph explain' has migrated yet, the page shows no explanations. | `<model>.insights.db` beside the first model |
+| `--insights FILE` | The insights store behind the page's explanation panel and the Vocabulary tab's glossary (what 'codegraph explain' wrote), or a walk's store (what 'codegraph walk' wrote: the panel shows the walk's answers, the glossary has none). With none, or one an older codegraph wrote that no 'codegraph explain' has migrated yet, the page shows no explanations. | `<model>.insights.db` beside the first model |
 | `--app` | The desktop app's daemon: no model on argv; bind 127.0.0.1:0 under a per-launch token, print one JSON line {port, token} on stdout, open folders through POST /jobs, exit when stdin closes. | — |
 | `--data-dir DIR` | With --app: where models, their model.db caches, the page's artifacts and the recents live. | the OS application-data directory, `codegraph/` under it |
 | `--extractors FILE` | With --app: the extractor registry, a JSON list of { name, path, extensions[], launch?, env? } — the daemon runs an entry, never a language. | — (only model.jsonl files open) |
 | `-h, --help` | Show this help. | — |
+
+## A walk's store behind the panel
+
+`--insights FILE` may name a [walk's](/docs/reference/cli/walk/) store (`<model>.N.walk.db`) as well as explain's: the server reads whichever walk the store's header names. Navigate's panel then shows a selected type's or module's answer in the same inference frame — the badge *LLM answer*, the walk's name, the model and its claimed confidence — then the answer, every declared field by its name (a list item by item, `false` shown, `—` for an empty value), then the description. One store per page: explain's or one walk's.
+
+On the wire, `/insight.json?id=ID` answers a walk's store with one more key, `walk`, right after `status`, on every answer (`explained`, `failed`, `unknown`); explain's answers carry no such key, and their keys are unchanged:
+
+```json
+{"kind":"codegraph.insight/1","id":"java:nope/Nope","status":"unknown","walk":"risk-review"}
+```
+
+`/glossary.json` answers `{"kind":"codegraph.glossary/1","status":"no-store"}` (`404`) on a walk's store, since a walk's blocks carry no words; `/carriers.json` reads the model and is unaffected. A store that has no header yet is read as explain's, and opened again on the next request until a run writes one.
 
 ## The app daemon (`--app`)
 

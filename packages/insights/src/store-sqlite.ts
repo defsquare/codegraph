@@ -1,21 +1,31 @@
 import type { SqliteDatabase, SqliteRow, SqliteValue } from "@codegraph/analyzer";
+import { EXPLAIN_RECORDS, mismatchPhrase, storedWalkOf, walkMismatch, walkReader, type RecordFormat, type StoredWalk } from "./format.js";
 import {
+  EXPLAIN_WALK_NAME,
   FailureRecord,
-  InsightRecord,
+  INSIGHTS_KIND,
   InsightsEof,
-  InsightsHeader,
   LEVELS,
+  WALK_RECORDS_KIND,
+  conceptLabel,
   type GlossaryEntry,
   type Level,
+  type RecordKey,
+  type RecordUsage,
+  type StoreHeader,
+  type WalkRecord,
+  type WalkRecordsHeader,
   type WordConcern,
   type WordEntry,
 } from "./schema.js";
-import { conceptLabel, type RecordSummary } from "./records.js";
+import { QUOTE_PATH, blockAt, type RecordSummary } from "./records.js";
 import { LEVEL_RANK, sortFailures, sortRecords, type InsightsFile } from "./sidecar.js";
+import type { QuotedRecord } from "./spec.js";
 import {
   INSIGHTS_APPLICATION_ID,
   INSIGHTS_DB_VERSION,
   InsightsStoreError,
+  WalkMismatchError,
   type ConcernRow,
   type ExportStamp,
   type GlossaryHit,
@@ -73,6 +83,15 @@ import {
  * binding sends for it, so such a word is looked for by a scan instead. Either
  * way, and for the glossaries, what is returned is what equals the word once
  * parsed back from JSON — never what SQLite's text comparison let through.
+ *
+ * ONE WALK PER STORE (PLAN.md §22.4), no migration: the block is TEXT and the
+ * header JSON in `meta`, so a walk's store is this same schema with its own
+ * blocks in it — `concept` and `insight_word` simply empty (a definition may not
+ * declare `words`). The walk that opens a store is checked against the header in
+ * `meta` with the version and the application id, before anything is written.
+ * Explain's projections — a row's label, the records owed words — are read on
+ * explain's store alone: a walk's block may name a field `owner` and mean
+ * something else by it.
  */
 
 /** Index i takes a store from version i to i+1. Append; never edit a shipped entry. */
@@ -174,8 +193,32 @@ function pragma(db: SqliteDatabase, name: string): number {
   return Number(db.prepare(`PRAGMA ${name}`).get()?.[name] ?? 0);
 }
 
-/** Refuse before writing a byte: a store that is not ours, or is from a later build, is left as found. */
-function migrate(db: SqliteDatabase, readOnly: boolean): void {
+/** A store another walk wrote: the walk its `meta` header names (from version 1, when `meta` exists), refused by name — or by answer. */
+function checkWalk(db: SqliteDatabase, version: number, format: RecordFormat): void {
+  if (version < 1) return;
+  const raw = db.prepare("SELECT value FROM meta WHERE key = 'header'").get()?.["value"];
+  // No header: nothing was ever imported nor run, so the store belongs to no walk yet.
+  if (typeof raw !== "string") return;
+  let json: unknown;
+  try {
+    json = JSON.parse(raw) as unknown;
+  } catch (error) {
+    throw new InsightsStoreError("this insights store's header is not JSON; it was left untouched", { cause: error });
+  }
+  const found = storedWalkOf(json);
+  if (found === undefined) {
+    const kind = (json as { kind?: unknown } | null)?.kind;
+    throw new InsightsStoreError(`this store's header is of kind ${JSON.stringify(kind)}, which this build does not read; it was left untouched`);
+  }
+  const mismatch = walkMismatch(found, format);
+  if (mismatch !== undefined) {
+    const why = mismatch === "walk" ? ": a store is opened only by the walk that wrote it" : "";
+    throw new WalkMismatchError(`this store holds the records ${mismatchPhrase(found, format, mismatch)}${why}; it was left untouched`, found, { kind: format.kind, name: format.name }, mismatch);
+  }
+}
+
+/** Refuse before writing a byte: a store that is not ours, is from a later build, or is another walk's, is left as found. */
+function migrate(db: SqliteDatabase, readOnly: boolean, format: RecordFormat): void {
   const version = pragma(db, "user_version");
   const tables = Number(db.prepare("SELECT count(*) AS n FROM sqlite_master").get()?.["n"] ?? 0);
   if (tables > 0 && pragma(db, "application_id") !== INSIGHTS_APPLICATION_ID) {
@@ -195,6 +238,7 @@ function migrate(db: SqliteDatabase, readOnly: boolean): void {
       `this insights store was written by a newer codegraph (store version ${version}, this build reads up to ${INSIGHTS_DB_VERSION}); it was left untouched`,
     );
   }
+  checkWalk(db, version, format);
   // A reader runs no migration and sets nothing that lands in the file; SQLite enforces the rest.
   if (readOnly) {
     db.exec("PRAGMA query_only = ON; PRAGMA busy_timeout = 5000;");
@@ -217,14 +261,14 @@ function migrate(db: SqliteDatabase, readOnly: boolean): void {
   }
 }
 
-function keyOf(row: SqliteRow): InsightRecord["key"] {
+function keyOf(row: SqliteRow): RecordKey | undefined {
   const lang = text(row, "key_lang");
   if (lang === undefined) return undefined;
   const disambiguator = text(row, "key_disambiguator");
   return { lang, module: text(row, "key_module") ?? "", symbol: text(row, "key_symbol") ?? "", ...(disambiguator === undefined ? {} : { disambiguator }) };
 }
 
-function usageOf(row: SqliteRow): InsightRecord["usage"] {
+function usageOf(row: SqliteRow): RecordUsage | undefined {
   const promptTokens = number(row, "prompt_tokens");
   if (promptTokens === undefined) return undefined;
   const cost = number(row, "cost");
@@ -236,10 +280,11 @@ function defined<T extends object>(object: T): T {
   return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined)) as T;
 }
 
-function recordOf(row: SqliteRow): InsightRecord {
+/** A row as a record, through the format's READ schema: a walk's block comes back as it was stored. */
+function recordOf<R extends WalkRecord>(format: RecordFormat<R, StoreHeader>, row: SqliteRow): R {
   const scc = text(row, "scc");
   const metadata = text(row, "metadata");
-  return InsightRecord.parse(
+  return format.stored.parse(
     defined({
       t: "i",
       id: row["id"],
@@ -276,8 +321,23 @@ function failureOf(row: SqliteRow): FailureRecord {
   );
 }
 
-export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOptions = {}): InsightsStore {
-  migrate(db, options.readOnly === true);
+/** A store of the walk `format` names — explain's when none is given (every caller before PLAN.md §22.4). */
+export function sqliteInsightsStore(db: SqliteDatabase, options?: Omit<StoreOpenOptions, "format">): InsightsStore;
+export function sqliteInsightsStore<R extends WalkRecord, H extends StoreHeader>(
+  db: SqliteDatabase,
+  options: StoreOpenOptions<R, H> & { readonly format: RecordFormat<R, H> },
+): InsightsStore<R, H>;
+export function sqliteInsightsStore(
+  db: SqliteDatabase,
+  options: StoreOpenOptions<WalkRecord, StoreHeader> = {},
+): InsightsStore<WalkRecord, StoreHeader> {
+  const format: RecordFormat<WalkRecord, StoreHeader> = options.format ?? EXPLAIN_RECORDS;
+  // Before anything is read or set: what holds no definition has nothing to write by.
+  if (format.readOnly === true && options.readOnly !== true) {
+    throw new InsightsStoreError(`the walk "${format.name}" read without its definition opens a store read-only: a reader writes nothing`);
+  }
+  migrate(db, options.readOnly === true, format);
+  const explains = format.kind === INSIGHTS_KIND;
 
   const insertInsight = db.prepare(`INSERT OR REPLACE INTO insight (${INSIGHT_COLUMNS}, run_id) VALUES (${"?, ".repeat(18)}?)`);
   const insertFailure = db.prepare(`INSERT OR REPLACE INTO failure (${FAILURE_COLUMNS}, run_id) VALUES (${"?, ".repeat(14)}?)`);
@@ -305,9 +365,20 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
     return typeof value === "string" ? (JSON.parse(value) as unknown) : undefined;
   };
 
+  /** A header or side-car of another walk would put its records under this walk's name: refused, nothing written. */
+  const ownHeader = (header: StoreHeader, what: string): StoreHeader => {
+    const found = storedWalkOf(header);
+    const mismatch = found === undefined ? "walk" : walkMismatch(found, format);
+    if (mismatch !== undefined) {
+      const named = found ?? { kind: String((header as { kind?: unknown }).kind), name: undefined };
+      throw new WalkMismatchError(`${what} holds the records ${mismatchPhrase(named, format, mismatch)}${mismatch === "walk" ? ":" : ";"} the store was left as it was`, named, { kind: format.kind, name: format.name }, mismatch);
+    }
+    return format.header.parse(header);
+  };
+
   /** Validated BEFORE the first bind, so a bad member aborts its unit with nothing written. Its words go with it. */
-  const writeRecord = (input: InsightRecord, run: number | null): void => {
-    const r = InsightRecord.parse(input);
+  const writeRecord = (input: WalkRecord, run: number | null): void => {
+    const r = format.record.parse(input);
     // First: the replaced record's words must not outlive it, and the row they reference is about to be replaced.
     deleteWords.run(r.id);
     insertInsight.run(
@@ -320,7 +391,8 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
       JSON.stringify(r.block),
       run,
     );
-    for (const { meaning: _meaning, ...listed } of r.block.words ?? []) insertWord.run(r.id, JSON.stringify(listed));
+    // Explain's blocks alone carry `words` (a definition may not declare the name): a walk's projects none.
+    for (const { meaning: _meaning, ...listed } of (r.block["words"] as readonly WordEntry[] | undefined) ?? []) insertWord.run(r.id, JSON.stringify(listed));
   };
 
   const writeFailure = (input: FailureRecord, run: number | null): void => {
@@ -337,8 +409,8 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
 
   /** One statement per arity, prepared on first use: a prompt asks for ONE record, an export for chunks. */
   const selectByIds = new Map<number, ReturnType<SqliteDatabase["prepare"]>>();
-  const get = (ids: readonly string[]): InsightRecord[] => {
-    const out: InsightRecord[] = [];
+  const get = (ids: readonly string[]): WalkRecord[] => {
+    const out: WalkRecord[] = [];
     for (let start = 0; start < ids.length; start += GET_CHUNK) {
       const chunk = ids.slice(start, start + GET_CHUNK);
       let statement = selectByIds.get(chunk.length);
@@ -346,7 +418,7 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
         statement = db.prepare(`SELECT ${INSIGHT_COLUMNS} FROM insight WHERE id IN (${chunk.map(() => "?").join(", ")})`);
         selectByIds.set(chunk.length, statement);
       }
-      for (const row of statement.all(...chunk)) out.push(recordOf(row));
+      for (const row of statement.all(...chunk)) out.push(recordOf(format, row));
     }
     return sortRecords(out);
   };
@@ -368,6 +440,27 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
       description: jsonString(row["description"]) ?? "",
       concept: conceptLabel(level, { owner: jsonString(row["owner"]), concept: jsonString(row["concept"]), context: jsonString(row["context"]) }),
     };
+  };
+
+  // One statement per path list, prepared on first use; `->` for the reason above. A path is checked before it is SQL.
+  const selectQuoted = new Map<string, ReturnType<SqliteDatabase["prepare"]>>();
+  const quoted = (id: string, paths: readonly string[]): QuotedRecord | undefined => {
+    const key = paths.join("\n");
+    let statement = selectQuoted.get(key);
+    if (statement === undefined) {
+      const bad = paths.find((path) => !QUOTE_PATH.test(path));
+      if (bad !== undefined) throw new InsightsStoreError(`a quote reads block paths made of identifiers (a.b), not ${JSON.stringify(bad)}`);
+      statement = db.prepare(`SELECT level${paths.map((path, i) => `, block -> '$.${path}' AS q${i}`).join("")} FROM insight WHERE id = ?`);
+      selectQuoted.set(key, statement);
+    }
+    const row = statement.get(id);
+    if (row === undefined) return undefined;
+    const values: [string, unknown][] = [];
+    paths.forEach((path, i) => {
+      const value = row[`q${i}`];
+      if (typeof value === "string") values.push([path, JSON.parse(value) as unknown]);
+    });
+    return { level: LEVELS[Number(row["level"])] as Level, block: blockAt(values) };
   };
 
   const selectWords = db.prepare("SELECT block -> '$.words' AS words FROM insight WHERE id = ?");
@@ -399,7 +492,7 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
       model: text(row, "model"),
       confidence: Number(row["confidence"]),
       description: jsonString(row["description"]) ?? "",
-      concept: conceptLabel(level, { owner: jsonString(row["owner"]), concept: jsonString(row["block_concept"]), context: jsonString(row["context"]) }),
+      concept: explains ? conceptLabel(level, { owner: jsonString(row["owner"]), concept: jsonString(row["block_concept"]), context: jsonString(row["context"]) }) : undefined,
     };
   };
 
@@ -457,9 +550,9 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
     };
   };
 
-  // A template has no words by design (no model judged it): only a record a model wrote is owed them.
+  // A template has no words by design (no model judged it): only a record a model wrote is owed them — by explain alone.
   const selectWithoutWords = db.prepare("SELECT count(*) AS n FROM insight WHERE origin = 'llm' AND block -> '$.words' IS NULL");
-  const withoutWords = (): number => Number(selectWithoutWords.get()?.["n"] ?? 0);
+  const withoutWords = (): number => (explains ? Number(selectWithoutWords.get()?.["n"] ?? 0) : 0);
 
   const HIT_SQL =
     "SELECT w.entry AS entry, i.id AS id, i.level AS level, i.kind AS kind, i.name AS name, i.model AS model, i.key_lang, i.key_module, i.key_symbol, i.key_disambiguator FROM insight_word w JOIN insight i ON i.id = w.id";
@@ -522,18 +615,18 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
       };
     });
 
-  const records = (): InsightRecord[] => {
-    const out: InsightRecord[] = [];
-    for (const row of db.prepare(`SELECT ${INSIGHT_COLUMNS} FROM insight`).iterate()) out.push(recordOf(row));
+  const records = (): WalkRecord[] => {
+    const out: WalkRecord[] = [];
+    for (const row of db.prepare(`SELECT ${INSIGHT_COLUMNS} FROM insight`).iterate()) out.push(recordOf(format, row));
     return sortRecords(out);
   };
 
   const failures = (): FailureRecord[] =>
     sortFailures(db.prepare(`SELECT ${FAILURE_COLUMNS} FROM failure`).all().map(failureOf));
 
-  const header = (): InsightsHeader | undefined => {
+  const header = (): StoreHeader | undefined => {
     const value = meta("header");
-    return value === undefined ? undefined : InsightsHeader.parse(value);
+    return value === undefined ? undefined : format.header.parse(value);
   };
 
   const eof = (): InsightsEof | undefined => {
@@ -564,6 +657,7 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
     },
 
     summary,
+    quoted,
     words,
     get,
 
@@ -580,12 +674,14 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
         .map((row) => ({ id: Number(row["id"]), startedAt: row["started_at"] as string, pid: number(row, "pid"), records: Number(row["records"]) }));
     },
 
-    importFile(file: InsightsFile) {
+    importFile(file: InsightsFile<WalkRecord, StoreHeader>) {
+      // Checked before the transaction: a side-car of another walk deletes nothing.
+      const h = ownHeader(file.header, "this side-car");
       transaction(() => {
         db.exec("DELETE FROM insight_word; DELETE FROM insight; DELETE FROM failure;");
         for (const record of file.records) writeRecord(record, null);
         for (const failure of file.failures) writeFailure(failure, null);
-        setMeta.run("header", JSON.stringify(InsightsHeader.parse(file.header)));
+        setMeta.run("header", JSON.stringify(h));
         if (file.eof === undefined) dropMeta.run("eof");
         else setMeta.run("eof", JSON.stringify(InsightsEof.parse(file.eof)));
         dropMeta.run("exported");
@@ -596,9 +692,9 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
       db.prepare("UPDATE run SET finished_at = started_at, aborted = ? WHERE id = ? AND finished_at IS NULL").run(aborted, id);
     },
 
-    beginRun(start: RunStart): RunHandle {
+    beginRun(start: RunStart<StoreHeader>): RunHandle {
+      const h = ownHeader(start.header, "this run's header");
       return transaction(() => {
-        const h = InsightsHeader.parse(start.header);
         const { lastInsertRowid } = db
           .prepare("INSERT INTO run (started_at, pid, provider, leaf, rollup, depth) VALUES (?, ?, ?, ?, ?, ?)")
           .run(start.startedAt, nullable(start.pid), nullable(h.provider), h.models.leaf, h.models.rollup, h.depth);
@@ -657,4 +753,37 @@ export function sqliteInsightsStore(db: SqliteDatabase, options: StoreOpenOption
       db.close();
     },
   };
+}
+
+/**
+ * Which walk a store's header names, read before the store is opened — a reader holding no definition chooses its
+ * format by it (`sqliteStoreReader`). Writes nothing. Undefined for no header, no `meta` table or a file SQLite cannot
+ * read: the open that follows refuses those in its own words.
+ */
+export function storedWalkIn(db: SqliteDatabase): StoredWalk | undefined {
+  try {
+    if (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta'").get() === undefined) return undefined;
+    const raw = db.prepare("SELECT value FROM meta WHERE key = 'header'").get()?.["value"];
+    return typeof raw === "string" ? storedWalkOf(JSON.parse(raw) as unknown) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A store opened by a reader, and whose: explain's (`walk` undefined, its own records' type) or a walk's, read as stored. */
+export type StoreReading =
+  | { readonly walk: undefined; readonly store: InsightsStore }
+  | { readonly walk: string; readonly store: InsightsStore<WalkRecord, WalkRecordsHeader> };
+
+/**
+ * A READER's store (`query_only`), for a caller holding no definition. `walk` names the walk it must be ("explain" for
+ * explain's) — another walk's store is refused as any open refuses it; undefined reads it as the walk its header names:
+ * explain's, or a walk's through `walkReader`. A header naming nothing readable opens as explain's, whose open says why.
+ * The database is the caller's to close when the open is refused.
+ */
+export function sqliteStoreReader(db: SqliteDatabase, walk: string | undefined): StoreReading {
+  const found = walk === undefined ? storedWalkIn(db) : undefined;
+  const name = walk ?? (found?.kind === WALK_RECORDS_KIND ? found.name : undefined);
+  if (name === undefined || name === EXPLAIN_WALK_NAME) return { walk: undefined, store: sqliteInsightsStore(db, { readOnly: true }) };
+  return { walk: name, store: sqliteInsightsStore(db, { readOnly: true, format: walkReader(name) }) };
 }

@@ -18,6 +18,8 @@ import {
   usageLine,
   VALIDATE_SPEC,
   VOCABULARY_SPEC,
+  EXPLAIN_SPEC,
+  WALK_SPEC,
   type Invocation,
 } from "../src/args.js";
 import { EXIT, UsageError } from "../src/exit.js";
@@ -499,5 +501,85 @@ describe("the model path defaults to what the extractor writes here", () => {
   it("leaves an explicitly typed path alone, existing or not", () => {
     const invocation = parse(["analyze", "nowhere.jsonl", "--report", "deps"]);
     expect(invocation).toMatchObject({ options: { models: ["nowhere.jsonl"] } });
+  });
+});
+
+/**
+ * `walk` and `explain` share ONE run-flag table (PLAN.md §22.5): every run flag
+ * one takes, the other takes, in the same order; each adds its own. A walk is
+ * parsed into a definition's overrides, a selector term at a time.
+ */
+describe("walk, and the run flags it shares with explain", () => {
+  const run = (argv: readonly string[]) => {
+    const invocation = parse(argv);
+    if (invocation.kind !== "run" || (invocation.command !== "walk" && invocation.command !== "explain")) throw new Error("not a walk or explain");
+    return invocation.options;
+  };
+
+  it("takes every run flag explain takes, through one table, in the same order", () => {
+    const own = { explain: ["terms", "scope", "include", "exclude", "levels", "closure", "instructions", "walk"], walk: ["walk", "prompt", "prompt-file", "instructions", "name", "print-definition", "include", "exclude", "levels", "closure"] };
+    const shared = (spec: typeof WALK_SPEC, mine: readonly string[]) => spec.options.map((o) => o.name).filter((name) => !mine.includes(name));
+    expect(shared(WALK_SPEC, own.walk)).toEqual(shared(EXPLAIN_SPEC, own.explain));
+    expect(shared(WALK_SPEC, own.walk)).toEqual(expect.arrayContaining(["src", "provider", "model", "rollup-model", "depth", "max-calls", "max-tokens", "concurrency", "max-lines", "max-scc", "internal-only", "declared-only", "dry-run", "estimate", "price-in", "price-out", "force", "retry-failed", "export", "import", "yes", "json"]));
+    expect(renderHelp(WALK_SPEC)).toContain("usage: codegraph walk [model.jsonl...] [--walk FILE|explain] [--prompt TEXT]");
+  });
+
+  it("parses a walk's own flags: repeatable terms, a set of levels, a closure, the context as typed", () => {
+    const options = run(["walk", "a.jsonl", "--prompt", "Why?", "--include", "kind:method", "--include", "edge:annotationUse>name:Audited", "--exclude", "name:get*", "--levels", "type, operation", "--closure", "containers", "--depth", "2", "--name", "why"]);
+    expect(options).toMatchObject({
+      models: ["a.jsonl"],
+      prompt: "Why?",
+      name: "why",
+      include: [{ type: "kind", kind: "method" }, { type: "edge", kind: "annotationUse", to: { type: "name", glob: "Audited" } }],
+      exclude: [{ type: "name", glob: "get*" }],
+      levels: ["operation", "type"],
+      closure: "containers",
+      depth: 2,
+      maxLines: 200,
+      typed: { depth: 2, maxLines: undefined },
+      printDefinition: undefined,
+    });
+    expect(run(["walk", "a.jsonl"])).toMatchObject({ include: [], exclude: [], levels: undefined, closure: undefined, typed: { depth: undefined, maxLines: undefined } });
+  });
+
+  it("refuses a bad term, level or closure when parsed, naming what is valid", () => {
+    expect(usageErrorFor(["walk", "a.jsonl", "--include", "edge:calls"]).message).toMatch(/^--include "edge:calls": unknown edge kind "calls"; valid: /u);
+    expect(usageErrorFor(["walk", "a.jsonl", "--include", "kind"]).hint).toContain("One selector term per flag, PREFIX:VALUE");
+    expect(usageErrorFor(["walk", "a.jsonl", "--levels", ""]).message).toBe("--levels needs at least one level");
+    expect(usageErrorFor(["walk", "a.jsonl", "--levels", "operation,class"]).hint).toBe("Valid levels: operation, type, module, comma-separated.");
+    expect(usageErrorFor(["walk", "a.jsonl", "--closure", "deps"]).hint).toBe("Valid values: none, dependencies, containers, all.");
+  });
+
+  it("refuses what cannot go together", () => {
+    expect(usageErrorFor(["walk", "a.jsonl", "--prompt", "a", "--prompt-file", "b"]).message).toBe("--prompt and --prompt-file both give the task");
+    expect(usageErrorFor(["walk", "a.jsonl", "--walk", "explain", "--name", "x"]).message).toBe("--name does not apply to --walk explain");
+    expect(usageErrorFor(["walk", "a.jsonl", "--retry-failed", "--levels", "type"]).message).toBe("--retry-failed and --levels both choose what to ask");
+    expect(usageErrorFor(["explain", "a.jsonl", "--retry-failed", "--closure", "all"]).message).toBe("--retry-failed and --closure both choose what to explain");
+    expect(usageErrorFor(["walk", "a.jsonl", "--export", "--import", "f"]).message).toBe("--export and --import move the same records in opposite directions");
+    expect(usageErrorFor(["walk", "a.jsonl", "b.jsonl", "--src", "d"]).message).toMatch(/^--src applies to one model/u);
+  });
+
+  it("--print-definition reads no model: none is defaulted, and only `explain` may follow it", () => {
+    // These tests run from packages/cli, where no default model exists: a model command would refuse.
+    expect(run(["walk", "--print-definition"])).toMatchObject({ printDefinition: "default", models: [] });
+    expect(run(["walk", "--print-definition", "explain"])).toMatchObject({ printDefinition: "explain" });
+    expect(usageErrorFor(["walk"]).message).toContain(defaultModelPath());
+    expect(usageErrorFor(["walk", "--print-definition", "a.jsonl"]).message).toBe("--print-definition prints the default definition, or explain's: got 'a.jsonl'");
+    expect(usageErrorFor(["walk", "--print-definition", "--name", "x"]).message).toBe("--print-definition takes no other option (got --name)");
+  });
+
+  it("explain parses the same selection, and keeps --scope as its own", () => {
+    expect(run(["explain", "a.jsonl", "--scope", "java:a,java:b", "--include", "id:java:c", "--instructions", "@ctx.md", "--walk", "w.json"])).toMatchObject({
+      scope: ["java:a", "java:b"],
+      include: [{ type: "id", id: "java:c" }],
+      instructions: "@ctx.md",
+      walkFile: "w.json",
+      terms: 60,
+    });
+  });
+
+  it("serve's --insights says it reads a walk's store too", () => {
+    const insights = COMMAND_SPECS.find((spec) => spec.name === "serve")?.options.find((option) => option.name === "insights");
+    expect(insights?.describe).toContain("or a walk's");
   });
 });

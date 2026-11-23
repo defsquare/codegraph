@@ -4,7 +4,21 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadSqlite } from "@codegraph/analyzer";
-import { INSIGHTS_GENERATOR, INSIGHTS_KIND, INSIGHTS_METAMODEL, PROMPT_VERSION, sqliteInsightsStore, type InsightRecord } from "@codegraph/insights";
+import {
+  INSIGHTS_GENERATOR,
+  INSIGHTS_KIND,
+  INSIGHTS_METAMODEL,
+  PROMPT_VERSION,
+  WALK_DEFINITION_KIND,
+  WALK_RECORDS_KIND,
+  answerDigestOf,
+  compileDefinition,
+  parseWalkDefinition,
+  sqliteInsightsStore,
+  walkRecords,
+  type InsightRecord,
+  type WalkRecord,
+} from "@codegraph/insights";
 import { parseInvocation, type ServeOptions } from "../src/args.js";
 import type { DaemonOptions } from "../src/app/daemon.js";
 import { defaultDataDir } from "../src/app/store.js";
@@ -413,6 +427,39 @@ describe("serve hands the page a selected node's explanation (M16c)", () => {
       const glossary = started[0]?.lookups?.["/glossary.json"]?.(new URLSearchParams({ term: "order" }));
       expect(glossary?.status).toBe(200);
       expect(JSON.parse(glossary?.body ?? "{}")).toMatchObject({ kind: "codegraph.glossary/1", status: "found", entries: [], withoutWords: 1 });
+      started[0]?.onClose?.();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("--insights FILE may be a WALK's store (PLAN.md §22.5): the walk's block, named; no glossary; the carriers as ever", () => {
+    const dir = mkdtempSync(join(tmpdir(), "serve-walk-insights-"));
+    try {
+      const compiled = compileDefinition(parseWalkDefinition({ kind: WALK_DEFINITION_KIND, name: "risk", answer: { fields: { type: { risky: "boolean" } } } }));
+      const format = walkRecords(compiled);
+      const db = join(dir, "model.risk.walk.db");
+      const store = sqliteInsightsStore(loadSqlite().open(db), { format });
+      const record: WalkRecord = { t: "i", id: "java:com.acme.order/Order", level: "type", kind: "class", origin: "llm", fingerprint: "a".repeat(64), block: { answer: "No.", risky: false, description: "An order.", confidence: 0.5 } };
+      const run = store.beginRun({
+        header: {
+          t: "header", kind: WALK_RECORDS_KIND, walk: { name: "risk", version: compiled.version, digest: compiled.digest, answerDigest: answerDigestOf(compiled.answer) },
+          generatedBy: INSIGHTS_GENERATOR, promptVersion: PROMPT_VERSION, models: { leaf: "m", rollup: "m" }, depth: 1, source: { paths: [], langs: [], view: { name: "all", filters: [] } },
+        },
+        startedAt: "t",
+      });
+      store.putUnit(run, record.id, [record]);
+      store.close();
+
+      const { started } = serveTo({ insights: db });
+      const answer = started[0]?.lookups?.["/insight.json"]?.(new URLSearchParams({ id: record.id }));
+      expect(answer?.status).toBe(200);
+      expect(JSON.parse(answer?.body ?? "{}")).toEqual({ kind: "codegraph.insight/1", id: record.id, status: "explained", walk: "risk", record });
+      const glossary = started[0]?.lookups?.["/glossary.json"]?.(new URLSearchParams({ term: "order" }));
+      expect(glossary?.status).toBe(404);
+      expect(JSON.parse(glossary?.body ?? "{}")).toEqual({ kind: "codegraph.glossary/1", status: "no-store" });
+      // The carriers are the model's names: no store is read for them.
+      expect(started[0]?.lookups?.["/carriers.json"]?.(new URLSearchParams({ term: "order" })).status).toBe(200);
       started[0]?.onClose?.();
     } finally {
       rmSync(dir, { recursive: true, force: true });

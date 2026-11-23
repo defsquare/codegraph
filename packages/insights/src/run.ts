@@ -1,15 +1,11 @@
 import type { z } from "zod";
-import { contextPackFor, glossaryAsked, type ContextEnv, type MemberPack } from "./context.js";
+import { contextPackFor, type ContextEnv } from "./context.js";
 import type { Unit } from "./order.js";
 import { dependenciesOf, unitHashes, type PlanEnv, type PlanStep, type RunPlan } from "./plan.js";
 import { renderPrompts, type Prompt } from "./prompt.js";
 import { bookOf, type RecordBook } from "./records.js";
 import {
-  ANSWER_BLOCKS,
-  clampConfidence,
-  responseJsonSchema,
-  sccResponseSchema,
-  type Block,
+  strictJsonSchema,
   type FailureReason,
   type FailureRecord,
   type InsightRecord,
@@ -17,9 +13,10 @@ import {
   type Level,
   type RecordKey,
   type RecordUsage,
+  type WalkRecord,
 } from "./schema.js";
 import { sortFailures } from "./sidecar.js";
-import { templateBlock } from "./template.js";
+import { responseSchemaOf, type AnswerBlock, type WalkSpec } from "./spec.js";
 
 /**
  * EXECUTING A PLAN. Layer by layer — every unit in a layer has all its
@@ -37,6 +34,9 @@ import { templateBlock } from "./template.js";
  * an `LlmClient`; tests pass a function), and every finished record is handed
  * to `onRecord`, every finished unit to `onUnit` and every failure to
  * `onFailure` — the CLI's progressive writes to the insights store.
+ *
+ * An answer is validated against the walk's spec and the spec keeps what it
+ * keeps of it; the engine reads no field of a block.
  *
  * A malformed answer gets ONE repair re-ask with the validation errors quoted.
  * A unit that still fails is left without a record and gets a FAILURE record
@@ -98,11 +98,12 @@ export interface StepEvent {
   readonly aborted?: true;
 }
 
-export interface RunHooks {
+/** Generic over the walk's record, as the books are (records.ts); explain's by default. */
+export interface RunHooks<R extends WalkRecord = InsightRecord> {
   readonly concurrency: number;
-  readonly onRecord?: (record: InsightRecord, step: PlanStep) => void | Promise<void>;
+  readonly onRecord?: (record: R, step: PlanStep) => void | Promise<void>;
   /** Every record of a finished unit at once — a cycle's members together: what a store commits as ONE transaction. */
-  readonly onUnit?: (records: readonly InsightRecord[], step: PlanStep) => void | Promise<void>;
+  readonly onUnit?: (records: readonly R[], step: PlanStep) => void | Promise<void>;
   /** A unit asked for and left without a record, the moment it fails — not at the layer boundary. */
   readonly onFailure?: (failure: FailureRecord, step: PlanStep) => void | Promise<void>;
   readonly onStep?: (event: StepEvent) => void;
@@ -128,13 +129,13 @@ export interface RunUsage {
   cost: number | undefined;
 }
 
-export interface RunResult {
+export interface RunResult<R extends WalkRecord = InsightRecord> {
   /**
    * Existing records carried over plus everything produced, sorted — read from
    * the book ON ACCESS, materializing every record. A test's convenience; a
    * run over a store never touches it (`counts.records` is the book's size).
    */
-  readonly records: readonly InsightRecord[];
+  readonly records: readonly R[];
   readonly counts: {
     readonly records: number;
     readonly llm: number;
@@ -191,59 +192,30 @@ function issuesOf(error: z.ZodError): string {
     .join("; ");
 }
 
-/** Validate one answer; returns the blocks by member id or the validation message. */
-function parseAnswer(level: Level, prompt: Prompt, json: unknown): { blocks: Map<string, Block> } | { error: string } {
-  if (prompt.shape === "block") {
-    const parsed = ANSWER_BLOCKS[level].safeParse(json);
-    if (!parsed.success) return { error: issuesOf(parsed.error) };
-    return { blocks: new Map([[prompt.memberIds[0] ?? "", clampConfidence(parsed.data as Block)]]) };
-  }
-  const parsed = sccResponseSchema(level).safeParse(json);
+/** Validate one answer against the spec; returns the blocks by member id, as validated, or the validation message. */
+function parseAnswer(spec: WalkSpec, level: Level, prompt: Prompt, json: unknown): { blocks: Map<string, AnswerBlock> } | { error: string } {
+  const parsed = responseSchemaOf(spec, level, prompt.shape).safeParse(json);
   if (!parsed.success) return { error: issuesOf(parsed.error) };
-  const blocks = new Map<string, Block>();
-  for (const member of parsed.data.members) blocks.set(member.id, clampConfidence(member.block as Block));
+  if (prompt.shape === "block") return { blocks: new Map([[prompt.memberIds[0] ?? "", parsed.data as AnswerBlock]]) };
+  const blocks = new Map<string, AnswerBlock>();
+  for (const member of (parsed.data as { members: readonly { id: string; block: unknown }[] }).members) blocks.set(member.id, member.block as AnswerBlock);
   const missing = prompt.memberIds.filter((id) => !blocks.has(id));
   if (missing.length > 0) return { error: `no entry for member id(s): ${missing.join(", ")}` };
   return { blocks };
 }
 
-/**
- * What is kept of an answer's words (PLAN.md §20.3). The words are GIVEN: an
- * entry for a word the prompt did not list is dropped, a word given twice
- * keeps its first entry, and `in` is restated from the split — a fact the
- * prompt stated, not the model's judgement. A module's glossary likewise.
- */
-function restateWords(block: Block, member: MemberPack | undefined): Block {
-  if (member === undefined) return block;
-  const asked = new Map<string, string[]>();
-  for (const { identifier, words } of member.names) {
-    for (const word of words) asked.set(word, [...(asked.get(word) ?? []), identifier]);
-  }
-  const once = <E extends { readonly word: string }>(entries: readonly E[] | undefined, keep: (word: string) => boolean): E[] => {
-    const seen = new Set<string>();
-    return (entries ?? []).flatMap((entry) => {
-      const word = entry.word.trim().toLowerCase();
-      if (!keep(word) || seen.has(word)) return [];
-      seen.add(word);
-      return [{ ...entry, word }];
-    });
-  };
-  const words = once(block.words, (word) => asked.has(word)).map((entry) => clampConfidence({ ...entry, in: asked.get(entry.word) ?? [] }));
-  if (!("glossary" in block)) return { ...block, words };
-  const listed = new Set(glossaryAsked(member).map((g) => g.word));
-  return { ...block, words, glossary: once(block.glossary, (word) => listed.has(word)) };
-}
-
-export async function executeRun(
+/** `R` is the walk's record type — explain's unless named (`executeRun<WalkRecord>(…)`): never inferred from `existing`. */
+export async function executeRun<R extends WalkRecord = InsightRecord>(
   plan: RunPlan,
   env: PlanEnv,
-  existing: RecordBook | ReadonlyMap<string, InsightRecord>,
+  existing: RecordBook<NoInfer<R>> | ReadonlyMap<string, NoInfer<R>>,
   complete: Completer,
   options: RunOptions,
-  hooks: RunHooks,
-): Promise<RunResult> {
+  hooks: RunHooks<NoInfer<R>>,
+): Promise<RunResult<R>> {
   // A map is copied into a book of its own; a book (the store) is written to.
-  const book = bookOf(existing);
+  const { spec } = env;
+  const book: RecordBook<R> = bookOf(existing, spec);
   const explained = (id: string): boolean => book.fingerprint(id) !== undefined;
   const usage: RunUsage = { promptTokens: 0, completionTokens: 0, cost: undefined };
   const failures = new Map<string, FailureRecord>();
@@ -270,10 +242,11 @@ export async function executeRun(
     return { kind: env.graph.entity(id)?.kind ?? "module", name: module?.name, file: undefined };
   };
 
-  const record = (unit: Unit, id: string, block: Block, fingerprint: string, origin: "llm" | "template", model: string | undefined, callUsage: RecordUsage | undefined): InsightRecord => {
+  // The one cast of a run: the spec validated `block` against its own schema; `R` is the caller's word for which walk's.
+  const record = (unit: Unit, id: string, block: AnswerBlock, fingerprint: string, origin: "llm" | "template", model: string | undefined, callUsage: RecordUsage | undefined): R => {
     const meta = describe(id);
     const key = options.keyOf?.(id);
-    return {
+    const made: WalkRecord = {
       t: "i",
       id,
       ...(key === undefined ? {} : { key }),
@@ -281,16 +254,17 @@ export async function executeRun(
       kind: meta.kind,
       ...(meta.name === undefined ? {} : { name: meta.name }),
       ...(meta.file === undefined ? {} : { file: meta.file }),
-      ...(unit.members.length > 1 ? { scc: unit.members } : {}),
+      ...(unit.members.length > 1 ? { scc: [...unit.members] } : {}),
       origin,
       block,
       fingerprint,
       ...(model === undefined ? {} : { model }),
       ...(callUsage === undefined ? {} : { usage: callUsage }),
-    } as InsightRecord;
+    };
+    return made as R;
   };
 
-  const emit = async (unit: readonly InsightRecord[], step: PlanStep): Promise<void> => {
+  const emit = async (unit: readonly R[], step: PlanStep): Promise<void> => {
     // Put first: once it returns, every later prompt can quote this unit.
     await book.put(step.unit.id, unit);
     for (const rec of unit) await hooks.onRecord?.(rec, step);
@@ -302,9 +276,10 @@ export async function executeRun(
     const stepUsage: RunUsage = { promptTokens: 0, completionTokens: 0, cost: undefined };
     switch (step.status) {
       case "template": {
+        // Planned only under a spec that templates (plan.ts `templateOf`).
         const id = unit.members[0] ?? "";
         const op = env.units.operations.get(id)!;
-        const block = templateBlock(op, step.template!, env.units.types.get(op.typeId)!);
+        const block = spec.template!(op, step.template!, env.units.types.get(op.typeId)!);
         await emit([record(unit, id, block, step.fingerprint, "template", undefined, undefined)], step);
         counts.template += 1;
         hooks.onStep?.({ step, outcome: "done", calls: 0, usage: stepUsage });
@@ -340,16 +315,16 @@ export async function executeRun(
       return dep === undefined || dep.members.some((member) => !explained(member));
     });
     const { fingerprint } = unitHashes(pack, step.model, options.depth, dependenciesOf(unit, plan.hashes), missing);
-    const produced: InsightRecord[] = [];
+    const produced: R[] = [];
     let calls = 0;
     try {
       for (const prompt of prompts) {
-        const jsonSchema = responseJsonSchema(unit.level, prompt.shape);
+        const jsonSchema = strictJsonSchema(responseSchemaOf(spec, unit.level, prompt.shape));
         const request: CompletionRequest = { model: step.model, system: prompt.system, user: prompt.user, schemaName: prompt.schemaName, jsonSchema };
         let completion = await complete(request);
         calls += 1;
         addUsage(stepUsage, completion.usage);
-        let answer = parseAnswer(unit.level, prompt, completion.json);
+        let answer = parseAnswer(spec, unit.level, prompt, completion.json);
         if ("error" in answer) {
           // One repair re-ask: the same prompt plus what was wrong with the answer.
           completion = await complete({
@@ -358,11 +333,11 @@ export async function executeRun(
           });
           calls += 1;
           addUsage(stepUsage, completion.usage);
-          answer = parseAnswer(unit.level, prompt, completion.json);
+          answer = parseAnswer(spec, unit.level, prompt, completion.json);
           if ("error" in answer) throw new RunAborted(`invalid answer after repair: ${answer.error}`);
         }
         const share = splitUsage(completion.usage, answer.blocks.size);
-        for (const [id, block] of answer.blocks) produced.push(record(unit, id, restateWords(block, memberOf.get(id)), fingerprint, "llm", completion.model, share));
+        for (const [id, block] of answer.blocks) produced.push(record(unit, id, spec.keep(block, memberOf.get(id)), fingerprint, "llm", completion.model, share));
       }
     } catch (error) {
       counts.calls += calls;

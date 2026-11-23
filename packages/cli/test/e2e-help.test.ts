@@ -21,7 +21,7 @@ import {
  */
 
 const FIXTURE = javaFixture();
-const COMMANDS = ["validate", "analyze", "export", "profiles"] as const;
+const COMMANDS = ["validate", "analyze", "export", "profiles", "walk"] as const;
 
 beforeAll(ensureCliBinary, 120_000);
 
@@ -49,6 +49,11 @@ describe("requested help goes to stdout and exits 0", () => {
     expect(runCli(["export", "--help"]).stdout).toContain("--out FILE");
     expect(runCli(["validate", "--help"]).stdout).toContain("--json");
     expect(runCli(["profiles", "--help"]).stdout).toContain("--lang");
+    const walk = runCli(["walk", "--help"]).stdout;
+    for (const flag of ["--walk FILE|explain", "--prompt TEXT", "--include SEL", "--exclude SEL", "--levels LEVELS", "--closure <none|dependencies|containers|all>", "--print-definition", "--dry-run"]) {
+      expect(walk).toContain(flag);
+    }
+    expect(runCli(["explain", "--help"]).stdout).toContain("--instructions TEXT|@FILE");
   });
 
   it("answers --help even when the rest of the line is wrong", () => {

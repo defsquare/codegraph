@@ -189,8 +189,9 @@ would have cost 53.
 
 ## IN-6 · Budget controls, because this one costs money
 
-This is the only command that opens a socket and the only one that costs
-anything, so the controls come first and the run comes second.
+This command and [`walk`](/docs/reference/cli/walk/), which runs on the same
+engine, are the only ones that send a prompt anywhere and the only ones that
+cost anything, so the controls come first and the run comes second.
 
 A **dry run** prints the plan — every unit in walk order with its status, the
 calls it will make, the estimated prompt tokens per level — and makes no call. It
@@ -209,8 +210,10 @@ counted, and records already in the side-car are not re-sent.
 Then the caps. A **maximum call count** stops planning calls after N, and what
 runs is always a dependency-consistent *prefix* of the walk — never a scattered
 subset whose records reference explanations that were never produced. A **scope**
-restricts calls to units inside named modules or types, with dependencies outside
-the scope reused when already explained and never called. **Concurrency** runs
+restricts calls to the units whose member, nearest type or nearest module is one
+of the named ids — a sub-package is not reached through its parent — with
+dependencies outside the scope reused when already explained and never called.
+It is one case of a general selection (IN-9). **Concurrency** runs
 several calls in flight within a layer, and it is a real dial rather than a
 default: a new account on one provider is allowed twenty requests a minute, and
 the client obeys the provider's own retry header on a rate-limit response before
@@ -218,9 +221,9 @@ retrying. Separate model slugs for the leaves and for the roll-ups make the
 intended split explicit — a cheap model for operations, a stronger one for types
 and modules.
 
-Records are appended to a journal as they arrive and the sorted side-car is
-rewritten at every layer, so an interrupted run resumes where it stopped rather
-than paying twice.
+Every finished unit is committed to a SQLite store beside the model as it
+arrives, and the side-car is that store's export, written when the run ends, so
+an interrupted run resumes where it stopped rather than paying twice.
 
 {{< callout type="info" >}}
 On the reference fixture, a full run was **77 units, 68 calls, about six cents**.
@@ -253,6 +256,48 @@ It is a small thing, and it is the shape of the concession: one command became
 asynchronous, in one function, rather than every command signature changing to
 accommodate the only feature that needs it.
 
+## IN-9 · The question is a parameter
+
+Nothing in IN-2 to IN-8 depends on *what* is asked. Units, the cycle-condensed
+order, context packs, fingerprints, the plan before the spend, the store and the
+retry are the same whatever the question; only the system message, the answer
+schema, what a dependent is shown of an answer and the template rule are
+explain's. Those sit behind one seam, so the same engine asks other questions:
+`codegraph walk` takes the task as `--prompt`, or reads a
+[walk definition](/docs/reference/walk-definition/) — a task per level,
+instructions for every prompt and for chosen entities, and the fields each
+answer must carry, in a small closed grammar compiled to the same strict schema
+explain's blocks use. `explain` is that command with its own question built in.
+
+Three decisions carry over from the rest of this page.
+
+**What flows upward is one line.** Every answer has an `answer`, the declared
+fields, and a `description` of at most 60 words written for a reader who will
+see only that line — because that line is what the units above it are shown.
+The bottom-up contract is the same as explain's: a caller reads its callees'
+summaries, not their source.
+
+**A filter decides what is asked, never what is walked.** A selection — selector
+terms over ids, kinds, names, modules, files and edges — picks the units to ask,
+but the walk is still built over the whole model, so units, cycles and
+fingerprints do not depend on it, and an answer bought under one filter is
+reused by any later run whose inputs match. What a filter leaves out is shown
+to the units above it as NOT EXPLAINED (IN-3), and the plan says how many such
+dependencies there are and what following them would cost.
+
+**What was paid for is never mixed up.** Each walk has its own store, named
+after it; a store is opened only by the walk that wrote it, and a store written
+under other answer fields is refused rather than half-rewritten. A changed task
+is not refused — the fingerprints decide what is asked again — but the run says
+how many records it would replace before it spends anything.
+
+One figure rests on little: the output tokens of a defined walk's answers were
+measured on a single live run — Spring PetClinic, one model, one question, no
+declared field — at 500 tokens per operation block and 620 per type block. The
+estimate uses those figures and says what they were measured on; a module
+takes the type's figure and a declared field adds nothing to the estimate,
+because neither was measured.
+
 ## Open questions
 
 The side-car is designed to be consumed, not just read — a domain-extraction step
@@ -268,6 +313,10 @@ sit beside a measured one.
   scoped run, reading a record beside its source.
 - [How to estimate and cap a run](/docs/how-to/explain-cost/) — scoping, provider
   choice, per-level models, forcing a re-run.
+- [How to ask your own question](/docs/how-to/walk-your-question/) — `walk`,
+  selectors, a definition file, reading the answers.
+- [Reference: walk definitions and selectors](/docs/reference/walk-definition/) —
+  the format, the selector grammar, what a selection means for the walk.
 - [Reference: insights.jsonl](/docs/reference/artifacts/insights-jsonl/) — the
   side-car's record shapes.
 - [Reference: domain-facts](/docs/reference/artifacts/domain-facts/) — the joined

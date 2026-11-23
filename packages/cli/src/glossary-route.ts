@@ -12,7 +12,7 @@ import type { LookupAnswer, StoreReader } from "./insight-route.js";
  * with, so a word's carriers and its glossary are of the same entities.
  *
  * QUIET LIKE `/insight.json`: no store, or one this build must not read, is a
- * 404 the page ignores. An unknown scope is 404, as on `/carriers.json`; a
+ * 404 the page ignores — and so is a walk's store, whose blocks carry no words. An unknown scope is 404, as on `/carriers.json`; a
  * request that cannot be asked — no term, a limit that is no whole number —
  * is 400.
  *
@@ -40,8 +40,10 @@ export function glossaryLookup(reader: StoreReader, build: () => Placement): Glo
       if (term === null || term === "") return refused(USAGE);
       if (limit !== null && !/^\d+$/u.test(limit)) return refused(`glossary.json: a limit is a whole number >= 0, not ${JSON.stringify(limit)}`);
 
-      const store = reader.get();
-      if (store === undefined) return answered({ kind: GLOSSARY_ANSWER_KIND, status: "no-store" });
+      const open = reader.get();
+      // A walk's store holds no word: there is no store the glossary may read.
+      if (open === undefined || open.walk !== undefined) return answered({ kind: GLOSSARY_ANSWER_KIND, status: "no-store" });
+      const store = open.store;
       if (placement === undefined && pending !== undefined) {
         placement = pending();
         pending = undefined;

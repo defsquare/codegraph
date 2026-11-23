@@ -272,5 +272,7 @@ told not to invent it.
   provider, models per level, and forcing a re-run.
 - [Explaining bottom-up](/docs/explanation/explaining-bottom-up/) — units, why a
   cycle is one unit, context packs and fingerprints.
+- [Ask your own question of the code](/docs/how-to/walk-your-question/) — the
+  same walk with a question of yours, over the units you select.
 - [Querying the model with SQL](/docs/tutorials/sql/) — the same facts, asked your
   own way.
