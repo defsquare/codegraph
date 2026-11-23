@@ -94,6 +94,9 @@ export const FAMILIES = [
   },
 ];
 
+/** Where a trait is described: its family's section of the traits page. */
+export const traitHref = new Map(FAMILIES.flatMap((family) => family.traits.map((t) => [t.name, `${PAGE}#${family.id}`])));
+
 const ENTITY = {
   label: "Entity",
   sub: "{ id, kind, traits[], …trait keys }",

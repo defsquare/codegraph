@@ -5,8 +5,36 @@
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { kindHref } from "./edges-diagram.mjs";
+import { traitHref } from "./traits-diagram.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+// Every trait the page names, and every edge kind a profile lists, links to its family's
+// section of the traits or edges page — the section the diagram links it to (each
+// diagram's test checks the result).
+const TRAIT = new RegExp(`\\b(${[...traitHref.keys()].join("|")})\\b(\\.\\w+)?`, "g");
+const linkTo = (hrefs, what) => (name) => {
+  const href = hrefs.get(name);
+  if (!href) throw new Error(`${name}: not ${what} of the closed vocabulary`);
+  return "[`" + name + "`](" + href + ")";
+};
+const traitLink = linkTo(traitHref, "a trait");
+const kindLink = linkTo(kindHref, "an edge kind");
+const linkBare = (text) => text.replace(TRAIT, (name, trait) => `[${name}](${traitHref.get(trait)})`);
+/** A note's trait names, linked: bare ones as they are written, a code span that is one trait (or `Trait.key`) whole. */
+function linkTraits(note) {
+  let out = "";
+  let last = 0;
+  // A code span closes on a backtick run as long as the one that opened it (``Repository`1``).
+  for (const span of note.matchAll(/(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g)) {
+    const whole = /^(\w+)(\.\w+)?$/.exec(span[2].trim());
+    out += linkBare(note.slice(last, span.index));
+    out += whole && traitHref.has(whole[1]) ? `[${span[0]}](${traitHref.get(whole[1])})` : span[0];
+    last = span.index + span[0].length;
+  }
+  return out + linkBare(note.slice(last));
+}
 const codegraph = (...args) => execFileSync(join(root, "bin", "codegraph"), args, { encoding: "utf8" });
 
 const NAMES = { clj: "Clojure", csharp: "C#", ex: "Elixir", go: "Go", java: "Java", js: "JavaScript", php: "PHP", python: "Python", rb: "Ruby", rust: "Rust", ts: "TypeScript" };
@@ -44,7 +72,6 @@ function parse(text) {
 }
 
 const profiles = Object.fromEntries(langs.map((lang) => [lang, parse(codegraph("profiles", "--lang", lang))]));
-const tick = (xs) => xs.map((x) => "`" + x + "`").join(", ");
 const out = [];
 out.push(`---
 title: Language profiles
@@ -81,9 +108,10 @@ for (const lang of langs) {
   const p = profiles[lang];
   out.push("", `## ${NAMES[lang]} — \`${lang}\``, "");
   if (lang === "ts") out.push("Declaration spaces: `abstractClass`, `arrowFunction`, `class`, `enum`, `function`, `interface`, `method`, `module`, `namespace`, `parameter`, `property`, `typeAlias`, `variable`.", "");
-  out.push("**Edge kinds:** " + p.edges.map((e) => "`" + e + "`").join(" · "), "");
+  out.push("**Edge kinds:** " + p.edges.map(kindLink).join(" · "), "");
   out.push("| Kind | Required traits | Optional traits |", "|---|---|---|");
-  for (const k of p.kinds) out.push(`| \`${k.name}\` | ${tick(k.required)} | ${tick(k.optional)} |`);
+  const traits = (xs) => xs.map(traitLink).join(", ");
+  for (const k of p.kinds) out.push(`| \`${k.name}\` | ${traits(k.required)} | ${traits(k.optional)} |`);
   const lx = p.lexicon;
   const words = (xs) => (xs.length === 0 ? "(none)" : xs.map((x) => "`" + x + "`").join(" · "));
   out.push("", "**Lexicon** — what the [vocabulary](/docs/reference/metamodel/profiles/#the-lexicon) reads of this language", "");
@@ -96,6 +124,6 @@ for (const lang of langs) {
   if (lx["qualified"]) out.push("- Qualified kinds: " + lx["qualified"].map(by).join(" · "));
   if (lx["interface prefix"]) out.push("- Interface prefix: a leading `I` before Upper + lower is a marker, not a word");
   out.push("", "**Notes**", "");
-  for (const note of p.notes) out.push("- " + note);
+  for (const note of p.notes) out.push("- " + linkTraits(note));
 }
 process.stdout.write(out.join("\n") + "\n");

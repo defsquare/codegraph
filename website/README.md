@@ -143,7 +143,9 @@ is not the script's output, when the boxes are not exactly the vocabulary and
 record keys of `schemas/` (the committed contract `core` generates), and when
 a box links to a heading its page no longer has; the edges test also fails
 when a kind is drawn in a family whose section of the edges page does not list
-it.
+it. Both check one more page, the generated Language profiles page
+(`scripts/profiles-page.mjs`): every trait it names, and every edge kind a
+profile lists, links to the section its diagram links it to.
 
 A page embeds one with `{{< metamodel-diagram "traits-metamodel" >}}`, which
 **inlines** the SVG rather than pointing an `<img>` at it: every box is a link

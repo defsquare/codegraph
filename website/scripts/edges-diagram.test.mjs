@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { site } from "./diagram-kit.mjs";
 import { assertLinksResolve, pageFile, sections } from "./doc-pages.mjs";
-import { EDGE, FAMILIES, PAGE, PROVENANCE, render } from "./edges-diagram.mjs";
+import { EDGE, FAMILIES, PAGE, PROVENANCE, kindHref, render } from "./edges-diagram.mjs";
 
 const schema = (name) => JSON.parse(readFileSync(join(site, "..", "schemas", `${name}.record.schema.json`), "utf8"));
 const dict = schema("header").properties.dict.properties;
@@ -53,6 +53,21 @@ test("every box links to a page, and to a heading of it where it names one", () 
   const hrefs = assertLinksResolve(render(), assert);
   const boxes = 1 + 3 + 1 + PROVENANCE.length + FAMILIES.length + kinds.length;
   assert.equal(hrefs.length, boxes + 2 + 1, "edge, entity/profile/anchor, provenance and its values, families, kinds, two legend rows, logo");
+});
+
+test("every edge kind the Language profiles page lists links to its family's section", () => {
+  // The page is generated (scripts/profiles-page.mjs, from the built CLI); this reads the committed result.
+  const lines = readFileSync(join(site, "content", "docs", "reference", "profiles.md"), "utf8")
+    .split("\n")
+    .filter((line) => line.startsWith("**Edge kinds:** "));
+  assert.ok(lines.length > 0);
+  for (const line of lines) {
+    for (const item of line.slice("**Edge kinds:** ".length).split(" · ")) {
+      const link = /^\[`([^`]+)`\]\(([^)]+)\)$/.exec(item);
+      assert.ok(link, `not a link: ${item} (node scripts/profiles-page.mjs)`);
+      assert.equal(link[2], kindHref.get(link[1]), `${item} does not lead to ${link[1]}'s section`);
+    }
+  }
 });
 
 test("each kind is drawn in the family whose section of the edges page lists it", () => {

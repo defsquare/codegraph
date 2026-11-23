@@ -66,6 +66,9 @@ export const FAMILIES = [
   },
 ];
 
+/** Where an edge kind is described: its family's section of the edges page. */
+export const kindHref = new Map(FAMILIES.flatMap((family) => family.kinds.map((kind) => [kind.name, `${PAGE}#${family.id}`])));
+
 /** The four values, in the header enum's order; all but a fact is an inference. */
 export const PROVENANCE = [
   { name: "declared", sub: "written in the source", fact: true },
