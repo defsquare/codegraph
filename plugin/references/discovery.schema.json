@@ -1,0 +1,425 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "codegraph.discovery/1",
+  "description": "The state of one discovery walk: `.codegraph/discovery.json` at the root of the analyzed repository. Written by the agent at the end of every step, read at the start of every step and of every session. Other tools may read it; only the walk writes it.",
+  "type": "object",
+  "required": ["kind", "codegraph", "corpus", "steps", "questions", "spend", "taught"],
+  "additionalProperties": false,
+  "properties": {
+    "kind": { "const": "codegraph.discovery/1" },
+    "codegraph": {
+      "description": "What `codegraph --version` printed when this file was last written.",
+      "type": "string"
+    },
+    "intake": {
+      "description": "What the person said at the start. Absent when a step was entered on its own; every answer is optional, because every question can be skipped.",
+      "type": "object",
+      "required": ["at"],
+      "additionalProperties": false,
+      "properties": {
+        "at": { "description": "The day intake was held, YYYY-MM-DD.", "type": "string" },
+        "purpose": {
+          "description": "Why the codebase is being discovered. It sets which steps get the emphasis.",
+          "enum": ["takeover", "migration", "due-diligence", "onboarding", "other"]
+        },
+        "purposeNote": { "description": "The purpose in the person's own words.", "type": "string" },
+        "time": {
+          "description": "How far the person means to go now: the tour (steps 1-3, no question), a session (steps 1-4), the whole walk.",
+          "enum": ["tour", "session", "whole"]
+        },
+        "provider": {
+          "description": "The answer to the one question that guards step 5: may source text go to a second model provider, which one, and up to how many dollars. `allowed: false` is a complete answer.",
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["allowed"],
+              "additionalProperties": false,
+              "properties": { "allowed": { "const": false } }
+            },
+            {
+              "type": "object",
+              "required": ["allowed", "name", "ceilingUsd"],
+              "additionalProperties": false,
+              "properties": {
+                "allowed": { "const": true },
+                "name": { "enum": ["openrouter", "cloudflare", "claude-code"] },
+                "ceilingUsd": { "description": "The most this walk may spend, in dollars. A ceiling, never a price.", "type": "number", "minimum": 0 }
+              }
+            }
+          ]
+        },
+        "predict": { "description": "True when the person asked to guess each ranking before it is shown.", "type": "boolean" }
+      }
+    },
+    "corpus": {
+      "description": "What is being discovered, and at which commit.",
+      "type": "object",
+      "required": ["path", "commit", "shallow", "languages", "roots", "excluded"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "description": "The repository, as an absolute path.", "type": "string" },
+        "commit": {
+          "description": "`git rev-parse HEAD` when the models were extracted; null outside a git repository. A session that finds another HEAD says by how much before it shows any anchor.",
+          "type": ["string", "null"]
+        },
+        "shallow": { "description": "True for a shallow clone, where step 3 has no history to mine.", "type": "boolean" },
+        "languages": {
+          "description": "The census of tracked files by extension, against the extractors that exist.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["lang", "files", "extractor"],
+            "additionalProperties": false,
+            "properties": {
+              "lang": { "description": "The language id a model's entity ids begin with (`java`, `csharp`, `ts`, `ex`, `rb`), or a file extension when no profile covers it.", "type": "string" },
+              "files": { "type": "integer", "minimum": 0 },
+              "extractor": { "description": "The extractor's command, or null when codegraph has none for this language.", "type": ["string", "null"] },
+              "installed": { "description": "Whether that command was found on this machine.", "type": "boolean" }
+            }
+          }
+        },
+        "roots": {
+          "description": "The source roots extracted, one model each. Main code and test code are never extracted into one model.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "src", "role", "lang", "model"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "description": "A short name; the workspace files of this root begin with it (`main.jsonl`, `main.db`).", "type": "string" },
+              "src": {
+                "description": "The directories given to the extractor as `--src`, relative to the repository.",
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "role": { "enum": ["main", "test"] },
+              "lang": { "type": "string" },
+              "model": { "description": "The model file, relative to the workspace.", "type": "string" },
+              "guessed": { "description": "True when the agent chose this root and nobody confirmed it.", "type": "boolean" }
+            }
+          }
+        },
+        "excluded": {
+          "description": "What a ranking must not be read as saying: generated, vendored or otherwise foreign code. Shown again at every later ranking.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "reason", "by", "at"],
+            "additionalProperties": false,
+            "properties": {
+              "path": { "description": "A file or a directory, relative to the repository.", "type": "string" },
+              "id": { "description": "The entity whose rank revealed it, when there is one.", "type": "string" },
+              "reason": { "description": "Generated, vendored, a migration, test data...", "type": "string" },
+              "by": { "description": "Who said so: a person, or the agent on its own reading (then it is a guess).", "enum": ["person", "agent"] },
+              "at": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "steps": {
+      "description": "One entry per step that has been started. A step that is absent has not been started.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "structure": {
+          "description": "Step 1, structure and elements.",
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "commit": { "$ref": "#/$defs/stepCommit" },
+            "at": { "$ref": "#/$defs/stepAt" },
+            "findings": {
+              "description": "What the page's \"Write down\" list asks for. Each key holds one finding per model the step ran on.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "resolution": {
+                  "description": "The extractor's resolution summary: type references, resolved, unresolved, and the rate.",
+                  "x-page-item": "The resolution rate and the stub count, and the commit the model was extracted from (the header carries it when the extractor was given `--repo-commit`; otherwise note `git rev-parse HEAD` beside it).",
+                  "$ref": "#/$defs/findings"
+                },
+                "stubs": {
+                  "description": "How many entities the code references and does not declare.",
+                  "x-page-item": "The resolution rate and the stub count, and the commit the model was extracted from (the header carries it when the extractor was given `--repo-commit`; otherwise note `git rev-parse HEAD` beside it).",
+                  "$ref": "#/$defs/findings"
+                },
+                "sizeBreak": {
+                  "description": "Where the size curve breaks: the types above the break, and the first one below it.",
+                  "x-page-item": "The size and complexity tables, with the break in each curve marked and the generated or test code marked as such.",
+                  "$ref": "#/$defs/findings"
+                },
+                "complexityBreak": {
+                  "description": "Where the complexity curve breaks, and the worst operation of the types above it.",
+                  "x-page-item": "The size and complexity tables, with the break in each curve marked and the generated or test code marked as such.",
+                  "$ref": "#/$defs/findings"
+                },
+                "cycles": {
+                  "description": "The cycles report at module level: how many components, the size of the largest, its feedback set.",
+                  "x-page-item": "The cycles report: how many components, the size of the largest, and its feedback set.",
+                  "$ref": "#/$defs/findings"
+                },
+                "topFanIn": {
+                  "description": "The ten types the most other types depend on.",
+                  "x-page-item": "The ten types with the highest fan-in. They are the ones you will read no matter what.",
+                  "$ref": "#/$defs/findings"
+                }
+              }
+            }
+          }
+        },
+        "boundaries": {
+          "description": "Step 2, boundaries and style.",
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "commit": { "$ref": "#/$defs/stepCommit" },
+            "at": { "$ref": "#/$defs/stepAt" },
+            "findings": {
+              "description": "What the page's \"Write down\" list asks for. Each key holds one finding per model the step ran on.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "moduleMap": {
+                  "description": "The module dependency graph: how many modules, how many dependencies between them, and the shape recognised (deep and narrow, a hub, a knot).",
+                  "x-page-item": "The module map, and the shape you recognised in it.",
+                  "$ref": "#/$defs/findings"
+                },
+                "style": {
+                  "description": "The style claimed — by layer, by feature, hexagonal, mixed — with what it rests on: the module names, the annotation census.",
+                  "x-page-item": "The style you claim, and the evidence for it: module names, annotation census, the checks that held and the ones that failed.",
+                  "$ref": "#/$defs/findings"
+                },
+                "checks": {
+                  "description": "The three checks of the claim, each held, failed or pending: direction, cycles, co-change (pending until step 3 gives the cross-module share).",
+                  "x-page-item": "The style you claim, and the evidence for it: module names, annotation census, the checks that held and the ones that failed.",
+                  "$ref": "#/$defs/findings"
+                },
+                "stack": {
+                  "description": "The external modules the code references most, the standard library set apart, and the rows that are the code's own modules.",
+                  "x-page-item": "The stack, as the stub table.",
+                  "$ref": "#/$defs/findings"
+                },
+                "outbound": {
+                  "description": "What the system depends on to do its job: vendor modules, I/O libraries, each with the module of the code that reaches it.",
+                  "x-page-item": "Outbound systems (vendor stubs, I/O libraries) and inbound doors (controllers, listeners, jobs), each with its module.",
+                  "$ref": "#/$defs/findings"
+                },
+                "inbound": {
+                  "description": "The doors: controllers, listeners, jobs found by their annotations, each with its module. Empty with the reason where the language has no annotation.",
+                  "x-page-item": "Outbound systems (vendor stubs, I/O libraries) and inbound doors (controllers, listeners, jobs), each with its module.",
+                  "$ref": "#/$defs/findings"
+                }
+              }
+            }
+          }
+        },
+        "activity": {
+          "description": "Step 3, activity.",
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "commit": { "$ref": "#/$defs/stepCommit" },
+            "at": { "$ref": "#/$defs/stepAt" },
+            "findings": {
+              "description": "What the page's \"Write down\" list asks for. A finding about the whole history has no root; one joined with a model names its root.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "hotspots": {
+                  "description": "The shortlist: five to ten files after triage, each with its revisions, its lines, its cyclomatic complexity, its fix density and its rank in the four families. The window mined is in the note.",
+                  "x-page-item": "The five to ten hotspots after triage, each with its revisions, its complexity from step 1, and its fix density.",
+                  "$ref": "#/$defs/findings"
+                },
+                "owners": {
+                  "description": "For each hotspot of the shortlist: how many authors, the main author's share, that author's row in the authors report, the day they were last seen. Shares, rows and dates, never a name.",
+                  "x-page-item": "The owners of those hotspots, and whether they are still around.",
+                  "$ref": "#/$defs/findings"
+                },
+                "hiddenCouplings": {
+                  "description": "The pairs that change together with no path between them in the declared graph, each with its support; or that the report found none, with its thresholds.",
+                  "x-page-item": "The hidden couplings, with their support: each is a question for the team.",
+                  "$ref": "#/$defs/findings"
+                },
+                "crossModuleShare": {
+                  "description": "Of the commits that touch the model, the share that cross a top-level directory, with the directories counted.",
+                  "x-page-item": "The cross-module co-change share.",
+                  "$ref": "#/$defs/findings"
+                }
+              }
+            }
+          }
+        },
+        "stimuli": {
+          "description": "Step 4, stimuli and flows.",
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "commit": { "$ref": "#/$defs/stepCommit" },
+            "at": { "$ref": "#/$defs/stepAt" },
+            "findings": {
+              "description": "What the page's \"Write down\" list asks for. Each key holds one finding per model the step ran on; what a person said is a second finding of kind `said`.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "inventory": {
+                  "description": "The stack table used and what was added to it; the entry points per kind of stimulus, each with the layer and the name that found it.",
+                  "x-page-item": "The entry-point inventory, grouped by kind, each with its module and the evidence it was found by (annotation, interface, zero callers).",
+                  "$ref": "#/$defs/findings"
+                },
+                "unclassified": {
+                  "description": "The rows the third layer found and no table names: how many, and the busiest. Not entry points until somebody says so.",
+                  "x-page-item": "The entry-point inventory, grouped by kind, each with its module and the evidence it was found by (annotation, interface, zero callers).",
+                  "$ref": "#/$defs/findings"
+                },
+                "chains": {
+                  "description": "The chains read: for each, the entry point, the types it reaches in depth order, its exit points. On facts; what the candidates add is a second finding.",
+                  "x-page-item": "For the top chains: the list of types in depth order and the exit points.",
+                  "$ref": "#/$defs/findings"
+                },
+                "useCases": {
+                  "description": "The groups of entry points whose chains overlap: how many, the largest, the threshold used, and the name proposed or given for each.",
+                  "x-page-item": "For the top chains: the list of types in depth order and the exit points.",
+                  "$ref": "#/$defs/findings"
+                },
+                "residue": {
+                  "description": "The types nothing reachable from an entry point mentions: how many, which are stable (no revision in the window mined) and which are active.",
+                  "x-page-item": "The residue, split into stable and active.",
+                  "$ref": "#/$defs/findings"
+                }
+              }
+            }
+          }
+        },
+        "meaning": { "$ref": "#/$defs/openStep" },
+        "domain": { "$ref": "#/$defs/openStep" }
+      }
+    },
+    "questions": {
+      "description": "What no file can answer. A deliverable of its own: the list a person takes to the team.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "step", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "text": { "type": "string" },
+          "step": { "enum": ["intake", "structure", "boundaries", "activity", "stimuli", "meaning", "domain"] },
+          "who": { "description": "Who could answer: a role, not a name.", "type": "string" },
+          "status": { "enum": ["open", "answered"] },
+          "answer": { "description": "The answer, in the words of whoever gave it.", "type": "string" },
+          "at": { "type": "string" }
+        }
+      }
+    },
+    "spend": {
+      "description": "One entry per paid run, with what the command itself reported. There is no price here on purpose: a price is read from this run's `--estimate`, never from a file.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["at", "step", "provider", "model", "calls", "usd"],
+        "additionalProperties": false,
+        "properties": {
+          "at": { "type": "string" },
+          "step": { "enum": ["meaning", "domain"] },
+          "provider": { "type": "string" },
+          "model": { "type": "string" },
+          "calls": { "type": "integer", "minimum": 0 },
+          "usd": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "taught": {
+      "description": "The terms already defined to this person, so none is defined twice.",
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "status": {
+      "description": "todo: started, nothing written yet. done: every finding written. partial: stopped before the end. skipped: the person chose not to run it.",
+      "enum": ["todo", "done", "partial", "skipped"]
+    },
+    "stepCommit": {
+      "description": "The commit the step's findings were made at. Every anchor of the step is true at this commit and may not be at another.",
+      "type": ["string", "null"]
+    },
+    "stepAt": { "description": "The day the step was last run, YYYY-MM-DD.", "type": "string" },
+    "openStep": {
+      "description": "A step whose findings this version of the plugin does not yet name.",
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "commit": { "$ref": "#/$defs/stepCommit" },
+        "at": { "$ref": "#/$defs/stepAt" },
+        "findings": { "type": "object", "additionalProperties": { "$ref": "#/$defs/findings" } }
+      }
+    },
+    "findings": {
+      "description": "One finding per model the step ran on; one alone when the finding is about the whole repository.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "finding": {
+      "description": "One thing that was found: what, which kind of knowledge it is, and where it can be checked.",
+      "type": "object",
+      "required": ["value", "kind", "anchor"],
+      "additionalProperties": false,
+      "properties": {
+        "root": { "description": "The source root (`corpus.roots[].name`) this finding is about; absent when it is about the repository.", "type": "string" },
+        "value": { "description": "The finding itself: a number, a list, a small object. Read from a saved file, never from memory." },
+        "kind": {
+          "description": "The kind of knowledge the finding rests on, the weakest one when it rests on several. See evidence.md.",
+          "enum": ["declared", "derived", "generated", "dynamic-candidate", "co-change", "explanation", "said"]
+        },
+        "anchor": {
+          "description": "Where a reader checks it. A claim with no anchor is not a finding: it is written to `questions`.",
+          "oneOf": [
+            {
+              "description": "A place in the source, true at one commit.",
+              "type": "object",
+              "required": ["file", "line", "commit"],
+              "additionalProperties": false,
+              "properties": {
+                "file": { "description": "Relative to the repository.", "type": "string" },
+                "line": { "type": "integer", "minimum": 1 },
+                "commit": { "type": "string" }
+              }
+            },
+            {
+              "description": "A file of the workspace: a saved query's rows, a saved report.",
+              "type": "object",
+              "required": ["artifact"],
+              "additionalProperties": false,
+              "properties": {
+                "artifact": { "description": "Relative to the workspace.", "type": "string" },
+                "row": { "description": "The row of a saved result, counted from 0.", "type": "integer", "minimum": 0 }
+              }
+            },
+            {
+              "description": "Something a person said.",
+              "type": "object",
+              "required": ["said", "at"],
+              "additionalProperties": false,
+              "properties": {
+                "said": { "description": "Who, as a role: \"the person in this session\", \"the lead of the billing team\".", "type": "string" },
+                "at": { "type": "string" }
+              }
+            }
+          ]
+        },
+        "note": { "description": "The rule a reading was made by, or what limits the finding.", "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "stack": "rails",
+  "lang": "rb",
+  "annotations": {},
+  "supertypes": {
+    "ActionCable::Channel::Base": "external event",
+    "ActionController::API": "inbound request",
+    "ActionController::Base": "inbound request",
+    "ActionMailer::Base": "framework callback",
+    "ActiveJob::Base": "internal event",
+    "ActiveModel::EachValidator": "framework callback",
+    "ActiveModel::Serializer": "framework callback",
+    "ActiveModel::Validator": "framework callback",
+    "Rails::Application": "lifecycle",
+    "Rails::Engine": "lifecycle",
+    "Rails::Railtie": "lifecycle",
+    "Sidekiq::Job": "internal event",
+    "Sidekiq::Worker": "internal event",
+    "Thor": "inbound command"
+  },
+  "types": {},
+  "operations": {},
+  "conventional": ["initialize","initialize_copy","to_s","to_str","to_a","to_ary","to_h","to_hash","to_proc","inspect","hash","eql?","==","===","=~","!~","!=","<=>","<",">","<=",">=","+","-","*","/","%","**","<<",">>","&","|","^","~","!","+@","-@","[]","[]=","each","coerce","method_missing","respond_to_missing?","respond_to?","included","extended","inherited","prepended","method_added","const_missing"],
+  "entries": {}
+}

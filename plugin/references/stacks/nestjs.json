@@ -1,0 +1,44 @@
+{
+  "stack": "nestjs",
+  "lang": "ts",
+  "annotations": {
+    "All": "inbound request",
+    "Cron": "temporal",
+    "Delete": "inbound command",
+    "EventPattern": "external event",
+    "Get": "inbound query",
+    "GrpcMethod": "inbound request",
+    "GrpcStreamMethod": "inbound request",
+    "Interval": "temporal",
+    "MessagePattern": "inbound request",
+    "Mutation": "inbound command",
+    "OnEvent": "internal event",
+    "Patch": "inbound command",
+    "Post": "inbound command",
+    "Process": "internal event",
+    "Put": "inbound command",
+    "Query": "inbound query",
+    "ResolveField": "framework callback",
+    "Sse": "inbound query",
+    "SubscribeMessage": "external event",
+    "Subscription": "external event",
+    "Timeout": "temporal"
+  },
+  "supertypes": {
+    "CanActivate": "framework callback",
+    "ExceptionFilter": "framework callback",
+    "NestInterceptor": "framework callback",
+    "NestMiddleware": "framework callback",
+    "OnApplicationBootstrap": "lifecycle",
+    "OnApplicationShutdown": "lifecycle",
+    "OnModuleDestroy": "lifecycle",
+    "OnModuleInit": "lifecycle",
+    "PipeTransform": "framework callback"
+  },
+  "types": {},
+  "operations": {
+    "bootstrap": "lifecycle"
+  },
+  "conventional": ["constructor","toString","toLocaleString","valueOf","toJSON","[Symbol.iterator]","[Symbol.asyncIterator]","[Symbol.hasInstance]","[Symbol.toPrimitive]","[Symbol.toStringTag]","[Symbol.dispose]","[Symbol.asyncDispose]"],
+  "entries": {}
+}
