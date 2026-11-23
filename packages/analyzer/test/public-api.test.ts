@@ -78,6 +78,9 @@ const PUBLIC_API = {
     "diagnoseStore",
     "renderStoreIds",
     "storeLang",
+    "createHelperViews",
+    "statementShape",
+    "queryStore",
   ],
 } as const;
 
@@ -98,6 +101,10 @@ const PUBLIC_VALUES = [
   "META_KEYS",
   "ENTITY_KEY_STORAGE",
   "EDGE_KEY_STORAGE",
+  "NODE_VIEW_SQL",
+  "DEP_VIEW_SQL",
+  "HELPER_VIEWS_SQL",
+  "QUERY_STATEMENT_KEYWORDS",
 ] as const;
 
 const SRC = fileURLToPath(new URL("../src", import.meta.url));

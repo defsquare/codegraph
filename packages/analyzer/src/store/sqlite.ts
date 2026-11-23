@@ -53,6 +53,9 @@ export type SqliteValue = null | number | bigint | string | Uint8Array;
 /** A result row. NOTE: `node:sqlite` returns these with a NULL prototype. */
 export type SqliteRow = Record<string, SqliteValue>;
 
+/** Values for a statement's named parameters, keyed as the statement spells them (`:id`). */
+export type SqliteNamedParameters = Record<string, SqliteValue>;
+
 /**
  * A prepared statement, described by what the store needs rather than by what
  * `node:sqlite` happens to offer — see `SqliteApi`.
@@ -63,6 +66,13 @@ export interface SqliteStatement {
   all(...params: SqliteValue[]): SqliteRow[];
   /** Row-at-a-time. The import and hydrate paths use this, never `all()`. */
   iterate(...params: SqliteValue[]): IterableIterator<SqliteRow>;
+  /** The same, with the statement's NAMED parameters bound from an object (`{ ":id": … }`). */
+  iterate(named: SqliteNamedParameters): IterableIterator<SqliteRow>;
+  /**
+   * The result's columns, in order — known before a row is read, so an answer
+   * with no row still has a header. `store/query.ts` is the one reader.
+   */
+  columns(): readonly { readonly name: string }[];
   /**
    * Return each row as a positional array instead of an object. Measured on
    * fineract's 1 023 147 entity and edge rows: **3.83s as objects, 1.46s as
