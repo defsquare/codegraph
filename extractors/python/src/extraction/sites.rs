@@ -768,21 +768,25 @@ impl Extractor<'_> {
             Some((file, class)),
             Some((file, class)),
         );
-        // A corpus class written as the receiver (`UserProfile.objects`) of a member only a
-        // library ancestor answers: the edge names the library, and the class is written there
-        // too — a `declared` reference at its name. Not `self`/`cls`, which write no class.
-        if let Ok(Step {
-            typed:
-                Typed::Folded {
-                    inferred: Some("ancestor-attributed"),
-                    ..
-                },
-            ..
-        }) = &found
-            && object
+        // A corpus class written as the receiver (`UserProfile.objects`, `Sub.method`) is a
+        // `declared` reference at its name — evidence about the class, not a resolution of the
+        // member: one rule whether a library ancestor answers the member, a corpus ancestor
+        // declares it, or nothing does (the site stays dropped). Not its own member, whose edge
+        // names it; not the language; not `self`/`cls`, which write no class.
+        let named_already = || match self.classes.find(order, dynamic, name, object) {
+            Found::Corpus {
+                file: owner,
+                class: owner_class,
+                ..
+            } => (owner, owner_class) == (file, class),
+            Found::Language => true,
+            Found::Library(_) | Found::Dynamic | Found::Unbound => false,
+        };
+        if object
             && inferred.is_none()
             && !self_receiver
             && ctx.emit
+            && !named_already()
             && let Some(key) = self.class_key(file, class)
         {
             let anchor = Anchor {

@@ -58,7 +58,7 @@ const FIXTURES: ReadonlyArray<{ lang: string; profile: Profile; joined: number }
   { lang: "typescript", profile: typescriptProfile, joined: 89 },
   { lang: "elixir", profile: elixirProfile, joined: 96 },
   { lang: "ruby", profile: rubyProfile, joined: 106 },
-  { lang: "python", profile: pythonProfile, joined: 190 },
+  { lang: "python", profile: pythonProfile, joined: 192 },
 ];
 
 const metricsOf = (entity: Entity): Record<string, number> | undefined =>

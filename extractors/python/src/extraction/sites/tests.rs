@@ -616,6 +616,79 @@ fn a_literal_import_module_or_dunder_import_is_an_import_and_a_computed_name_is_
     assert_eq!(extraction.stats.imports.stdlib, 2);
 }
 
+/// One rule, three outcomes: a corpus class written as a receiver is referenced, at its name,
+/// whatever the member does — a library ancestor answers it, a corpus ancestor declares it, or
+/// nothing does and the site is dropped (with its reason, as before) — unless the member is the
+/// class's own, whose edge names it already. Not through `self`/`cls`; not for the language.
+#[test]
+fn a_corpus_class_written_as_a_receiver_is_referenced_unless_its_own_member_names_it() {
+    let source = "from django.db import models\nfrom mixins import Audit\n\
+                  class Profile(models.Model):\n    def ping(self): pass\nclass Sub(Profile): pass\n\
+                  class Plain:\n    def own(self): pass\nclass Child(Plain): pass\n\
+                  class Dyn:\n    def __getattr__(self, name): pass\nclass Two(Audit, models.Model): pass\n\
+                  def f():\n    Profile.objects.all()\n    Sub.ping\n    Plain.missing\n    Dyn.anything\n\
+                  \x20   Two.objects\n    Plain.own\n    Plain.__name__\n    Child.own\n\
+                  class Q(models.Model):\n    @classmethod\n    def make(cls):\n        return cls.objects.create()\n\
+                  \x20   def m(self):\n        return self.objects\n";
+    let extraction = extract_sources(&[("m.py", source)]);
+    let mut classes: Vec<(String, String, u32)> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "reference" && e.provenance == "declared")
+        .map(|e| (e.from.render(ids::LANG), e.to.render(ids::LANG), e.anchor.start))
+        .filter(|(_, to, _)| to.starts_with("python:m.py/") && !to[12..].contains('.'))
+        .collect();
+    classes.sort();
+    let row = |to: &str, line: u32| ("python:m.py/f".to_owned(), format!("python:m.py/{to}"), line);
+    assert_eq!(
+        classes,
+        vec![
+            row("Child", 20),   // a corpus ancestor declares the member
+            row("Dyn", 16),     // dropped: unbound-dynamic
+            row("Plain", 15),   // dropped: unbound-attribute
+            row("Profile", 13), // a library ancestor answers
+            row("Sub", 14),     // a corpus ancestor declares it
+            row("Two", 17),     // dropped: ambiguous-ancestor
+        ]
+    );
+    // The member edges are unchanged: `Sub.ping` is Profile's, `Plain.own` Plain's own.
+    let members: Vec<(String, u32)> = extraction
+        .model
+        .edges
+        .iter()
+        .filter(|e| e.from.render(ids::LANG) == "python:m.py/f" && e.to.render(ids::LANG).contains('.'))
+        .map(|e| (e.to.render(ids::LANG), e.anchor.start))
+        .collect();
+    for member in [
+        ("python:m.py/Profile.ping", 14),
+        ("python:m.py/Plain.own", 18),
+        ("python:m.py/Plain.own", 20),
+    ] {
+        assert!(
+            members.contains(&(member.0.to_owned(), member.1)),
+            "{member:?} in {members:?}"
+        );
+    }
+    // The dropped sites stay dropped, with their reasons: the reference resolves nothing.
+    let mut drops: Vec<(u32, &str)> = extraction
+        .stats
+        .drops
+        .iter()
+        .filter(|d| (13..=20).contains(&d.line))
+        .map(|d| (d.line, d.reason))
+        .collect();
+    drops.sort();
+    assert_eq!(
+        drops,
+        vec![
+            (15, "unbound-attribute"),
+            (16, "unbound-dynamic"),
+            (17, "ambiguous-ancestor")
+        ]
+    );
+}
+
 #[test]
 fn a_corpus_class_written_as_the_receiver_of_a_member_a_library_answers_is_referenced() {
     let extraction = extract_sources(&[(
@@ -656,11 +729,20 @@ fn a_corpus_class_written_as_the_receiver_of_a_member_a_library_answers_is_refer
             6,
             6,
         ),
-        // A member a corpus ancestor declares is the edge itself.
+        // A member a corpus ancestor declares is the member edge, and the class written there
+        // is referenced the same way.
         (
             "python:m.py/f".to_owned(),
             "reference",
             "python:m.py/Profile.ping".to_owned(),
+            "declared",
+            7,
+            7,
+        ),
+        (
+            "python:m.py/f".to_owned(),
+            "reference",
+            "python:m.py/Sub".to_owned(),
             "declared",
             7,
             7,

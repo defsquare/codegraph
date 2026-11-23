@@ -65,3 +65,13 @@ class Proxy:
 
     def forward(self):
         return self.anything()
+
+
+class Express(Tracked):
+    """A subclass that declares nothing of its own."""
+
+
+def audit():
+    """A written class is evidence whatever its member does: referenced, at its name."""
+    Express.recent()
+    Ledger.flush()
