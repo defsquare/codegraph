@@ -69,7 +69,7 @@ Python binds names when the program runs, so the extractor does the part that is
 
 - **A re-export is an import of what the source writes**, while every `reference` and `invocation` names what the name is: `from acme import Order` imports `acme/__init__.py` and references `acme/order.py`'s class. `from x import *` binds `__all__` where it is one literal list never grown, else every public top-level name.
 - **One key per library class.** A standard-library class is keyed where typeshed declares it, its re-exports followed — `unittest.TestCase` is `<stdlib>%2Funittest.case/TestCase`, `collections.abc.Mapping` is `typing`'s, `io.StringIO` is `_io`'s — whatever the import names; that may be a private module and differ from the run-time `__module__`, and a Python 2 module's names (its list carries no re-export data) stay as written. A `<site>` class reached through an imported name (`from django.db import models` … `models.Model`) is keyed at the dotted module, `<site>%2Fdjango.db.models/Model`, every segment before the last taken for module path: a guess, counted `dotted-site-class`. The `import` edge always names the module written; a library function or value folds to the module the import names.
-- **A call is an edge when its receiver's class is written**: a module, a class named at the site, `self`/`cls` along written bases, `super()` — `declared`. The extractor computes each class's C3 order to look members up, and does not write it. An inferred receiver is `derived`. A bare parameter, a call's result, a subscript: dropped and counted, never guessed. A corpus class written as the receiver of a member only a library ancestor answers (`UserProfile.objects.all()`) is also a `declared` `reference` to the class, at its name — never through `self` or `cls`.
+- **A call is an edge when its receiver's class is written**: a module, a class named at the site, `self`/`cls` along written bases, `super()` — `declared`. The extractor computes each class's C3 order to look members up, and does not write it. An inferred receiver is `derived`. A bare parameter, a call's result, a subscript: dropped and counted, never guessed. A corpus class written as a receiver is a `declared` `reference` to the class, at its name, whatever its member does — a library ancestor answers it (`UserProfile.objects.all()`), a corpus ancestor declares it (`Sub.method()`), or nothing does and the site stays dropped, with its reason: evidence about the class, never a resolution of the member. Not for the class's own member, not for the language, never through `self` or `cls`.
 - **The language is never an edge.** `len`, `print`, `str(x)`, a method of a literal, `int` in an annotation, the module dunders (`__name__`) and a method's `__class__` are resolved, counted, and produce nothing.
 
 ## Streams
@@ -82,11 +82,11 @@ syntax errors (recovered, 10): src/acme_order/legacy/report.py
 decoded (not UTF-8, 2): src/acme_order/legacy/latin.py (iso-8859-1)
 RESOLUTION SUMMARY
   files           : 51 (with syntax errors: 2; not UTF-8: 1; read lossily: 0)
-  sites           : 216
-  resolved        : 186 (corpus 97, <builtins> 17, <stdlib> 27, <site> 7, missing modules 1, the language 37)
-  unresolved      : 30
-  resolution rate : 86.1%
-  ambiguous-ancestor (dropped)        : 1
+  sites           : 219
+  resolved        : 188 (corpus 99, <builtins> 17, <stdlib> 27, <site> 7, missing modules 1, the language 37)
+  unresolved      : 31
+  resolution rate : 85.8%
+  ambiguous-ancestor (dropped)        : 2
   ambiguous-root (dropped)            : 1
   ambiguous-star (dropped)            : 1
   computed-base (dropped)             : 4
@@ -108,8 +108,8 @@ RESOLUTION SUMMARY
   alias-base                          : 3
   dotted-site-class                   : 1
   imports         : 64 (relative 24; by package root 9, by namespace package 2, implicit-relative 1; <stdlib> 18, <site> 9; missing 1; type-checking-only 1)
-  entities        : 374 (stubs: 45)
-  edges           : 223 (self-edges dropped: 0)
+  entities        : 376 (stubs: 45)
+  edges           : 227 (self-edges dropped: 0)
 ```
 
 - A **site** is something written that names something: a name read, a call, an attribute, a decorator, a base, an annotation, a `raise`. **resolved** are the ones that named what the corpus declares, a stub, or the language itself. Everything else is dropped under its reason, each a stated ceiling:
@@ -217,19 +217,19 @@ Five corpora, each model `validate`-clean with the metrics pass applied, nothing
 
 | Corpus | Files | Sites | Resolved | Entities (stubs) | Edges | Time | Peak RSS |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| psf/requests | 37 | 5 768 | 81.6 % | 2 529 (158) | 3 592 | 0.06 s | 20 MB |
-| Django | 2 922 | 278 073 | 73.4 % | 111 593 (585) | 215 023 | 2.9 s | 433 MB |
-| Zulip | 2 125 | 228 523 | 81.9 % | 54 725 (1 063) | 173 638 | 2.0 s | 307 MB |
-| CPython 3.14.10 `Lib/` | 1 876 | 623 485 | 77.0 % | 206 234 (663) | 418 812 | 5.1 s | 822 MB |
-| CPython 2.7.18 `Lib/` | 1 613 | 303 632 | 78.7 % | 141 281 (511) | 216 890 | 2.8 s | 478 MB |
+| psf/requests | 37 | 5 768 | 81.6 % | 2 529 (158) | 3 593 | 0.06 s | 20 MB |
+| Django | 2 922 | 278 073 | 73.4 % | 111 593 (585) | 229 360 | 2.9 s | 433 MB |
+| Zulip | 2 125 | 228 523 | 81.9 % | 54 725 (1 063) | 174 640 | 2.0 s | 307 MB |
+| CPython 3.14.10 `Lib/` | 1 876 | 623 485 | 77.0 % | 206 234 (663) | 420 124 | 5.1 s | 822 MB |
+| CPython 2.7.18 `Lib/` | 1 613 | 303 632 | 78.7 % | 141 281 (511) | 217 345 | 2.8 s | 478 MB |
 
-The rate is over everything written, tests included; `untyped-receiver` is the largest remainder everywhere. 590 of 2.7's files are Python 2 syntax the parser recovers. No standard-library class has two keys in any of the five models — the same-name pairs left are different classes, the Python 2 names kept as written aside. The dotted-module guess keys 66 `<site>` classes over the five corpora, one with a Capitalized segment before the last (Zulip's `pika.spec` `Basic.Deliver`, a nested class). The receiver `reference`s add 4 778 edges on Zulip, 1 199 on 2.7, 48 on 3.14 and 3 on Django. In CPython 3's own `Lib/`, every import of a module that has a file there reaches that file; the 229 modules reached outside it have none (built into the interpreter, or registered at run time: `os.path`, `collections.abc`).
+The rate is over everything written, tests included; `untyped-receiver` is the largest remainder everywhere. 590 of 2.7's files are Python 2 syntax the parser recovers. No standard-library class has two keys in any of the five models — the same-name pairs left are different classes, the Python 2 names kept as written aside. The dotted-module guess keys 66 `<site>` classes over the five corpora, one with a Capitalized segment before the last (Zulip's `pika.spec` `Basic.Deliver`, a nested class). The receiver `reference`s add 14 340 edges on Django, 5 780 on Zulip, 1 654 on 2.7, 1 360 on 3.14 and 1 on requests; the sites they name resolve or drop exactly as before. In CPython 3's own `Lib/`, every import of a module that has a file there reaches that file; the 229 modules reached outside it have none (built into the interpreter, or registered at run time: `os.path`, `collections.abc`).
 
 **Against CPython's `ast`** (`lib2to3` for 2.7), by (file, line, kind, name), once the stated folds are applied — a redefinition is one entity, `@overload` signatures fold into their implementation, a module-scope `namedtuple`/`NamedTuple`/`TypedDict`/`Enum` call is a class: every class, function and method of requests (788), Django (43 581) and Zulip (16 876); 83 413 of 83 415 on CPython 3.14 and 43 112 of 43 117 on 2.7, the rest members of a class dropped `redefinition-of-another-kind`.
 
 **Against grimp 3.20** on Django's `django/` package: 3 209 of the model's 3 211 module→module edges are grimp's (it has 3 214). Every difference is `from pkg import sub` where `pkg` binds its own submodule `sub`: grimp names the submodule, the model the package — the re-export rule.
 
-**Against pyright** (scip-python 0.6.8), on requests and Zulip. Where pyright resolves a site, the model agrees with 98.6 % / 98.2 % of the `declared` edges, 99.1 % / 98.9 % of `annotation-typed`, 100 % / 96.3 % of `flow-typed`, and every `ancestor-attributed` one it resolves — up to the stated folds: a class called is its `__init__`, a library function or value its module, a library member its class, an attribute its root-most owner, a library name as the site imports it — now only a `<site>` package's re-export (`requests.Response`) and the differences between the pinned typeshed and pyright's (`io` / `_io`): 30 edges on requests, 1 399 on Zulip, against 86 and 1 935 before.
+**Against pyright** (scip-python 0.6.8), on requests and Zulip (Django's `declared` tier too: 98.8 %). Where pyright resolves a site, the model agrees with 98.6 % / 98.3 % of the `declared` edges, 99.1 % / 98.9 % of `annotation-typed`, 100 % / 96.3 % of `flow-typed`, and every `ancestor-attributed` one it resolves — up to the stated folds: a class called is its `__init__`, a library function or value its module, a library member its class, an attribute its root-most owner, a library name as the site imports it — now only a `<site>` package's re-export (`requests.Response`) and the differences between the pinned typeshed and pyright's (`io` / `_io`): 30 edges on requests, 1 399 on Zulip, against 86 and 1 935 before.
 
 **Against a running test suite** (requests, 615 tests passed): of 282 import statements executed, 262 reach what the model says and 2 a run-time alias (`os.path` is `posixpath`; `requests.packages.urllib3` is `urllib3`); the other 18 are no statement — imports the interpreter makes inside a call — and one computed `__import__`, counted.
 
@@ -241,6 +241,7 @@ Current behaviour, with its number; none is a promise either way.
 |---|---|
 | a star-imported name read from another file is dropped, though inside the module it is `star-attributed` | CPython 3.14 `Lib/`: 578 `signal.*`, 91 `struct.*` |
 | `if TYPE_CHECKING:` imports are counted, not marked on the edge, so a cycle they close is drawn | requests: its only cycle (8 files); Zulip: 6 files more in its largest |
+| a receiver reference is anchored at its site's first line, a line early for a receiver after a parenthesis that opens the site on the line above | 2 of 23 135 over the five corpora (Django 1, Zulip 1) |
 | a base written under an alias (`IOError`) comes back from the trace under its real name (`OSError`) and is added as `generated` | requests: 2 of 85 bases |
 | what stays dropped, honestly | Django: 18 816 `unbound-dynamic` (17 971 in `tests/`); Zulip: 6 508 `ambiguous-ancestor`; CPython: `re.*` bound by `@enum.global_enum` at run time |
 
