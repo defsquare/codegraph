@@ -91,7 +91,7 @@ How many of each kind of element, stubs excluded:
 SELECT k.name AS kind, count(*) AS n
   FROM entity e JOIN kind k ON k.id = e.kind_id
  WHERE e.is_stub IS NOT 1
- GROUP BY k.name ORDER BY n DESC;
+ GROUP BY k.name ORDER BY n DESC, kind;
 ```
 
 | kind | n |
@@ -101,8 +101,13 @@ SELECT k.name AS kind, count(*) AS n
 | attribute | 21 |
 | constructor | 19 |
 | class | 14 |
+| lambda | 6 |
+| localVariable | 6 |
 | package | 3 |
 | interface | 2 |
+| annotation | 1 |
+| enum | 1 |
+| record | 1 |
 
 This is the reference fixture, a deliberately small corpus. On a real system
 expect thousands of methods and hundreds of types; the shape of the table is
@@ -112,42 +117,67 @@ carriers; one with many `lambda` rows is functional in style; a single
 
 ## Measure size and find the outliers
 
-Size per module, with the share of the whole. Only type-level `sloc` is
-summed, because the extractor also measures each method and adding both would
-count every line twice:
+Size per module, with the share of the whole. A module that is a file (in
+TypeScript, Elixir and Ruby) carries its own `sloc`. A package or a namespace
+carries none, and gets the sum of the types written directly in it. Only
+those: a method's lines and a nested type's lines are already inside the type
+around them, and adding them would count every line twice.
 
 ```sql
-WITH type_sloc AS (
-  SELECT e.module_id, em.value AS sloc
-    FROM entity_metric em
-    JOIN entity e ON e.id = em.entity_id
-    JOIN kind   k ON k.id = e.kind_id
+WITH types AS (
+  SELECT m.trait_set_id
+    FROM trait_set_member m JOIN trait t ON t.id = m.trait_id
+   WHERE t.name = 'TType'),
+top_type AS (
+  SELECT e.parent_id AS module_id, em.value AS sloc
+    FROM entity_metric em JOIN entity e ON e.id = em.entity_id
    WHERE em.key = 'sloc'
-     AND k.name IN ('class', 'interface', 'enum', 'record', 'annotation'))
-SELECT m.symbol AS module,
-       sum(t.sloc) AS sloc,
-       count(*)    AS types,
-       round(100.0 * sum(t.sloc) / (SELECT sum(sloc) FROM type_sloc), 1) AS pct
-  FROM type_sloc t JOIN entity m ON m.id = t.module_id
- GROUP BY m.symbol ORDER BY sloc DESC;
+     AND e.parent_id = e.module_id
+     AND e.trait_set_id IN (SELECT trait_set_id FROM types)),
+module_size AS (
+  SELECT m.symbol AS module,
+         coalesce((SELECT em.value FROM entity_metric em
+                    WHERE em.entity_id = m.id AND em.key = 'sloc'),
+                  (SELECT sum(t.sloc) FROM top_type t WHERE t.module_id = m.id)) AS sloc,
+         (SELECT count(*) FROM top_type t WHERE t.module_id = m.id) AS types
+    FROM entity m
+   WHERE m.id = m.module_id AND m.is_stub IS NOT 1)
+SELECT module, sloc, types,
+       round(100.0 * sloc / (SELECT sum(sloc) FROM module_size), 1) AS pct
+  FROM module_size
+ WHERE sloc IS NOT NULL
+ ORDER BY sloc DESC, module;
 ```
+
+| module | sloc | types | pct |
+|---|---|---|---|
+| `com.acme.order` | 221 | 14 | 90.9 |
+| `com.acme.order.legacy` | 14 | 1 | 5.8 |
+| `com.acme.order.adapter` | 8 | 1 | 3.3 |
+
+The `types` CTE is how a query says "a type" in any language: it asks for the
+trait `TType`, not for a list of kinds. A Java class, a C# struct, a Ruby
+module and an Elixir protocol all carry it.
 
 The largest types, which is where an outlier shows up first:
 
 ```sql
-SELECT n.id, em.value AS sloc
+SELECT n.id, n.kind, em.value AS sloc
   FROM entity_metric em JOIN node n ON n.ref = em.entity_id
  WHERE em.key = 'sloc'
-   AND n.kind IN ('class', 'interface', 'enum', 'record', 'annotation')
+   AND n.trait_set_id IN (
+         SELECT m.trait_set_id
+           FROM trait_set_member m JOIN trait t ON t.id = m.trait_id
+          WHERE t.name = 'TType')
  ORDER BY em.value DESC, n.id
  LIMIT 20;
 ```
 
-| id | sloc |
-|---|---|
-| `java:com.acme.order/Basket` | 34 |
-| `java:com.acme.order/Batch` | 29 |
-| `java:com.acme.order/Reporting` | 28 |
+| id | kind | sloc |
+|---|---|---|
+| `java:com.acme.order/Basket` | class | 34 |
+| `java:com.acme.order/Batch` | class | 29 |
+| `java:com.acme.order/Reporting` | class | 28 |
 
 **How to read it.** Size follows a power law in every codebase: a handful of
 types hold a large share of the lines. That is normal. What you are looking
@@ -163,43 +193,62 @@ counting it as empty.
 
 ## Measure branching
 
-Cyclomatic complexity is measured per method. Summed per type it says how much
-decision logic a class carries; the maximum says whether one method carries
-most of it:
+Cyclomatic complexity is measured per operation: a method, a constructor, a
+function, a lambda. Summed per type it says how much decision logic a class
+carries; the maximum says whether one operation carries most of it. Each
+operation is counted in the nearest type around it, so a lambda counts in the
+class of the method that holds it. That is the sum the city draws as a
+building's height. A function written outside any type is counted in its
+module, and the `kind` column says so:
 
 ```sql
-SELECT p.id AS type,
+WITH RECURSIVE types AS (
+  SELECT m.trait_set_id
+    FROM trait_set_member m JOIN trait t ON t.id = m.trait_id
+   WHERE t.name = 'TType'),
+climb(op, at) AS (
+  SELECT em.entity_id, e.parent_id
+    FROM entity_metric em JOIN entity e ON e.id = em.entity_id
+   WHERE em.key = 'cyclomatic'
+  UNION ALL
+  SELECT c.op, e.parent_id
+    FROM climb c JOIN entity e ON e.id = c.at
+   WHERE e.parent_id IS NOT NULL
+     AND e.trait_set_id NOT IN (SELECT trait_set_id FROM types))
+SELECT o.id AS owner, o.kind,
        sum(em.value) AS cyclomatic,
-       max(em.value) AS worst_method,
-       count(*)      AS methods
-  FROM entity_metric em
-  JOIN node n ON n.ref = em.entity_id
-  JOIN node p ON p.ref = n.parent_ref
- WHERE em.key = 'cyclomatic'
- GROUP BY p.ref ORDER BY cyclomatic DESC, p.id
+       max(em.value) AS worst,
+       count(*)      AS operations
+  FROM climb c
+  JOIN entity e ON e.id = c.at
+  JOIN node   o ON o.ref = c.at
+  JOIN entity_metric em ON em.entity_id = c.op AND em.key = 'cyclomatic'
+ WHERE e.parent_id IS NULL
+    OR e.trait_set_id IN (SELECT trait_set_id FROM types)
+ GROUP BY o.ref ORDER BY cyclomatic DESC, o.id
  LIMIT 20;
 ```
 
-| type | cyclomatic | worst_method | methods |
-|---|---|---|---|
-| `java:com.acme.order/Reporting` | 11 | 4 | 6 |
-| `java:com.acme.order/Notifications` | 7 | 1 | 7 |
-| `java:com.acme.order/Batch` | 5 | 1 | 5 |
+| owner | kind | cyclomatic | worst | operations |
+|---|---|---|---|---|
+| `java:com.acme.order/Notifications` | class | 12 | 1 | 12 |
+| `java:com.acme.order/Reporting` | class | 11 | 4 | 6 |
+| `java:com.acme.order/Batch` | class | 8 | 1 | 8 |
 
-**How to read it.** `Reporting` has one method at 4 and five simpler ones: a
-type with one branchy centre. `Notifications` is at 7 across seven methods of
-complexity 1: many small straight-line methods, probably dispatch or
-notification glue. A type with `worst_method` above 15 has a method nobody can
-test exhaustively, and that method is where bugs are fixed repeatedly (step 3
-will confirm or deny). Compare this table with the size table: a type that is
-high on both is the classic outlier; a type that is small but branchy is the
-one lines of code would have hidden.
+**How to read it.** `Reporting` has one operation at 4 and five simpler ones:
+a type with one branchy centre. `Notifications` is at 12 across twelve
+operations of complexity 1: many small straight-line methods and lambdas,
+probably dispatch or notification glue. A type with `worst` above 15 has an
+operation nobody can test exhaustively, and that operation is where bugs are
+fixed repeatedly (step 3 will confirm or deny). Compare this table with the
+size table: a type that is high on both is the classic outlier; a type that is
+small but branchy is the one lines of code would have hidden.
 
 With the [metrics pass](/docs/how-to/measure-metrics/) run over the model, the
-same query with `em.key = 'cognitive'` ranks by **cognitive** complexity —
-branching weighted by how deep it nests, which is closer to how hard a method
-is to read than to how many tests it needs — and `'mi'` gives each method's
-maintainability index. The pass joins its measures to the entities the
+same query with `'cognitive'` in place of `'cyclomatic'` ranks by
+**cognitive** complexity — branching weighted by how deep it nests, which is
+closer to how hard a method is to read than to how many tests it needs — and
+`'mi'` gives each method's maintainability index. The pass joins its measures to the entities the
 extractor already wrote, so the queries above do not change.
 
 ## Find the tangles
@@ -211,7 +260,13 @@ codebase:
 
 ```bash
 codegraph analyze app.jsonl --report cycles --level module --internal-only
+codegraph analyze app.jsonl --report cycles --level type --internal-only
 ```
+
+`--internal-only` drops the stubs, so the cycles you see are between code you
+own. Run it at `--level module` first (packages tangled with packages) and
+then at `--level type`. The reference fixture has no cycle between its three
+packages; between its types it has two, and this is the first:
 
 ```text
 cycles: 2 strongly connected components, ranked by component size descending, ties by weight then first member
@@ -222,17 +277,14 @@ cycle 1 — 2 nodes, 3 edges, weight 8, tangle 50.0%
     java:com.acme.order/Money
     java:com.acme.order/Priceable
   edges:
+    java:com.acme.order/Money     -> java:com.acme.order/Money      weight=6  kinds=access,invocation,reference  provenance=declared  (self)
     java:com.acme.order/Money     -> java:com.acme.order/Priceable  weight=1  kinds=interfaceImplementation  provenance=declared
     java:com.acme.order/Priceable -> java:com.acme.order/Money      weight=1  kinds=reference  provenance=declared  [feedback]
 ```
 
-`--internal-only` drops the stubs, so the cycles you see are between code you
-own. Run it at `--level module` first (packages tangled with packages) and
-then at `--level type`.
-
 **How to read it.** Three numbers per cycle:
 
-- **members** is how many modules are locked together. One cycle of 500
+- **members** is how many modules (or types) are locked together. One cycle of 500
   packages is a ball of mud with a thin shell; ten cycles of two packages each
   are ten local mistakes.
 - **weight** is how many base dependencies are involved: how strongly the
@@ -258,10 +310,14 @@ codegraph analyze app.jsonl --report coupling --level type --internal-only --top
   Ce = efferent (distinct nodes this one depends on)   = fan-out
   I  = Ce / (Ca + Ce); 0 when nothing touches the node. Self-loops excluded.
 
-  NODE                         FAN-IN  FAN-OUT  CA  CE      I
-  java:com.acme.order.legacy        1        0   1   0  0.000
-  java:com.acme.order               0        1   0   1  1.000
+  NODE                               FAN-IN  FAN-OUT  CA  CE      I
+  java:com.acme.order/Money               7        1   7   1  0.125
+  java:com.acme.order/Priceable           5        1   5   1  0.167
+  java:com.acme.order/Order               2        4   2   4  0.667
 ```
+
+The rows are ranked by total coupling, fan-in plus fan-out, so read the
+`FAN-IN` column for what is most depended on.
 
 **How to read it.** High fan-in and low instability (`I` near 0) is a
 **load-bearing wall**: many things depend on it and it depends on little, so it
@@ -299,7 +355,8 @@ it is actually worked on.
 ## Write down
 
 - The resolution rate and the stub count, and the commit the model was
-  extracted from (the model header carries it).
+  extracted from (the header carries it when the extractor was given
+  `--repo-commit`; otherwise note `git rev-parse HEAD` beside it).
 - The size and complexity tables, with the break in each curve marked and the
   generated or test code marked as such.
 - The cycles report: how many components, the size of the largest, and its

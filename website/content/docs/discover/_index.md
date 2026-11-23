@@ -24,7 +24,7 @@ stops and where you, or a language model, take over.
 | 1 | [**Structure and elements**](/docs/discover/structure/) — what is here, how big, how branchy, how tangled? | counts, sizes, complexity, cycles, a city | extract, `analyze`, SQL, `serve` | ready |
 | 2 | [**Boundaries and style**](/docs/discover/boundaries/) — how is it cut, in which style, and do the cuts hold? | the module map, the stack, the framework roles | `export`, SQL, `--framework spring` | ready, with ad-hoc queries |
 | 3 | [**Activity**](/docs/discover/activity/) — where does the effort go, who spends it, what changes together? | hotspots, owners, hidden coupling, dead weight | `scm`, `history` | ready |
-| 4 | [**Stimuli and flows**](/docs/discover/stimuli/) — what reacts to the outside world or to time, and what does each reaction reach? | an entry-point inventory and the chain each one runs | SQL, the navigator | partly: Spring only, chains by query |
+| 4 | [**Stimuli and flows**](/docs/discover/stimuli/) — what reacts to the outside world or to time, and what does each reaction reach? | an entry-point inventory by kind, the chain each one runs, the use cases, what nothing reaches | nine query files, the navigator | ready from a table of names: five frameworks checked, any other yours to list |
 | 5 | [**Meaning**](/docs/discover/meaning/) — what does each unit do, in domain words? | one explanation per method, type and module | `explain` | ready, costs money |
 | 6 | [**Domain**](/docs/discover/domain/) — which part is the business, and what is its model? | a `.domain` model and a refactoring report | `domain-facts` + the Specy skill | ready, not yet fed by step 5 |
 
@@ -73,8 +73,11 @@ first hours of reading.
 ## Words used in this section
 
 - **Module.** The unit of code organisation the language has: a Java package,
-  a C# namespace. Codegraph folds dependencies up to it.
-- **Type.** A class, interface, enum, record or annotation.
+  a C# namespace, a file in TypeScript, Elixir and Ruby. Codegraph folds
+  dependencies up to it.
+- **Type.** A class, interface, enum, record or annotation; also a C# struct,
+  a TypeScript type alias, an Elixir module or protocol, a Ruby class or
+  module. Whatever its kind is called, it carries the trait `TType`.
 - **SLOC.** Source lines of code, blank lines and comments excluded. Every
   extractor measures it per type and per method.
 - **Cyclomatic complexity.** The number of independent paths through a

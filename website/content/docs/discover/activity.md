@@ -90,48 +90,58 @@ ten is a test that is hard to keep green.
 ## Join effort with complexity
 
 A hotspot is complexity **times** effort, and the two tables come from two
-sources: the history is per file, the model is per type and method. Join them
-on the file path. First, complexity per file from the model:
-
-```sql
-.mode csv
-.headers on
-.output app-complexity.csv
-SELECT f.path AS file,
-       sum(CASE WHEN em.key = 'sloc'
-                 AND k.name IN ('class', 'interface', 'enum', 'record', 'annotation')
-                THEN em.value END) AS sloc,
-       sum(CASE WHEN em.key = 'cyclomatic' THEN em.value END) AS cyclomatic
-  FROM entity e
-  JOIN file f ON f.id = e.anchor_file_id
-  JOIN kind k ON k.id = e.kind_id
-  LEFT JOIN entity_metric em ON em.entity_id = e.id
- WHERE e.is_stub IS NOT 1
- GROUP BY f.path ORDER BY cyclomatic DESC;
-.output stdout
-```
-
-Then the hotspots as data:
+sources: the history is per file, the model is per type and method. Give the
+model to the same report and it joins them on the file path:
 
 ```bash
-codegraph history app-history.jsonl --report hotspots --top 500 --json > app-hotspots.json
+codegraph history app-history.jsonl --report hotspots --model app.jsonl --top 20
 ```
 
-Join the two on the path in a spreadsheet, a notebook or ten lines of any
-language, and sort by `revisions × cyclomatic`. Two things to know about the
-join: the model's paths are relative to the source root you extracted, the
-history's to the repository root, so match on the **suffix**; and a file in
-the history with no counterpart in the model (docs, build files, anything
-outside the extracted root) is expected, not an error.
+```text
+note: 654 of 1082 history files have no counterpart in the model (docs, build files, deleted files, anything outside the extracted root).
+hotspots of codegraph, joined with the model (top 5 of 428 files, by branchy rank):
+  REVISIONS  SLOC  CYCLOMATIC  CYCLE  FIXES  DENSITY  AUTHORS    OWNER  CLASSIC  BRANCHY  TANGLED  FRAGILE  PATH
+         45  2158         276      0      1     0.02        2   91% #1        1        1        -       20  packages/cli/src/args.ts
+         15   919         241      0      3     0.20        2   89% #1        2        2        -        3  packages/cli/test/explain.test.ts
+         13   750         244      0      2     0.15        2   98% #1        3        3        -        8  packages/cli/src/commands/explain.ts
+         13   609         208      0      3     0.23        2   84% #1        4        4        -        4  packages/insights/test/run.test.ts
+         15   482         122      0      2     0.13        1  100% #1        5        5        -        7  packages/viz/src/three/cityScene.ts
+ranks: classic = revisions x sloc, branchy = revisions x cyclomatic, tangled = revisions of a file in a dependency cycle (CYCLE = its files), fragile = revisions x density = fixes; - = not ranked. OWNER = the share of the file's added lines its main author wrote, and that author's row in --report authors.
+```
 
-{{< callout type="info" >}}
-A single `hotspots` report that ranks files by revisions × complexity from a
-model given with `--model` is planned. Until it lands, the join above is two
-files and a spreadsheet, and the rank family it should produce is worth
-knowing anyway: **classic** (revisions × lines), **branchy** (revisions ×
-cyclomatic), **tangled** (revisions × membership in a cycle from step 1) and
-**fragile** (revisions × fix density). Each finds a different kind of trouble.
-{{< /callout >}}
+**How to read it.** `SLOC` is the file's source lines and `CYCLOMATIC` the sum
+over its operations, both from step 1's model. `CYCLE` is the number of files
+locked in a dependency cycle with this one, itself included; 0 when it is in
+none. `AUTHORS` is how many people touched the file. `OWNER` is the share of
+its added lines that its main author wrote, then that author's row in the
+`authors` report below: two files with the same `#` have the same owner. With
+`--json` each row also has `ownerLastSeen`, the day that author last committed
+anywhere in the history. None of this names anyone. The four right-hand columns are the file's **rank** in
+four families, and each family finds a different kind of trouble:
+
+- **classic**: revisions × lines. Large code that is worked on.
+- **branchy**: revisions × cyclomatic. Complicated code that is worked on. It
+  is the order of the table; `--rank classic`, `tangled` or `fragile` chooses
+  another.
+- **tangled**: revisions, among the files that are in a dependency cycle. A
+  change there pulls the other files of the cycle with it.
+- **fragile**: revisions × fix density, which is the number of fix commits.
+  Where bugs are repaired again and again.
+
+A `-` is "not ranked": no effort, or nothing measured in that family. A file of
+constants has no cyclomatic complexity, and that is not the same as being
+simple. A file near the top of two or three families belongs on the shortlist;
+a file that tops only one tells you which kind of trouble it is. The test file
+in second place above is the triage rule at work: a test that is hard to keep
+green.
+
+Two things to know about the join. The model's paths are relative to the
+source root you extracted, the history's to the repository root, so they are
+matched on the path **suffix**: the model must come from a directory inside
+the mined clone. And the first line counts the history files that found no
+counterpart: docs, build files, files deleted since, anything outside the
+extracted root. That is expected; a count close to the total means the model
+was extracted from somewhere else.
 
 ## See who works where
 
@@ -151,8 +161,9 @@ authors of gson (202):
 Two readings matter for discovery: **knowledge concentration** (one author
 owns most of the hotspots: a truck-factor risk, and the person to interview
 first) and **knowledge loss** (the owner of a hotspot no longer works on the
-project: the code nobody can explain). The bot on the third line is why you
-filter before you count.
+project: the code nobody can explain). The joined table above already says
+both per hotspot, as `OWNER` and `ownerLastSeen`; this report is where the
+names are, and `#3` there is its third row. The bot on the third line is why you filter before you count.
 
 {{< callout type="warning" >}}
 Authorship data describes how a team works. It is never a measure of a
@@ -205,11 +216,28 @@ the model was extracted from somewhere other than inside the mined clone.
 thresholds and the join.
 
 Finally, the number step 2 was waiting for: **how often does a commit cross a
-top-level module?** Fold the coupling pairs to their first path segment and
-count the pairs whose segments differ. Roughly a third of commits crossing
-modules is what a stable layered application shows; two thirds is a codebase
-growing feature by feature through every layer at once. That share is what
-decides whether the folders are boundaries or filing.
+top-level module?** The summary answers when it is given the model:
+
+```bash
+codegraph history app-history.jsonl --report summary --model app.jsonl
+```
+
+```text
+history of codegraph: 378 commits by 5 authors over 1082 files
+  span:         2026-08-18 .. 2026-11-18 (92 days)
+  churn:        +826970 / -214341 (1041311 lines)
+  firefighting: 50 fixes (13.2% of commits), 0 reverts
+  momentum:     0.85x (last 90 days vs lifetime rate)
+  cross-module: 54 of 206 commits touching the model cross its top-level directories (26.2%; 11 at its root)
+```
+
+A top-level module is here a top-level **directory** of the model: the first
+path segment below the directory all its files share. In Java that is the
+first package below the common root. Only commits that touch the model are
+counted, and those over 30 files are left out, as for coupling. Roughly a
+third of commits crossing modules is what a stable layered application shows;
+two thirds is a codebase growing feature by feature through every layer at
+once. That share is what decides whether the folders are boundaries or filing.
 
 ## See it move
 

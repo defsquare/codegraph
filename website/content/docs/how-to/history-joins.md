@@ -105,7 +105,33 @@ the model must come from a directory inside the repository you mined. An
 ambiguous suffix joins nothing and is counted rather than guessed.
 
 `--model FILE` is required for `hidden` and `deadweight`; without it the command
-falls back to this directory's default model.
+falls back to this directory's default model. A file that is not a model is a
+finding, exit `3`: no report is printed over an empty join.
+
+## Rank the hotspots by effort times complexity
+
+The same join gives `hotspots` the model's measures, and `summary` the share of
+commits that cross a top-level directory. Both do it only when `--model` names
+a model:
+
+```bash
+codegraph history codegraph-history.jsonl --report hotspots --model codegraph.jsonl --rank fragile --top 3
+```
+
+```text
+hotspots of codegraph, joined with the model (top 3 of 428 files, by fragile rank):
+  REVISIONS  SLOC  CYCLOMATIC  CYCLE  FIXES  DENSITY  AUTHORS   OWNER  CLASSIC  BRANCHY  TANGLED  FRAGILE  PATH
+         14   161           -      0      4     0.29        3  89% #1       29        -        -        1  packages/core/src/profiles/java.ts
+         22    10           -      0      3     0.14        2  99% #1      208        -        -        2  packages/viz/src/main.ts
+         15   919         241      0      3     0.20        2  89% #1        2        2        -        3  packages/cli/test/explain.test.ts
+ranks: classic = revisions x sloc, branchy = revisions x cyclomatic, tangled = revisions of a file in a dependency cycle (CYCLE = its files), fragile = revisions x density = fixes; - = not ranked. OWNER = the share of the file's added lines its main author wrote, and that author's row in --report authors.
+```
+
+The four right-hand columns are ranks, one per family; `--rank` chooses which
+one orders the rows (`branchy` by default). A `-` under `CYCLOMATIC` is a file
+with no measured operation, here a file of data: it is not ranked as branchy,
+which is not the same as being simple. [Activity](/docs/discover/activity/)
+says how to read the four families.
 
 {{< callout type="info" >}}
 Co-change is an inference about people, not a fact about code. It never enters

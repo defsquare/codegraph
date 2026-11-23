@@ -65,7 +65,8 @@ assumes them.
 CREATE TEMP VIEW node AS
 SELECT e.id                                          AS ref,
        (SELECT value FROM meta WHERE key = 'lang') || ':' || m.symbol
-         || CASE WHEN e.id = e.module_id THEN '' ELSE '/' || e.symbol END
+         -- no '/' for a module (it names itself) nor for an empty symbol (an anonymous function)
+         || CASE WHEN e.id = e.module_id OR e.symbol = '' THEN '' ELSE '/' || e.symbol END
          || CASE WHEN e.disambiguator IS NULL THEN '' ELSE '#' || e.disambiguator END
                                                      AS id,
        k.name                                        AS kind,

@@ -86,21 +86,26 @@ frameworks, the libraries, the I/O. Rank them by how often the corpus
 references them:
 
 ```sql
-SELECT m.symbol AS external_module, count(*) AS refs
+SELECT m.symbol AS external_module,
+       m.is_stub IS NOT 1 AS own,
+       count(*) AS refs
   FROM dep d
   JOIN node n   ON n.ref = d.to_ref
   JOIN entity m ON m.id  = n.module_ref
  WHERE n.is_stub = 1
- GROUP BY m.symbol ORDER BY refs DESC
+ GROUP BY m.id ORDER BY refs DESC, external_module
  LIMIT 40;
 ```
 
-| external_module | refs |
-|---|---|
-| `java.lang` | 39 |
-| `java.util` | 15 |
-| `com.megacorp.ledger` | 10 |
-| `java.time` | 3 |
+| external_module | own | refs |
+|---|---|---|
+| `java.lang` | 0 | 39 |
+| `java.util` | 0 | 15 |
+| `com.megacorp.ledger` | 0 | 10 |
+| `java.lang.annotation` | 0 | 4 |
+| `java.util.function` | 0 | 4 |
+| `com.acme.order` | 1 | 3 |
+| `java.time` | 0 | 3 |
 
 **How to read it.** Skip the standard library and read the rest as a bill of
 materials. `org.springframework.web` is Spring MVC; `jakarta.persistence` is
@@ -110,20 +115,43 @@ a vendor package like `com.megacorp.ledger` above is an **external system the
 corpus depends on** and belongs in the outbound list at the end of this page.
 Copy the table into your notebook; it is the stack.
 
+A row with `own` = 1 is not the outside world: the module is one of yours, and
+what is counted is the names in it that no extracted file declares. That is
+code generated at build time, a type that lives in another source root, or a
+name the extractor could not resolve and placed in the package it was written
+in. A handful is normal; many means a source root is missing from the model.
+
+How fine the table is depends on the language. Java and C# give one row per
+package or namespace. TypeScript gives one per npm package, with `<lib>` for
+the language's own library. Elixir and Ruby give a few roots (`<otp>` and
+`<deps>`, `<ruby>` and `<gems>`): there the bill of materials is the build
+file, `mix.exs` or the `Gemfile`, and this table only says how much the code
+leans on each side.
+
 Which of your modules reach which external ones is the next question, and it
 is the one that tests a hexagonal cut:
 
 ```sql
 SELECT src.symbol AS module, ext.symbol AS reaches, count(*) AS refs
   FROM dep d
-  JOIN node f   ON f.ref = d.from_ref
+  JOIN node f     ON f.ref = d.from_ref
   JOIN entity src ON src.id = f.module_ref
-  JOIN node t   ON t.ref = d.to_ref
+  JOIN node t     ON t.ref = d.to_ref
   JOIN entity ext ON ext.id = t.module_ref
- WHERE t.is_stub = 1 AND f.is_stub IS NOT 1
- GROUP BY src.symbol, ext.symbol
- ORDER BY src.symbol, refs DESC;
+ WHERE t.is_stub = 1 AND f.is_stub IS NOT 1 AND ext.is_stub = 1
+ GROUP BY src.id, ext.id
+ ORDER BY module, refs DESC, reaches;
 ```
+
+| module | reaches | refs |
+|---|---|---|
+| `com.acme.order` | `java.lang` | 34 |
+| `com.acme.order` | `java.util` | 15 |
+| `com.acme.order` | `com.megacorp.ledger` | 8 |
+| `com.acme.order` | `java.lang.annotation` | 4 |
+
+Only external modules are on the right-hand side; the `own` rows of the table
+above are left out.
 
 A module called `domain` that reaches `jakarta.persistence` or
 `org.springframework.web` is a violation the code admits to. Write each one
@@ -132,10 +160,12 @@ are a layer that never existed.
 
 ## Find the patterns from the annotations
 
-Frameworks write their roles into the code as annotations (Java) or
-attributes (C#), and codegraph keeps every use as an `annotationUse` edge with
-its written arguments. A census of annotation names is the fastest honest
-fingerprint of the style:
+Frameworks write their roles into the code as annotations (Java), attributes
+(C#) or decorators (TypeScript), and codegraph keeps every use as an
+`annotationUse` edge with its written arguments. A census of annotation names
+is the fastest honest fingerprint of the style. Elixir and Ruby have no such
+construct, and the census is empty there: their frameworks speak through
+`use`, mixins and naming, which the module map and the stub table show.
 
 ```sql
 SELECT a.name AS annotation, am.symbol AS declared_in, count(*) AS uses
@@ -144,7 +174,7 @@ SELECT a.name AS annotation, am.symbol AS declared_in, count(*) AS uses
   JOIN entity a     ON a.id  = x.to_id
   JOIN entity am    ON am.id = a.module_id
  WHERE ek.name = 'annotationUse'
- GROUP BY a.name, am.symbol ORDER BY uses DESC, a.name;
+ GROUP BY a.id ORDER BY uses DESC, annotation, declared_in;
 ```
 
 | annotation | declared_in | uses |
@@ -158,28 +188,47 @@ On a Spring codebase the same query returns `RestController`, `Service`,
 counts per module are the architecture fingerprint: a module that is 80%
 controllers is the presentation layer whatever its name.
 
-From there, one targeted query per pattern. The **REST controllers and their
-routes**, arguments included, on a Spring codebase:
+From there, one targeted query per pattern: everything that carries one of a
+list of annotations, with the arguments as written. The list is a parameter,
+`:names`, a JSON array:
 
 ```sql
-SELECT n.id AS annotated, a.name AS annotation, x.arguments
+SELECT a.name AS annotation, x.arguments, n.id AS annotated
   FROM edge x
   JOIN edge_kind ek ON ek.id = x.kind_id
   JOIN entity a     ON a.id  = x.to_id
   JOIN node n       ON n.ref = x.from_id
  WHERE ek.name = 'annotationUse'
-   AND a.name IN ('RestController', 'Controller', 'RequestMapping',
-                  'GetMapping', 'PostMapping', 'PutMapping',
-                  'DeleteMapping', 'PatchMapping')
- ORDER BY n.id;
+   AND a.name IN (SELECT value FROM json_each(:names))
+ ORDER BY annotated, annotation;
 ```
 
+| annotation | arguments | annotated |
+|---|---|---|
+| `Retention` | `[{"name":"value","value":{"k":"enum","type":169,"name":"RUNTIME"}}]` | `java:com.acme.order/Audited` |
+| `Audited` | `[{"name":"value","value":{"k":"unevaluated","source":"LedgerClient.AUDIT_TAG"}}]` | `java:com.acme.order/Order.discount(int)` |
+| `Audited` | `[{"name":"value","value":{"k":"string","v":"monthly"}}]` | `java:com.acme.order/Reporting.max(java.util.List)` |
+
+That is the reference fixture, asked for `["Audited","Retention"]`. The **REST
+controllers and their routes** of a Spring codebase are the same statement
+with another list:
+
+```bash
+codegraph query app.jsonl --file annotated-with.sql \
+  --param names='["RestController","Controller","RequestMapping","GetMapping","PostMapping","PutMapping","DeleteMapping","PatchMapping"]'
+```
+
+[`codegraph query`](/docs/reference/cli/query/) binds the list with `--param`;
+in the `sqlite3` shell it is `.parameter set :names '[…]'`.
+
 `arguments` is a JSON array of the written values, so the path of a
-`@GetMapping("/owners/{id}")` is in there as a string literal. Swap the name
-list for `Entity`/`Table`/`Id` and you have the persistence model;
-for `KafkaListener`/`JmsListener`/`RabbitListener` the message consumers;
-for `Scheduled` the timers; for `[ApiController]`/`[HttpGet]` the ASP.NET
-Core equivalents.
+`@GetMapping("/owners/{id}")` is in there as a string literal:
+`[{"name":"value","value":{"k":"string","v":"/owners/{id}"}}]`. Swap the list
+for `["Entity","Table","Id"]` and you have the persistence model; for
+`["KafkaListener","JmsListener","RabbitListener"]` the message consumers; for
+`["Scheduled"]` the timers. In C# the model names the attribute's class, so
+the ASP.NET Core equivalents are `["ApiControllerAttribute","HttpGetAttribute"]`,
+suffix included.
 
 {{< callout type="info" >}}
 These queries are three tables and a name list. If SQL is not your language,
