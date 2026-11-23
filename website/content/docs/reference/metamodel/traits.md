@@ -7,6 +7,10 @@ A trait is a named micro-capability: a partial schema contributing zero or more 
 
 Traits marked *(marker)* contribute **no attributes**: they declare a capability whose data lives in edges, which are stored once, outgoing direction only.
 
+{{< metamodel-diagram "traits-metamodel" >}}
+
+The diagram is a map of this page: an entity composes at most one of each trait, so zero to all of a family's. A dashed box is a marker, and the three red dots are [the composition that motivates the design](#the-composition-that-motivates-the-design).
+
 ## Base
 
 | Trait | Attributes contributed | Notes |

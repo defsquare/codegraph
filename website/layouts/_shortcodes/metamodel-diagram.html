@@ -1,0 +1,14 @@
+{{- /* A generated metamodel diagram (assets/diagrams/<name>.svg), INLINED: an <img> would keep
+       the drawing and lose what makes it a map — its boxes are links, and its own stylesheet
+       gives them a hover. Usage: {{< metamodel-diagram "traits-metamodel" >}}
+       `not-prose` keeps Hextra's link and figure typography off the drawing. */ -}}
+{{- $name := .Get 0 -}}
+{{- $svg := resources.Get (printf "diagrams/%s.svg" $name) -}}
+{{- if not $svg }}{{ errorf "metamodel-diagram: no asset diagrams/%s.svg (%s)" $name .Position }}{{ end -}}
+<figure class="mm-figure not-prose">
+  <div class="mm-figure__canvas">{{ $svg.Content | safeHTML }}</div>
+  <figcaption>
+    <span>Select a box to jump to its section.</span>
+    <a href="{{ $svg.RelPermalink }}">Open the diagram alone (SVG)</a>
+  </figcaption>
+</figure>
