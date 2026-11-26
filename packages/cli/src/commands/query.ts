@@ -273,24 +273,8 @@ function tableCell(value: SqliteValue): string {
  * line up; NULL is written NULL so it cannot be read as an empty string.
  */
 export function formatTable(result: QueryResult): string {
-  const numeric = result.columns.map((_name, column) => {
-    const values = result.rows.map((row) => row[column]).filter((value) => value !== null);
-    return values.length > 0 && values.every((value) => typeof value === "number" || typeof value === "bigint");
-  });
-  // One number of decimals per column: `round(x, 1)` gives 6 for 6.0, and a
-  // column reading 90.9, 6, 3.3 hides that all three are shares to one place.
-  const decimals = result.columns.map((_name, column) => {
-    if (numeric[column] !== true) return 0;
-    const texts = result.rows.map((row) => row[column]).filter((value) => value !== null).map(String);
-    if (texts.some((text) => /e/i.test(text))) return 0; // exponent form: leave as written
-    return Math.max(0, ...texts.map((text) => (text.split(".")[1] ?? "").length));
-  });
-  const cells = result.rows.map((row) =>
-    row.map((value, column) => {
-      const places = decimals[column] ?? 0;
-      return places > 0 && typeof value === "number" ? value.toFixed(places) : tableCell(value);
-    }),
-  );
+  const numeric = numericColumns(result);
+  const cells = tableCells(result);
   const widths = result.columns.map((name, column) =>
     Math.max(name.length, ...cells.map((row) => row[column]?.length ?? 0)),
   );
@@ -305,6 +289,35 @@ export function formatTable(result: QueryResult): string {
 
   const lines = [line(result.columns), widths.map((width) => "-".repeat(width)).join("  "), ...cells.map(line)];
   return `${lines.join("\n")}\n`;
+}
+
+/** A column whose every value is a number. */
+function numericColumns(result: QueryResult): boolean[] {
+  return result.columns.map((_name, column) => {
+    const values = result.rows.map((row) => row[column]).filter((value) => value !== null);
+    return values.length > 0 && values.every((value) => typeof value === "number" || typeof value === "bigint");
+  });
+}
+
+/**
+ * Each cell as the table writes it — what a page that prints the table must
+ * show. One number of decimals per column: `round(x, 1)` gives 6 for 6.0, and
+ * a column reading 90.9, 6, 3.3 hides that all three are shares to one place.
+ */
+export function tableCells(result: QueryResult): string[][] {
+  const numeric = numericColumns(result);
+  const decimals = result.columns.map((_name, column) => {
+    if (numeric[column] !== true) return 0;
+    const texts = result.rows.map((row) => row[column]).filter((value) => value !== null).map(String);
+    if (texts.some((text) => /e/i.test(text))) return 0; // exponent form: leave as written
+    return Math.max(0, ...texts.map((text) => (text.split(".")[1] ?? "").length));
+  });
+  return result.rows.map((row) =>
+    row.map((value, column) => {
+      const places = decimals[column] ?? 0;
+      return places > 0 && typeof value === "number" ? value.toFixed(places) : tableCell(value);
+    }),
+  );
 }
 
 /** What JSON has for a cell: null, a number, a string. */
