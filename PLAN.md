@@ -7971,6 +7971,152 @@ and running the step on six codebases changed:
   entered directly, and any stack but Spring in a session — the four other
   tables were run through the same statements by hand.
 
+**As built — M23d (2026-11-23).** On the same worktree, on top of M23a to
+M23c, uncommitted; the Specy side on a new branch of its own repository. As
+designed, with what measuring the two pages and three live runs changed:
+
+- **The two pages, run before they were followed.** `meaning.md` read the
+  records with `jq`, which the walk forbids, named OpenRouter and Cloudflare
+  only, and printed a plan without its `models:` line; it now reads them with
+  `codegraph insights`, names Claude Code, and prints the command's output.
+  `domain.md` printed for `--framework spring` the bytes of the run without
+  it (100 827 for 100 949), its purity query left out the standard library by
+  `NOT LIKE 'java.%'` on every language — the C# fixture's `Acme.Order` read
+  53.1 % pure with every `System` type counted as a library, 95.1 % with its
+  own — and its order tied on every TypeScript, Elixir and Ruby module, so a
+  ranking moved between two runs. Its "planned change" sentence is corrected
+  (below). `stimuli.md` printed `25` where the command prints `25.0`: the
+  test now compares a page's table with the command's own cells
+  (`tableCells`, lifted out of `formatTable` in `query.ts`, no output
+  changed), where it compared `String(value)`.
+- **What a record is a function of, measured on the paid store.** On a copy,
+  this branch plans the M21 gate's bytes (`240f75ce…3b8e`, 53 llm, 33
+  template, 53 reuse). Three things move them, each now a reading rule of
+  the page and of the skill: (1) *the metrics pass* — the walk's own model of
+  the same commit, extracted at step 1 and measured, plans 90 llm and 16
+  reuse against the same store; with the pass's 1 466 keys stripped it plans
+  the gate's bytes exactly, so the cause is the fourteen measures each prompt
+  shows, not the extractor's version; (2) *the provider* — the same command
+  resolving to Claude Code (no key set) plans other bytes (`a502ba1a…`),
+  because the estimate counts Claude Code's scaffolding in every prompt; the
+  skill names `--provider` on every plan; (3) *the models and depth* — with
+  Claude Code's default model instead of the store's, the plan is 106 calls
+  and reuses nothing; the store's summary (`codegraph insights`) names its
+  models and depth, and the skill plans with those. The 53 calls that remain are 2a79c8f's words (§22.6): the
+  page now says a codegraph that asks other words plans those units again.
+- **Three query files**, with the M23c discipline: an in-memory oracle on the
+  five fixtures for each, then deliberate breaks — dropping the standard
+  library, counting a stub of the code's own package as a library, dropping
+  the supertypes from "reaches a library", any provenance, `entry` at depth
+  1, any field, reads for writes — each failing one to six oracle tests; one
+  break (an enum that is a stub) fails only the page-equality test, no
+  fixture having one. `purity.sql` (domain.md) binds the standard library
+  as `:stdlib`, a list of GLOB patterns from a five-row table on
+  `meaning.md`, held equal to the test's and each pattern to a module its
+  fixture references. `chain-position.sql` (meaning.md) counts, per type of
+  step 4's chains, where chains start (`entry`), pass (`inside`), and leave
+  the code (`edge`: the type calls or reads a library outside the standard
+  library, or one is above it — without the supertypes a repository
+  interface read as `inside`). `invariant-evidence.sql` (domain.md): per type,
+  writes to its own fields, throw sites, both in one operation (`guarded`),
+  and the enum-typed fields it writes. On PetClinic `guarded` is 0 for every
+  type: its guards are `Assert.notNull` calls, not throw sites, which the
+  page now says. The pages hold 26 `sql` blocks: the 21 query files and the
+  how-to's five own; no discovery page is left uncovered.
+- **The skills.** `discover-5-meaning` (266 lines, 2 036 words) and
+  `discover-6-domain` (236, 1 748); the schema closes both steps' findings
+  (seven and five keys, each tied to an item of its page's list, which gains
+  "What was explained" on `meaning.md`) and gives a finding an `origin`
+  (`explain` or `session`) for an `explanation`; a fourth example state,
+  `complete.discovery.json`. The consent block is `references/consent.md`,
+  the Specy skill's §1.4 block and question word for word. The test that
+  read "no line carries `--yes`" is restated as what it guarded: one line in
+  the plugin carries `--yes`, an `explain` run in step 5's Ask beat, with a
+  stated `--scope`, `--provider` and `--max-calls`, after an `explain` that
+  only plans and two that only estimate.
+- **Specy** (`~/specy/skills`, worktree `.claude/worktrees/codegraph-discovery`,
+  branch `feat/codegraph-discovery-workspace` from fa6f029, uncommitted; its
+  main working tree holds someone's edits since 2026-11-17 and was not
+  touched): `heuristics/codegraph.md` for `architecture-extract-from-code`
+  and for `sysreq-extract-from-code`, `heuristics/codegraph-workspace.md` for
+  `domain-extract-from-code` (lookup `.codegraph/`, then `specy/codegraph/`,
+  then any side-car; excluded paths, names a person gave, hotspot ranks
+  ordering the refactoring report, no second consent when `spend` or the
+  `run` finding holds the answer), each wired into its `main.md` and
+  `build.sh`, `dist/` rebuilt for the three skills against a clean export of
+  `metamodels` HEAD (a build from its working tree would carry someone's
+  uncommitted grammar). *Measured:* the plan's "§1.4" and "looks for
+  `specy/codegraph/*.insights.jsonl`, then any `*.insights.jsonl`" describe
+  that uncommitted working tree; the committed skill reads
+  `specy/codegraph/model.insights.jsonl` alone, on JVM code only. The branch
+  is written against the commit, so it will conflict with those edits in
+  `codegraph.md` §1 and `main.md` step 4 when they land.
+- **Three live runs** (Sonnet, headless, no provider key in the environment,
+  each checked on FILES by one script):
+  - *Step 5 on a copy of the paid store placed in a workspace* (the M23c
+    workspace, steps 1–4 done, its model replaced by the paid one so that the
+    store is the paid store whole; intake allowing OpenRouter up to $1; the
+    consent answered no): 33 turns, 237 s, $0.93. The saved plan is the M21
+    gate's bytes; the store and its side-car keep their sha256; the consent
+    block was shown with "Estimated cost: unknown" and a nine-type scope as
+    the cheaper line (33 calls); the readings came from the paid records,
+    free; `spend` empty; every finding anchored. It found by itself that
+    `Owner` is an entity at the edge of its seven chains (Spring's `Assert`
+    and `ToStringCreator`) and `BaseEntity` "plumbing" inside all eleven. It
+    rewrote `REPORT.md` through a `python3` script: `rhythm.md` now says the
+    three files are written with the file tool; and it proposed the whole
+    root, as the skill then said, where the page says not on a first visit:
+    the skill now proposes the scope.
+  - *Step 6 on the result, with the Specy branch loaded* (`--plugin-dir` of
+    its `dist/`, which replaces the installed `specy@skills-dir` — measured
+    with a session that cannot start, $0): 73 turns, 638 s, $2.80. Verdicts:
+    `system` and the root package infrastructure, `owner`, `vet` and `model`
+    undecided, the measures disagreeing. The Specy skill read
+    `codegraph-workspace.md`, extracted nothing, ran no `explain`, wrote
+    `specy/petclinic.domain` (two contexts, one aggregate, five entities,
+    five commands, five queries, six preconditions, no event), a `.sysreq`
+    and a refactoring report of 11 smells ordered by hotspot rank (first:
+    `OwnerController`, a transaction script, fragile #1); `specy validate`
+    passes on both, in the session and again in the checker; `git status`
+    shows `specy/` and nothing else. One `python3` call read the dossier's
+    shape.
+  - *Step 5 with a no at intake and no store* (the M23c workspace as it
+    was, its model measured by the pass): 55 turns, 237 s, $1.03. It planned
+    and estimated through Claude Code as the provider that "would have been"
+    (106 calls for the root, 50 for nine types), created no store, read five
+    types itself and wrote them as explanations with `origin: "session"`,
+    each anchored at a file and line, and the glossary from `codegraph
+    vocabulary` as `derived`. Two of the checker's assertions failed, and
+    both showed the text was silent: it wrote the step `partial` ("so a
+    resume offers step 5 again") and no `said` finding, a no nobody gave.
+    The skill now says the step is `done` after a no, a later yes being a new
+    question, and `consent.md` that `said` is for an answer a person gave in
+    the step. It also found that a scope of types gives no module record, so
+    no purpose and no glossary: the page and the skill now propose the module
+    that holds the chain and the shortlist (`owner`: 55 calls cold), the
+    types alone as the cheaper option. It read the state through `python3`
+    four times: `state.md` now says to read it with the file tool too.
+  - Before the second run, a session with an unknown model (it stops before
+    any call, $0) showed what a plugin directory does to an installed plugin
+    of the same name: `--plugin-dir` of the Specy branch's `dist/` replaces
+    `specy@skills-dir`, and `--safe-mode` drops every plugin's skills,
+    `--plugin-dir` ones included.
+  - The three runs cost $4.75 of Claude Code usage ($0.93, $2.80, $1.03).
+- **Gate.** 1 697 CLI tests (526 of them in the six plugin suites), 691 analyzer, 544
+  core, 96 llm and 56 scm tests green (run one package at a time: under a
+  parallel run the analyzer's `scale.test.ts` times out at 5 s, as M21
+  recorded, and passes alone); typecheck and lint clean; `claude plugin
+  validate plugin --strict` passes; the website builds (`hugo --themesDir`
+  the main checkout's themes; `pnpm -r build` fails on the website package
+  in a worktree, which has no theme); the single-executable image passes its
+  gates; the paid store's three files keep their sha256. Not committed, in
+  either repository. Not live-tested: a yes and the paid run behind it, its
+  `spend` entry, the consent asked of a person; the three changes made after
+  the third run; step 6 without the Specy plugin (the install line); the
+  architecture and requirements heuristics of Specy, which no session read;
+  `--step 5` or `--step 6` entered directly; any corpus but PetClinic; and
+  an enum-typed field whose enum is a stub, which no fixture has.
+
 Definition of done: from a cold checkout of PetClinic and two install
 commands, `/codegraph:discover <path> --tour` writes a valid workspace
 with `git status` unchanged; a second session resumes at step 4 from the
