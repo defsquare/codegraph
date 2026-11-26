@@ -343,7 +343,7 @@ codegraph query app.jsonl --file shared-types.sql --param-file chains=chains.jso
 |---|---|---|
 | `java:com.acme.order/AbstractOrder` | 3 | 37.5 |
 | `java:com.acme.order/OrderService` | 3 | 37.5 |
-| `java:com.acme.order/Money` | 2 | 25 |
+| `java:com.acme.order/Money` | 2 | 25.0 |
 
 **The residue.** What nothing that starts at an entry point touches. A chain
 follows what *runs*; a type that is only mentioned (a parameter's type, an

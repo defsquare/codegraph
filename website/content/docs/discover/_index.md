@@ -25,8 +25,8 @@ stops and where you, or a language model, take over.
 | 2 | [**Boundaries and style**](/docs/discover/boundaries/) — how is it cut, in which style, and do the cuts hold? | the module map, the stack, the framework roles | `export`, SQL, `--framework spring` | ready, with ad-hoc queries |
 | 3 | [**Activity**](/docs/discover/activity/) — where does the effort go, who spends it, what changes together? | hotspots, owners, hidden coupling, dead weight | `scm`, `history` | ready |
 | 4 | [**Stimuli and flows**](/docs/discover/stimuli/) — what reacts to the outside world or to time, and what does each reaction reach? | an entry-point inventory by kind, the chain each one runs, the use cases, what nothing reaches | nine query files, the navigator | ready from a table of names: five frameworks checked, any other yours to list |
-| 5 | [**Meaning**](/docs/discover/meaning/) — what does each unit do, in domain words? | one explanation per method, type and module | `explain` | ready, costs money |
-| 6 | [**Domain**](/docs/discover/domain/) — which part is the business, and what is its model? | a `.domain` model and a refactoring report | `domain-facts` + the Specy skill | ready, not yet fed by step 5 |
+| 5 | [**Meaning**](/docs/discover/meaning/) — what does each unit do, in domain words? | one explanation per method, type and module, a glossary, the three readings | `explain`, `insights`, one query file | ready; the plan and the price are free, the run costs money |
+| 6 | [**Domain**](/docs/discover/domain/) — which part is the business, and what is its model? | a verdict per module, a `.domain` model and a refactoring report | `domain-facts`, two query files, the Specy skill | ready; the extraction reads step 5's records where it finds them |
 
 The **Today** column is the honest state of the tooling. "Ready" means one
 command gives the answer. "Ad-hoc queries" means the answer is a SQL query over
