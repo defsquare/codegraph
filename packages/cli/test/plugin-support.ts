@@ -34,6 +34,8 @@ export function pluginFiles(directory = ""): string[] {
     .sort()
     .flatMap((name) => {
       const path = directory === "" ? name : `${directory}/${name}`;
+      // What `claude plugin eval` writes (gitignored): output of a run, not part of the plugin.
+      if (path === "evals/results") return [];
       return statSync(join(PLUGIN_ROOT, path)).isDirectory() ? pluginFiles(path) : [path];
     });
 }

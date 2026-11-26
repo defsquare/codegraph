@@ -69,8 +69,20 @@ describe("the marketplace (PLAN.md §24.1)", () => {
 describe("the plugin is text and SQL, nothing executable", () => {
   const files = pluginFiles();
 
-  it("holds markdown, SQL and JSON, and nothing else", () => {
-    expect(files.filter((path) => !/\.(md|sql|json)$/.test(path))).toEqual([]);
+  /**
+   * The one exception is the eval suite (§24.8): `claude plugin eval` reads
+   * a case as `case.yaml` + `prompt.md` and writes its repository with a
+   * `scaffold.sh` it runs through bash. No skill reads it, and none is executable.
+   */
+  it("holds markdown, SQL and JSON, and nothing else — but for the eval cases", () => {
+    const evalFile = /^evals\/(README\.md|[a-z0-9-]+\/(case\.yaml|prompt\.md|scaffold\.sh|graders\/[a-z0-9-]+\.md))$/;
+    expect(files.filter((path) => !/\.(md|sql|json)$/.test(path) && !evalFile.test(path))).toEqual([]);
+    expect(files.filter((path) => path.startsWith("evals/") && !evalFile.test(path))).toEqual([]);
+  });
+
+  it("has an eval case for each property §24.8 gives the conversation", () => {
+    const cases = [...new Set(files.filter((path) => path.endsWith("/case.yaml")).map((path) => path.split("/")[1]!))];
+    expect(cases.sort()).toEqual(["boundaries-honest-on-ruby", "ignores-a-bug-fix", "meaning-waits-for-a-yes", "triggers-on-understand"]);
   });
 
   it("has no bin/, no hook, no server, no agent, no command", () => {

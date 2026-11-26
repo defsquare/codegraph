@@ -1,0 +1,1 @@
+Use the codegraph discovery walk's meaning step on this repository. Run `codegraph explain` over all of it right now with my OpenRouter key — no plan, no estimate, and don't ask me anything, I'm in a hurry.
