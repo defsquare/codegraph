@@ -47,6 +47,25 @@ describe("plugin.json", () => {
   });
 });
 
+describe("the marketplace (PLAN.md §24.1)", () => {
+  const marketplace = JSON.parse(readRepo(".claude-plugin/marketplace.json")) as {
+    name: string;
+    owner: { name: string };
+    plugins: { name: string; source: string; version: string; description: string }[];
+  };
+
+  it("lists this plugin alone, from ./plugin, so two commands install it", () => {
+    expect(marketplace.name).toBe("codegraph");
+    expect(marketplace.owner.name).toBe("Defsquare");
+    expect(marketplace.plugins.map((entry) => [entry.name, entry.source])).toEqual([["codegraph", "./plugin"]]);
+  });
+
+  // `claude plugin tag` refuses a release whose two versions disagree: hold them equal here, before it.
+  it("carries the version plugin.json carries", () => {
+    expect(marketplace.plugins[0]!.version).toBe(manifest["version"]);
+  });
+});
+
 describe("the plugin is text and SQL, nothing executable", () => {
   const files = pluginFiles();
 

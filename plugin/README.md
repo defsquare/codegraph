@@ -16,6 +16,17 @@ answered from the code itself.
 | `/codegraph:discover-6-domain <path>` | Step 6 — which part is the business: purity, position in the chains and invariant evidence give a verdict per module; with the Specy plugin, a `.domain` model and a refactoring report weighed by the hotspots. Free with codegraph. |
 | `/codegraph:query <path> <question>` | One question about the code as one saved, read-only SQL query, with its rows. |
 
+## Install
+
+```text
+/plugin marketplace add defsquare/codegraph
+/plugin install codegraph@codegraph
+```
+
+On Claude Code 2.1.275 or later, in one step:
+`/plugin install codegraph --marketplace defsquare/codegraph`. From a clone of
+codegraph, without installing: `claude --plugin-dir plugin`.
+
 ## What it needs
 
 - The `codegraph` command and the extractor of your language, from the
@@ -53,6 +64,9 @@ Text and SQL, nothing executable: no binary, no MCP server, no hook.
   step 4: which names mean "called from outside", per framework (`stacks/`).
 - `queries/` — the SQL the steps run with `codegraph query`. The same
   statements the documentation shows, held equal by a test.
+- `evals/` — the `claude plugin eval` cases: the guide chosen for the right
+  request and not for a bug fix, step 5 waiting for a yes, step 2 saying what
+  a language cannot give. Not read by any skill.
 
 The plugin is versioned with the `codegraph` command it drives: a skill
 spells flags, so it is released with the binary that parses them.

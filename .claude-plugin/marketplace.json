@@ -1,0 +1,18 @@
+{
+  "name": "codegraph",
+  "owner": {
+    "name": "Defsquare",
+    "url": "https://defsquare.com"
+  },
+  "description": "The codegraph plugin for Claude Code: the discovery walk of a codebase you did not write, as agent skills driving the codegraph command.",
+  "plugins": [
+    {
+      "name": "codegraph",
+      "source": "./plugin",
+      "description": "Discover a codebase you did not write, with codegraph: six questions in a fixed order — structure, boundaries, activity, stimuli and flows, meaning, domain — answered from the code itself and written to a workspace on disk.",
+      "version": "0.4.0",
+      "category": "development",
+      "tags": ["code-analysis", "legacy-code", "architecture", "onboarding"]
+    }
+  ]
+}
