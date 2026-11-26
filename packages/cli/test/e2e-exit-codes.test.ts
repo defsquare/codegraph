@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { EXIT } from "../src/exit.js";
 import { createBrokenModels } from "./broken-models.js";
-import { describeArgv, describeResult, ensureCliBinary, javaFixture, runCli } from "./cli-process.js";
+import { describeArgv, describeResult, ensureCliBinary, javaFixture, runCli, runCliAsync } from "./cli-process.js";
 
 /**
  * EXIT CODE DISCIPLINE, end to end (decision 2).
@@ -240,9 +240,9 @@ describe("exit 2 — the invocation was wrong", () => {
     expect(result.code, describeResult(result)).toBe(EXIT.USAGE);
   });
 
-  it("says something useful on stderr and nothing at all on stdout", () => {
+  it("says something useful on stderr and nothing at all on stdout", async () => {
     for (const { argv } of USAGE_CASES) {
-      const result = runCli(argv);
+      const result = await runCliAsync(argv);
       expect(result.stdout, `${describeArgv(argv)} wrote to stdout`).toBe("");
       expect(result.stderr.trim(), `${describeArgv(argv)} said nothing`).not.toBe("");
     }
@@ -288,10 +288,10 @@ describe("exit 1 is reserved for codegraph's own bugs and must never occur", () 
     ).toContain(result.code);
   });
 
-  it("only ever exits 0, 2 or 3 across every invocation in this suite", () => {
+  it("only ever exits 0, 2 or 3 across every invocation in this suite", async () => {
     const seen = new Map<number, string[]>();
     for (const { argv } of ALL_CASES) {
-      const result = runCli(argv);
+      const result = await runCliAsync(argv);
       const bucket = seen.get(result.code) ?? [];
       bucket.push(describeArgv(argv));
       seen.set(result.code, bucket);
