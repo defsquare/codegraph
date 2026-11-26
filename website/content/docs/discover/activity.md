@@ -4,6 +4,8 @@ linkTitle: 3 · Activity
 weight: 3
 ---
 
+> **In Claude Code**, `/codegraph:discover-3-activity <path>` runs this step with you: the commands below, a few rows at a time, written to a workspace that resumes. See [Walk a codebase with Claude Code](/docs/how-to/discover-with-claude-code/).
+
 **The question.** Where does the effort go, who spends it, and what changes
 together? Which complex code is worked on often? Which co-changes have no
 structural explanation?

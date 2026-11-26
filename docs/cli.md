@@ -209,6 +209,13 @@ included — go to stderr. Every refusal, SQLite's own included, is a usage
 error (exit 2) carrying SQLite's message; a file that is not a model is a
 finding (exit 3), as everywhere.
 
+`query` is what the discovery skills of the Claude Code plugin run
+(`plugin/`, PLAN.md §24): each step's statements are files in
+`plugin/queries/`, run with `--file` and `--param`, their `--json` rows saved
+in the walk's workspace and handed to the next statement with `--param-file`.
+The guide's preflight runs `query --views` to find out whether the
+`codegraph` it found is recent enough for the steps.
+
 ### `serve`
 Opens the model browser on port 4177 (every interface unless `--host` narrows
 it): ONE page over the model, built from one graph under one view. Its tabs:

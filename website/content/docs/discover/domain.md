@@ -4,6 +4,8 @@ linkTitle: 6 · Domain
 weight: 6
 ---
 
+> **In Claude Code**, `/codegraph:discover-6-domain <path>` runs this step with you: the commands below, a few rows at a time, written to a workspace that resumes. See [Walk a codebase with Claude Code](/docs/how-to/discover-with-claude-code/).
+
 **The question.** Which part of this codebase is the domain, its structure
 and its behaviour, clearly separated from the technical concerns (application
 and infrastructure, through the hexagonal lens)? And what is the domain model

@@ -4,6 +4,8 @@ linkTitle: 4 · Stimuli
 weight: 4
 ---
 
+> **In Claude Code**, `/codegraph:discover-4-stimuli <path>` runs this step with you: the commands below, a few rows at a time, written to a workspace that resumes. See [Walk a codebase with Claude Code](/docs/how-to/discover-with-claude-code/).
+
 **The question.** What reacts to the outside world? Which elements of the code
 are entry points from outside (a REST endpoint, a web controller, a message
 listener, a command-line verb) or from time (a scheduled job), and what does

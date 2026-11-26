@@ -352,11 +352,33 @@ answer and 620 per type answer, measured on one live run (Spring PetClinic,
 figure, and declared fields add to an answer but not to the estimate. Design: [`docs/insights.md`](docs/insights.md)
 IN-9; reference: [`docs/cli.md`](docs/cli.md).
 
+### Walk it with an agent
+
+The [discovery walk](https://codegraph.biz/docs/discover/) — structure,
+boundaries, activity, stimuli and flows, meaning, domain — ships as a Claude
+Code plugin, [`plugin/`](plugin/README.md). It runs each step's commands, shows
+a few rows at a time, keeps facts and inferences apart, and writes what it
+found to a hidden `.codegraph/` in the analyzed repository, so a walk stops and
+resumes:
+
+```text
+/plugin marketplace add defsquare/codegraph
+/plugin install codegraph@codegraph
+/codegraph:discover path/to/repository          # --tour: steps 1–3, no question, a report
+```
+
+Text and SQL, nothing executable; the one paid step (`explain`) is planned and
+priced first and runs only after a yes. It needs the `codegraph` of its own
+version: `query` and the joined hotspot report arrive with the release after
+v0.4.0.
+
 ### Feed it to something else
 
 `codegraph export --format json|csv` gives you the folded graph;
-`codegraph import gson.jsonl` gives you `gson.db`, a SQLite file you can query
-directly (see the [SQL cookbook](docs/sql-cookbook.md));
+`codegraph query gson.jsonl "SELECT …"` runs one read-only statement over its
+SQLite store, with the `node` and `dep` views already there, and
+`codegraph import gson.jsonl` gives you `gson.db` for any other SQLite client
+(see the [SQL cookbook](docs/sql-cookbook.md));
 `codegraph domain-facts` gives one pre-joined dossier per class for
 domain-model extraction. Every artifact is deterministic, so it diffs cleanly
 in a repository or a CI job.
@@ -472,6 +494,7 @@ so a model file has one direction of truth. The full reference is
 | `packages/navigator`, `packages/navigator-ui` | navigator model, React browser |
 | `packages/insights`, `packages/llm` | the bottom-up walk (`explain`, and `walk`'s definitions and selection), the provider clients |
 | `packages/cli` | the `codegraph` command |
+| `plugin/` | the Claude Code plugin: the discovery walk as skills, the SQL they run, their eval cases — text and SQL, imported by nothing |
 
 ## Documentation
 
@@ -487,7 +510,8 @@ so a model file has one direction of truth. The full reference is
 - [`docs/ruby-extractor.md`](docs/ruby-extractor.md) — running the Ruby extractor, how it resolves without running anything, the dropped-site reasons, `--trace`, and what the audit measured against Packwerk and a booted VM
 - [`docs/python-extractor.md`](docs/python-extractor.md) — running the Python extractor, how it resolves without running anything, the dropped-site reasons, `--trace`, the audit and its oracles (CPython's `ast`, grimp, pyright, a running test suite), the limits as measured
 - [`docs/metrics.md`](docs/metrics.md) — the metrics pass: what it measures, how it joins a model, change history
-- [`docs/distribution.md`](docs/distribution.md) — the Homebrew tap, what a tagged release produces, what is signed and how
+- [`docs/distribution.md`](docs/distribution.md) — the Homebrew tap, what a tagged release produces, what is signed and how, the plugin's marketplace and tag
+- [`plugin/README.md`](plugin/README.md) — the Claude Code plugin: its skills, what it needs, what it writes to a repository
 - [`docs/navigator.md`](docs/navigator.md) — the navigator's design
 - [`docs/insights.md`](docs/insights.md) — the explanation walk's design, and `walk`: definitions, selectors, one store per walk
 - [`docs/vocabulary.md`](docs/vocabulary.md) — the vocabulary's design: the lexicons, the split, the classes and weights, `vocabulary.json`, the cloud, the words a model defines and the glossary readers
@@ -520,6 +544,7 @@ about known code shows up as a diff.
 | Sixth language extractor (Python, Ruff's parser in a Rust binary): no Python, nothing run, Python 2 read from the recovered tree, the standard library from a typeshed-distilled table; audited on requests, Django, Zulip and CPython's own `Lib/` (3.14 and 2.7), checked against CPython's `ast`, grimp, pyright and a running test suite | built, not released (from the release after v0.3.0) |
 | Desktop app (Tauri, macOS, signed and notarized) over the single-executable `codegraph` daemon | done |
 | Releases: one binary per platform on a GitHub release, the Homebrew tap (app cask + one formula per extractor), `codegraph-typescript` on npm | done (v0.1.0) |
+| The discovery walk as Claude Code skills (`plugin/`, `codegraph query`): six steps, a tour, a workspace that resumes, the paid step behind a yes | built, not released (from the release after v0.4.0) |
 | Clojure extractor (clj-kondo) | next |
 | Project website and documentation site | planned, see [`WEBSITE.md`](WEBSITE.md) |
 

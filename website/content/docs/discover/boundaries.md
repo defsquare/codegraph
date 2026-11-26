@@ -4,6 +4,8 @@ linkTitle: 2 · Boundaries
 weight: 2
 ---
 
+> **In Claude Code**, `/codegraph:discover-2-boundaries <path>` runs this step with you: the commands below, a few rows at a time, written to a workspace that resumes. See [Walk a codebase with Claude Code](/docs/how-to/discover-with-claude-code/).
+
 **The question.** What is the overall structure? How is the codebase cut, in
 which architecture style (layered, hexagonal, modular monolith…), and do the
 cuts hold? Which patterns are used, on which technology stack (language,

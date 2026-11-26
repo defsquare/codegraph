@@ -17,6 +17,11 @@ few concepts it needs, gives the codegraph commands that answer it today, shows
 what the output looks like and how to read it, and says honestly where the tool
 stops and where you, or a language model, take over.
 
+In Claude Code, the [`codegraph` plugin](/docs/how-to/discover-with-claude-code/)
+walks it with you: `/codegraph:discover <path>` runs each step's commands,
+keeps facts and inferences apart, and writes what was found to a workspace
+on disk, so the walk stops and resumes.
+
 ## The six questions
 
 | # | Question | What you get | How | Today |

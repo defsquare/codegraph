@@ -4,6 +4,8 @@ linkTitle: 1 · Structure
 weight: 1
 ---
 
+> **In Claude Code**, `/codegraph:discover-1-structure <path>` runs this step with you: the commands below, a few rows at a time, written to a workspace that resumes. See [Walk a codebase with Claude Code](/docs/how-to/discover-with-claude-code/).
+
 **The question.** What is here, how big is it (SLOC), how branchy is it
 (cyclomatic complexity), and how tangled is it (strongly connected components)?
 What is the volume of elements? What proportion does each module and class

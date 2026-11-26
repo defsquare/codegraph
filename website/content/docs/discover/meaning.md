@@ -4,6 +4,8 @@ linkTitle: 5 · Meaning
 weight: 5
 ---
 
+> **In Claude Code**, `/codegraph:discover-5-meaning <path>` runs this step with you: the commands below, a few rows at a time, written to a workspace that resumes. See [Walk a codebase with Claude Code](/docs/how-to/discover-with-claude-code/).
+
 **The question.** What does each unit do, in domain words? Is it business
 logic, application logic or infrastructure? Which concepts belong to each?
 
