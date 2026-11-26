@@ -7607,6 +7607,19 @@ release and not in CI, because each run is a paid session:
   "fix this bug"); the gate (no `explain` without a dry run and a yes);
   honesty (on the Ruby fixture, step 2 says wiring is not available).
 
+  *Scores, 2026-11-26* (Claude Code 2.1.332, `plugin/evals/`, one run per
+  arm, `--scaffold`, no Bash granted — see M23e; $1.79 in all):
+
+  | Case | With | Without | Δ | Note |
+  |---|---|---|---|---|
+  | `meaning-waits-for-a-yes` | 1 | 0 | +1 | told "no plan, don't ask", step 5 still asks for the yes; without the plugin the session agrees to run |
+  | `boundaries-honest-on-ruby` | 1 | 0 | +1 | says there is no wiring report for Ruby; without the plugin one is described |
+  | `ignores-a-bug-fix` | 1 | 1 | 0 | no codegraph skill fired, the bug found, in both arms |
+  | `triggers-on-understand` | 0 | 0 | 0 | the guide fires (indicator passes); the reply grader fails, twice — once as first written ("does not jump to reviewing code", which a run with no shell cannot avoid), once restated; the reply is honest that nothing ran and labels its own reading as such. Owed: the judge's reason, then a third reading |
+
+  One run per arm is a smoke, not a measurement: three runs per arm, as the
+  cases declare, before a release.
+
 Live gate of M23d, on a copy of the paid PetClinic store placed in a
 workspace: step 5 plans exactly what `explain --dry-run` plans there (the
 M21 gate's bytes, §22.6 — not "0 calls") and spends nothing; step 6's
@@ -8124,6 +8137,50 @@ state alone; no model call precedes a yes; every finding carries a kind
 and an anchor that resolves; on a Ruby corpus the walk says what it
 cannot do; the tests of §24.8 are green in `pnpm -r test`.
 
+**As built — M23e (2026-11-26).** On the same branch, rebased onto `main`
+e6ee860 (v0.4.0, with M21 and M22): the conflicts were M21's `walk` beside
+`query` in `args.ts` (both kept; `walk --print-definition` and `query
+--views` the two commands that read no model) and this section's numbering
+(24, Milestones 25, Decisions 26, as planned). As designed, with what the
+integration and the first eval run changed:
+
+- **The marketplace**: `.claude-plugin/marketplace.json` at the root, one
+  entry, `source: "./plugin"`; `claude plugin validate . --strict` passes;
+  `/plugin marketplace add defsquare/codegraph` + `/plugin install
+  codegraph@codegraph`. `plugin-manifest.test.ts` holds the entry to
+  `plugin.json` and `plugin.json` to the root `package.json` — which the
+  rebase had already broken (0.3.0 against 0.4.0): the bump of a release now
+  names both files. The marketplace is read from `main`, so the plugin
+  installable after the merge needs the `codegraph` of the release after
+  v0.4.0 (`query`, the joined hotspots); the preflight's `query --views`
+  probe says so to anyone on v0.4.0.
+- **Python arrived with the rebase** and the plugin had not heard of it:
+  `capabilities.md` regenerated with its column (`--trace`: yes), the guide's
+  preflight looks for `codegraph-python`, and `stacks.md` lists every Python
+  framework as not covered — no Django, Flask or FastAPI table was checked
+  on a corpus, so none ships.
+- **The eval suite**, `plugin/evals/`: four cases, one per property of the
+  conversation above, each with a `scaffold.sh` (run by bash, not
+  executable — the manifest test admits `case.yaml`, `prompt.md`,
+  `scaffold.sh` and graders under `evals/` and nothing else) and NO Bash:
+  this machine has no bubblewrap, and a Bash grant without the OS sandbox is
+  refused. So a case holds what a skill decides and says, not what its
+  commands print — which is what triggering, the gate and honesty are. The
+  scores are above. Its output (`evals/results/`) is gitignored and skipped
+  by the tests.
+- **The release step** in `docs/distribution.md`: validate, `claude plugin
+  tag plugin --push` (`codegraph--vX.Y.Z`, which does not match the `v*`
+  trigger), the eval before the tag.
+- **Docs**: `how-to/discover-with-claude-code.md`; a line on each discover
+  page naming its step's skill; `query-model-db.md` leads with `codegraph
+  query`, the views kept verbatim for other clients; README (usage, packages,
+  docs, status), CLAUDE.md (the layout, the boundary, the commands),
+  `docs/cli.md`, `plugin/README.md` (the install lines `claude plugin
+  validate` asks for).
+- **Not done**: three runs per arm; a judge's reason for the failing
+  `triggers-on-understand` reading; the scripted tour on PetClinic with the
+  installed plugin (not `--plugin-dir`), which needs the release.
+
 ### 24.11 Deferred, explicitly
 
 - **`codegraph doctor`.** The preflight is some forty lines of shell an
@@ -8133,7 +8190,7 @@ cannot do; the tests of §24.8 are green in `pnpm -r test`.
 - **Entry points and reach as `analyze` reports**, with the annotation and
   interface lists as framework-profile data (M10d's door).
 - **Deep links in `serve`**, so the agent can point at one building.
-- **Walk definitions shipped with the plugin** once M21 is merged: a walk
+- **Walk definitions shipped with the plugin** now that M21 is on `main`: a walk
   naming each stimulus, a walk listing outbound systems, on the same
   estimate-and-consent machinery.
 - **The insights store attached in `query`**, to join a concept with a
@@ -8204,11 +8261,11 @@ cannot do; the tests of §24.8 are green in `pnpm -r test`.
 | M22a | Python extractor — profile v2 + skeleton | ✅ (2026-11-22, worktree `python-extractor`, PR #51) §23.9: the parity script run first (CPython's `ast` against the recovered tree, on the fixture and on requests); `python` profile v2 in core (`decorator` and `lambda` no longer kinds, `annotationUse` and `throws` added, the module's name its path) and the registry test; `extractors/python/` in Rust on Ruff's parser pinned by tag, the typeshed table embedded and its generator beside it; the walking skeleton — decoding, import roots, classes / functions / methods / parameters at every nesting, absolute and relative imports with the submodule rule and re-export chains, bases, the stub roots `<builtins>` / `<stdlib>` / `<site>` — → `fixtures/python/expected/model.jsonl` byte-identical to core's encoder, profile-valid with zero issues; the core gate; `bin/codegraph-python`, `build.sh --python`, `test.sh --python` with the release-binary `cmp`; `python-test` in CI |
 | M22b | Python extractor — model | ✅ (2026-11-22, worktree `python-extractor`, PR #51) `attribute` and `variable`; scopes and the name tiers of §23.4; every receiver shape with its provenance (`declared` where the class is written, `derived` for flow, for an annotation and for a sole library ancestor); star imports bound; `annotationUse` with written arguments, `access`, `reference`, `throws`; synthetic classes; `declaredType`; comments, `sloc` + `cyclomatic`, literals; `.pyi` and shebang files; `python` in the metrics pass and a sixth `model.metrics.jsonl`; the full fixture in every per-fixture suite; every CLI command verified on it; city and navigator screenshots reviewed |
 | M22c | Python extractor — audit + oracles + distribution | ✅ (2026-11-23, worktree `python-extractor`, PR #51; `python-native` green on its four runners there, the release loop not yet run with a Python asset) as built: 81.6 / 73.4 / 81.9 / 77.0 / 78.7 % of sites resolved on requests / Django / Zulip / CPython 3.14.10 / 2.7.18; pyright agrees with `declared` at 98.6 % (requests), 98.3 % (Zulip) and 98.8 % (Django), and with `annotation-typed` at 99.1 % and 98.9 %, which stays `derived`; the rulings taken on the audit are in §23. As planned: requests, Django, Zulip, CPython 3.x `Lib/` and CPython 2.7.18 `Lib/` audited `validate`-clean; declarations equal to CPython's `ast` up to the stated folds; the import graph against grimp on Django; references against pyright per provenance, the annotation decision confirmed or reversed on those numbers; `trace/codegraph_trace.py` and `--trace`; binaries on four Unix runners, the registry entry, the formula, `--licenses`; `docs/python-extractor.md`, the website pages, README, CLAUDE.md |
-| M23a | Discovery skills — skeleton, guide, step 1, `query` | §24.10, the two measurements first (a skill reached by name or by file path; Hugo mounting `../plugin/queries`); the helper views defined once in `@codegraph/analyzer` and the three docs copies pinned to it; `codegraph query` (bound parameters, read-only by handle and by a one-statement rule, `codegraph.queryResult/1`) in every CLI suite and the SEA smoke; `plugin/` with `discover` (preflight, intake, state, resume) and `discover-1-structure`; the session-free tests of §24.8 green. Step 1 runs on PetClinic from a cold checkout and a second session resumes from `.codegraph/discovery.json` alone |
-| M23b | Discovery skills — steps 2–3, the tour | `history --report hotspots --model` with the four rank families, hand-counted on the history fixture; `discover-2-boundaries`, `discover-3-activity` and the `query` skill; `--tour` writing its brief and `REPORT.md` with no question asked; one city restyled per step; `activity.md` without its spreadsheet. On a non-Java corpus the tour says what it could not do |
-| M23c | Discovery skills — step 4 | the three detection layers, the slice on facts and with candidates, overlap groups and the residue as query files; `stacks/spring.md` plus one checked stack per other extractor language, the rest listed as not covered. PetClinic's inventory equals the entry points of `--report wiring` plus a hand count of what the two other layers add |
-| M23d | Discovery skills — steps 5–6, Specy | the consent block, the scope proposed from steps 3–4, the background run; `domain-facts`, the three readings and the hand-over; the three Specy changes of §24.6 in its repository; `domain.md` corrected. On a copy of the paid PetClinic store step 5 plans the M21 gate's bytes and spends nothing, and step 6's `.domain` passes `specy validate` |
-| M23e | Discovery skills — distribution | the marketplace file; the website how-to and `query-model-db.md` leading with `codegraph query`; the eval suite and its scores stated in §24.8; README, CLAUDE.md, `docs/cli.md`; the release step. Installable by two commands |
+| M23a | Discovery skills — skeleton, guide, step 1, `query` | ✅ (2026-11-22, branch `feat/m23-discover-skills`, as built in §24.10) §24.10, the two measurements first (a skill reached by name or by file path; Hugo mounting `../plugin/queries`); the helper views defined once in `@codegraph/analyzer` and the three docs copies pinned to it; `codegraph query` (bound parameters, read-only by handle and by a one-statement rule, `codegraph.queryResult/1`) in every CLI suite and the SEA smoke; `plugin/` with `discover` (preflight, intake, state, resume) and `discover-1-structure`; the session-free tests of §24.8 green. Step 1 runs on PetClinic from a cold checkout and a second session resumes from `.codegraph/discovery.json` alone |
+| M23b | Discovery skills — steps 2–3, the tour | ✅ (2026-11-22, same branch) `history --report hotspots --model` with the four rank families, hand-counted on the history fixture; `discover-2-boundaries`, `discover-3-activity` and the `query` skill; `--tour` writing its brief and `REPORT.md` with no question asked; one city restyled per step; `activity.md` without its spreadsheet. On a non-Java corpus the tour says what it could not do |
+| M23c | Discovery skills — step 4 | ✅ (2026-11-23, same branch) the three detection layers, the slice on facts and with candidates, overlap groups and the residue as query files; `stacks/spring.md` plus one checked stack per other extractor language, the rest listed as not covered. PetClinic's inventory equals the entry points of `--report wiring` plus a hand count of what the two other layers add |
+| M23d | Discovery skills — steps 5–6, Specy | ✅ (2026-11-23, same branch; Specy's side on its branch `feat/codegraph-discovery-workspace`; a paid run behind a yes not live-tested) the consent block, the scope proposed from steps 3–4, the background run; `domain-facts`, the three readings and the hand-over; the three Specy changes of §24.6 in its repository; `domain.md` corrected. On a copy of the paid PetClinic store step 5 plans the M21 gate's bytes and spends nothing, and step 6's `.domain` passes `specy validate` |
+| M23e | Discovery skills — distribution | built (2026-11-26, same branch, rebased onto v0.4.0): the eval smoke is 3 of 4 (§24.8), three runs per arm and the installed-plugin tour owed before the release the marketplace file; the website how-to and `query-model-db.md` leading with `codegraph query`; the eval suite and its scores stated in §24.8; README, CLAUDE.md, `docs/cli.md`; the release step. Installable by two commands |
 
 ## 26. Decisions made in this plan (deltas vs. the design doc)
 
