@@ -40,6 +40,7 @@ export const PROFILE_OF_EXTRACTOR: Readonly<Record<string, string>> = {
   typescript: "ts",
   elixir: "ex",
   ruby: "rb",
+  python: "python",
 };
 
 const DISPLAY: Readonly<Record<string, string>> = {
@@ -48,6 +49,7 @@ const DISPLAY: Readonly<Record<string, string>> = {
   ts: "TypeScript",
   ex: "Elixir",
   rb: "Ruby",
+  python: "Python",
 };
 
 /**
@@ -55,7 +57,7 @@ const DISPLAY: Readonly<Record<string, string>> = {
  * anywhere in TypeScript — the flag is each extractor's own — so it is stated
  * here and the test holds it against the extractors' sources.
  */
-export const TRACE_EXTRACTORS: readonly string[] = ["elixir", "ruby"];
+export const TRACE_EXTRACTORS: readonly string[] = ["elixir", "ruby", "python"];
 
 /** The language each framework profile describes. A profile's rows name modules, not a language. */
 export const FRAMEWORK_LANGUAGE: Readonly<Record<string, string>> = {

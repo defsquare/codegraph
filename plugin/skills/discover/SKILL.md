@@ -75,7 +75,7 @@ output. `$REPO` is the repository's absolute path, `$WS` is `$REPO/.codegraph`.
 ```bash
 [ -n "${CODEGRAPH_HOME:-}" ] && PATH="$CODEGRAPH_HOME/bin:$PATH"
 for tool in codegraph codegraph-java codegraph-csharp codegraph-typescript \
-            codegraph-elixir codegraph-ruby codegraph-metrics; do
+            codegraph-elixir codegraph-ruby codegraph-python codegraph-metrics; do
   command -v "$tool" || echo "$tool MISSING"
 done
 codegraph --version

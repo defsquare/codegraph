@@ -18,6 +18,7 @@ can be said about them.
 | TypeScript | `ts` | `.ts`, `.tsx` | `codegraph-typescript` | `brew install defsquare/tap/codegraph-typescript` |
 | Elixir | `ex` | `.ex`, `.exs` | `codegraph-elixir` | `brew install defsquare/tap/codegraph-elixir` |
 | Ruby | `rb` | `.rb`, `.rake`, `.gemspec`, `.ru` | `codegraph-ruby` | `brew install defsquare/tap/codegraph-ruby` |
+| Python | `python` | `.py`, `.pyw`, `.pyi` | `codegraph-python` | `brew install defsquare/tap/codegraph-python` |
 
 Every extractor takes the same flags: `--src DIR`, repeatable, and `--out FILE`.
 It reads sources and runs nothing of the project.
@@ -27,17 +28,17 @@ the model it is given (`brew install defsquare/tap/codegraph-metrics`).
 
 ## What a model holds
 
-| | Java | C# | TypeScript | Elixir | Ruby |
-|---|---|---|---|---|---|
-| A module is a | `package` | `namespace` | `module` | `file` | `file` |
-| A type is a | `class`, `interface`, `enum`, `record`, `annotation` | `class`, `interface`, `struct`, `enum`, `record`, `delegate` | `class`, `abstractClass`, `interface`, `typeAlias`, `enum` | `module`, `protocol` | `class`, `module` |
-| An operation is a | `method`, `constructor`, `lambda` | `delegate`, `method`, `constructor`, `lambda` | `function`, `method`, `constructor`, `arrowFunction` | `function`, `macro`, `callback` | `method` |
-| Kinds that may carry measures | `class`, `interface`, `enum`, `record`, `annotation`, `method`, `constructor`, `lambda` | `class`, `interface`, `struct`, `enum`, `record`, `delegate`, `method`, `constructor`, `property`, `lambda` | `module`, `namespace`, `class`, `abstractClass`, `interface`, `typeAlias`, `enum`, `function`, `method`, `constructor`, `arrowFunction` | `file`, `module`, `protocol`, `function`, `macro` | `file`, `class`, `module`, `method` |
-| Edge kinds | `import`, `inheritance`, `interfaceImplementation`, `invocation`, `access`, `reference`, `annotationUse`, `throws` | `import`, `inheritance`, `interfaceImplementation`, `invocation`, `access`, `reference`, `annotationUse`, `throws` | `import`, `inheritance`, `interfaceImplementation`, `invocation`, `access`, `reference`, `annotationUse`, `throws` | `import`, `interfaceImplementation`, `invocation`, `access`, `reference`, `throws` | `import`, `inheritance`, `traitUsage`, `invocation`, `access`, `reference`, `throws` |
-| Annotations as edges (`annotationUse`) | yes | yes | yes | no | no |
-| Inheritance as an edge | yes | yes | yes | no | yes |
-| Takes a trace of the compiler or the runtime (`--trace`) | no | no | no | yes | yes |
-| External code is filed under | one module per external package | one module per external namespace, `<unresolved>` | one module per external package or library, `<lib>`, `<unresolved>` | `<deps>`, `<otp>` | one module per external package or library, `<gems>`, `<ruby>` |
+| | Java | C# | TypeScript | Elixir | Ruby | Python |
+|---|---|---|---|---|---|---|
+| A module is a | `package` | `namespace` | `module` | `file` | `file` | `module` |
+| A type is a | `class`, `interface`, `enum`, `record`, `annotation` | `class`, `interface`, `struct`, `enum`, `record`, `delegate` | `class`, `abstractClass`, `interface`, `typeAlias`, `enum` | `module`, `protocol` | `class`, `module` | `class` |
+| An operation is a | `method`, `constructor`, `lambda` | `delegate`, `method`, `constructor`, `lambda` | `function`, `method`, `constructor`, `arrowFunction` | `function`, `macro`, `callback` | `method` | `function`, `method` |
+| Kinds that may carry measures | `class`, `interface`, `enum`, `record`, `annotation`, `method`, `constructor`, `lambda` | `class`, `interface`, `struct`, `enum`, `record`, `delegate`, `method`, `constructor`, `property`, `lambda` | `module`, `namespace`, `class`, `abstractClass`, `interface`, `typeAlias`, `enum`, `function`, `method`, `constructor`, `arrowFunction` | `file`, `module`, `protocol`, `function`, `macro` | `file`, `class`, `module`, `method` | `module`, `class`, `function`, `method` |
+| Edge kinds | `import`, `inheritance`, `interfaceImplementation`, `invocation`, `access`, `reference`, `annotationUse`, `throws` | `import`, `inheritance`, `interfaceImplementation`, `invocation`, `access`, `reference`, `annotationUse`, `throws` | `import`, `inheritance`, `interfaceImplementation`, `invocation`, `access`, `reference`, `annotationUse`, `throws` | `import`, `interfaceImplementation`, `invocation`, `access`, `reference`, `throws` | `import`, `inheritance`, `traitUsage`, `invocation`, `access`, `reference`, `throws` | `import`, `inheritance`, `interfaceImplementation`, `invocation`, `access`, `reference`, `annotationUse`, `throws` |
+| Annotations as edges (`annotationUse`) | yes | yes | yes | no | no | yes |
+| Inheritance as an edge | yes | yes | yes | no | yes | yes |
+| Takes a trace of the compiler or the runtime (`--trace`) | no | no | no | yes | yes | yes |
+| External code is filed under | one module per external package | one module per external namespace, `<unresolved>` | one module per external package or library, `<lib>`, `<unresolved>` | `<deps>`, `<otp>` | one module per external package or library, `<gems>`, `<ruby>` | one module per external package or library, `<builtins>`, `<site>`, `<stdlib>` |
 
 How to read it:
 

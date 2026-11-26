@@ -75,10 +75,14 @@ nothing on the corpus is in the table because the framework documents it.
 ## A framework with no table: not covered
 
 Jakarta EE and JAX-RS, Micronaut, Quarkus, Azure Functions, Express, Fastify,
-Next.js, Sinatra, Grape, Hanami, and anything in-house. Say "no table for this
-framework", then build one, and say it is yours:
+Next.js, Sinatra, Grape, Hanami, every Python framework (Django, Flask,
+FastAPI, Celery: Python has no table yet), and anything in-house. Say "no table
+for this framework", then build one, and say it is yours:
 
 1. Copy the table of the same language. Keep `operations` and `conventional`.
+   Python has none: copy any table, empty its five maps, and write
+   `conventional` as the special methods Python itself calls (`__init__`,
+   `__str__`, `__eq__`, `__iter__`…); the finding's `note` says it is yours.
 2. From `annotations`, `supertypes` and `types`, remove every name the two
    censuses do not show.
 3. Add the names the censuses show that mean "called from outside". Each one
