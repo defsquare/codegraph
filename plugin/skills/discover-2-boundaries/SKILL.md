@@ -243,4 +243,5 @@ Then:
 
 If skills named `specy:…` are available, say once that
 `/specy:architecture-extract-from-code` turns a codebase into an architecture
-model, and that it reads the source, not yet this workspace.
+model; a version that knows this walk starts from this step's module map,
+stack, doors and exits, which it reads in the workspace.

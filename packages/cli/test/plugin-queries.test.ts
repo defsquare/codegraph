@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFileSync } from "node:fs";
@@ -27,7 +27,7 @@ import {
   type QueryResult,
   type SqliteDatabase,
 } from "@codegraph/analyzer";
-import { formatJson } from "../src/commands/query.js";
+import { formatJson, tableCells } from "../src/commands/query.js";
 import { DOCS_ROOT, REPO_ROOT, fences, pageCommandTables, pageSql, queryFiles, readDoc, type QueryFile } from "./plugin-support.js";
 
 /**
@@ -136,6 +136,19 @@ const REACH_FROM: Readonly<Record<Language, string>> = {
   ruby: "rb:lib%2Facme_order%2Forder.rb/AcmeOrder::Order.total",
 };
 
+/**
+ * The standard library of each language, as modules of its model: what step 5
+ * and 6 leave out of "reaches a library". The table `meaning.md` prints, which
+ * a test below holds equal to this.
+ */
+const STDLIB: Readonly<Record<Language, string>> = {
+  java: '["java.*"]',
+  csharp: '["System","System.*"]',
+  typescript: '["<lib>","node:*"]',
+  elixir: '["<otp>"]',
+  ruby: '["<ruby>"]',
+};
+
 /** The two literals the page passes where step 3's reports would be. */
 const PAGE_HOTSPOTS = '{"rows":[{"model":"com/acme/order/Money.java"},{"model":"com/acme/order/OrderService.java"}]}';
 const PAGE_ACTIVITY = '{"rows":[{"model":"com/acme/order/Basket.java","revisions":4}]}';
@@ -168,6 +181,10 @@ function paramsFor(name: string, lang: Language): Record<string, string | number
       return { chains: saved("chains", lang) };
     case "residue":
       return { inventory: saved("entry-points", lang), activity: lang === "java" ? PAGE_ACTIVITY : NO_ROWS };
+    case "chain-position":
+      return { chains: saved("chains", lang), stdlib: STDLIB[lang] };
+    case "purity":
+      return { stdlib: STDLIB[lang] };
     default:
       return {};
   }
@@ -206,13 +223,9 @@ const COVERED = [
   "discover/boundaries.md",
   "discover/activity.md",
   "discover/stimuli.md",
+  "discover/meaning.md",
+  "discover/domain.md",
 ] as const;
-
-/** The discovery pages whose steps are not shipped yet, with the milestone that will. */
-const PENDING: Readonly<Record<string, string>> = {
-  "discover/meaning.md": "M23d",
-  "discover/domain.md": "M23d",
-};
 
 /** Blocks of a covered page that are NOT a query file, each with the reason. Keyed by the block's first line. */
 const PAGE_ONLY: Readonly<Record<string, Readonly<Record<string, string>>>> = {
@@ -232,14 +245,17 @@ describe("a query file is a header and one statement that reads", () => {
       "annotations",
       "branching-by-type",
       "chain-groups",
+      "chain-position",
       "chain-ranking",
       "chains",
       "entry-point-kinds",
       "entry-points",
       "external-modules",
+      "invariant-evidence",
       "kinds",
       "largest-types",
       "module-reach",
+      "purity",
       "reach",
       "residue",
       "shared-types",
@@ -288,18 +304,18 @@ describe("the pages and the query files hold the same statements", () => {
     expect(QUERIES.filter((file) => !(COVERED as readonly string[]).includes(file.page)).map((file) => file.name)).toEqual([]);
   });
 
-  it("the pages still to cover are the discovery pages, each with its SQL counted", () => {
+  it("covers every discovery page, each with its SQL counted", () => {
     // The 18 blocks measured when the plan was written (PLAN.md §24) and the
     // two views, less the one `activity.md` gave up in M23b — a `sqlite3`
     // shell script that fed a spreadsheet, replaced by a command.
     // Restated so a page that gains a query is noticed here.
     const count = (page: string): number => pageSql(readDoc(page)).length;
-    expect(Object.fromEntries(Object.keys(PENDING).map((page) => [page, count(page)]))).toEqual({
-      "discover/meaning.md": 0,
-      "discover/domain.md": 1,
-    });
+    const discover = readdirSync(join(DOCS_ROOT, "discover")).filter((file) => file.endsWith(".md") && file !== "_index.md");
+    expect(discover.map((file) => `discover/${file}`).filter((page) => !(COVERED as readonly string[]).includes(page))).toEqual([]);
     // `stimuli.md` held 4 blocks; M23c made them 9 query files, at the page's end.
-    expect(COVERED.map(count)).toEqual([4, 6, 4, 0, 9]);
+    // `meaning.md` held none and `domain.md` one; M23d made them 1 and 2 (purity
+    // with its standard library bound, invariant evidence, chain position).
+    expect(COVERED.map(count)).toEqual([4, 6, 4, 0, 9, 1, 2]);
   });
 });
 
@@ -344,8 +360,8 @@ describe("the tables the pages print are the Java fixture's rows", () => {
 
   it.each(printed.map((entry) => [entry.file.name, entry] as const))("%s: the page's rows are the first rows of the result", (_name, entry) => {
     const result = run(entry.file, "java");
-    // NULL is written NULL, as the command's own table writes it.
-    const rows = result.rows.map((row) => row.map((value) => (value === null ? "NULL" : String(value))));
+    // Each cell as the command's own table writes it: NULL as NULL, a share with its decimals.
+    const rows = tableCells(result);
     expect(entry.table.length).toBeGreaterThan(0);
     expect(entry.table, `${entry.page}:${entry.line}`).toEqual(rows.slice(0, entry.table.length));
   });
@@ -1062,5 +1078,193 @@ describe("residue is what nothing reachable from an entry point mentions", () =>
       expect(query(name).statement).toContain("json_extract(r.value, '$[0]')");
       expect(query(name).statement).toContain("json_extract(r.value, '$[4]') IS NOT NULL");
     }
+  });
+});
+
+// ---------------------------------------------- steps 5 and 6: meaning, domain
+
+const MEANING_PAGE = readDoc("discover/meaning.md");
+const DOMAIN_PAGE = readDoc("discover/domain.md");
+const matchesAny = (patterns: string, symbol: string): boolean => (JSON.parse(patterns) as string[]).some((pattern) => glob(pattern).test(symbol));
+const moduleSymbol = (id: string): string => parseRenderedId(id).module;
+
+describe("the standard library each language leaves out of \"reaches a library\"", () => {
+  it("is the table meaning.md prints, language for language", () => {
+    const start = MEANING_PAGE.indexOf("| Language | `:stdlib` |");
+    expect(start).toBeGreaterThan(0);
+    const rows = MEANING_PAGE.slice(start).split("\n").slice(2).filter((line) => line.startsWith("|"));
+    const printed = Object.fromEntries(rows.map((line) => line.split("|").map((cell) => cell.trim().replace(/^`|`$/g, "")).slice(1, 3)));
+    expect(printed).toEqual({ Java: STDLIB.java, "C#": STDLIB.csharp, TypeScript: STDLIB.typescript, Elixir: STDLIB.elixir, Ruby: STDLIB.ruby });
+  });
+
+  it.each(LANGUAGES)("%s: every pattern names a module the fixture's code references", (lang) => {
+    const shape = shapeOf(lang);
+    const external = new Set([...shape.entities.values()].filter((entity) => entity.isStub === true).map((entity) => moduleSymbol(entity.id)));
+    for (const pattern of JSON.parse(STDLIB[lang]) as string[]) {
+      // Node's own modules are a TypeScript pattern no fixture references.
+      if (pattern === "node:*") continue;
+      expect([...external].some((symbol) => glob(pattern).test(symbol)), `${lang}: ${pattern}`).toBe(true);
+    }
+  });
+
+  it("asks the fixture what the pages' commands ask", () => {
+    const meaning = pageCommandTables(MEANING_PAGE).find((shown) => shown.file === "chain-position")!;
+    expect(meaning.command).toContain("--param-file chains=");
+    expect(meaning.command).toContain(`--param stdlib='${STDLIB.java}'`);
+    const purity = pageCommandTables(DOMAIN_PAGE).find((shown) => shown.file === "purity")!;
+    expect(purity.command).toContain(`--param stdlib='${STDLIB.java}'`);
+  });
+});
+
+describe("purity: the share of a module's references that stay in the code", () => {
+  function expected(lang: Language): Map<string, [number, number]> {
+    const shape = shapeOf(lang);
+    const want = new Map<string, [number, number]>();
+    for (const edge of shape.edges) {
+      if (isStub(shape.entities.get(edge.from))) continue;
+      if (matchesAny(STDLIB[lang], moduleSymbol(edge.to))) continue;
+      const module = moduleSymbol(edge.from);
+      const row = want.get(module) ?? [0, 0];
+      row[0] += 1;
+      if (isStub(shape.entities.get(edge.to))) row[1] += 1;
+      want.set(module, row);
+    }
+    return want;
+  }
+
+  it.each(LANGUAGES)("%s: every reference of the code is counted once, by the module it is written in", (lang) => {
+    const result = run(query("purity"), lang);
+    expect(result.columns).toEqual(["module", "refs", "external", "purity_pct"]);
+    expect(new Map(result.rows.map((row) => [String(row[0]), [Number(row[1]), Number(row[2])] as [number, number]]))).toEqual(expected(lang));
+    for (const row of result.rows) expect(Number(row[3])).toBeCloseTo((100 * (Number(row[1]) - Number(row[2]))) / Number(row[1]), 1);
+  });
+
+  it("leaves out the language's own library, which the page's Java-only filter did not (C#: 53.1 % → 95.1 %)", () => {
+    const share = (stdlib: string): unknown =>
+      queryStore(stores.get("csharp")!, query("purity").statement, { params: { stdlib } }).rows.find((row) => row[0] === "Acme.Order")?.[3];
+    expect(share(STDLIB.java)).toBe(53.1);
+    expect(share(STDLIB.csharp)).toBe(95.1);
+    expect(DOMAIN_PAGE).toMatch(/`Acme\.Order` reads 53\.1 % pure/);
+    expect(DOMAIN_PAGE).toMatch(/with its own, 95\.1 %/);
+  });
+
+  it("is refused without its standard library, by name, before anything runs", () => {
+    expect(() => queryStore(stores.get("java")!, query("purity").statement)).toThrow(/stdlib/);
+  });
+});
+
+describe("chain-position: where a chain starts, what it passes through, where it leaves the code", () => {
+  function expected(lang: Language): Map<string, number[]> {
+    const shape = shapeOf(lang);
+    const isType = (id: string): boolean => hasTrait(shape.entities.get(id)!, "TType");
+    const LEAVE = new Set(["invocation", "access", "inheritance", "interfaceImplementation", "traitUsage"]);
+    const edge = new Set<string>();
+    for (const one of shape.edges) {
+      if (!LEAVE.has(one.edge) || one.provenance !== "declared" || !isStub(shape.entities.get(one.to))) continue;
+      if (matchesAny(STDLIB[lang], moduleSymbol(one.to))) continue;
+      const owner = shape.owner(one.from);
+      if (isType(owner)) edge.add(owner);
+    }
+    const want = new Map<string, number[]>();
+    for (const row of run(query("chains"), lang).rows) {
+      if (row[2] !== 0) continue;
+      const type = String(row[1]);
+      const depth = Number(row[3]);
+      const [chains, entry, atEdge, inside] = want.get(type) ?? [0, 0, 0, 0];
+      want.set(type, [
+        chains! + 1,
+        entry! + (depth === 0 ? 1 : 0),
+        atEdge! + (depth > 0 && edge.has(type) ? 1 : 0),
+        inside! + (depth > 0 && !edge.has(type) ? 1 : 0),
+      ]);
+    }
+    return want;
+  }
+
+  it.each(LANGUAGES)("%s: each type of each chain is counted where it sits", (lang) => {
+    const result = run(query("chain-position"), lang);
+    expect(result.columns).toEqual(["type", "chains", "entry", "edge", "inside"]);
+    const want = expected(lang);
+    expect(want.size, "a fixture with no chain tests nothing").toBeGreaterThan(0);
+    expect(new Map(result.rows.map((row) => [String(row[0]), row.slice(1).map(Number)]))).toEqual(want);
+    const chains = result.rows.map((row) => Number(row[1]));
+    expect(chains).toEqual([...chains].sort((a, b) => b - a));
+  });
+
+  it("reads a chain's own rows: a type a library implements or that calls one is at the edge, the rest inside", () => {
+    // LedgerAdapter implements the external LedgerClient; Money reaches only the standard library.
+    const chains = JSON.stringify({
+      rows: [
+        ["e", "java:com.acme.order.adapter/LedgerAdapter", 0, 1, null],
+        ["e", "java:com.acme.order/Money", 0, 1, null],
+        ["e", "java:com.acme.order/OrderService", 0, 0, null],
+        ["e", "java:java.util/List", 1, 2, null],
+      ],
+    });
+    const rows = queryStore(stores.get("java")!, query("chain-position").statement, { params: { chains, stdlib: STDLIB.java } }).rows;
+    expect(rows).toEqual([
+      ["java:com.acme.order.adapter/LedgerAdapter", 1, 0, 1, 0],
+      ["java:com.acme.order/Money", 1, 0, 0, 1],
+      ["java:com.acme.order/OrderService", 1, 1, 0, 0],
+    ]);
+    // A repository interface has no code of its own: a library above it is what puts it at the edge.
+    expect(query("chain-position").statement).toMatch(/'inheritance', 'interfaceImplementation', 'traitUsage'/);
+  });
+});
+
+describe("invariant-evidence: where a type's rules leave marks", () => {
+  function expected(lang: Language): Map<string, (number | string | null)[]> {
+    const shape = shapeOf(lang);
+    const isType = (id: string): boolean => hasTrait(shape.entities.get(id)!, "TType");
+    const ownerOf = (id: string): string | undefined => {
+      const entity = shape.entities.get(id);
+      if (entity === undefined || entity.isStub === true) return undefined;
+      const owner = shape.owner(id);
+      return isType(owner) ? owner : undefined;
+    };
+    const writers = new Set<string>();
+    const state = new Map<string, Set<string>>();
+    for (const edge of shape.edges as (LooseEdge & { isWrite?: boolean })[]) {
+      if (edge.edge !== "access" || edge.isWrite !== true) continue;
+      const mine = ownerOf(edge.from);
+      if (mine === undefined || mine !== ownerOf(edge.to) || edge.from === mine) continue;
+      writers.add(edge.from);
+      const field = shape.entities.get(edge.to)!;
+      const declared = field.declaredType === undefined ? undefined : shape.entities.get(field.declaredType);
+      if (declared !== undefined && declared.kind === "enum" && declared.isStub !== true) state.set(mine, (state.get(mine) ?? new Set()).add(field.name!));
+    }
+    const throwers = new Set(shape.edges.filter((edge) => edge.edge === "throws").map((edge) => edge.from));
+    const want = new Map<string, (number | string | null)[]>();
+    for (const entity of shape.entities.values()) {
+      if (!hasTrait(entity, "TInvocable")) continue;
+      const type = ownerOf(entity.id);
+      if (type === undefined) continue;
+      const row = want.get(type) ?? [0, 0, 0, 0, null];
+      row[0] = Number(row[0]) + 1;
+      if (writers.has(entity.id)) row[1] = Number(row[1]) + 1;
+      if (throwers.has(entity.id)) row[2] = Number(row[2]) + 1;
+      if (writers.has(entity.id) && throwers.has(entity.id)) row[3] = Number(row[3]) + 1;
+      want.set(type, row);
+    }
+    for (const [type, row] of want) {
+      if (row[1] === 0 && row[2] === 0) want.delete(type);
+      else row[4] = state.has(type) ? [...state.get(type)!].sort().join(", ") : null;
+    }
+    return want;
+  }
+
+  it.each(LANGUAGES)("%s: per type, its operations, the writes to its own fields, its throw sites, both, its enum-typed state", (lang) => {
+    const result = run(query("invariant-evidence"), lang);
+    expect(result.columns).toEqual(["type", "operations", "writes", "throws", "guarded", "state"]);
+    expect(new Map(result.rows.map((row) => [String(row[0]), row.slice(1).map((value) => (typeof value === "string" || value === null ? value : Number(value)))]))).toEqual(expected(lang));
+  });
+
+  it("finds a guarded write and an enum-typed state on the fixtures that have them", () => {
+    expect(run(query("invariant-evidence"), "elixir").rows.some((row) => Number(row[4]) > 0)).toBe(true);
+    expect(run(query("invariant-evidence"), "ruby").rows.some((row) => Number(row[4]) > 0)).toBe(true);
+    expect(run(query("invariant-evidence"), "java").rows.find((row) => row[0] === "java:com.acme.order/Order")?.[5]).toBe("channel");
+    // No enum kind in these profiles: no state, and the page says so.
+    for (const lang of ["elixir", "ruby"] as const) expect(run(query("invariant-evidence"), lang).rows.every((row) => row[5] === null)).toBe(true);
+    expect(DOMAIN_PAGE).toMatch(/no enum kind \(Elixir, Ruby\) has no\s+`state`/);
   });
 });

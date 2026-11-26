@@ -78,6 +78,10 @@ Steps done: … · not done: …
 - **A guess that looks like a fact.** Every line built on a root with
   `guessed: true`, an exclusion `by: "agent"`, or a window you chose by the
   page's rule ends with "(guess)".
+- **An explanation as a fact.** A line from step 5 or 6 says whose reading it
+  is: "the records say" (`origin` `explain`), or "my reading of the source"
+  (`origin` `session`). A `.domain` is the Specy skill's reading until a
+  domain expert confirms it.
 - **A claim without its kind and its file.** A sentence you cannot anchor
   belongs under "Questions for the team", as a question.
 - **A price.** What was spent is what `spend` holds; what a step would cost

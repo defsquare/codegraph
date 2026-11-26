@@ -46,7 +46,9 @@ codebase, not reading yours: at each beat, less is more.
 6. **Write.** Re-read `discovery.json`, then write: the step's findings, each
    with its kind and its anchor (`evidence.md`); the questions; the step's
    status and the commit it ran at. Append the entry to `NOTEBOOK.md`. Then
-   rewrite `REPORT.md` from the state (`report.md`). Write before the gate,
+   rewrite `REPORT.md` from the state (`report.md`). The three are written
+   with your file tool, like the state: never through `python`, `sed` or a
+   heredoc. Write before the gate,
    not after: if the session ends at the gate, nothing is lost, and the
    report does not describe an older walk than the state does.
 

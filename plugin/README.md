@@ -12,10 +12,9 @@ answered from the code itself.
 | `/codegraph:discover-2-boundaries <path>` | Step 2 — how it is cut, in which style, on which stack, and whether the cuts hold. Free, seconds. |
 | `/codegraph:discover-3-activity <path>` | Step 3 — where the effort goes: the hotspots, who holds them, what changes together. Free, seconds; needs the git history. |
 | `/codegraph:discover-4-stimuli <path>` | Step 4 — what reacts to the outside or to time: the entry points by kind, the chain behind each, the use cases, what nothing reaches. Free, seconds. |
+| `/codegraph:discover-5-meaning <path>` | Step 5 — what each unit does, in domain words: the plan and the price of `codegraph explain` first, a run only after your yes for a stated scope and ceiling, then the purposes, the concepts and the glossary. The one paid step. |
+| `/codegraph:discover-6-domain <path>` | Step 6 — which part is the business: purity, position in the chains and invariant evidence give a verdict per module; with the Specy plugin, a `.domain` model and a refactoring report weighed by the hotspots. Free with codegraph. |
 | `/codegraph:query <path> <question>` | One question about the code as one saved, read-only SQL query, with its rows. |
-
-Steps 5 and 6 arrive with the next releases; until then the guide gives their
-documentation page and stops there.
 
 ## What it needs
 
@@ -23,7 +22,10 @@ documentation page and stops there.
   Homebrew tap: https://codegraph.biz/docs/how-to/install/. The skills install
   nothing; they print the line to run.
 - Nothing else for steps 1 to 4. Step 5 is the only one that calls a model
-  provider and costs money, and it asks first.
+  provider and costs money, and it asks first: an API key on OpenRouter or a
+  Cloudflare AI Gateway, or Claude Code itself (`--provider claude-code`).
+- Step 6 hands over to the Specy plugin (`specy-ai/skills`), detected, not
+  required: without it the step stops at the verdict per module.
 
 ## What it does to your repository
 
@@ -36,6 +38,8 @@ state of the walk (`discovery.json`). The report holds shares and counts,
 never a person's name. Delete the directory and nothing is left.
 
 It runs none of the analyzed project's code: no build, no test, no script.
+The one other directory is Specy's, at step 6: `specy/`, with the model it
+wrote, yours to keep or delete.
 
 ## What is in this plugin
 

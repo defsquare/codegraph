@@ -299,8 +299,102 @@
             }
           }
         },
-        "meaning": { "$ref": "#/$defs/openStep" },
-        "domain": { "$ref": "#/$defs/openStep" }
+        "meaning": {
+          "description": "Step 5, meaning. The one step that may send source to a second provider and spend money: what was paid is in `spend`, what was decided is a `said` finding under `run`.",
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "commit": { "$ref": "#/$defs/stepCommit" },
+            "at": { "$ref": "#/$defs/stepAt" },
+            "findings": {
+              "description": "What the page's \"Write down\" list asks for. An `explanation` says in `origin` whether it comes from codegraph explain's records or from this session reading the source itself.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "run": {
+                  "description": "What was explained: the scope proposed and why, the plan's units, calls, templates and reuse, the provider and models, and what the run reported; or that nothing was sent and why. The person's answer is a second finding, kind `said`.",
+                  "x-page-item": "What was explained: the scope, the plan's calls and reuse, and what the run cost; or that nothing was sent, and why.",
+                  "$ref": "#/$defs/findings"
+                },
+                "purposes": {
+                  "description": "Per module: its one-line purpose and its bounded-context hint, as the module records give them.",
+                  "x-page-item": "Per module: its one-line purpose and its bounded-context hint.",
+                  "$ref": "#/$defs/findings"
+                },
+                "readings": {
+                  "description": "Per type in the hotspot chains: its concept, its framework role, its position in the chains, and whether the three agree. A disagreement is named.",
+                  "x-page-item": "Per type in the hotspot chains: its concept, and whether the three readings agree.",
+                  "$ref": "#/$defs/findings"
+                },
+                "review": {
+                  "description": "The records a person should read: concept `unknown`, and the lowest confidence, with the bound used.",
+                  "x-page-item": "The `unknown` and low-confidence records: the reading list for a human.",
+                  "$ref": "#/$defs/findings"
+                },
+                "language": {
+                  "description": "The ubiquitous language the module records propose: each term with its definition and its module.",
+                  "x-page-item": "The ubiquitous language the module records propose (`ubiquitousLanguage`): the glossary of the business, extracted from the code.",
+                  "$ref": "#/$defs/findings"
+                },
+                "glossary": {
+                  "description": "The words the code spells, per module, as its glossary reconciles them: word, concern, sense. Without records, the words of the names alone (`codegraph vocabulary`).",
+                  "x-page-item": "The words the code spells, as each module's `glossary` reconciles them, and the ones it flags `polysemous`: a word its types use in different senses is a boundary to look at.",
+                  "$ref": "#/$defs/findings"
+                },
+                "polysemous": {
+                  "description": "The words a module flags as used in different senses by its types, each with the senses and the types.",
+                  "x-page-item": "The words the code spells, as each module's `glossary` reconciles them, and the ones it flags `polysemous`: a word its types use in different senses is a boundary to look at.",
+                  "$ref": "#/$defs/findings"
+                }
+              }
+            }
+          }
+        },
+        "domain": {
+          "description": "Step 6, domain. The verdicts are codegraph's; the `.domain` and its report are the Specy skill's, written under `specy/` in the repository.",
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "$ref": "#/$defs/status" },
+            "commit": { "$ref": "#/$defs/stepCommit" },
+            "at": { "$ref": "#/$defs/stepAt" },
+            "findings": {
+              "description": "What the page's \"Write down\" list asks for. Without the Specy plugin only `verdicts` and `contextMap` can be written.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "verdicts": {
+                  "description": "Per module: domain, application, infrastructure or mixed, with the three measures behind it — purity, the position of its types in the chains, the invariant evidence.",
+                  "x-page-item": "Per module, the hexagonal verdict (domain, application, infrastructure) and the three measures behind it.",
+                  "$ref": "#/$defs/findings"
+                },
+                "model": {
+                  "description": "The `.domain` file the Specy skill wrote, what it holds by construct, and whether `specy validate` passed.",
+                  "x-page-item": "The `.domain` file, and the elements of it a domain expert should confirm first: the aggregates, their invariants, the events.",
+                  "$ref": "#/$defs/findings"
+                },
+                "toConfirm": {
+                  "description": "The elements a domain expert should confirm first: the aggregates, their invariants, the events. A confirmation is a second finding, kind `said`.",
+                  "x-page-item": "The `.domain` file, and the elements of it a domain expert should confirm first: the aggregates, their invariants, the events.",
+                  "$ref": "#/$defs/findings"
+                },
+                "refactoring": {
+                  "description": "The smells of the refactoring report, each with the hotspot rank of the file it sits in, the first ones first.",
+                  "x-page-item": "The refactoring report, weighted by hotspot rank, cut to what is worth doing this quarter.",
+                  "$ref": "#/$defs/findings"
+                },
+                "contextMap": {
+                  "description": "The candidate bounded contexts and their boundaries, each boundary with the evidence it rests on: the context hints, the chain groups, the co-change, the cycles.",
+                  "x-page-item": "The context map.",
+                  "$ref": "#/$defs/findings"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "questions": {
@@ -353,18 +447,6 @@
       "type": ["string", "null"]
     },
     "stepAt": { "description": "The day the step was last run, YYYY-MM-DD.", "type": "string" },
-    "openStep": {
-      "description": "A step whose findings this version of the plugin does not yet name.",
-      "type": "object",
-      "required": ["status"],
-      "additionalProperties": false,
-      "properties": {
-        "status": { "$ref": "#/$defs/status" },
-        "commit": { "$ref": "#/$defs/stepCommit" },
-        "at": { "$ref": "#/$defs/stepAt" },
-        "findings": { "type": "object", "additionalProperties": { "$ref": "#/$defs/findings" } }
-      }
-    },
     "findings": {
       "description": "One finding per model the step ran on; one alone when the finding is about the whole repository.",
       "type": "array",
@@ -402,7 +484,7 @@
               "required": ["artifact"],
               "additionalProperties": false,
               "properties": {
-                "artifact": { "description": "Relative to the workspace.", "type": "string" },
+                "artifact": { "description": "Relative to the workspace; what the Specy skill wrote is `../specy/…`.", "type": "string" },
                 "row": { "description": "The row of a saved result, counted from 0.", "type": "integer", "minimum": 0 }
               }
             },
@@ -417,6 +499,10 @@
               }
             }
           ]
+        },
+        "origin": {
+          "description": "For an `explanation` only, who read the code: `explain` for the records codegraph explain wrote (the store beside the model), `session` for this session's own model reading the source, with no record behind it.",
+          "enum": ["explain", "session"]
         },
         "note": { "description": "The rule a reading was made by, or what limits the finding.", "type": "string" }
       }

@@ -30,6 +30,16 @@ const PLACEHOLDERS: Readonly<Record<string, string>> = {
   SRC: "src/main/java",
   MODEL: "/repo/.codegraph/main.jsonl",
   HISTORY: "/repo/.codegraph/history.jsonl",
+  // Step 5: the run the person agreed to, and the readings of steps 5 and 6.
+  PROVIDER: "openrouter",
+  LEAF: "openai/gpt-5.6-luna",
+  ROLLUP: "openai/gpt-5.6-luna",
+  DEPTH: "1",
+  SCOPE: "java:com.acme.order/Order,java:com.acme.order/Money",
+  CALLS: "53",
+  IN: "0.10",
+  OUT: "0.60",
+  STDLIB: '["java.*"]',
   CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT,
 };
 
@@ -143,11 +153,48 @@ describe("the hazards a command line can carry (PLAN.md §24.9)", () => {
     expect(bindings("discover-3-activity")).toEqual(["history-file:churn_recent members - history:risk_score"]);
     // Step 4's picture is the Navigate tab: an entry point's fan-out, one hop per click.
     expect(bindings("discover-4-stimuli")).toEqual(["loc members - -"]);
+    // Step 5 raises the buildings that spell a word the glossary flags; step 6 is the Graph tab again.
+    expect(bindings("discover-5-meaning")).toEqual(["vocabulary:pet members - -"]);
+    expect(bindings("discover-6-domain")).toEqual(["loc members - -"]);
   });
 
-  it("never answers a confirmation for the person: no line carries --yes", () => {
-    const confirmed = cliLines.filter((line) => line.words.includes("--yes")).map((line) => line.at);
-    expect(confirmed).toEqual([]);
+  /**
+   * PLAN §24, principle 4: no money spent without a yes per scope. Until M23d
+   * this read "no line carries --yes"; step 5 must now say how a run starts once
+   * the person has agreed, so the property is restated as what it guarded: one
+   * line answers the confirmation, it is `explain`'s run in step 5's Ask beat,
+   * it carries the scope, provider and call bound that were agreed to, and every
+   * `explain` before it in that step only plans or estimates.
+   */
+  it("answers a confirmation only after the person's yes, for a stated scope, provider and bound", () => {
+    const confirmed = cliLines.filter((line) => line.words.includes("--yes") || line.words.includes("-y"));
+    expect(confirmed.map((line) => line.at.replace(/:\d+$/, ""))).toEqual(["skills/discover-5-meaning/SKILL.md"]);
+    const [run] = confirmed;
+    const invocation = parse(run!);
+    if (invocation.kind !== "run" || invocation.command !== "explain") throw new Error(`${run!.at} is not an explain run`);
+    const options = invocation.options as { scope: readonly string[]; provider: string; maxCalls?: number; dryRun: boolean; estimate: boolean; importFrom?: string };
+    expect(options.scope.length, "a stated scope").toBeGreaterThan(0);
+    expect(options.provider, "a stated provider").not.toBe("auto");
+    expect(options.maxCalls, "a bound in calls").toBeDefined();
+    expect([options.dryRun, options.estimate, options.importFrom]).toEqual([false, false, undefined]);
+
+    const skill = skills().find((candidate) => candidate.name === "discover-5-meaning")!;
+    const lineOf = (at: string): number => Number(at.slice(at.lastIndexOf(":") + 1));
+    const heading = (name: string): number => skill.text.split("\n").findIndex((line) => line === `## ${name}`) + 1;
+    expect(lineOf(run!.at)).toBeGreaterThan(heading("Ask"));
+    expect(lineOf(run!.at)).toBeLessThan(heading("Write"));
+    const ask = prose(skill.text.split("\n").slice(heading("Ask"), lineOf(run!.at)).join("\n"));
+    expect(ask).toMatch(/Only after an explicit yes/);
+    // Before the run, in the same step: explain only plans or estimates.
+    const explains = commandLines(skill.path, skill.text).filter((line) => line.words[1] === "explain" && lineOf(line.at) < lineOf(run!.at));
+    expect(explains.length).toBeGreaterThanOrEqual(3);
+    for (const line of explains) {
+      const parsed = parse(line);
+      if (parsed.kind !== "run" || parsed.command !== "explain") throw new Error(`${line.at} is not explain`);
+      const flags = parsed.options as { dryRun: boolean; estimate: boolean };
+      expect(flags.dryRun || flags.estimate, `${line.at} would make calls`).toBe(true);
+    }
+    expect(explains[0]!.words, "the plan comes first").toContain("--dry-run");
   });
 
   it("writes a query's rows and a report into the workspace, never beside the plugin", () => {

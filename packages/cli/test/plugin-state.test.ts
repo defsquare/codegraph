@@ -90,11 +90,12 @@ describe("the schema is one this file can check", () => {
 });
 
 describe("the example states are valid", () => {
-  it("ships a state that has just started, one after step 1 and one after a tour", () => {
+  it("ships a state that has just started, one after step 1, one after a tour and one complete", () => {
     expect(EXAMPLES).toEqual([
       "references/examples/after-step-1.discovery.json",
       "references/examples/after-the-tour.discovery.json",
       "references/examples/cold.discovery.json",
+      "references/examples/complete.discovery.json",
     ]);
   });
 
@@ -189,9 +190,49 @@ describe("the state after a tour", () => {
   });
 });
 
+describe("the state of a walk that went to the end", () => {
+  const complete = example("references/examples/complete.discovery.json");
+  type Finding = { kind: string; anchor: { [key: string]: Json }; origin?: string; root?: string };
+  const steps = complete["steps"] as { [key: string]: { status: string; findings: { [key: string]: Finding[] } } };
+
+  it("is six steps done, each with every finding its page asks for", () => {
+    expect(Object.keys(steps)).toEqual(Object.keys(STEP_PAGES));
+    for (const [key, step] of Object.entries(steps)) {
+      expect(step.status, key).toBe("done");
+      const expected = Object.keys(((STEPS[key]!["properties"] as Schema)["findings"] as Schema)["properties"] as Schema);
+      expect(Object.keys(step.findings).sort(), key).toEqual([...expected].sort());
+    }
+  });
+
+  it("says who read the code for every explanation, and only for an explanation", () => {
+    const all = Object.values(steps).flatMap((step) => Object.values(step.findings).flat());
+    const explanations = all.filter((finding) => finding.kind === "explanation");
+    expect(explanations.length).toBeGreaterThan(5);
+    expect(explanations.every((finding) => finding.origin === "explain" || finding.origin === "session")).toBe(true);
+    expect(all.filter((finding) => finding.kind !== "explanation" && finding.origin !== undefined)).toEqual([]);
+    // What the Specy skill wrote is the session's reading, and it lies beside the workspace.
+    for (const finding of steps["domain"]!.findings["model"]!) {
+      expect(finding.origin).toBe("session");
+      expect(String(finding.anchor["artifact"])).toMatch(/^\.\.\/specy\//);
+    }
+  });
+
+  it("records the run it paid for once, as the command reported it, and the yes that allowed it", () => {
+    const spend = complete["spend"] as { step: string; provider: string; model: string; calls: number; usd: number }[];
+    expect(spend.length).toBe(1);
+    const provider = (complete["intake"] as { provider: { allowed: boolean; name: string; ceilingUsd: number } }).provider;
+    expect(provider.allowed).toBe(true);
+    expect(spend[0]!.provider).toBe(provider.name);
+    expect(spend[0]!.usd).toBeLessThanOrEqual(provider.ceilingUsd);
+    const run = steps["meaning"]!.findings["run"]!;
+    expect(run.map((finding) => finding.kind)).toEqual(["derived", "said"]);
+    expect(typeof run[1]!.anchor["said"]).toBe("string");
+  });
+});
+
 describe("a step's findings are its page's \"Write down\" list", () => {
-  it("ships the first four steps", () => {
-    expect(SHIPPED_STEPS).toEqual(["structure", "boundaries", "activity", "stimuli"]);
+  it("ships the six steps", () => {
+    expect(SHIPPED_STEPS).toEqual(["structure", "boundaries", "activity", "stimuli", "meaning", "domain"]);
   });
 
   it.each(SHIPPED_STEPS)("%s: every finding answers an item of the page, and every item has a finding", (key) => {

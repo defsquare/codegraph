@@ -25,8 +25,11 @@ files alone.
                           11-stack.json is the table of names step 4 ran with
 ```
 
-Later steps add their own files here (`<root>.insights.db`,
-`domain-facts.json`); each step's file names them.
+Later steps add their own files here: step 5 the store `<root>.insights.db`
+and its export `<root>.insights.jsonl`, step 6 `<root>.domain-facts.json`;
+each step's file names them. The Specy skill of step 6 writes its model in
+`specy/` at the repository root, never here: that directory is the person's,
+to commit or to delete.
 
 Three rules about this directory:
 
@@ -42,8 +45,8 @@ Three rules about this directory:
 ## discovery.json
 
 The schema is `discovery.schema.json`, beside this file; the examples in
-`examples/` show a walk that has just started, one after step 1 and one after
-a tour. In short:
+`examples/` show a walk that has just started, one after step 1, one after
+a tour and one that went to the end. In short:
 
 | Field | Holds |
 |---|---|
@@ -53,7 +56,7 @@ a tour. In short:
 | `corpus` | the repository path, the commit extracted, shallow or not, the language census, the source roots and their models, the excluded paths |
 | `steps` | per step started: `status`, the `commit` it ran at, the day, and `findings` |
 | `questions` | what no file answers: the text, the step that raised it, who could answer, open or answered |
-| `spend` | per paid run: day, step, provider, model, calls, dollars — as the command reported them |
+| `spend` | per paid run: day, step, provider, model, calls, dollars — as the command reported them (`codegraph insights … --runs`) |
 | `taught` | the terms already defined to this person |
 
 `steps` uses the page names as keys: `structure`, `boundaries`, `activity`,
@@ -64,12 +67,14 @@ is missing) or `skipped` (the person chose not to run it).
 `findings` holds what the step's documentation page lists under "Write down",
 one key per item. Each key holds a list: one finding per model the step ran
 on, or one alone when the finding is about the repository. A finding is
-`value`, `kind`, `anchor`, and optionally `root` and `note` (`evidence.md`).
+`value`, `kind`, `anchor`, and optionally `root` and `note`; an explanation
+also says who read the code, in `origin` (`evidence.md`).
 
 ## Reading and writing it
 
-- **Read it first.** A step begins by reading `discovery.json`; a session
-  begins by reading it and saying where the walk stands.
+- **Read it first**, with your file tool, not through `python` or `jq`. A
+  step begins by reading `discovery.json`; a session begins by reading it and
+  saying where the walk stands.
 - **Re-read it before you write.** Read the file again immediately before each
   write, change only your step's part, and write the whole file back. Never
   write it from what you remember of it.

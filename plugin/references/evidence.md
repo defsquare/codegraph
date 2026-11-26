@@ -24,7 +24,7 @@ the weakest, in this order:
 | `generated` | what the language's own compiler or runtime produced | an edge of provenance `generated`, present only when a trace was merged (Elixir, Ruby) |
 | `dynamic-candidate` | a plausible runtime wiring, not a certainty | an edge of provenance `dynamic-candidate`: a Spring injection, a dispatch the extractor could not pin |
 | `co-change` | what the commits did: how often a file changed, who changed it, which files changed together | git history (step 3), alone or joined with the model. A fact about how people work, an inference about the code |
-| `explanation` | what a language model said a unit does | `codegraph explain` (step 5), or your own reading of the source — then say so in `note` |
+| `explanation` | what a language model said a unit does | `codegraph explain` (step 5): `origin` is `explain`; or your own reading of the source: `origin` is `session`, and `note` says what you read |
 | `said` | what a person told you | this conversation, or someone they quote |
 
 Rules that follow:
@@ -38,6 +38,9 @@ Rules that follow:
   query, and what it cannot see for this language (`capabilities.md`).
 - A number is read from the saved file, at the moment it is written down.
   Never from memory, never rounded differently in two places.
+- An `explanation` always says who read the code (`origin`), and only an
+  explanation does. Your own reading is not a record: nobody paid for it,
+  nothing fingerprints it, and the next session cannot reuse it.
 - Never upgrade a kind. A `dynamic-candidate` confirmed by a person stays one
   finding (`dynamic-candidate`), plus a second one (`said`).
 

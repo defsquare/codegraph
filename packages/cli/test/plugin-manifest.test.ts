@@ -31,10 +31,7 @@ const manifest = JSON.parse(readPlugin(".claude-plugin/plugin.json")) as Record<
 const SKILLS = skills();
 
 /** The steps the guide's table names that a later milestone ships. Shrinks; never grows. */
-const PLANNED: Readonly<Record<string, string>> = {
-  "discover-5-meaning": "M23d",
-  "discover-6-domain": "M23d",
-};
+const PLANNED: Readonly<Record<string, string>> = {};
 
 describe("plugin.json", () => {
   it("is named codegraph and carries the version of the binary it drives", () => {
@@ -76,7 +73,16 @@ describe("the plugin is text and SQL, nothing executable", () => {
 
 describe("every skill", () => {
   it("is found", () => {
-    expect(SKILLS.map((skill) => skill.name)).toEqual(["discover", "discover-1-structure", "discover-2-boundaries", "discover-3-activity", "discover-4-stimuli", "query"]);
+    expect(SKILLS.map((skill) => skill.name)).toEqual([
+      "discover",
+      "discover-1-structure",
+      "discover-2-boundaries",
+      "discover-3-activity",
+      "discover-4-stimuli",
+      "discover-5-meaning",
+      "discover-6-domain",
+      "query",
+    ]);
   });
 
   it.each(SKILLS.map((skill) => [skill.name, skill] as const))("%s: is named after its directory and says when to use it", (_name, skill) => {
@@ -115,8 +121,15 @@ describe("a step's skill", () => {
     expect(skill.body).toContain("discovery.json");
   });
 
-  it("ships the first four steps, in order", () => {
-    expect(steps.map((skill) => skill.name)).toEqual(["discover-1-structure", "discover-2-boundaries", "discover-3-activity", "discover-4-stimuli"]);
+  it("ships the six steps, in order", () => {
+    expect(steps.map((skill) => skill.name)).toEqual([
+      "discover-1-structure",
+      "discover-2-boundaries",
+      "discover-3-activity",
+      "discover-4-stimuli",
+      "discover-5-meaning",
+      "discover-6-domain",
+    ]);
   });
 
   it.each(steps.map((skill) => [skill.name, skill] as const))("%s: reads the rhythm and the evidence rules before it plays a beat", (_name, skill) => {

@@ -1,0 +1,1420 @@
+{
+  "kind": "codegraph.discovery/1",
+  "codegraph": "0.3.0",
+  "intake": {
+    "at": "2026-11-24",
+    "purpose": "migration",
+    "purposeNote": "moving the clinic onto the group's booking platform",
+    "time": "whole",
+    "provider": {
+      "allowed": true,
+      "name": "openrouter",
+      "ceilingUsd": 1
+    }
+  },
+  "corpus": {
+    "path": "/home/you/src/spring-petclinic",
+    "commit": "500158f732419217507c7656904b8e6aa1bcc0d6",
+    "shallow": false,
+    "languages": [
+      {
+        "lang": "java",
+        "files": 50,
+        "extractor": "codegraph-java",
+        "installed": true
+      },
+      {
+        "lang": ".properties",
+        "files": 16,
+        "extractor": null
+      },
+      {
+        "lang": ".html",
+        "files": 12,
+        "extractor": null
+      },
+      {
+        "lang": ".yml",
+        "files": 8,
+        "extractor": null
+      },
+      {
+        "lang": ".sql",
+        "files": 7,
+        "extractor": null
+      },
+      {
+        "lang": ".scss",
+        "files": 4,
+        "extractor": null
+      }
+    ],
+    "roots": [
+      {
+        "name": "main",
+        "src": [
+          "src/main/java"
+        ],
+        "role": "main",
+        "lang": "java",
+        "model": "main.jsonl"
+      },
+      {
+        "name": "test",
+        "src": [
+          "src/test/java"
+        ],
+        "role": "test",
+        "lang": "java",
+        "model": "test.jsonl"
+      }
+    ],
+    "excluded": []
+  },
+  "steps": {
+    "structure": {
+      "status": "done",
+      "commit": "500158f732419217507c7656904b8e6aa1bcc0d6",
+      "at": "2026-11-24",
+      "findings": {
+        "resolution": [
+          {
+            "root": "main",
+            "value": {
+              "references": 2320,
+              "resolved": 1813,
+              "unresolved": 507,
+              "rate": 78.1
+            },
+            "kind": "declared",
+            "anchor": {
+              "artifact": "main.extract.log"
+            },
+            "note": "Below the page's 90% 'normal'. Extracted without a classpath; the model was extracted at HEAD 500158f."
+          }
+        ],
+        "stubs": [
+          {
+            "root": "main",
+            "value": 134,
+            "kind": "declared",
+            "anchor": {
+              "artifact": "queries/01-summary.json",
+              "row": 0
+            }
+          }
+        ],
+        "sizeBreak": [
+          {
+            "root": "main",
+            "value": {
+              "above": [],
+              "top": [
+                {
+                  "id": "java:org.springframework.samples.petclinic.owner/PetController",
+                  "sloc": 125
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.owner/OwnerController",
+                  "sloc": 108
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.owner/Owner",
+                  "sloc": 96
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.owner/VisitController",
+                  "sloc": 49
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.vet/VetController",
+                  "sloc": 36
+                }
+              ]
+            },
+            "kind": "derived",
+            "anchor": {
+              "artifact": "queries/04-largest-types.json"
+            },
+            "note": "No break: the sizes fall regularly (125, 108, 96, 49, 36, 30, 25). The largest step, 96 to 49, is about 2x, not several times. Rule: the first type several times smaller than the one before. The top three hold 329 of the 676 measured source lines (queries/03-size-by-module.json); the owner package holds 72%."
+          }
+        ],
+        "complexityBreak": [
+          {
+            "root": "main",
+            "value": {
+              "above": [],
+              "top": [
+                {
+                  "id": "java:org.springframework.samples.petclinic.owner/PetController",
+                  "cyclomatic": 33,
+                  "worst": 9
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.owner/Owner",
+                  "cyclomatic": 28,
+                  "worst": 7
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.owner/OwnerController",
+                  "cyclomatic": 24,
+                  "worst": 7
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.owner/VisitController",
+                  "cyclomatic": 11,
+                  "worst": 4
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.owner/PetValidator",
+                  "cyclomatic": 8,
+                  "worst": 6
+                }
+              ]
+            },
+            "kind": "derived",
+            "anchor": {
+              "artifact": "queries/05-branching-by-type.json"
+            },
+            "note": "No break by the page's rule: 33, 28, 24, 11, 8, 7. The largest step, 24 to 11, is about 2x, not several times. No operation above 15; the worst is 9 (PetController). The top three are the same three types as the size ranking."
+          }
+        ],
+        "cycles": [
+          {
+            "root": "main",
+            "value": {
+              "module": {
+                "components": 0,
+                "largest": 0,
+                "feedback": []
+              }
+            },
+            "kind": "declared",
+            "anchor": {
+              "artifact": "reports/main.cycles-module.json"
+            },
+            "note": "This query found no cycle between the five packages (the report folds every edge kind and provenance). Nor between types: 0 components (reports/main.cycles-type.json). Self-loops (a package or a type depending on itself) are reported separately and are not cycles."
+          }
+        ],
+        "topFanIn": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "id": "java:org.springframework.samples.petclinic.model/NamedEntity",
+                "fanIn": 8
+              },
+              {
+                "id": "java:org.springframework.samples.petclinic.model/BaseEntity",
+                "fanIn": 8
+              },
+              {
+                "id": "java:org.springframework.samples.petclinic.owner/Owner",
+                "fanIn": 4
+              },
+              {
+                "id": "java:org.springframework.samples.petclinic.owner/Pet",
+                "fanIn": 4
+              },
+              {
+                "id": "java:org.springframework.samples.petclinic.vet/Vet",
+                "fanIn": 4
+              },
+              {
+                "id": "java:org.springframework.samples.petclinic.model/Person",
+                "fanIn": 4
+              },
+              {
+                "id": "java:org.springframework.samples.petclinic.owner/PetType",
+                "fanIn": 4
+              },
+              {
+                "id": "java:org.springframework.samples.petclinic.owner/OwnerRepository",
+                "fanIn": 3
+              },
+              {
+                "id": "java:org.springframework.samples.petclinic.owner/Visit",
+                "fanIn": 3
+              },
+              {
+                "id": "java:org.springframework.samples.petclinic.owner/PetTypeRepository",
+                "fanIn": 2
+              }
+            ],
+            "kind": "derived",
+            "anchor": {
+              "artifact": "reports/main.coupling-type.json"
+            },
+            "note": "The ten highest fan-in among the twenty most coupled types (25 types in the report); the report folds every edge kind and every provenance, and was not run with --declared-only."
+          }
+        ]
+      }
+    },
+    "boundaries": {
+      "status": "done",
+      "commit": "500158f732419217507c7656904b8e6aa1bcc0d6",
+      "at": "2026-11-24",
+      "findings": {
+        "moduleMap": [
+          {
+            "root": "main",
+            "value": {
+              "modules": 5,
+              "dependencies": 4,
+              "heaviest": {
+                "from": "owner",
+                "to": "model",
+                "count": 34
+              },
+              "shape": "shallow, around one hub: owner, vet and the root package all depend on model, and nothing depends on owner"
+            },
+            "kind": "derived",
+            "anchor": {
+              "artifact": "reports/main.modules.csv"
+            },
+            "note": "Every row is provenance declared; the shape is a reading of them by the page's three shapes. 4 dependencies between different packages, 5 rows are a package depending on itself."
+          }
+        ],
+        "style": [
+          {
+            "root": "main",
+            "value": {
+              "cut": "by feature",
+              "names": [
+                "owner",
+                "vet",
+                "system",
+                "model"
+              ],
+              "census": "6 Controller, 6 Entity, 12 GetMapping, 5 PostMapping: controllers and entities sit together in owner and in vet"
+            },
+            "kind": "derived",
+            "anchor": {
+              "artifact": "queries/08-annotations.json"
+            },
+            "note": "Rule: module names after business capabilities are a cut by feature. model is a shared kernel of base classes, not a layer. A reading, made in a tour: nobody confirmed it."
+          }
+        ],
+        "checks": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "check": "direction",
+                "verdict": "held",
+                "evidence": "a cut by feature claims no direction; no feature package depends on another (owner and vet both depend on model only)"
+              },
+              {
+                "check": "cycles",
+                "verdict": "held",
+                "evidence": "0 components at module level (reports/main.cycles-module.json)"
+              },
+              {
+                "check": "co-change",
+                "verdict": "pending",
+                "evidence": "settled by step 3: steps.activity.findings.crossModuleShare"
+              }
+            ],
+            "kind": "derived",
+            "anchor": {
+              "artifact": "reports/main.modules.csv"
+            }
+          }
+        ],
+        "stack": [
+          {
+            "root": "main",
+            "value": {
+              "standardLibrary": [
+                [
+                  "java.lang",
+                  103
+                ],
+                [
+                  "java.util",
+                  76
+                ],
+                [
+                  "java.time",
+                  20
+                ]
+              ],
+              "libraries": [
+                [
+                  "jakarta.persistence",
+                  81
+                ],
+                [
+                  "org.springframework.web.bind.annotation",
+                  63
+                ],
+                [
+                  "org.springframework.data.domain",
+                  35
+                ],
+                [
+                  "org.springframework.validation",
+                  30
+                ],
+                [
+                  "org.springframework.web.servlet.mvc.support",
+                  22
+                ],
+                [
+                  "jakarta.validation.constraints",
+                  21
+                ]
+              ],
+              "own": [
+                [
+                  "org.springframework.samples.petclinic",
+                  3
+                ],
+                [
+                  "org.springframework.samples.petclinic.system",
+                  2
+                ]
+              ],
+              "modules": 37
+            },
+            "kind": "declared",
+            "anchor": {
+              "artifact": "queries/06-external-modules.json"
+            },
+            "note": "Spring MVC, Spring Data and JPA (jakarta.persistence), Bean Validation. The two own rows are 5 names the extractor could not resolve without a classpath, placed in the package they were written in."
+          }
+        ],
+        "outbound": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "system": "a relational database, through JPA",
+                "module": "jakarta.persistence",
+                "reachedBy": [
+                  [
+                    "owner",
+                    47
+                  ],
+                  [
+                    "model",
+                    17
+                  ],
+                  [
+                    "vet",
+                    17
+                  ]
+                ]
+              },
+              {
+                "system": "a cache, through JCache",
+                "module": "javax.cache.configuration",
+                "reachedBy": [
+                  [
+                    "system",
+                    3
+                  ]
+                ]
+              }
+            ],
+            "kind": "declared",
+            "anchor": {
+              "artifact": "queries/07-module-reach.json"
+            },
+            "note": "Which database and which cache provider is in configuration files, which the model does not read."
+          }
+        ],
+        "inbound": [
+          {
+            "root": "main",
+            "value": {
+              "http": {
+                "annotations": 24,
+                "controllers": 6,
+                "routes": 17,
+                "examples": [
+                  "GET /owners/new",
+                  "GET /owners/find",
+                  "GET /owners/{ownerId}"
+                ]
+              },
+              "messages": 0,
+              "timers": 0
+            },
+            "kind": "declared",
+            "anchor": {
+              "artifact": "queries/09-inbound-http.json"
+            },
+            "note": "HTTP only: the census shows no listener and no scheduled method, so those two lists were not run. This query found none; it does not say there is none configured outside the code."
+          }
+        ]
+      }
+    },
+    "activity": {
+      "status": "done",
+      "commit": "500158f732419217507c7656904b8e6aa1bcc0d6",
+      "at": "2026-11-24",
+      "findings": {
+        "hotspots": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "file": "src/main/java/org/springframework/samples/petclinic/owner/PetController.java",
+                "revisions": 52,
+                "sloc": 125,
+                "cyclomatic": 33,
+                "fixDensity": 0.13,
+                "ranks": {
+                  "classic": 1,
+                  "branchy": 1,
+                  "tangled": null,
+                  "fragile": 2
+                }
+              },
+              {
+                "file": "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+                "revisions": 52,
+                "sloc": 108,
+                "cyclomatic": 24,
+                "fixDensity": 0.15,
+                "ranks": {
+                  "classic": 2,
+                  "branchy": 2,
+                  "tangled": null,
+                  "fragile": 1
+                }
+              },
+              {
+                "file": "src/main/java/org/springframework/samples/petclinic/owner/Owner.java",
+                "revisions": 39,
+                "sloc": 96,
+                "cyclomatic": 28,
+                "fixDensity": 0.1,
+                "ranks": {
+                  "classic": 3,
+                  "branchy": 3,
+                  "tangled": null,
+                  "fragile": 7
+                }
+              },
+              {
+                "file": "src/main/java/org/springframework/samples/petclinic/owner/VisitController.java",
+                "revisions": 42,
+                "sloc": 49,
+                "cyclomatic": 11,
+                "fixDensity": 0.1,
+                "ranks": {
+                  "classic": 4,
+                  "branchy": 4,
+                  "tangled": null,
+                  "fragile": 6
+                }
+              },
+              {
+                "file": "src/main/java/org/springframework/samples/petclinic/owner/Pet.java",
+                "revisions": 38,
+                "sloc": 30,
+                "cyclomatic": 7,
+                "fixDensity": 0.13,
+                "ranks": {
+                  "classic": 6,
+                  "branchy": 5,
+                  "tangled": null,
+                  "fragile": 4
+                }
+              }
+            ],
+            "kind": "co-change",
+            "anchor": {
+              "artifact": "reports/main.hotspots.json"
+            },
+            "note": "The whole history was mined, 2013-01-09 to 2026-09-29: over the page's two years, and nobody was asked for a window (guess). 25 of 1543 history files joined the model. No file is ranked tangled: no dependency cycle. Not triaged by a person."
+          }
+        ],
+        "owners": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "file": "PetController.java",
+                "authors": 24,
+                "ownerShare": 0.16,
+                "ownerRank": 1,
+                "ownerLastSeen": "2014-08-26"
+              },
+              {
+                "file": "OwnerController.java",
+                "authors": 24,
+                "ownerShare": 0.21,
+                "ownerRank": 1,
+                "ownerLastSeen": "2014-08-26"
+              },
+              {
+                "file": "Owner.java",
+                "authors": 27,
+                "ownerShare": 0.22,
+                "ownerRank": 9,
+                "ownerLastSeen": "2013-01-09"
+              },
+              {
+                "file": "VisitController.java",
+                "authors": 22,
+                "ownerShare": 0.19,
+                "ownerRank": 9,
+                "ownerLastSeen": "2013-01-09"
+              },
+              {
+                "file": "Pet.java",
+                "authors": 18,
+                "ownerShare": 0.2,
+                "ownerRank": 9,
+                "ownerLastSeen": "2013-01-09"
+              }
+            ],
+            "kind": "co-change",
+            "anchor": {
+              "artifact": "reports/main.hotspots.json"
+            },
+            "note": "Two authors hold the five: row 1 of the authors report (PetController, OwnerController) and row 9 (Owner, VisitController, Pet), each with under a quarter of the lines among 18 to 27 authors, and last seen in 2014 and 2013. Knowledge is spread thin, and its first holders are long gone."
+          }
+        ],
+        "hiddenCouplings": [
+          {
+            "root": "main",
+            "value": {
+              "pairs": 0,
+              "thresholds": {
+                "minSupport": 3,
+                "minConfidence": 50
+              }
+            },
+            "kind": "co-change",
+            "anchor": {
+              "artifact": "reports/main.hidden.json"
+            },
+            "note": "This report found none at its default thresholds. 251 pairs co-change over the whole repository (reports/coupling.json); the strongest, build.gradle with pom.xml, lies outside the model."
+          }
+        ],
+        "crossModuleShare": [
+          {
+            "root": "main",
+            "value": {
+              "commits": 165,
+              "crossing": 40,
+              "share": 0.242,
+              "directories": [
+                ".",
+                "model",
+                "owner",
+                "system",
+                "vet"
+              ],
+              "under": "org/springframework/samples/petclinic",
+              "skipped": 20
+            },
+            "kind": "co-change",
+            "anchor": {
+              "artifact": "reports/main.summary.json"
+            },
+            "note": "24.2%, under the page's third: the feature packages are boundaries in practice, which settles the third check of step 2 as held."
+          }
+        ]
+      }
+    },
+    "stimuli": {
+      "status": "done",
+      "commit": "500158f732419217507c7656904b8e6aa1bcc0d6",
+      "at": "2026-11-24",
+      "findings": {
+        "inventory": [
+          {
+            "root": "main",
+            "value": {
+              "table": "spring.json, as shipped; nothing added",
+              "rows": 55,
+              "classified": 39,
+              "unclassified": 16,
+              "byKind": [
+                {
+                  "stimulus": "inbound query",
+                  "entryPoints": 12,
+                  "layer": "annotation",
+                  "name": "GetMapping"
+                },
+                {
+                  "stimulus": "inbound command",
+                  "entryPoints": 5,
+                  "layer": "annotation",
+                  "name": "PostMapping"
+                },
+                {
+                  "stimulus": "inbound request",
+                  "entryPoints": 1,
+                  "layer": "annotation",
+                  "name": "RequestMapping"
+                },
+                {
+                  "stimulus": "framework callback",
+                  "entryPoints": 7,
+                  "layer": "annotation",
+                  "name": "ModelAttribute"
+                },
+                {
+                  "stimulus": "framework callback",
+                  "entryPoints": 4,
+                  "layer": "annotation",
+                  "name": "InitBinder"
+                },
+                {
+                  "stimulus": "framework callback",
+                  "entryPoints": 2,
+                  "layer": "supertype",
+                  "name": "Formatter"
+                },
+                {
+                  "stimulus": "framework callback",
+                  "entryPoints": 2,
+                  "layer": "supertype",
+                  "name": "Validator"
+                },
+                {
+                  "stimulus": "lifecycle",
+                  "entryPoints": 3,
+                  "layer": "annotation",
+                  "name": "Bean"
+                },
+                {
+                  "stimulus": "lifecycle",
+                  "entryPoints": 1,
+                  "layer": "supertype",
+                  "name": "RuntimeHintsRegistrar"
+                },
+                {
+                  "stimulus": "lifecycle",
+                  "entryPoints": 1,
+                  "layer": "supertype",
+                  "name": "WebMvcConfigurer"
+                },
+                {
+                  "stimulus": "lifecycle",
+                  "entryPoints": 1,
+                  "layer": "no caller",
+                  "name": "main (operations table)"
+                }
+              ],
+              "byLayer": {
+                "annotation": 32,
+                "supertype": 6,
+                "noCaller": 1
+              },
+              "none": [
+                "external event",
+                "internal event",
+                "temporal"
+              ]
+            },
+            "kind": "derived",
+            "anchor": {
+              "artifact": "queries/13-entry-point-kinds.json"
+            },
+            "note": "A kind is the table's reading of a written name. 12 GetMapping plus 5 PostMapping are the 17 routes of step 2; the only RequestMapping is the class-level prefix /owners/{ownerId} on PetController, and one of the 7 ModelAttribute rows is a parameter binding: both are markers, not operations (queries/12-entry-points.json). The 32 annotation rows equal the 32 entry points of the Spring wiring report in count (reports/main.wiring.json); not compared id by id. This table found no listener, no event handler and no scheduled method; it does not say there are none configured outside the code. No name was added to the table."
+          }
+        ],
+        "unclassified": [
+          {
+            "root": "main",
+            "value": {
+              "count": 16,
+              "busiest": [
+                {
+                  "id": "java:org.springframework.samples.petclinic.vet/Vet.getSpecialties()",
+                  "calls": 7
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.system/CacheConfiguration.cacheConfiguration()",
+                  "calls": 2
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.vet/Vet.addSpecialty(org.springframework.samples.petclinic.vet.Specialty)",
+                  "calls": 2
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.vet/Vet.getNrOfSpecialties()",
+                  "calls": 2
+                },
+                {
+                  "id": "java:org.springframework.samples.petclinic.owner/Owner.getPet(java.lang.String)",
+                  "calls": 1
+                }
+              ]
+            },
+            "kind": "derived",
+            "anchor": {
+              "artifact": "queries/12-entry-points.json"
+            },
+            "note": "Operations with no caller that no table names. Not entry points until somebody says so. The 16 belong to Vet, Owner, Visit, Person (accessors and mutators) and CacheConfiguration.cacheConfiguration(); stacks.md reads the accessors as getters a template reads and setters a binder calls, and cacheConfiguration() as a call made inside a lambda that the extractor does not draw. That reading is the table's documentation, not checked here. No name was added to the table, because none of the 16 belongs to a type a framework calls."
+          }
+        ],
+        "chains": [
+          {
+            "root": "main",
+            "value": {
+              "rank": 1,
+              "entryPoint": "java:org.springframework.samples.petclinic.owner/VisitController.loadPetWithVisit(int,int,java.util.Map)",
+              "stimulus": "framework callback (ModelAttribute \"visit\")",
+              "types": [
+                "VisitController",
+                "Owner",
+                "OwnerRepository",
+                "Pet",
+                "Visit",
+                "BaseEntity"
+              ],
+              "depths": "VisitController 0; Owner, OwnerRepository, Pet, Visit 1; BaseEntity 2",
+              "exits": [
+                "java.lang.IllegalArgumentException",
+                "java.util.Map",
+                "java.util.Optional",
+                "java.time.LocalDate",
+                "java.util.Collection",
+                "java.util.Objects"
+              ],
+              "hotspots": 4
+            },
+            "kind": "declared",
+            "anchor": {
+              "artifact": "queries/19-reach-1.json"
+            },
+            "note": "Ranked first by queries/15-chain-ranking.json (6 types, 6 exits, 4 hotspot files crossed). It is not a route: Spring calls it before the visit handlers of VisitController. Every exit is the language's own library; the chain ends at OwnerRepository.findById, an interface whose implementation is not in the source."
+          },
+          {
+            "root": "main",
+            "value": {
+              "rank": 2,
+              "entryPoint": "java:org.springframework.samples.petclinic.owner/PetController.processCreationForm(org.springframework.samples.petclinic.owner.Owner,org.springframework.samples.petclinic.owner.Pet,org.springframework.validation.BindingResult,org.springframework.web.servlet.mvc.support.RedirectAttributes)",
+              "stimulus": "inbound command (POST /pets/new under the class prefix /owners/{ownerId})",
+              "types": [
+                "PetController",
+                "Owner",
+                "Pet",
+                "NamedEntity",
+                "BaseEntity"
+              ],
+              "exits": [
+                "java.time.LocalDate",
+                "org.springframework.util.StringUtils",
+                "org.springframework.validation.BindingResult",
+                "org.springframework.web.servlet.mvc.support.RedirectAttributes",
+                "java.lang.String",
+                "java.util.List",
+                "java.util.Objects",
+                "org.springframework.dao.DataIntegrityViolationException"
+              ],
+              "hotspots": 4
+            },
+            "kind": "declared",
+            "anchor": {
+              "artifact": "queries/19-reach-2.json"
+            },
+            "note": "5 types, 8 exits. The source calls this.owners.saveAndFlush(owner) (PetController.java line 126), and no chain draws it: saveAndFlush is inherited from JpaRepository, a library type the extractor could not resolve without a classpath. So this query shows no exit to the database for a method that writes to it. A lower bound."
+          },
+          {
+            "root": "main",
+            "value": {
+              "rank": 3,
+              "entryPoint": "java:org.springframework.samples.petclinic.owner/PetController.processUpdateForm(org.springframework.samples.petclinic.owner.Owner,org.springframework.samples.petclinic.owner.Pet,org.springframework.validation.BindingResult,org.springframework.web.servlet.mvc.support.RedirectAttributes)",
+              "stimulus": "inbound command (POST /pets/{petId}/edit under the class prefix /owners/{ownerId})",
+              "types": [
+                "PetController",
+                "Owner",
+                "Pet",
+                "NamedEntity",
+                "BaseEntity"
+              ],
+              "exits": [
+                "java.time.LocalDate",
+                "java.util.Objects",
+                "org.springframework.util.StringUtils",
+                "org.springframework.validation.BindingResult",
+                "org.springframework.web.servlet.mvc.support.RedirectAttributes",
+                "java.lang.String",
+                "org.springframework.dao.DataIntegrityViolationException",
+                "org.springframework.util.Assert",
+                "java.util.List"
+              ],
+              "hotspots": 4
+            },
+            "kind": "declared",
+            "anchor": {
+              "artifact": "queries/19-reach-3.json"
+            },
+            "note": "5 types, 9 exits, through its helper updatePetDetails. Same limit as the chain above: its saveAndFlush (PetController.java line 199) is not drawn. The chain of POST .../visits/new (VisitController.processNewVisitForm, rank 4) is saved apart in queries/19-reach-4.json."
+          },
+          {
+            "root": "main",
+            "value": "candidates add nothing to any of the 37 chains",
+            "kind": "dynamic-candidate",
+            "anchor": {
+              "artifact": "queries/14-chains-candidates.json"
+            },
+            "note": "queries/14-chains-candidates.json (candidates=1) is byte-identical to queries/14-chains.json (candidates=0), checked with cmp. By the page's rule, equal chains mean the implementation is not in the source: the repositories are interfaces and Spring Data supplies their code at runtime."
+          }
+        ],
+        "useCases": [
+          {
+            "root": "main",
+            "value": {
+              "threshold": {
+                "min": 50
+              },
+              "chains": 37,
+              "groups": 12,
+              "largest": [
+                {
+                  "entryPoints": 9,
+                  "groupOf": "owner/OwnerController.findOwner(java.lang.Integer)",
+                  "proposedName": "Find, view, create and edit an owner (proposed)"
+                },
+                {
+                  "entryPoints": 8,
+                  "groupOf": "owner/PetController.findPet(int,java.lang.Integer)",
+                  "proposedName": "Add a pet, update a pet, record a visit (proposed)"
+                },
+                {
+                  "entryPoints": 5,
+                  "groupOf": "owner/PetController.findOwner(int)",
+                  "proposedName": "Prepare and show the pet edit form (proposed)"
+                }
+              ],
+              "others": "3 entry points around WebConfiguration (interceptor and locale beans), 3 around VisitController.initNewVisitForm (the form page and two callbacks), 2 around PetTypeFormatter, 2 around VetController, and 5 singletons: CacheConfiguration, CrashController, WelcomeController, main, PetClinicRuntimeHints",
+              "sharedTypes": [
+                {
+                  "type": "model/BaseEntity",
+                  "chains": 11,
+                  "pct": 29.7
+                },
+                {
+                  "type": "owner/OwnerController",
+                  "chains": 9,
+                  "pct": 24.3
+                },
+                {
+                  "type": "owner/PetController",
+                  "chains": 9,
+                  "pct": 24.3
+                }
+              ]
+            },
+            "kind": "derived",
+            "anchor": {
+              "artifact": "queries/16-chain-groups.json"
+            },
+            "note": "Rule: two chains go together when they share at least half their types (min=50), the types most chains reach left out. No group swallows the rest (largest 9 of 37). Every name above is proposed by the agent, from the entry points of the group: nobody confirmed any. Shared types (queries/17-shared-types.json) are the kernel or the plumbing; step 5 says which."
+          }
+        ],
+        "residue": [
+          {
+            "root": "main",
+            "value": {
+              "types": 0,
+              "stable": 0,
+              "active": 0
+            },
+            "kind": "co-change",
+            "anchor": {
+              "artifact": "queries/18-residue.json"
+            },
+            "note": "This query found no type that nothing reachable from an entry point mentions, by any edge. Joined with the activity of reports/main.activity.json (window from 2024-09-29, chosen by the agent, a guess). It is only as good as the inventory: the 16 unclassified rows count in it. It says nothing about the 79 history files that did not join the model, nor about the html, properties, yml and sql files, which have no extractor."
+          }
+        ]
+      }
+    },
+    "meaning": {
+      "status": "done",
+      "commit": "500158f732419217507c7656904b8e6aa1bcc0d6",
+      "at": "2026-11-24",
+      "findings": {
+        "run": [
+          {
+            "root": "main",
+            "value": {
+              "scope": "every unit of main",
+              "units": 139,
+              "calls": 106,
+              "template": 33,
+              "reuse": 0,
+              "provider": "openrouter",
+              "models": {
+                "leaf": "openai/gpt-5.6-luna",
+                "rollup": "openai/gpt-5.6-luna"
+              },
+              "depth": 1,
+              "reported": {
+                "calls": 106,
+                "failed": 0,
+                "usd": 0.1343
+              }
+            },
+            "kind": "derived",
+            "anchor": {
+              "artifact": "reports/main.explain-estimate.json"
+            },
+            "note": "The plan and the estimate were run first, with the provider the run used; the whole root fit under the ceiling, so no narrower scope was proposed. What the run reported is in `spend` and in reports/main.insights-runs.txt."
+          },
+          {
+            "root": "main",
+            "value": "yes: every unit of main, through OpenRouter, up to $1",
+            "kind": "said",
+            "anchor": {
+              "said": "the person in this session",
+              "at": "2026-11-24"
+            }
+          }
+        ],
+        "purposes": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "module": "java:org.springframework.samples.petclinic.owner",
+                "context": "Pet Care",
+                "purpose": "manages pet owners, their pets, pet categories and scheduled visits"
+              },
+              {
+                "module": "java:org.springframework.samples.petclinic.vet",
+                "context": "Veterinary care",
+                "purpose": "veterinarians and their specialties, read for a listing"
+              },
+              {
+                "module": "java:org.springframework.samples.petclinic.model",
+                "context": null,
+                "purpose": "the persistence base classes, and Person"
+              },
+              {
+                "module": "java:org.springframework.samples.petclinic.system",
+                "context": null,
+                "purpose": "Spring MVC, cache and locale configuration"
+              },
+              {
+                "module": "java:org.springframework.samples.petclinic",
+                "context": null,
+                "purpose": "starts the application and registers its runtime hints"
+              }
+            ],
+            "kind": "explanation",
+            "origin": "explain",
+            "anchor": {
+              "artifact": "reports/main.insights-modules.txt"
+            },
+            "note": "Two of the five modules carry a bounded-context hint; the other three are described as technical."
+          }
+        ],
+        "readings": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "type": "java:org.springframework.samples.petclinic.owner/Owner",
+                "concept": "entity",
+                "role": "none",
+                "position": "edge 7",
+                "agree": false
+              },
+              {
+                "type": "java:org.springframework.samples.petclinic.owner/Pet",
+                "concept": "entity",
+                "role": "none",
+                "position": "inside 8",
+                "agree": true
+              },
+              {
+                "type": "java:org.springframework.samples.petclinic.owner/OwnerRepository",
+                "concept": "repository",
+                "role": "repository",
+                "position": "edge 6",
+                "agree": true
+              },
+              {
+                "type": "java:org.springframework.samples.petclinic.owner/PetController",
+                "concept": "applicationService",
+                "role": "controller",
+                "position": "entry 9",
+                "agree": true
+              },
+              {
+                "type": "java:org.springframework.samples.petclinic.owner/OwnerController",
+                "concept": "applicationService",
+                "role": "controller",
+                "position": "entry 9",
+                "agree": true
+              }
+            ],
+            "kind": "explanation",
+            "origin": "explain",
+            "anchor": {
+              "artifact": "queries/20-chain-position.json"
+            },
+            "note": "Concept from the type records, role from reports/main.wiring.json, position from queries/20-chain-position.json. Owner is an entity at the edge of seven chains: addVisit calls Spring's Assert and toString its ToStringCreator, so the entity leans on the framework."
+          }
+        ],
+        "review": [
+          {
+            "root": "main",
+            "value": {
+              "maxConfidence": 0.6,
+              "records": 0,
+              "unknown": 0,
+              "lowest": {
+                "id": "java:org.springframework.samples.petclinic.model/NamedEntity.<init>()",
+                "confidence": 0.84
+              }
+            },
+            "kind": "explanation",
+            "origin": "explain",
+            "anchor": {
+              "artifact": "reports/main.insights-review.txt"
+            },
+            "note": "No record at or below 0.6 and none `unknown`: the reading list for a human is empty at that bound."
+          }
+        ],
+        "language": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "module": "java:org.springframework.samples.petclinic.owner",
+                "term": "owner",
+                "definition": "A person entity with contact details and an ordered collection of pets."
+              },
+              {
+                "module": "java:org.springframework.samples.petclinic.owner",
+                "term": "pet",
+                "definition": "An animal entity with a name, optional birth date, category, and visits."
+              },
+              {
+                "module": "java:org.springframework.samples.petclinic.owner",
+                "term": "pet type",
+                "definition": "A persisted named category used to classify pets."
+              },
+              {
+                "module": "java:org.springframework.samples.petclinic.owner",
+                "term": "visit",
+                "definition": "A scheduled interaction associated with a pet, with a date and description."
+              }
+            ],
+            "kind": "explanation",
+            "origin": "explain",
+            "anchor": {
+              "artifact": "reports/main.insights-owner.txt"
+            }
+          }
+        ],
+        "glossary": [
+          {
+            "root": "main",
+            "value": {
+              "module": "java:org.springframework.samples.petclinic.owner",
+              "words": 67,
+              "domain": 26,
+              "technical": 44,
+              "ambiguous": 6,
+              "top": [
+                "pet",
+                "owner",
+                "visit",
+                "type",
+                "date"
+              ]
+            },
+            "kind": "explanation",
+            "origin": "explain",
+            "anchor": {
+              "artifact": "reports/main.insights-glossary-owner.txt"
+            }
+          }
+        ],
+        "polysemous": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "word": "pet",
+                "module": "java:org.springframework.samples.petclinic.owner",
+                "senses": 5
+              },
+              {
+                "word": "type",
+                "module": "java:org.springframework.samples.petclinic.owner",
+                "senses": 4
+              },
+              {
+                "word": "name",
+                "module": "java:org.springframework.samples.petclinic.model",
+                "senses": 2
+              }
+            ],
+            "kind": "explanation",
+            "origin": "explain",
+            "anchor": {
+              "artifact": "reports/main.insights-polysemy.txt"
+            },
+            "note": "`pet` names the animal in Pet and the category in PetType, PetTypeFormatter and PetTypeRepository: one word on both sides of an aggregate boundary."
+          }
+        ]
+      }
+    },
+    "domain": {
+      "status": "done",
+      "commit": "500158f732419217507c7656904b8e6aa1bcc0d6",
+      "at": "2026-11-24",
+      "findings": {
+        "verdicts": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "module": "java:org.springframework.samples.petclinic.owner",
+                "verdict": "mixed",
+                "purity": 44.5,
+                "entry": [
+                  "OwnerController",
+                  "PetController",
+                  "VisitController"
+                ],
+                "inside": [
+                  "Pet",
+                  "Visit"
+                ],
+                "edge": [
+                  "Owner",
+                  "OwnerRepository",
+                  "PetTypeRepository"
+                ],
+                "guarded": 0
+              },
+              {
+                "module": "java:org.springframework.samples.petclinic.vet",
+                "verdict": "mixed",
+                "purity": 37.3
+              },
+              {
+                "module": "java:org.springframework.samples.petclinic.model",
+                "verdict": "domain",
+                "purity": 32.4,
+                "inside": [
+                  "BaseEntity",
+                  "NamedEntity",
+                  "Person"
+                ]
+              },
+              {
+                "module": "java:org.springframework.samples.petclinic.system",
+                "verdict": "infrastructure",
+                "purity": 2.3
+              },
+              {
+                "module": "java:org.springframework.samples.petclinic",
+                "verdict": "infrastructure",
+                "purity": 28.6
+              }
+            ],
+            "kind": "derived",
+            "anchor": {
+              "artifact": "queries/21-purity.json"
+            },
+            "note": "Rule: inside the chains and reaching no library is the domain candidate, where chains start is the driving side, at their edge the driven side. Purity is low everywhere: JPA and Spring annotations count as library references. The model module is domain by position (its types are inside every chain they are in), not by purity."
+          }
+        ],
+        "model": [
+          {
+            "root": "main",
+            "value": {
+              "file": "../specy/petclinic.domain",
+              "contexts": 2,
+              "aggregates": 2,
+              "entities": 5,
+              "valueTypes": 0,
+              "events": 0,
+              "validated": true
+            },
+            "kind": "explanation",
+            "origin": "session",
+            "anchor": {
+              "artifact": "../specy/petclinic.domain"
+            },
+            "note": "Written by /specy:domain-extract-from-code from the records, the dossiers and the source; `specy validate` passed."
+          }
+        ],
+        "toConfirm": [
+          {
+            "root": "main",
+            "value": [
+              "aggregate Owner, holding Pet and Visit",
+              "invariant: a pet name is unique for its owner",
+              "aggregate Vet, holding Specialty"
+            ],
+            "kind": "explanation",
+            "origin": "session",
+            "anchor": {
+              "artifact": "../specy/petclinic.domain"
+            }
+          }
+        ],
+        "refactoring": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "smell": "anemic entity",
+                "type": "Pet",
+                "hotspotRank": 5
+              },
+              {
+                "smell": "framework in the entity",
+                "type": "Owner",
+                "hotspotRank": 3
+              }
+            ],
+            "kind": "explanation",
+            "origin": "session",
+            "anchor": {
+              "artifact": "../specy/refactoring.report"
+            },
+            "note": "Each smell carries the classic rank of its file in reports/main.hotspots.json."
+          }
+        ],
+        "contextMap": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "context": "Pet Care",
+                "modules": [
+                  "java:org.springframework.samples.petclinic.owner"
+                ],
+                "evidence": [
+                  "boundedContextHint",
+                  "one chain group",
+                  "co-change"
+                ]
+              },
+              {
+                "context": "Veterinary care",
+                "modules": [
+                  "java:org.springframework.samples.petclinic.vet"
+                ],
+                "evidence": [
+                  "boundedContextHint",
+                  "its own chains"
+                ]
+              }
+            ],
+            "kind": "explanation",
+            "origin": "explain",
+            "anchor": {
+              "artifact": "reports/main.insights-modules.txt"
+            },
+            "note": "model is the shared kernel of both: every chain of both contexts reaches BaseEntity."
+          }
+        ]
+      }
+    }
+  },
+  "questions": [
+    {
+      "text": "Is any of the largest or most branchy types (PetController, OwnerController, Owner) generated, vendored, or otherwise not written by this team?",
+      "step": "structure",
+      "who": "the team that owns the code",
+      "status": "open"
+    },
+    {
+      "text": "Does anything in the structure surprise you: a package larger or smaller than expected (owner holds 72% of the measured lines), or a dependency you did not know about?",
+      "step": "structure",
+      "who": "the person doing the onboarding, then the team that owns the code",
+      "status": "open"
+    },
+    {
+      "text": "What sits behind JPA here: which database in production, and is the schema owned by this application?",
+      "step": "boundaries",
+      "who": "the team that owns the code",
+      "status": "open"
+    },
+    {
+      "text": "Who calls this system? Nothing in the code says which clients or systems depend on its HTTP routes.",
+      "step": "boundaries",
+      "who": "the team that owns the code, or the gateway's logs",
+      "status": "open"
+    },
+    {
+      "text": "Is 'by feature' (owner, vet, system, with model as a shared kernel) how the team describes the architecture?",
+      "step": "boundaries",
+      "who": "the team that owns the code",
+      "status": "open"
+    },
+    {
+      "text": "The history spans 13 years. Should the hotspots be read over the last one or two years instead?",
+      "step": "activity",
+      "who": "the person doing the discovery",
+      "status": "open"
+    },
+    {
+      "text": "PetController and OwnerController hold the first two places in three of the four hotspot families. Is either a false positive: generated, or changed for a reason unrelated to its difficulty?",
+      "step": "activity",
+      "who": "the team that owns the code",
+      "status": "open"
+    },
+    {
+      "text": "The five hotspots have two main authors, rows 1 and 9 of reports/authors.json, last seen in 2014 and 2013. Is anyone who knows this code still on the team?",
+      "step": "activity",
+      "who": "the team lead",
+      "status": "open"
+    },
+    {
+      "text": "Is a pet's name unique per owner a business rule, or only a form check (PetValidator)?",
+      "step": "domain",
+      "who": "a domain expert of the clinic",
+      "status": "open"
+    },
+    {
+      "text": "Is the Visit an aggregate of its own in the booking platform, or stays it with the pet?",
+      "step": "domain",
+      "who": "the architect of the booking platform",
+      "status": "open"
+    }
+  ],
+  "spend": [
+    {
+      "at": "2026-11-24",
+      "step": "meaning",
+      "provider": "openrouter",
+      "model": "openai/gpt-5.6-luna",
+      "calls": 106,
+      "usd": 0.1343
+    }
+  ],
+  "taught": [
+    "module",
+    "type",
+    "stub",
+    "resolution rate",
+    "SLOC",
+    "cyclomatic complexity",
+    "strongly connected component",
+    "fan-in and fan-out",
+    "hotspot",
+    "hidden coupling",
+    "co-change",
+    "entry point",
+    "chain",
+    "exit point",
+    "use-case group",
+    "residue",
+    "concept",
+    "confidence",
+    "bounded-context hint",
+    "polysemous",
+    "purity",
+    "hexagonal verdict"
+  ]
+}

@@ -267,5 +267,6 @@ another. Then:
   the questions for the team.
 
 If skills named `specy:…` are available, say once that
-`/specy:sysreq-extract-from-code` writes requirements from a codebase, and
-that it reads the source, not yet this workspace.
+`/specy:sysreq-extract-from-code` writes requirements from a codebase; a
+version that knows this walk takes this step's inventory as its triggers, one
+requirement per chain, for the chains the person chose.
