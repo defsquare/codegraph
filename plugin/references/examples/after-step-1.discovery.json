@@ -1,0 +1,254 @@
+{
+  "kind": "codegraph.discovery/1",
+  "codegraph": "0.3.0",
+  "intake": {
+    "at": "2026-11-22",
+    "purpose": "takeover",
+    "purposeNote": "We inherit this service next quarter; its two authors have left.",
+    "time": "session",
+    "provider": {
+      "allowed": false
+    }
+  },
+  "corpus": {
+    "path": "/home/dev/src/acme-order",
+    "commit": "4f2c1a9d0b7e6a35c8f1e2d3b4a5968778695a4b",
+    "shallow": false,
+    "languages": [
+      {
+        "lang": "java",
+        "files": 16,
+        "extractor": "codegraph-java",
+        "installed": true
+      },
+      {
+        "lang": ".sql",
+        "files": 4,
+        "extractor": null
+      }
+    ],
+    "roots": [
+      {
+        "name": "main",
+        "src": [
+          "src/main/java"
+        ],
+        "role": "main",
+        "lang": "java",
+        "model": "main.jsonl"
+      },
+      {
+        "name": "test",
+        "src": [
+          "src/test/java"
+        ],
+        "role": "test",
+        "lang": "java",
+        "model": "test.jsonl",
+        "guessed": true
+      }
+    ],
+    "excluded": [
+      {
+        "path": "src/main/java/com/acme/order/legacy",
+        "id": "java:com.acme.order.legacy/List",
+        "reason": "Kept from the previous system; nobody maintains it.",
+        "by": "person",
+        "at": "2026-11-22"
+      }
+    ]
+  },
+  "steps": {
+    "structure": {
+      "status": "done",
+      "commit": "4f2c1a9d0b7e6a35c8f1e2d3b4a5968778695a4b",
+      "at": "2026-11-22",
+      "findings": {
+        "resolution": [
+          {
+            "root": "main",
+            "value": {
+              "references": 636,
+              "resolved": 601,
+              "unresolved": 35,
+              "rate": 94.5
+            },
+            "kind": "declared",
+            "anchor": {
+              "artifact": "main.extract.log"
+            }
+          }
+        ],
+        "stubs": [
+          {
+            "root": "main",
+            "value": 27,
+            "kind": "declared",
+            "anchor": {
+              "artifact": "queries/01-summary.json",
+              "row": 0
+            }
+          }
+        ],
+        "sizeBreak": [
+          {
+            "root": "main",
+            "value": {
+              "above": [],
+              "top": [
+                {
+                  "id": "java:com.acme.order/Basket",
+                  "sloc": 34
+                },
+                {
+                  "id": "java:com.acme.order/Batch",
+                  "sloc": 29
+                },
+                {
+                  "id": "java:com.acme.order/Reporting",
+                  "sloc": 28
+                }
+              ]
+            },
+            "kind": "derived",
+            "anchor": {
+              "artifact": "queries/04-largest-types.json"
+            },
+            "note": "No break: the sizes fall regularly (34, 29, 28, 27, 20). Rule: the first type several times smaller than the one before."
+          }
+        ],
+        "complexityBreak": [
+          {
+            "root": "main",
+            "value": {
+              "above": [],
+              "top": [
+                {
+                  "id": "java:com.acme.order/Notifications",
+                  "cyclomatic": 12,
+                  "worst": 1
+                },
+                {
+                  "id": "java:com.acme.order/Reporting",
+                  "cyclomatic": 11,
+                  "worst": 4
+                },
+                {
+                  "id": "java:com.acme.order/Batch",
+                  "cyclomatic": 8,
+                  "worst": 1
+                }
+              ]
+            },
+            "kind": "derived",
+            "anchor": {
+              "artifact": "queries/05-branching-by-type.json"
+            },
+            "note": "No break: 12, 11, 8, 5. No operation above 15."
+          }
+        ],
+        "cycles": [
+          {
+            "root": "main",
+            "value": {
+              "module": {
+                "components": 0,
+                "largest": 0,
+                "feedback": []
+              },
+              "type": {
+                "components": 2,
+                "largest": 2,
+                "feedback": [
+                  [
+                    "java:com.acme.order/Priceable",
+                    "java:com.acme.order/Money"
+                  ],
+                  [
+                    "java:com.acme.order/Basket.Cursor",
+                    "java:com.acme.order/Basket"
+                  ]
+                ]
+              }
+            },
+            "kind": "declared",
+            "anchor": {
+              "artifact": "reports/main.cycles-module.json"
+            },
+            "note": "No cycle between the three packages. Between types, two cycles of two; both feedback edges are declared (reports/main.cycles-type.json)."
+          }
+        ],
+        "topFanIn": [
+          {
+            "root": "main",
+            "value": [
+              {
+                "id": "java:com.acme.order/Money",
+                "fanIn": 7
+              },
+              {
+                "id": "java:com.acme.order/Priceable",
+                "fanIn": 5
+              },
+              {
+                "id": "java:com.acme.order/AbstractOrder",
+                "fanIn": 3
+              },
+              {
+                "id": "java:com.acme.order/Audited",
+                "fanIn": 2
+              },
+              {
+                "id": "java:com.acme.order/Basket.Line",
+                "fanIn": 2
+              },
+              {
+                "id": "java:com.acme.order/Order",
+                "fanIn": 2
+              },
+              {
+                "id": "java:com.acme.order.legacy/List",
+                "fanIn": 1
+              },
+              {
+                "id": "java:com.acme.order/Basket",
+                "fanIn": 1
+              },
+              {
+                "id": "java:com.acme.order/Basket.Cursor",
+                "fanIn": 1
+              },
+              {
+                "id": "java:com.acme.order/Channel",
+                "fanIn": 1
+              }
+            ],
+            "kind": "derived",
+            "anchor": {
+              "artifact": "reports/main.coupling-type.json"
+            },
+            "note": "The ten highest fan-in among the twenty most coupled types; the report folds every edge kind and every provenance."
+          }
+        ]
+      }
+    }
+  },
+  "questions": [
+    {
+      "text": "Is `Reporting` still run by anyone? It is the most branchy type and nothing in the code calls it.",
+      "step": "structure",
+      "who": "whoever operates the monthly reports",
+      "status": "open"
+    }
+  ],
+  "spend": [],
+  "taught": [
+    "module",
+    "type",
+    "stub",
+    "SLOC",
+    "cyclomatic complexity",
+    "strongly connected component",
+    "fan-in and fan-out"
+  ]
+}

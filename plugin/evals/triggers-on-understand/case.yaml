@@ -1,0 +1,12 @@
+schema_version: "1.1"
+name: triggers-on-understand
+description: The guide is chosen when someone asks to understand a codebase they inherited.
+tags: [triggering]
+runs: 3
+expected_outcome: The discover skill is invoked and the reply starts the walk at step 1, or says which tool is missing and how to install it.
+execution:
+  max_turns: 15
+  timeout_seconds: 300
+  allowed_tools: [Read, Glob, Grep, Skill]
+context:
+  scaffold_script: scaffold.sh

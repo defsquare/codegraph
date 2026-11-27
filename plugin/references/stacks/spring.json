@@ -1,0 +1,50 @@
+{
+  "stack": "spring",
+  "lang": "java",
+  "annotations": {
+    "Bean": "lifecycle",
+    "DeleteMapping": "inbound command",
+    "EventListener": "internal event",
+    "ExceptionHandler": "framework callback",
+    "GetMapping": "inbound query",
+    "InitBinder": "framework callback",
+    "JmsListener": "external event",
+    "KafkaListener": "external event",
+    "ModelAttribute": "framework callback",
+    "PatchMapping": "inbound command",
+    "PostConstruct": "lifecycle",
+    "PostMapping": "inbound command",
+    "PreDestroy": "lifecycle",
+    "PutMapping": "inbound command",
+    "RabbitListener": "external event",
+    "RequestMapping": "inbound request",
+    "Scheduled": "temporal",
+    "SqsListener": "external event",
+    "TransactionalEventListener": "internal event"
+  },
+  "supertypes": {
+    "ApplicationListener": "internal event",
+    "ApplicationRunner": "lifecycle",
+    "Callable": "temporal",
+    "CommandLineRunner": "lifecycle",
+    "Converter": "framework callback",
+    "Filter": "framework callback",
+    "Formatter": "framework callback",
+    "HandlerInterceptor": "framework callback",
+    "HealthIndicator": "framework callback",
+    "Job": "temporal",
+    "MessageListener": "external event",
+    "OncePerRequestFilter": "framework callback",
+    "Runnable": "temporal",
+    "RuntimeHintsRegistrar": "lifecycle",
+    "TimerTask": "temporal",
+    "Validator": "framework callback",
+    "WebMvcConfigurer": "lifecycle"
+  },
+  "types": {},
+  "operations": {
+    "main": "lifecycle"
+  },
+  "conventional": ["toString","equals","hashCode","clone","finalize","main","compareTo","iterator","hasNext","valueOf","serialVersionUID","readObject","writeObject","readObjectNoData","readResolve","writeReplace"],
+  "entries": {}
+}

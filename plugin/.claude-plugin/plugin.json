@@ -1,0 +1,22 @@
+{
+  "name": "codegraph",
+  "version": "0.4.0",
+  "description": "Discover a codebase you did not write, with codegraph. An agent walks a person through six questions in a fixed order — structure, boundaries, activity, stimuli and flows, meaning, domain — runs the commands, shows a few rows at a time, keeps facts and inferences apart, and writes what was found to a workspace on disk.",
+  "author": {
+    "name": "Defsquare",
+    "url": "https://defsquare.com"
+  },
+  "homepage": "https://codegraph.biz/docs/discover/",
+  "repository": "https://github.com/defsquare/codegraph",
+  "license": "MIT",
+  "keywords": [
+    "codegraph",
+    "code-analysis",
+    "legacy-code",
+    "reverse-engineering",
+    "architecture",
+    "dependencies",
+    "onboarding",
+    "due-diligence"
+  ]
+}

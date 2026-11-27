@@ -21,7 +21,7 @@ import {
  */
 
 const FIXTURE = javaFixture();
-const COMMANDS = ["validate", "analyze", "export", "profiles", "walk"] as const;
+const COMMANDS = ["validate", "analyze", "export", "profiles", "walk", "query"] as const;
 
 beforeAll(ensureCliBinary, 120_000);
 

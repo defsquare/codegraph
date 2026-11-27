@@ -91,6 +91,8 @@ export * from "./store/schema.js";
 export * from "./store/import.js";
 export * from "./store/fold-sql.js";
 export * from "./store/ids.js";
+export * from "./store/helper-views.js";
+export * from "./store/query.js";
 export * from "./store/diagnose.js";
 export * from "./store/cache.js";
 export * from "./store/temporal.js";

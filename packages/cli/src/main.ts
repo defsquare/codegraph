@@ -13,6 +13,7 @@ import { snapshotsCommand } from "./commands/snapshots.js";
 import { timelineCommand } from "./commands/timeline.js";
 import { replayCommand } from "./commands/replay.js";
 import { profilesCommand } from "./commands/profiles.js";
+import { queryCommand } from "./commands/query.js";
 import { validateCommand } from "./commands/validate.js";
 import { vocabularyCommand } from "./commands/vocabulary.js";
 import { EXIT, isUsageError, type ExitCode } from "./exit.js";
@@ -97,6 +98,8 @@ function dispatch(invocation: Invocation, io: IoSink): ExitCode | Promise<ExitCo
           return analyzeCommand(invocation.options, io);
         case "import":
           return importCommand(invocation.options, io);
+        case "query":
+          return queryCommand(invocation.options, io);
         case "export":
           return exportCommand(invocation.options, io);
         case "city":

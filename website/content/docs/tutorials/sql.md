@@ -73,7 +73,7 @@ names you can read. Save this as `views.sql`:
 CREATE TEMP VIEW node AS
 SELECT e.id AS ref,
        (SELECT value FROM meta WHERE key = 'lang') || ':' || m.symbol
-         || CASE WHEN e.id = e.module_id THEN '' ELSE '/' || e.symbol END
+         || CASE WHEN e.id = e.module_id OR e.symbol = '' THEN '' ELSE '/' || e.symbol END
          || CASE WHEN e.disambiguator IS NULL THEN '' ELSE '#' || e.disambiguator END AS id,
        k.name AS kind, e.name AS name, e.is_stub IS 1 AS is_stub,
        e.module_id AS module_ref, e.parent_id AS parent_ref, e.trait_set_id AS trait_set_id

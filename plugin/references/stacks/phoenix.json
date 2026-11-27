@@ -1,0 +1,42 @@
+{
+  "stack": "phoenix",
+  "lang": "ex",
+  "annotations": {},
+  "supertypes": {
+    "Application": "lifecycle",
+    "GenServer": "internal event",
+    "Mix.Task": "inbound command",
+    "Oban.Worker": "internal event",
+    "Phoenix.Channel": "external event",
+    "Phoenix.LiveComponent": "framework callback",
+    "Phoenix.LiveView": "inbound request",
+    "Plug": "framework callback",
+    "Supervisor": "lifecycle"
+  },
+  "types": {
+    "*Controller": "inbound request",
+    "Mix.Tasks.*": "inbound command"
+  },
+  "operations": {
+    "call": "framework callback",
+    "child_spec": "lifecycle",
+    "handle_call": "internal event",
+    "handle_cast": "internal event",
+    "handle_event": "inbound command",
+    "handle_in": "external event",
+    "handle_info": "internal event",
+    "handle_params": "inbound query",
+    "init": "lifecycle",
+    "join": "external event",
+    "mount": "inbound query",
+    "on_mount": "framework callback",
+    "perform": "internal event",
+    "render": "framework callback",
+    "start": "lifecycle",
+    "start_link": "lifecycle",
+    "terminate": "lifecycle",
+    "update": "framework callback"
+  },
+  "conventional": ["__using__","__before_compile__","__after_compile__","__after_verify__","__on_definition__","__struct__","__info__","__deriving__","__impl__","__protocol__","start_link","child_spec","init","handle_call","handle_cast","handle_info","handle_continue","terminate","code_change","format_status","to_string","inspect","@moduledoc","@doc","@typedoc","@spec","@type","@typep","@opaque","@callback","@macrocallback","@optional_callbacks","@impl","@behaviour","@derive","@enforce_keys","@external_resource","@compile","@deprecated","@dialyzer","@on_load","@vsn","@before_compile","@after_compile","@after_verify","@on_definition","@nifs","@fallback_to_any","@file"],
+  "entries": {}
+}

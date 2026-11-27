@@ -141,6 +141,13 @@ apps/desktop/        The desktop app (Tauri 2): a Cargo workspace — `discovery
                      single-executable `codegraph` as its ONE sidecar; needs the
                      platform's WebKit to compile). No model logic in Rust; the
                      page it shows is the daemon's, with no Tauri IPC.
+plugin/              The Claude Code plugin `codegraph` (PLAN §24): the discovery walk
+                     as skills (`discover` + one per step + `query`), `references/`
+                     (`capabilities.md` GENERATED from the profiles), `queries/*.sql`
+                     (the SQL the website's discover pages show, held equal by a
+                     test), `evals/` (`claude plugin eval` cases). Text and SQL,
+                     nothing executable; versioned with the CLI. The repository
+                     root's `.claude-plugin/marketplace.json` lists it alone.
 fixtures/            Reference corpora + expected model.jsonl snapshots.
 ```
 
@@ -173,6 +180,13 @@ fixtures/            Reference corpora + expected model.jsonl snapshots.
   test in the workspace runs against the fake client or a fake transport.
   Explanations live in `<model>.insights.db` and its export, the side-car
   `<model>.insights.jsonl` — never in `model.jsonl`/`model.db`.
+- **The plugin imports nothing and nothing imports it.** `plugin/` is
+  markdown, SQL and JSON (and its eval cases): no binary, hook, MCP server or
+  `package.json`, no executable file; the workspace does not list it. A skill
+  reaches codegraph only through the command line, so every command a skill
+  writes is parsed with its `CommandSpec` (`plugin-commands.test.ts`): a flag
+  renamed in `args.ts` breaks a test, not a walk. Its version is the root
+  `package.json`'s, in `plugin.json` and in the marketplace entry.
 - **The insights store is not a cache.** `model.db` is rebuilt on any doubt
   because the model says everything it holds; `<model>.insights.db` holds what
   was PAID for, so it is migrated (never regenerated), a newer or foreign file
@@ -310,6 +324,14 @@ OPENROUTER_API_KEY=… ./bin/codegraph explain model.jsonl --src DIR [--max-call
 ./bin/codegraph insights model.jsonl --id ID               # one explanation whole; --failures, --runs, --json
 #   reads <model>.insights.db and NOTHING else (not the model, no provider); writes nothing
 ./bin/codegraph serve model.jsonl --insights FILE          # the explanation panel's store, if not beside the model
+./bin/codegraph query model.jsonl "SELECT …" [--param NAME=VALUE] [--param-file NAME=FILE] [--json|--csv]
+#   ONE read-only statement over the store, views node + dep created; --views prints their SQL
+./bin/codegraph history h.jsonl --report hotspots --model model.jsonl [--rank …]   # hotspots joined with a model
+claude --plugin-dir plugin                                 # the discovery skills from this checkout
+claude plugin validate . --strict                          # the marketplace + the plugin (the test suite validates plugin/ alone)
+CODEGRAPH_UPDATE_SNAPSHOTS=1 pnpm --filter @codegraph/cli test plugin-capabilities   # regenerate capabilities.md
+claude plugin eval plugin --scaffold                       # the eval suite: PAID sessions, before a release, never CI
+claude plugin tag plugin --push                            # at a release: codegraph--vX.Y.Z (docs/distribution.md)
 ./bin/codegraph walk model.jsonl --src DIR --prompt "…" --include 'edge:annotationUse>name:Audited' --dry-run
 #   your question, bottom-up, of the selected units (--include/--exclude SEL, --levels, --closure);
 #   every explain run flag; → model.adhoc.walk.db + .jsonl (--name N: model.N.walk.*), never explain's store

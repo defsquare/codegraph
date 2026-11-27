@@ -1,0 +1,12 @@
+schema_version: "1.1"
+name: ignores-a-bug-fix
+description: The guide is not chosen for a bug fix, though the repository is the same.
+tags: [triggering]
+runs: 3
+expected_outcome: No codegraph skill is invoked; the reply finds the doubled tax in Cart.total().
+execution:
+  max_turns: 10
+  timeout_seconds: 300
+  allowed_tools: [Read, Glob, Grep, Skill]
+context:
+  scaffold_script: scaffold.sh

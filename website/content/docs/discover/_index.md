@@ -17,6 +17,11 @@ few concepts it needs, gives the codegraph commands that answer it today, shows
 what the output looks like and how to read it, and says honestly where the tool
 stops and where you, or a language model, take over.
 
+In Claude Code, the [`codegraph` plugin](/docs/how-to/discover-with-claude-code/)
+walks it with you: `/codegraph:discover <path>` runs each step's commands,
+keeps facts and inferences apart, and writes what was found to a workspace
+on disk, so the walk stops and resumes.
+
 ## The six questions
 
 | # | Question | What you get | How | Today |
@@ -24,9 +29,9 @@ stops and where you, or a language model, take over.
 | 1 | [**Structure and elements**](/docs/discover/structure/) — what is here, how big, how branchy, how tangled? | counts, sizes, complexity, cycles, a city | extract, `analyze`, SQL, `serve` | ready |
 | 2 | [**Boundaries and style**](/docs/discover/boundaries/) — how is it cut, in which style, and do the cuts hold? | the module map, the stack, the framework roles | `export`, SQL, `--framework spring` | ready, with ad-hoc queries |
 | 3 | [**Activity**](/docs/discover/activity/) — where does the effort go, who spends it, what changes together? | hotspots, owners, hidden coupling, dead weight | `scm`, `history` | ready |
-| 4 | [**Stimuli and flows**](/docs/discover/stimuli/) — what reacts to the outside world or to time, and what does each reaction reach? | an entry-point inventory and the chain each one runs | SQL, the navigator | partly: Spring only, chains by query |
-| 5 | [**Meaning**](/docs/discover/meaning/) — what does each unit do, in domain words? | one explanation per method, type and module | `explain` | ready, costs money |
-| 6 | [**Domain**](/docs/discover/domain/) — which part is the business, and what is its model? | a `.domain` model and a refactoring report | `domain-facts` + the Specy skill | ready, not yet fed by step 5 |
+| 4 | [**Stimuli and flows**](/docs/discover/stimuli/) — what reacts to the outside world or to time, and what does each reaction reach? | an entry-point inventory by kind, the chain each one runs, the use cases, what nothing reaches | nine query files, the navigator | ready from a table of names: five frameworks checked, any other yours to list |
+| 5 | [**Meaning**](/docs/discover/meaning/) — what does each unit do, in domain words? | one explanation per method, type and module, a glossary, the three readings | `explain`, `insights`, one query file | ready; the plan and the price are free, the run costs money |
+| 6 | [**Domain**](/docs/discover/domain/) — which part is the business, and what is its model? | a verdict per module, a `.domain` model and a refactoring report | `domain-facts`, two query files, the Specy skill | ready; the extraction reads step 5's records where it finds them |
 
 The **Today** column is the honest state of the tooling. "Ready" means one
 command gives the answer. "Ad-hoc queries" means the answer is a SQL query over
@@ -73,8 +78,11 @@ first hours of reading.
 ## Words used in this section
 
 - **Module.** The unit of code organisation the language has: a Java package,
-  a C# namespace. Codegraph folds dependencies up to it.
-- **Type.** A class, interface, enum, record or annotation.
+  a C# namespace, a file in TypeScript, Elixir and Ruby. Codegraph folds
+  dependencies up to it.
+- **Type.** A class, interface, enum, record or annotation; also a C# struct,
+  a TypeScript type alias, an Elixir module or protocol, a Ruby class or
+  module. Whatever its kind is called, it carries the trait `TType`.
 - **SLOC.** Source lines of code, blank lines and comments excluded. Every
   extractor measures it per type and per method.
 - **Cyclomatic complexity.** The number of independent paths through a

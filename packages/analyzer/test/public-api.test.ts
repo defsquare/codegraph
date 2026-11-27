@@ -78,6 +78,20 @@ const PUBLIC_API = {
     "diagnoseStore",
     "renderStoreIds",
     "storeLang",
+    "createHelperViews",
+    "statementShape",
+    "queryStore",
+  ],
+  // The cross-graph queries: the declared graph joined with mined history, on
+  // paths. The CLI's `history` reports call each of them.
+  evolution: [
+    "joinOnPaths",
+    "fileDependencies",
+    "hiddenCoupling",
+    "deadWeight",
+    "fileMeasures",
+    "joinedHotspots",
+    "crossModuleShare",
   ],
 } as const;
 
@@ -98,6 +112,12 @@ const PUBLIC_VALUES = [
   "META_KEYS",
   "ENTITY_KEY_STORAGE",
   "EDGE_KEY_STORAGE",
+  "NODE_VIEW_SQL",
+  "DEP_VIEW_SQL",
+  "HELPER_VIEWS_SQL",
+  "QUERY_STATEMENT_KEYWORDS",
+  "HOTSPOT_FAMILIES",
+  "DEFAULT_HOTSPOT_FAMILY",
 ] as const;
 
 const SRC = fileURLToPath(new URL("../src", import.meta.url));

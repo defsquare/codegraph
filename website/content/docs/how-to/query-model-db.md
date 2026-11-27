@@ -6,18 +6,58 @@ weight: 13
 
 `model.db` is the workbench: a SQLite cache of one `model.jsonl`, indexed so you
 can ask your own questions without writing a program. This guide gets you to a
-useful query and states the four rules a query must respect.
+useful query with `codegraph query`, then with any other SQLite client, and
+states the four rules a query must respect.
 
-**Before you start:** a `model.jsonl` and anything that speaks SQLite.
+**Before you start:** a `model.jsonl`. Nothing else for `codegraph query`; for
+another client, anything that speaks SQLite.
 
-## Get a store
+## Ask with `codegraph query`
+
+Give it the model and one statement:
+
+```console
+$ codegraph query fixtures/java/expected/model.jsonl \
+    "SELECT n.id, count(*) AS fan_in FROM dep d JOIN node n ON n.ref = d.to_ref
+     GROUP BY d.to_ref ORDER BY fan_in DESC, n.id" --limit 3
+cache: fixtures/java/expected/model.db
+id                         fan_in
+-------------------------  ------
+java:com.acme.order/Money      16
+java:java.lang/String          16
+java:com.acme.order/Order       7
+3 of 69 rows shown — --all prints every row, --limit N another count.
+```
+
+It builds `model.db` beside the model when it is missing or stale, and the two
+views of the next section, `node` and `dep`, are already there: entities by
+their ids, edges with their kinds, provenance and anchors. A value goes in as a
+bound parameter, never pasted into the text, so an id needs no quoting:
+
+```console
+$ codegraph query fixtures/java/expected/model.jsonl \
+    "SELECT d.kind, d.provenance, d.file, d.line FROM dep d JOIN node n ON n.ref = d.to_ref
+     WHERE n.id = :id ORDER BY d.file, d.line" --param id='java:com.acme.order/Money' --limit 3
+cache: fixtures/java/expected/model.db
+kind       provenance  file                               line
+---------  ----------  ---------------------------------  ----
+reference  declared    com/acme/order/AbstractOrder.java     6
+reference  declared    com/acme/order/AbstractOrder.java    20
+reference  declared    com/acme/order/Batch.java            24
+3 of 16 rows shown — --all prints every row, --limit N another count.
+```
+
+`--file q.sql` reads the statement from a file, `--csv` and `--json` print the
+rows for another program, and `--param-file rows=saved.json` hands one query's
+saved `--json` result to the next. It never writes: the store is opened
+read-only and the text must be one statement that reads, so a `DELETE`, a
+`VACUUM INTO` or a second statement after a `;` stops with exit 2. Every option
+is on the [`query` reference](/docs/reference/cli/query/).
+
+## From another SQLite client
 
 ```bash
 codegraph import model.jsonl                  # writes model.db beside it
-codegraph analyze model.jsonl --report deps   # builds it on demand, then reuses it
-```
-
-```bash
 sqlite3 model.db
 datasette model.db
 duckdb -c "ATTACH 'model.db' AS cg (TYPE sqlite); SELECT count(*) FROM cg.entity;"
@@ -27,17 +67,17 @@ Nothing you do here can hurt anything: delete the file and the next command
 rebuilds it. `--out FILE` puts the store somewhere else; `--no-cache` on an
 analysis command reads the JSONL directly and never touches a store.
 
-## Paste these two views first
-
 Rows reference entities by integer surrogate and vocabularies by id. These two
 temp views turn both into the ids and names you recognise, and every recipe below
-assumes them.
+assumes them. `codegraph query --views` prints them, to paste or to pipe into
+`sqlite3`:
 
 ```sql
 CREATE TEMP VIEW node AS
 SELECT e.id                                          AS ref,
        (SELECT value FROM meta WHERE key = 'lang') || ':' || m.symbol
-         || CASE WHEN e.id = e.module_id THEN '' ELSE '/' || e.symbol END
+         -- no '/' for a module (it names itself) nor for an empty symbol (an anonymous function)
+         || CASE WHEN e.id = e.module_id OR e.symbol = '' THEN '' ELSE '/' || e.symbol END
          || CASE WHEN e.disambiguator IS NULL THEN '' ELSE '#' || e.disambiguator END
                                                      AS id,
        k.name                                        AS kind,
@@ -174,8 +214,9 @@ spreadsheet is how a number outlives its meaning. Identity is the natural key �
 is not a measurement of the code, it is a measurement of the code plus the
 extractor's guesses. Say which you meant.
 
-**The store is a cache, not a source.** Nothing but the importer writes to it. If
-you want a derived table, make it a `TEMP` one — the next `codegraph` run may
+**The store is a cache, not a source.** Nothing but the importer writes to it;
+`codegraph query` cannot. If you want a derived table in another client, make it
+a `TEMP` one — the next `codegraph` run may
 regenerate the file underneath you, and it will not ask.
 
 ## When to ask codegraph instead
@@ -190,5 +231,6 @@ reproducible artefacts.
 
 - [Querying the model with SQL](/docs/tutorials/sql/)
 - [`model.db` reference](/docs/reference/model-db/)
+- [`codegraph query`](/docs/reference/cli/query/)
 - [`codegraph import`](/docs/reference/cli/import/)
 - [Identity is a natural key](/docs/explanation/identity/)

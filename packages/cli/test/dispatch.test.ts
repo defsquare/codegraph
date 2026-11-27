@@ -106,6 +106,7 @@ describe("dispatch reaches every command", () => {
     ["analyze", ["analyze", FIXTURE, "--report", "deps"]],
     ["export", ["export", FIXTURE, "--format", "dot"]],
     ["profiles", ["profiles"]],
+    ["query", ["query", FIXTURE, "SELECT count(*) AS n FROM node"]],
   ];
 
   it.each(commands)("%s is wired and runs", (_name, argv) => {

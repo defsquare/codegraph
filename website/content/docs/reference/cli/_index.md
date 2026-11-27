@@ -35,6 +35,7 @@ global options:
 | [`validate`](/docs/reference/cli/validate/) | Check models against their language profile and the graph invariants. |
 | [`analyze`](/docs/reference/cli/analyze/) | Report dependencies, cycles, coupling or framework wiring over the loaded models. |
 | [`import`](/docs/reference/cli/import/) | Build the SQLite analysis store (`model.db`) beside a `model.jsonl`. |
+| [`query`](/docs/reference/cli/query/) | Run one read-only SQL statement over a model's store, with the `node` and `dep` views. |
 | [`export`](/docs/reference/cli/export/) | Write the folded graph as DOT, JSON, CSV or PlantUML. |
 | [`city`](/docs/reference/cli/city/) | Write the code city: modules as districts, types as buildings. |
 | [`navigator`](/docs/reference/cli/navigator/) | Explore the model: a searchable tree with per-node dependency detail. |

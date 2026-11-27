@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -190,6 +190,35 @@ export function runCli(args: readonly string[], options?: RunOptions): CliResult
     stderr: result.stderr ?? "",
     argv: args,
   };
+}
+
+/**
+ * `runCli`, without blocking the worker: a test that loops over dozens of
+ * invocations holds the worker's event loop for as long as the loop runs when
+ * each spawn is synchronous, and vitest's worker RPC times out behind it.
+ */
+export function runCliAsync(args: readonly string[], options?: RunOptions): Promise<CliResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cliBinary(), ...args], {
+      cwd: options?.cwd ?? repoRoot(),
+      env: childEnv(options?.env),
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
+    child.on("error", (error) => reject(new Error(`could not spawn the CLI: ${error.message}`)));
+    child.on("close", (code, signal) =>
+      resolve({
+        code: code ?? -1,
+        signal,
+        stdout: Buffer.concat(out).toString("utf8"),
+        stderr: Buffer.concat(err).toString("utf8"),
+        argv: args,
+      }),
+    );
+  });
 }
 
 /**

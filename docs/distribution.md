@@ -48,6 +48,36 @@ matter for distribution, and their outputs on the GitHub release:
 `<rid>` is one of `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`,
 `win-x64`; Windows assets end in `.exe`.
 
+## The Claude Code plugin
+
+`plugin/` is a Claude Code plugin (PLAN.md §24), and the repository root is
+its marketplace: `.claude-plugin/marketplace.json` lists it alone, with
+`source: "./plugin"`. A user installs it with two commands:
+
+```
+/plugin marketplace add defsquare/codegraph
+/plugin install codegraph@codegraph
+```
+
+The marketplace is read from the default branch, not from a release asset, so
+what a user installs is `main`'s plugin. Its skills spell the CLI's flags, so
+the plugin is versioned with the CLI: `plugin/.claude-plugin/plugin.json` and
+the marketplace entry carry the root `package.json`'s version, which
+`plugin-manifest.test.ts` holds. The guide's preflight runs `codegraph query
+--views` and stops on a `codegraph` too old for the steps.
+
+At a release, after the version bump and once the `v*` tag's run is green:
+
+```bash
+claude plugin validate . --strict               # the marketplace and the plugin
+claude plugin tag plugin --dry-run              # codegraph--vX.Y.Z: plugin.json and the entry must agree
+claude plugin tag plugin --push                 # the plugin's own tag; it does not match `v*`, so no run starts
+```
+
+Before a release, not in CI (each case is a paid session), the eval suite
+runs against its no-plugin arm and its scores go to PLAN.md §24.8:
+`claude plugin eval plugin --scaffold` (`plugin/evals/README.md`).
+
 ## The tap's files, generated
 
 `scripts/homebrew/render.mjs` renders every file of the tap from the

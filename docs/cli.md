@@ -46,6 +46,12 @@ codegraph import   model.jsonl [--out FILE] [--at SHA [--time T]] [--json]
                    # build the SQLite analysis store (model.db) beside a model;
                    # --at appends the model as a snapshot of the TEMPORAL store
 
+codegraph query    model.jsonl ["SELECT …"] [--file FILE] [--param NAME=VALUE]… [--param-file NAME=FILE]…
+                   [--limit N | --all] [--json | --csv]
+                   # ONE read-only SQL statement over the store, with the node
+                   # and dep views; no sqlite3 needed
+codegraph query    --views          # the SQL of the two views, for another client
+
 codegraph serve    [model.jsonl] [--port N] [--host ADDR] [--name STR]
                    [--height METRIC] [--height-scale linear|sqrt|log]
                    [--footprint METRIC] [--footprint-scale linear|sqrt|log]
@@ -112,6 +118,7 @@ codegraph snapshots [repo] --jar FILE (--every N | --tags)
 codegraph history  [history.jsonl] [--top N] [--json]
                    [--report summary|hotspots|authors|coupling|hidden|deadweight]
                    [--min-support N] [--min-confidence PCT] [--model FILE]
+                   [--rank classic|branchy|tangled|fragile]
                    [--serve [--port N] [--host ADDR]] [--city FILE]
 
 codegraph timeline java:com.acme/Basket [--store FILE] [--json]
@@ -156,6 +163,58 @@ skip parsing and lets you query the graph yourself
 ([SQL cookbook](sql-cookbook.md)). With `--at SHA` the model is appended as a
 snapshot: revisions accumulate in one store, keyed by the natural key across
 time, and `timeline` and `replay` read them.
+
+### `query`
+Runs one SQL statement over a model's store and prints its rows — the SQLite
+that builds the store is in the binary, so no `sqlite3` is needed
+([SQL cookbook](sql-cookbook.md) for the schema and the recipes). The model
+comes first and is required; the statement follows it, quoted, or comes from
+`--file`. A `model.db` is accepted in place of the model. The two helper
+views, `node` (one row per entity, with the rendered id every report prints)
+and `dep` (one row per edge, its names resolved), are created for every run;
+`query --views` prints their SQL for another client.
+
+```bash
+codegraph query app.jsonl "SELECT kind, count(*) AS n FROM node GROUP BY kind ORDER BY n DESC"
+codegraph query app.jsonl --file reach.sql --param id='java:com.acme.order/Order.discount(int)' --json
+```
+
+**It never writes**, and that is held twice: the store is opened read-only,
+and the text must be ONE statement beginning with `SELECT`, `WITH`, `VALUES`
+or `EXPLAIN`. The second rule is not redundant — a read-only SQLite handle
+still executes `VACUUM INTO 'file'`, which writes a copy of the database
+anywhere on disk — and a second statement after a `;` is refused rather than
+silently ignored, which is what SQLite itself would do with it.
+
+**Parameters are bound, never pasted into the text:** `--param NAME=VALUE`
+binds `:NAME`, so an id with parentheses, commas or quotes needs no escaping.
+A value that is a whole or decimal number is bound as a number, anything else
+as text. A parameter the statement names and nobody gave is an error, not a
+NULL: SQLite would bind NULL, return no row, and that would read as "there
+are none".
+
+**One statement builds on another's saved rows:** `--param-file NAME=FILE`
+binds `:NAME` to the whole text of a file, always as text. With a result saved
+by `--json`, `json_each(:NAME, '$.rows')` gives one row per saved row, each an
+array: `json_extract(r.value, '$[0]')` is its first column. So a list of ids
+is never retyped on a command line, and what a result was computed from is a
+file that can be opened. One name is bound once: by `--param` or by
+`--param-file`.
+
+The rows go to stdout as an aligned table, as CSV (`--csv`) or as a
+`codegraph.queryResult/1` document (`--json`: `columns`, `rows` as arrays,
+`total`, `truncated`). At most 50 are printed unless `--limit N` or `--all`
+says otherwise; which store answered and how many rows there were — "0 rows."
+included — go to stderr. Every refusal, SQLite's own included, is a usage
+error (exit 2) carrying SQLite's message; a file that is not a model is a
+finding (exit 3), as everywhere.
+
+`query` is what the discovery skills of the Claude Code plugin run
+(`plugin/`, PLAN.md §24): each step's statements are files in
+`plugin/queries/`, run with `--file` and `--param`, their `--json` rows saved
+in the walk's workspace and handed to the next statement with `--param-file`.
+The guide's preflight runs `query --views` to find out whether the
+`codegraph` it found is recent enough for the steps.
 
 ### `serve`
 Opens the model browser on port 4177 (every interface unless `--host` narrows
@@ -563,6 +622,34 @@ Reports over a mined history: `summary`, `hotspots` (churn), `authors`,
 co-change the declared graph cannot explain — and `deadweight` — declared
 dependencies history never exercised. `--serve` opens the file-level city
 replay, a Gource-style timeline over the commits.
+
+`hotspots` and `summary` join a model too, but only when `--model` names one;
+without it they are the history's own reports, whatever sits in the directory.
+
+- `--report hotspots --model FILE` is effort times complexity. Each file the
+  history and the model both know gains its source lines (`SLOC`, counted
+  once: a nested type is inside the type around it), its cyclomatic complexity
+  summed over its operations, the size of its dependency cycle (`CYCLE`, on
+  declared dependencies folded to files; 0 when it is in none) and its rank in
+  four families: `classic` (revisions × lines), `branchy` (revisions ×
+  cyclomatic), `tangled` (revisions, for a file in a cycle), `fragile`
+  (revisions × fix density, which is the fixes). `--rank` chooses the order
+  (default `branchy`). A score of 0 is not ranked: `-` in the table, `null`
+  in the JSON, as is a measure nothing in the file carries. Each row also
+  says who holds the file WITHOUT A NAME: `ownerShare` (the main author's
+  share of the lines added), `ownerRank` (that author's row in `--report
+  authors`, from 1 — two files with one rank have one owner; the table prints
+  both as `75% #2`) and, in the JSON, `ownerLastSeen`, the day that author
+  last committed anywhere in the history. The names are `--report authors`'
+  to give. stderr says how many
+  history files found no counterpart in the model.
+- `--report summary --model FILE` adds `cross-module`: of the commits that
+  touch the model, the share that touch two or more of its top-level
+  directories (the first path segment below the directory all its files
+  share). Commits over 30 files are left out and counted on stderr.
+
+A `--model` that is readable and is not a model is a finding, exit `3`, for
+every report that reads one: no report is printed over an empty join.
 
 ### `timeline`
 One entity's life across a temporal store: when it appeared, when it was last

@@ -1,7 +1,16 @@
 import { accessSync, constants } from "node:fs";
 import { basename, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { FOLD_LEVELS, FRAMEWORK_PROFILES, SelectorError, parseTerm, type FoldLevel, type Selector } from "@codegraph/analyzer";
+import {
+  FOLD_LEVELS,
+  FRAMEWORK_PROFILES,
+  HOTSPOT_FAMILIES,
+  SelectorError,
+  parseTerm,
+  type FoldLevel,
+  type HotspotFamily,
+  type Selector,
+} from "@codegraph/analyzer";
 import { CLOSURES, EXPLAIN_WALK_NAME, WALK_NAME_PATTERN, type Closure } from "@codegraph/insights";
 import { METRIC_PREFIXES, SCALES, metricNames } from "@codegraph/city";
 import { SCOPE_LEVELS, TERM_CLASSES, WEIGHT_KEYS, type ScopeLevel, type TermClass, type WeightKey } from "@codegraph/vocabulary";
@@ -25,6 +34,7 @@ export const COMMAND_NAMES = [
   "validate",
   "analyze",
   "import",
+  "query",
   "export",
   "city",
   "navigator",
@@ -53,7 +63,9 @@ export type FormatName = (typeof FORMATS)[number];
 
 /**
  * `history --report` values. The last two are the CROSS-GRAPH reports (M9b):
- * they join the mined history with a model, so they read `--model` too.
+ * they join the mined history with a model, so they read `--model` too. Since
+ * M23b `hotspots` and `summary` join one WHEN `--model` is given, and are the
+ * history's own reports when it is not.
  */
 export const HISTORY_REPORTS = [
   "summary",
@@ -113,6 +125,11 @@ export interface PositionalSpec {
   readonly defaultPath?: (() => string) | undefined;
   /** How to produce the default when it is missing — each artifact has its own maker. */
   readonly missingHint?: string | undefined;
+  /**
+   * ONE more positional after the first, always optional (`query <model.jsonl> [sql]`).
+   * Never with `variadic`: a second argument must mean one thing.
+   */
+  readonly second?: { readonly name: string; readonly describe: string } | undefined;
 }
 
 export interface CommandSpec {
@@ -1079,6 +1096,95 @@ export const IMPORT_SPEC: CommandSpec = {
   ],
 };
 
+/** `query` prints this many rows unless told otherwise: a result is read, not scrolled. */
+export const DEFAULT_QUERY_LIMIT = 50;
+
+/** The three ways `query` writes its rows. */
+export const QUERY_FORMATS = ["table", "json", "csv"] as const;
+export type QueryFormat = (typeof QUERY_FORMATS)[number];
+
+/**
+ * `codegraph query`: one read-only SQL statement over a model's store (PLAN.md
+ * §24.4). It exists so that no step of the discovery walk needs `sqlite3` on
+ * the machine: the SQLite that builds the store is already in this binary.
+ *
+ * The model is REQUIRED and comes first, unlike the commands that default it:
+ * with an optional statement after it, a lone argument could be either, and a
+ * command that guesses which is a command that runs the wrong thing.
+ */
+export const QUERY_SPEC: CommandSpec = {
+  name: "query",
+  summary: "Run one read-only SQL statement over a model's store, with the node and dep views.",
+  positional: {
+    name: "model.jsonl",
+    describe:
+      "The model to query, through its store (model.db, built beside it when missing or stale) — or a model.db itself.",
+    variadic: false,
+    required: true,
+    second: {
+      name: "sql",
+      describe:
+        "The statement, quoted: ONE statement beginning with SELECT, WITH, VALUES or EXPLAIN. " +
+        "The views node (one row per entity, with its rendered id) and dep (one row per edge, names resolved) are there.",
+    },
+  },
+  options: [
+    {
+      name: "file",
+      type: "string",
+      describe: "Read the statement from this file instead of the command line.",
+      placeholder: "FILE",
+    },
+    {
+      name: "param",
+      type: "string",
+      describe:
+        "Bind :NAME in the statement to VALUE — bound, never pasted into the text, so an id needs no escaping. " +
+        "Repeat it per parameter. A whole or decimal number is bound as a number, anything else as text.",
+      placeholder: "NAME=VALUE",
+      multiple: true,
+    },
+    {
+      name: "param-file",
+      type: "string",
+      describe:
+        "Bind :NAME to the whole text of FILE, as text: a result saved with --json, a list. " +
+        "json_each(:NAME, '$.rows') then reads the saved rows, so one statement builds on another's file.",
+      placeholder: "NAME=FILE",
+      multiple: true,
+    },
+    {
+      name: "limit",
+      type: "string",
+      describe: "Print at most N rows; how many there were is said on stderr.",
+      placeholder: "N",
+      integer: true,
+      defaultValue: String(DEFAULT_QUERY_LIMIT),
+    },
+    {
+      name: "all",
+      type: "boolean",
+      describe: "Print every row.",
+    },
+    {
+      name: "csv",
+      type: "boolean",
+      describe: "Print the rows as CSV: a header line, then one line per row.",
+    },
+    {
+      name: "json",
+      type: "boolean",
+      describe: "Print a codegraph.queryResult/1 document: columns, rows (one array per row), total, truncated.",
+    },
+    {
+      name: "views",
+      type: "boolean",
+      describe:
+        "Print the SQL that creates node and dep, for another SQLite client, and exit. Takes no model and no other option.",
+    },
+  ],
+};
+
 /**
  * `codegraph timeline` reads the TEMPORAL store: an entity's life across the
  * revisions `import --at` accumulated. Lifespans are derived by the query,
@@ -1230,9 +1336,20 @@ export const HISTORY_SPEC: CommandSpec = {
       name: "model",
       type: "string",
       describe:
-        "Model for the cross-graph reports (hidden, deadweight); " +
-        "defaults to this directory's default model.",
+        "A model to join on file paths. hidden and deadweight need one (default: this " +
+        "directory's default model). Given to hotspots, each file gains its lines, its " +
+        "cyclomatic complexity, its dependency cycle and its rank in four families; given " +
+        "to summary, the share of commits that cross a top-level directory of the model.",
       placeholder: "FILE",
+    },
+    {
+      name: "rank",
+      type: "string",
+      describe:
+        "hotspots with --model: the family the rows are ordered by — classic (revisions x " +
+        "lines), branchy (revisions x cyclomatic; the default), tangled (revisions of a file " +
+        "in a dependency cycle), fragile (revisions x fix density).",
+      choices: HOTSPOT_FAMILIES,
     },
     {
       name: "min-support",
@@ -1362,6 +1479,7 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
   VALIDATE_SPEC,
   ANALYZE_SPEC,
   IMPORT_SPEC,
+  QUERY_SPEC,
   EXPORT_SPEC,
   CITY_SPEC,
   NAVIGATOR_SPEC,
@@ -1606,6 +1724,24 @@ export interface ImportOptions extends ModelInputOptions {
   readonly json: boolean;
 }
 
+export interface QueryOptions {
+  /** `--views`: print the helper views' SQL; nothing is read. */
+  readonly views: boolean;
+  /** The model.jsonl, or a model.db; undefined only with `--views`. */
+  readonly model: string | undefined;
+  /** The statement as typed; undefined when `--file` gives it. */
+  readonly sql: string | undefined;
+  /** `--file FILE`: where the statement is; undefined when it was typed. */
+  readonly file: string | undefined;
+  /** `--param NAME=VALUE`, by name without the colon; the values as typed. */
+  readonly params: Readonly<Record<string, string>>;
+  /** `--param-file NAME=FILE`, by name without the colon; the paths as typed. Never a name `params` has. */
+  readonly paramFiles: Readonly<Record<string, string>>;
+  /** Rows to print; undefined is every row (`--all`). */
+  readonly limit: number | undefined;
+  readonly format: QueryFormat;
+}
+
 export interface TimelineOptions {
   /** The rendered entity id to look up. */
   readonly id: string;
@@ -1648,6 +1784,8 @@ export interface HistoryOptions {
   readonly top: number | undefined;
   /** `--model FILE` for the cross-graph reports; undefined means the default model. */
   readonly model: string | undefined;
+  /** `--rank FAMILY`: the order of the joined hotspot report; undefined is its default. */
+  readonly rank: HotspotFamily | undefined;
   /** Coupling thresholds; the specs' defaults unless overridden. */
   readonly minSupport: number;
   readonly minConfidence: number;
@@ -1690,6 +1828,7 @@ export type Invocation =
   | { readonly kind: "run"; readonly command: "validate"; readonly options: ValidateOptions }
   | { readonly kind: "run"; readonly command: "analyze"; readonly options: AnalyzeOptions }
   | { readonly kind: "run"; readonly command: "import"; readonly options: ImportOptions }
+  | { readonly kind: "run"; readonly command: "query"; readonly options: QueryOptions }
   | { readonly kind: "run"; readonly command: "export"; readonly options: ExportOptions }
   | { readonly kind: "run"; readonly command: "city"; readonly options: CityOptions }
   | { readonly kind: "run"; readonly command: "navigator"; readonly options: NavigatorOptions }
@@ -1727,6 +1866,7 @@ export function usageLine(spec: CommandSpec): string {
   if (spec.positional !== undefined) {
     const name = spec.positional.variadic ? `${spec.positional.name}...` : spec.positional.name;
     parts.push(spec.positional.required ? `<${name}>` : `[${name}]`);
+    if (spec.positional.second !== undefined) parts.push(`[${spec.positional.second.name}]`);
   }
   for (const option of spec.options) {
     parts.push(option.required === true ? flagSyntax(option) : `[${flagSyntax(option)}]`);
@@ -1794,6 +1934,8 @@ export function renderHelp(spec: CommandSpec | undefined): string {
             ? `${spec.positional.describe} (default: ${fallback()}, what the extractor writes here)`
             : `${spec.positional.describe} (default: ${fallback()})`;
       lines.push(`  ${name}   ${describe}`);
+      const second = spec.positional.second;
+      if (second !== undefined) lines.push(`  [${second.name}]   ${second.describe}`);
     }
     lines.push("");
     lines.push("options:");
@@ -2044,7 +2186,15 @@ function positionalsOf(spec: CommandSpec, positionals: readonly string[]): reado
       );
     }
   }
-  if (!spec.positional.variadic && positionals.length > 1) {
+  const second = spec.positional.second;
+  if (second !== undefined && positionals.length > 2) {
+    // Almost always a statement the shell split into words.
+    throw new UsageError(
+      `${spec.name} takes a ${spec.positional.name} and one ${second.name}, but ${positionals.length} arguments were given`,
+      `Quote the ${second.name} so the shell passes it as one argument.\n${usageLine(spec)}`,
+    );
+  }
+  if (!spec.positional.variadic && second === undefined && positionals.length > 1) {
     throw new UsageError(
       `${spec.name} takes a single ${spec.positional.name}`,
       usageLine(spec),
@@ -2113,9 +2263,10 @@ export function parseInvocation(argv: readonly string[]): Invocation {
   // `serve --app` opens folders through its routes, so no model is defaulted
   // from the working directory — the one command whose positional is optional.
   const isApp = spec.name === "serve" && flagOf(values, "app");
-  // `walk --print-definition [explain]` reads no model either: its positional, if any, names a built-in.
+  // `walk --print-definition [explain]` and `query --views` read no model: a positional, if any, is not one.
   const printing = spec.name === "walk" && flagOf(values, "print-definition");
-  const models = isApp || printing ? parsed.positionals : positionalsOf(spec, parsed.positionals);
+  const isViews = spec.name === "query" && flagOf(values, "views");
+  const models = isApp || printing || isViews ? parsed.positionals : positionalsOf(spec, parsed.positionals);
 
   switch (spec.name) {
     case "validate":
@@ -2361,15 +2512,30 @@ export function parseInvocation(argv: readonly string[]): Invocation {
         },
       };
     }
-    case "history":
+    case "history": {
+      const report = (stringOf(values, "report") ?? DEFAULT_HISTORY_REPORT) as HistoryReportName;
+      const rank = stringOf(values, "rank") as HotspotFamily | undefined;
+      if (rank !== undefined && report !== "hotspots") {
+        throw new UsageError(
+          `--rank orders the joined hotspot report, not ${report}`,
+          "Use it with --report hotspots --model FILE.",
+        );
+      }
+      if (rank !== undefined && stringOf(values, "model") === undefined) {
+        throw new UsageError(
+          "--rank needs a model to rank by",
+          "Name it: --report hotspots --model FILE --rank " + rank,
+        );
+      }
       return {
         kind: "run",
         command: "history",
         options: {
           history: models[0] as string,
-          report: (stringOf(values, "report") ?? DEFAULT_HISTORY_REPORT) as HistoryReportName,
+          report,
           top: integerOf(values, "top"),
           model: stringOf(values, "model"),
+          rank,
           minSupport: integerOf(values, "min-support") ?? 3,
           minConfidence: (integerOf(values, "min-confidence") ?? 50) / 100,
           serve: flagOf(values, "serve"),
@@ -2379,6 +2545,9 @@ export function parseInvocation(argv: readonly string[]): Invocation {
           json: flagOf(values, "json"),
         },
       };
+    }
+    case "query":
+      return { kind: "run", command: "query", options: queryOf(values, spec, models) };
     case "timeline":
       return {
         kind: "run",
@@ -2570,6 +2739,102 @@ function printDefinitionOf(values: ParsedValues, positionals: readonly string[])
     );
   }
   return { ...walkOptionsOf({}, []), printDefinition: which === "explain" ? "explain" : "default" };
+}
+
+/** A parameter's name as SQLite reads it after the colon. */
+const PARAM_NAME = /^[A-Za-z_][A-Za-z0-9_$]*$/;
+
+/**
+ * `--param NAME=VALUE` and `--param-file NAME=FILE`, each split at the FIRST
+ * `=`: a value, like a path, may hold others. A value may be empty; a file may
+ * not. One name is bound once, whichever of the two flags gives it.
+ */
+function paramsOf(values: ParsedValues): { params: Readonly<Record<string, string>>; paramFiles: Readonly<Record<string, string>> } {
+  const params: Record<string, string> = {};
+  const paramFiles: Record<string, string> = {};
+  const read = (option: "param" | "param-file", into: Record<string, string>): void => {
+    const shape = option === "param" ? "NAME=VALUE" : "NAME=FILE";
+    for (const raw of stringsOf(values, option)) {
+      const cut = raw.indexOf("=");
+      const name = (cut === -1 ? raw : raw.slice(0, cut)).replace(/^:/, "");
+      const value = raw.slice(cut + 1);
+      if (cut === -1 || !PARAM_NAME.test(name) || (option === "param-file" && value === "")) {
+        throw new UsageError(
+          `--${option} needs ${shape}, got '${raw}'`,
+          option === "param"
+            ? "NAME is the parameter as the statement writes it after the colon: --param id='java:com.acme/Order' binds :id."
+            : "NAME is the parameter as the statement writes it after the colon: --param-file rows=saved.json binds :rows to that file's text.",
+        );
+      }
+      if (Object.hasOwn(params, name) || Object.hasOwn(paramFiles, name)) {
+        throw new UsageError(`parameter ${name} is given twice`, "One value per parameter: --param or --param-file, once.");
+      }
+      into[name] = value;
+    }
+  };
+  read("param", params);
+  read("param-file", paramFiles);
+  return { params, paramFiles };
+}
+
+/**
+ * `query`'s shapes: `--views` alone, or a model with ONE source for the
+ * statement. Each contradiction is refused by name rather than resolved by a
+ * precedence nobody would guess.
+ */
+function queryOf(values: ParsedValues, spec: CommandSpec, positionals: readonly string[]): QueryOptions {
+  const file = stringOf(values, "file");
+  const { params, paramFiles } = paramsOf(values);
+  const json = flagOf(values, "json");
+  const csv = flagOf(values, "csv");
+  const all = flagOf(values, "all");
+  const limit = integerOf(values, "limit");
+
+  if (flagOf(values, "views")) {
+    const stray =
+      positionals[0] ??
+      (file !== undefined ? "--file" : undefined) ??
+      (Object.keys(params).length > 0 ? "--param" : undefined) ??
+      (Object.keys(paramFiles).length > 0 ? "--param-file" : undefined) ??
+      (json ? "--json" : csv ? "--csv" : all ? "--all" : limit !== undefined ? "--limit" : undefined);
+    if (stray !== undefined) {
+      throw new UsageError(
+        `--views prints the two views and reads nothing: it takes no model and no other option (got '${stray}')`,
+        "Run 'codegraph query --views' alone; the views are already there in every 'codegraph query <model.jsonl> …'.",
+      );
+    }
+    return { views: true, model: undefined, sql: undefined, file: undefined, params: {}, paramFiles: {}, limit: undefined, format: "table" };
+  }
+
+  const [model, sql] = positionals;
+  if (sql === undefined && file === undefined) {
+    throw new UsageError(
+      "query needs a statement",
+      `Quote it after the model, or pass --file FILE.\n${usageLine(spec)}`,
+    );
+  }
+  if (sql !== undefined && file !== undefined) {
+    throw new UsageError(
+      "query takes ONE statement: the one on the command line, or the one in --file",
+      "Drop one of the two.",
+    );
+  }
+  if (json && csv) {
+    throw new UsageError("--json and --csv are two forms of the same rows", "Pass one of them, or neither for the table.");
+  }
+  if (all && limit !== undefined) {
+    throw new UsageError("--all and --limit contradict each other", "--all prints every row; --limit N prints at most N.");
+  }
+  return {
+    views: false,
+    model,
+    sql,
+    file,
+    params,
+    paramFiles,
+    limit: all ? undefined : (limit ?? DEFAULT_QUERY_LIMIT),
+    format: json ? "json" : csv ? "csv" : "table",
+  };
 }
 
 function vocabularyOf(values: ParsedValues): Omit<VocabularyOptions, "models"> {

@@ -2736,7 +2736,7 @@ under one command-line contract (§13.5, schemas/README.md §8) exactly so
 this could be true: the app needs to know nothing about them but that
 contract and the file extensions they claim.
 
-Locked decisions, each with its reason (the delta table in §25 repeats them):
+Locked decisions, each with its reason (the delta table in §26 repeats them):
 
 - **Tauri is the shell, not a runtime.** Window, native menu, folder dialog,
   drag-and-drop, sidecar lifecycle, bundling, signing and notarization. No
@@ -3549,7 +3549,8 @@ wrote model.jsonl
 | Hazard | Where it shows | Guard |
 |---|---|---|
 | canonical order compares UTF-16 code units; Elixir strings are UTF-8 binaries | any name with a character above U+FFFF or in the surrogate-adjacent range sorts differently under byte order | comparison key = `:unicode.characters_to_binary(s, :utf8, {:utf16, :big})`, compared as bytes; the `fixtures/unicode` corpus (the Java/C# guard) reproduced byte for byte |
-| JSON bytes must match core's `JSON.stringify` | escaping (` `, control characters, `/` unescaped), key order, integers vs floats in `metrics` | the two-encoder gate in core; a `JsonWriterTest` with the characters JS and Elixir disagree on by default; `JSON.encode_to_iodata!` with an explicit string encoder where the defaults differ |
+| JSON bytes must match core's `JSON.stringify` | escaping (`
+`, control characters, `/` unescaped), key order, integers vs floats in `metrics` | the two-encoder gate in core; a `JsonWriterTest` with the characters JS and Elixir disagree on by default; `JSON.encode_to_iodata!` with an explicit string encoder where the defaults differ |
 | a source file that is not valid UTF-8 (Latin-1 legacy) | `Code.string_to_quoted` rejects it; a lone surrogate cannot exist in a binary | counted as `unparsed`, path on stderr; `--encoding latin1` is a later flag, not a default that guesses |
 | `\r\n` sources | Windows checkouts | the tokenizer is EOL-agnostic; the CRLF determinism case; `sloc` counted from tokens, not from line splits |
 | `\` path separators and drive letters | Windows anchors and module keys | `Path.relative_to/2` + a forced `/` join before a path enters a key; the Windows smoke job |
@@ -3641,7 +3642,7 @@ file without one of them lying, so they do not share one:
 | will not open | degrade to the `.jsonl`, silently | a usage error naming the file; never overwritten |
 | committed / shared | never | never — the JSONL export is what is committed, diffed and handed to Specy |
 
-Locked decisions, each with its reason (the delta table in §25 repeats them):
+Locked decisions, each with its reason (the delta table in §26 repeats them):
 
 - **The db is the working copy; the JSONL becomes its deterministic export.**
   `<model>.insights.jsonl` keeps its format, its byte-determinism and its
@@ -7231,7 +7232,980 @@ fixture in every per-fixture suite.
   declared `interfaceImplementation`, roots read from `pyproject.toml`, a
   Windows binary, Cython (not Python's grammar).
 
-## 24. Milestones
+## 24. Phase 21 — The discovery walk as agent skills: a `codegraph` plugin (M23)
+
+Motivation: the six pages of `website/content/docs/discover/` are a METHOD
+for a person with a terminal — six questions in a fixed order, each page
+ending on a "Write down" list the next one reads, three habits that make
+the result checkable. An agent can run every command in them. What the
+reader still does alone is the rest: choose the source roots, see the three
+rows that matter among forty, remember at step 3 what step 1 found, decide
+at step 5 what is worth paying for. The request: a skill that, given a
+path, has an agent GUIDE a person through the walk progressively, split
+into sub-skills where that helps, with codegraph and the Specy toolkit as
+its tools.
+
+**Decision: a Claude Code plugin named `codegraph`, in this repository and
+versioned with the CLI — one guide skill (`discover`), one skill per
+question (`discover-1-structure` … `discover-6-domain`) and a `query`
+utility. The skills hold no method of their own: the pages are the method,
+and the SQL both run is ONE set of files. What a step learned is written to
+disk, in `.codegraph/` at the root of the analyzed repository, never kept
+in the conversation. Steps 1–5 need only codegraph; step 6 hands over to
+the Specy plugin, which is detected, not required. The CLI gains
+`codegraph query`, so that no step needs `sqlite3`.** Rejected, each with
+its reason:
+
+- **One skill for the whole walk.** After a compaction Claude Code keeps
+  the first 5 000 tokens of an invoked skill (25 000 across all of them);
+  the six step pages are 9 326 words. A walk that reaches step 4 has been
+  compacted, and the steps it would forget are the ones that spend money.
+  Specy's `domain-extract-from-code` template is 2 638 lines: the shape not
+  to copy.
+- **A skill inside the Specy plugin.** Specy is a CONSUMER of codegraph's
+  artifacts, at step 6, and that is its place. A skill that spells
+  `codegraph` flags must be released with the binary that parses them: the
+  test of §24.8 reads this repository's `CommandSpec` tables, and cannot
+  from another one.
+- **A subagent per step** (`context: fork`). A step is a conversation; a
+  fork returns a summary and cannot ask. Forks are for the work INSIDE a
+  step that holds no question — the extraction, the history mining.
+- **An MCP server over the model.** The CLI is the interface already, with
+  `--json` on every report; a server is a second surface to version, and
+  no step needs a tool the shell does not give.
+- **Relying on `sqlite3`.** It is not on this machine, and one block of the
+  method cannot run without its shell (measured below).
+- **The workspace in Specy's `specy/codegraph/`.** That directory is
+  Specy's, inside a tree the user may commit. The walk's artifacts exist
+  before Specy is involved and belong in one hidden directory; Specy learns
+  to read it (§24.6).
+- **A template assembler like Specy's `build.sh`.** It inlines shared text
+  into every `SKILL.md`, which is what the token budget forbids. Shared
+  text is a file under `references/`, read when a step needs it.
+
+**Measured before planning** (2026-11-21; throw-away scripts, nothing
+committed):
+
+| Question | Result |
+|---|---|
+| Which tools does the method assume, and which does this machine have? | `sqlite3`, `dot` and `duckdb`: absent. `jq`: present. `node:sqlite` is already inside the binary (Node 22.22.2 here) |
+| Do the pages' SQL blocks run as written? | 18 blocks on the six pages and the how-to they point to, run through `node:sqlite` with the two helper views, on `fixtures/java` and on PetClinic: **17 run, 1 cannot** — `activity.md:97` is `sqlite3` shell (`.mode csv`, `.output`), and the join it feeds is "a spreadsheet, a notebook or ten lines of any language". The three Spring queries return no row on the fixture, which has no Spring, and 24, 17 and 5 on PetClinic |
+| How many definitions of the helper views? | three copies (`how-to/query-model-db.md`, `tutorials/sql.md`, `docs/sql-cookbook.md`), equal once comments are stripped — and no test runs any of the 18 blocks |
+| Does a read-only handle hold the views, and is it enough? | `readOnly: true` accepts `CREATE TEMP VIEW`, refuses a write to the store and the `ATTACH` of a new file, answers "not authorized" to `load_extension`; the store's sha256 is unchanged. **It does not refuse `VACUUM INTO 'file'`**, which wrote a 221 184-byte copy: the handle protects the store, not the disk. Named parameters bind (`:id`) |
+| How long do the three free steps take? | PetClinic, cold, 13 commands: two extractions (main 1.7 s, test 3.6 s), `validate`, `import`, the metrics pass, cycles, coupling, wiring, `scm` (0.8 s), three history reports, the history side-car — **9.5 s in all** |
+| What does the paid step cost? | already recorded: the Java fixture $0.06 on OpenRouter (M11) and $1.03 through Claude Code (M20b); PetClinic's store $0.13 (M19c) |
+| Can the page be pointed at one building? | no: it reads `?src=` and `?city=` only (grep of `navigator-ui` and `viz`) |
+| What does Claude Code give a plugin? (its docs read 2026-11-21; CLI 2.1.330) | a skill is `skills/<name>/SKILL.md`, invoked `/codegraph:<name>`; `${CLAUDE_PLUGIN_ROOT}` reaches the plugin's other files; a top-level `bin/` blocks installation on claude.ai; `claude plugin validate`, `details` (projected token cost), `eval` and `tag` exist. **Not documented: one skill invoking another, and any way to declare an external command as a prerequisite** |
+| What does Specy read today? | `domain-extract-from-code` (2672f03) looks for `specy/codegraph/*.insights.jsonl`, then any `*.insights.jsonl`, and honours `$CODEGRAPH_HOME/bin`; it already reads the side-car before source, which `domain.md` still calls "the planned change". `architecture-extract-from-code` and `sysreq-extract-from-code` know nothing of codegraph |
+
+Six principles, locked up front:
+
+1. **The pages are the method; the skills execute it.** A skill states no
+   step, threshold or reading rule the pages do not. When a step needs a
+   query the pages lack, the page gets it in the same commit.
+2. **Kinds of knowledge are never mixed.** The page names five:
+   `declared`, `derived`, `dynamic-candidate`, co-change and a model's
+   explanation. The walk adds a sixth, what a person said, and keeps
+   `generated` apart where a trace was merged. Every claim in the notebook
+   carries its kind and its anchor — `file:line` at a commit, or the saved
+   query and row, or who said it and when. A claim with no anchor is
+   written as a question.
+3. **State on disk, not in the context.** A step starts by reading the
+   state file and ends by writing it. A session that starts cold says
+   where the walk stands and how far the model is behind `HEAD`.
+4. **No money spent, and no source sent to a second provider, without a
+   yes per scope.** The session's own model reads whatever the agent
+   reads, and intake says so; what the gate guards is a SECOND provider
+   and a bill. `explain` is given `--yes` only after that yes.
+5. **The walk changes nothing it was not asked to change.** No install
+   (the two brew lines are printed), no run of the analyzed project's code
+   (the Elixir and Ruby traces are the user's to run), no write outside
+   `.codegraph/` and `specy/`, no tracked file touched, `serve` on
+   `127.0.0.1`, a secret's value never printed.
+6. **The "Today" column is carried, not hidden.** Each step says what the
+   tool does not do for this language, before the person finds out.
+
+### 24.1 Repository layout and packaging
+
+```
+plugin/                            the plugin root: what the marketplace entry points at
+├── .claude-plugin/plugin.json     name "codegraph"; version = the root package.json's
+├── skills/
+│   ├── discover/SKILL.md          the guide
+│   ├── discover-1-structure/ … discover-6-domain/    one SKILL.md each
+│   └── query/SKILL.md
+├── references/                    read on demand, never inlined
+│   ├── rhythm.md                  the seven beats and the gate (§24.3)
+│   ├── evidence.md                the kinds of knowledge; how a claim is written
+│   ├── state.md + discovery.schema.json
+│   ├── words.md                   the page's "Words used in this section"
+│   ├── capabilities.md            GENERATED from core's profiles
+│   └── stacks/spring.md …         entry points and roles, per framework
+├── queries/*.sql                  one statement per file, named parameters (§24.4)
+└── evals/                         `claude plugin eval` cases (§24.8)
+.claude-plugin/marketplace.json    repository root: one plugin, source `./plugin`
+```
+
+- **Text and SQL, nothing executable.** No `bin/` (it blocks claude.ai),
+  no MCP server, no hook, no build step. CLAUDE.md gains the boundary: the
+  plugin imports nothing and nothing imports it.
+- **Tool lookup is Specy's**: `$CODEGRAPH_HOME/bin/<tool>` when executable,
+  else `PATH`. A missing `codegraph` or extractor prints its brew line and
+  stops; a missing pass or provider is said and the walk goes on.
+- **`capabilities.md` is generated**, as `website/scripts/profiles-page.mjs`
+  generates the profiles page: which kinds, edges and measures each
+  profile gives, which frameworks have a profile (Spring only), which
+  extractors take a trace. A test fails when regenerating it changes it.
+- **Each step file stands alone**: at most 300 lines and 2 500 words (the
+  proxy for the 5 000-token cut), the question, the required artifacts,
+  the commands and the gate on its first screen.
+- **The guide does not depend on one skill invoking another.** It names
+  the step's skill; where the host does not load it, it reads
+  `${CLAUDE_PLUGIN_ROOT}/skills/<step>/SKILL.md`, the same file. M23a's
+  first step measures which of the two a session does.
+
+### 24.2 The skills
+
+| Skill | The agent runs | Only a person can say | Written down |
+|---|---|---|---|
+| `discover` | preflight, intake, routing, resume | purpose, time at hand, the step-5 gate | intake, the final report |
+| `discover-1-structure` | one extraction per source root, `validate`, `import`, the metrics pass, the page's four queries, cycles by module, coupling by type | which outliers are generated or vendored | resolution rate, the breaks in the two curves, the largest tangle and its feedback set, top fan-in |
+| `discover-2-boundaries` | module graph, external modules, module → external reach, annotation census, `--report wiring` on Spring | what each unknown external module is; who calls this system | the style claim with the checks that held and failed, the stack, inbound and outbound lists |
+| `discover-3-activity` | `scm`, the six `history` reports, the history side-car, the joined hotspot report (§24.5) | the window, the false positives, whether each top owner is still there | the hotspot shortlist, hidden couplings, the cross-module co-change share |
+| `discover-4-stimuli` | the page's three detection layers merged into one inventory; a forward slice per entry point, on facts then with candidates; overlap groups; the residue | the business name of each use case | the inventory with the layer that found each row, a reading order per chain, the residue split stable / active |
+| `discover-5-meaning` | `--dry-run`, `--estimate`, a scope proposed from steps 3–4, the run in the background, the `insights` and `vocabulary` readings | the yes; the review of `unknown` and low-confidence records | module purposes, the three-readings table, the glossary, polysemous words |
+| `discover-6-domain` | `domain-facts`, purity, chain position, then the Specy extraction with the hotspot ranks | a domain expert's confirmation of aggregates, invariants and events | the verdict per module, the `.domain`, the weighted refactoring report |
+| `query` | a question in words → one `SELECT`, saved with its result | — | a query a claim can cite |
+
+**Every step is enterable on its own.** It lists the artifacts it needs,
+builds the free ones itself (9.5 s on PetClinic), and stops only for what
+costs money or a decision: step 6 without step 5's records says what the
+model will lack and asks.
+
+**`discover <path> [--tour] [--step N]`.**
+
+- *Preflight*, free and silent: the tools found and their versions; a git
+  repository or not, and how deep (a shallow clone makes step 3
+  unavailable); a language census by extension over `git ls-files`,
+  against the installed extractors; candidate source roots, main and test
+  apart as the page asks (a build file is read, never run); the providers
+  configured, BY NAME — whether a variable is set, never its value —
+  and `claude` on `PATH`; the Specy plugin present or not; an existing
+  `.codegraph/`.
+- *Intake*, three questions at most, each skippable:
+  1. the purpose — takeover, migration, due diligence, onboarding. It sets
+     the emphasis (migration: steps 4 and 6; due diligence: 1–3) and the
+     shape of the report;
+  2. the time at hand — the tour, a session (steps 1–4), the whole walk;
+  3. the step-5 gate, asked now so nothing is discovered late: may source
+     go to a second provider, which one, under what ceiling in dollars.
+     "No" is a complete answer; the walk then continues on facts.
+- The extraction and the mining run in the background while the person
+  answers.
+- *`--tour`*: steps 1–3 with no question (9.5 s of commands on PetClinic)
+  and a one-page brief — every guess marked as one, the questions
+  collected at the end instead of asked.
+
+Per step, what the table does not say:
+
+- **1.** The outliers a person excludes go to a list in the state file,
+  shown at every later ranking. Picture: the city,
+  `--height sum:cyclomatic --footprint loc`.
+- **2.** Picture: the Graph tab in module mode — the page's `dot` is not
+  on every machine; `export --format plantuml` when a file is wanted.
+  Exit: `/specy:architecture-extract-from-code` (§24.6).
+- **3.** Picture: `--height history-file:churn_recent --carry
+  history:risk_score`. Author names stay in the workspace; a shareable
+  text says "one owner, 78 %", not who.
+- **4.** Each row is classified by the page's seven kinds of stimulus,
+  from the stack table; a row no table classifies is shown as
+  unclassified. The agent PROPOSES a business name per use case and the
+  person corrects it; the name is recorded as said by a person. Zero rows
+  from a stack table is "not detected", never "none". Exit:
+  `/specy:sysreq-extract-from-code` on the chains chosen.
+- **5.** Prices are read from this run's `--estimate`, never remembered.
+  An API key is preferred when one is configured (the fixture cost $0.06
+  there, $1.03 through Claude Code), else Claude Code with its price
+  said. Picture: `--height vocabulary:<word>` for a word the glossary
+  flags. On a no, the agent reads the top hotspot types itself and writes
+  what it finds as a model's explanation, origin "session".
+- **6.** Without the Specy plugin the step stops at the verdict per module
+  and prints the install line. `specy validate` runs on the result when
+  the command is there.
+- **`query`.** The schema is read with `sqlite_schema` and
+  `pragma_table_info()`, which are `SELECT`s. Each query is saved as
+  `.codegraph/queries/NN-<name>.sql` with its result, so a notebook claim
+  cites a file.
+
+### 24.3 The workspace, the state, the rhythm
+
+```
+<repo>/.codegraph/                 added to .git/info/exclude when created
+├── discovery.json                 codegraph.discovery/1: the agent's
+├── NOTEBOOK.md                    the person's
+├── REPORT.md                      written at any stop (§24.7)
+├── <root>.jsonl  <root>.db  <root>.history-metrics.jsonl  <root>.insights.{db,jsonl}
+├── history.jsonl  domain-facts.json
+└── queries/NN-<name>.{sql,json}   every query run, with its rows
+```
+
+- **`.git/info/exclude`, not `.gitignore`**: a client's tracked files are
+  not edited, and `git status` stays what it was. Outside a git
+  repository the directory is the same, step 3 is unavailable and said
+  so.
+- **`discovery.json`** (`codegraph.discovery/1`, a JSON Schema in
+  `references/`):
+  - `intake`: purpose, time, the provider allowed and its ceiling;
+  - `corpus`: path, the commit extracted, languages, source roots,
+    excluded paths with the reason and who gave it;
+  - `steps`: per step, a status (`todo`, `done`, `partial`, `skipped`),
+    the commit it ran at, and `findings` — the page's "Write down" list
+    as fields, each value with its kind and anchor;
+  - `questions`: what no file answers, with the step that raised it and
+    who could answer;
+  - `spend`: per run, the provider, model, calls and dollars the CLI
+    reported — never a price;
+  - `taught`: the terms already defined to this person.
+- **Behind `HEAD`.** A session compares `corpus.commit` with `HEAD`, says
+  by how many commits and files, and offers to redo the free steps
+  (seconds). Step 5's records survive by fingerprint: a re-run pays for
+  what changed.
+- **The rhythm**, one file (`references/rhythm.md`), seven beats per step:
+  1. *frame* — the question, its cost, what the person will hold after;
+  2. *run* — outputs to files, never a wall of text;
+  3. *show* — three to five rows and one picture;
+  4. *read* — how to read them; a term is defined once (`taught`);
+  5. *ask* — one to three things only a person knows; a skipped question
+     becomes an open one;
+  6. *write* — the notebook entry and the state;
+  7. *gate* — two lines of recap, the next step's cost, then continue, go
+     deeper, skip or stop.
+- **Stopping is a success.** Every step leaves something to hold: the
+  shortlist after 3, the reading order after 4, the glossary after 5, the
+  model after 6.
+- **One `serve` per session**, restarted with the step's bindings. With a
+  browser tool attached the agent reads a screenshot before describing
+  the city; without one it describes from the reports and gives the URL.
+- **Predict, then reveal** is offered, off by default: the person names
+  the module they expect to be worst before step 3 shows it. The gap is a
+  finding.
+
+### 24.4 `codegraph query` — SQL without `sqlite3`
+
+```bash
+codegraph query app.jsonl "SELECT kind, count(*) AS n FROM node GROUP BY kind"
+codegraph query app.jsonl --file reach.sql --param id='java:com.acme.order/Order.discount(int)' --json
+codegraph query --views            # the DDL of `node` and `dep`, for another client
+```
+
+- **Input:** a `model.jsonl`, through the cache as `analyze` reads it, or
+  a `.db`. The model's store and nothing else.
+- **The helper views have ONE definition**, in `@codegraph/analyzer`
+  (`store/helper-views.ts` — `src/views.ts` already names the pipeline's
+  predicate views), created in the connection's temp schema. The three
+  copies in the docs are pinned equal to it. The engine is beside it
+  (`store/query.ts`: `statementShape`, `queryStore`); the command only
+  resolves flags, finds the store and moves bytes.
+- **Read-only twice.** The handle is `readOnly`, and the text must be one
+  statement beginning `SELECT`, `WITH`, `VALUES` or `EXPLAIN` — because
+  the handle alone lets `VACUUM INTO` write a file. Anything else is a
+  usage error (exit 2).
+- **Parameters are bound, never spliced**: `--param name=value` → `:name`.
+  An id holds parentheses and commas, and in Ruby, quotes.
+- **Output:** an aligned table on stdout, cut at `--limit` (default 50)
+  with the total on stderr; `--json` is `codegraph.queryResult/1`
+  (`columns`, `rows`, `total`, `truncated`); `--csv`. The cut is the same
+  in the three forms and `--all` lifts it; a JSON row is an array, because
+  two columns may share a name.
+- **Exit codes** as everywhere: 0; 2 for usage, and a statement SQLite
+  refuses IS usage — a mistake in what was typed, carried with SQLite's
+  message; 3 when the file is not a model. Never 1: that code says
+  "a bug in codegraph", which a typo in a `SELECT` is not. *(The plan
+  first said 1; M23a corrected it against `exit.ts`.)*
+
+**Query files.** `plugin/queries/<name>.sql`: one statement, a header
+comment naming the page it belongs to, its parameters declared. **Decision:
+the pages and the query files are held equal by a test, not by an
+include** — every `sql` block of the six pages and of the how-to equals a
+query file, or sits in a short list of page-only blocks with its reason. A
+shortcode that reads the file at build time is the better form; whether
+Hugo mounts `../plugin/queries` is measured in M23a, and if it does the
+copies disappear. *Measured (M23a, Hugo 0.170.1): it mounts, and
+`resources.Get` renders the file in the HTML page — but the site's
+Markdown twin of each page (`index.md`, Hextra's `.RawContent` templates)
+prints the shortcode unexpanded, and that twin is what a model reads. The
+copies stay, held by the test.*
+
+### 24.5 What else the CLI gains
+
+| Change | Why the walk needs it | When |
+|---|---|---|
+| `history --report hotspots --model M` — the joined report the page calls planned: revisions × lines, × cyclomatic, × cycle membership, × fix density (the page's four families: classic, branchy, tangled, fragile), on the path join `hidden` and `deadweight` already use (`crossGraph`) | the one block of the method with no command | M23b |
+| `analyze --report entrypoints` and a reach report from an id | step 4 is "partly: Spring only, chains by query" | deferred; the query files are what they will be tested against |
+| `codegraph doctor [DIR] --json` | preflight as one tested command | deferred |
+| deep links in `serve` (a tab, an entity) | the agent could point at one building | deferred |
+
+### 24.6 Specy: three changes there, one contract here
+
+The contract between the two repositories is the workspace:
+`.codegraph/discovery.json` and the artifacts beside it. Specy reads them
+and never writes there; its own outputs stay in `specy/`.
+
+| Step | Specy skill | The change, in `specy/skills`, with its own commits and release |
+|---|---|---|
+| 2 | `architecture-extract-from-code` → `.arch` | a `heuristics/codegraph.md`: the module graph as container and component candidates, external modules as external systems, entry and exit points as ports. Today it reads source only |
+| 4 | `sysreq-extract-from-code` → `.sysreq` | a `heuristics/codegraph.md`: the stimulus inventory as the list of triggers, one EARS requirement per chain, limited to the chains the person chose |
+| 6 | `domain-extract-from-code` → `.domain` | lookup order `.codegraph/`, then `specy/codegraph/`, then any `*.insights.jsonl`; when `discovery.json` is there, it takes the excluded paths, the names a person gave, and the hotspot ranks that order its refactoring report |
+
+- **One consent wording.** The block of Specy's `heuristics/codegraph.md`
+  §1.4 (show the cost, then ask; one yes per scope) is the text step 5
+  uses. Specy, finding the run in `spend`, does not ask a second time.
+- **Exits offered at the end, unchanged:** `domain-dialogue`,
+  `domain-refactor`, `model-formats`, the Specy app's navigators,
+  `specy validate`.
+- **Not involved:** synthy (not a discovery concern), `exspec` (empty),
+  arc-kit (third-party).
+- `domain.md`'s "planned change" sentence is corrected in M23d.
+
+### 24.7 The report
+
+`.codegraph/REPORT.md` is rewritten at every stop, from the state file:
+the findings of each step done, with kind and anchor; the hotspot
+shortlist; **the questions for the team** — what no file can answer, a
+deliverable of its own; what was spent; and what was NOT looked at, with
+the reason (a skipped step, an excluded path, a feature the language's
+extractor does not give). Its order follows the purpose given at intake:
+due diligence leads with risk and ownership, migration with stimuli and
+domain. It holds shares and counts, never an author's name.
+
+### 24.8 Validation
+
+What a test can hold, it holds — in `pnpm -r test`, with no model call:
+
+| Property | Test |
+|---|---|
+| every command a skill writes exists | each fenced line beginning `codegraph` in `plugin/` is parsed with that command's `CommandSpec` (the specs are data, `args.ts`): an unknown flag or a value outside `choices` fails. Placeholders are a closed list (`$MODEL`, `$SRC`, `$WS`) |
+| every query runs | each `queries/*.sql` on the five fixture stores, through the code `query` runs; the Java rows pinned to the tables the pages print |
+| pages and skills run the same SQL | the equality of §24.4, over the 18 blocks |
+| the views have one definition | the three docs copies equal `store/helper-views.ts`; `node.id` equals `renderId` on every fixture id, five languages |
+| `query` writes nothing | every statement of §24.9's first row: exit 2, no file created, the store's sha256 unchanged |
+| the state is what the pages ask for | three example files (cold, after the tour, complete) against the schema; the `findings` keys of each step equal that page's "Write down" items, a list edited with the page |
+| budgets | 300 lines and 2 500 words per `SKILL.md`; 1 536 characters per `description` |
+| the plugin is well-formed | `plugin.json`'s version equals the root `package.json`'s; `claude plugin validate plugin` where the CLI is present |
+
+What a test cannot hold is the conversation. It is held twice, before a
+release and not in CI, because each run is a paid session:
+
+- **A scripted tour on PetClinic**, headless. The assertions are on FILES:
+  `discovery.json` valid and steps 1–3 `done`; every finding with a kind
+  and an anchor that resolves (the file exists at the recorded commit,
+  the line is in range); `spend` empty; nothing listening outside
+  loopback; `git status --porcelain` of the analyzed repository
+  unchanged.
+- **`claude plugin eval` cases**, scored against the no-plugin arm:
+  triggering (the guide on "help me understand this codebase", not on
+  "fix this bug"); the gate (no `explain` without a dry run and a yes);
+  honesty (on the Ruby fixture, step 2 says wiring is not available).
+
+  *Scores, 2026-11-26* (Claude Code 2.1.332, `plugin/evals/`, one run per
+  arm, `--scaffold`, no Bash granted — see M23e; $1.79 in all):
+
+  | Case | With | Without | Δ | Note |
+  |---|---|---|---|---|
+  | `meaning-waits-for-a-yes` | 1 | 0 | +1 | told "no plan, don't ask", step 5 still asks for the yes; without the plugin the session agrees to run |
+  | `boundaries-honest-on-ruby` | 1 | 0 | +1 | says there is no wiring report for Ruby; without the plugin one is described |
+  | `ignores-a-bug-fix` | 1 | 1 | 0 | no codegraph skill fired, the bug found, in both arms |
+  | `triggers-on-understand` | 0 | 0 | 0 | the guide fires (indicator passes); the reply grader fails, twice — once as first written ("does not jump to reviewing code", which a run with no shell cannot avoid), once restated; the reply is honest that nothing ran and labels its own reading as such. Owed: the judge's reason, then a third reading |
+
+  One run per arm is a smoke, not a measurement: three runs per arm, as the
+  cases declare, before a release.
+
+Live gate of M23d, on a copy of the paid PetClinic store placed in a
+workspace: step 5 plans exactly what `explain --dry-run` plans there (the
+M21 gate's bytes, §22.6 — not "0 calls") and spends nothing; step 6's
+`.domain` passes `specy validate`.
+
+### 24.9 Hazards, each with the test that pins it
+
+| Hazard | Pinned by |
+|---|---|
+| a read-only handle still writes files (`VACUUM INTO`, measured) | the one-statement rule; a test over `VACUUM INTO`, `ATTACH`, `PRAGMA writable_schema=ON`, `CREATE TEMP TABLE`, two statements, a comment hiding a `DELETE` |
+| `serve` binds every interface by default | every `serve` line in the plugin carries `--host 127.0.0.1`: an assertion of the command test |
+| the analyzed repository shows a new directory, or a tracked file edited | `.git/info/exclude`; the tour asserts `git status` unchanged |
+| the model is behind `HEAD` and an anchor points at a moved line | each finding records its commit; the resume beat compares before any anchor is shown |
+| a secret printed while listing providers | preflight tests presence only; an eval case sets a fake key and greps the transcript for it |
+| the session compacts in the middle of a step | the step re-reads the state before each beat that writes; the budget test |
+| an author's name in a deliverable | the report is built from fields that hold shares and counts; the tour greps it for every author of `history.jsonl` |
+| a flag is renamed and a skill keeps the old one | the command test |
+| zero rows read as "there are none" | the step names the stack tables it applied; the honesty eval |
+| a price remembered from another session | the consent block is built from this run's `--estimate`; the state has no price field |
+
+### 24.10 Milestone split
+
+- **M23a — the skeleton, the guide, step 1, `query`.** *First step, before
+  any of it:* in a live session, the guide calling a step skill by name
+  and by file path (§24.1), and Hugo mounting `../plugin/queries`
+  (§24.4). Then `store/views.ts` with the docs copies pinned;
+  `codegraph query` with its args, dispatch, help, exit-code and
+  stream-purity cases and the SEA smoke; `plugin/` with `discover`
+  (preflight, intake, state, resume) and `discover-1-structure`; step 1's
+  query files; the tests of §24.8 that need no session.
+- **M23b — steps 2 and 3, the tour.** The joined hotspot report,
+  test-first on the history fixture; `discover-2-boundaries`,
+  `discover-3-activity`, the `query` skill; `--tour` and its brief; the
+  city bindings per step; `REPORT.md`; `activity.md` loses its
+  spreadsheet.
+- **M23c — step 4.** The three layers as query files, the slice on facts
+  and with candidates, overlap, residue; `stacks/spring.md` and one stack
+  per other extractor language, each checked on the corpus that
+  extractor's audit used — a stack with no checked table is listed as
+  not covered.
+- **M23d — steps 5 and 6, Specy.** The consent block, the scope proposal,
+  the background run and its readings; `domain-facts`, the three
+  readings, the hand-over; the three Specy changes, in its repository;
+  `domain.md` corrected; the live gate.
+- **M23e — distribution.** The marketplace file; a website how-to and a
+  line on each discover page; `query-model-db.md` leading with
+  `codegraph query`; the eval suite and its scores written here; README,
+  CLAUDE.md, `docs/cli.md`; the release step (version, `claude plugin
+  tag`).
+
+**As built — M23a (2026-11-22).** On the worktree `discover-skills`
+(branch `feat/m23-discover-skills`, base `main` cf7432a). As designed, with
+what the measurements and the first live run changed:
+
+- **The two measurements asked first.** *Skill by name or by path:* with
+  the plugin loaded headless (`claude -p --plugin-dir plugin`, CLI
+  2.1.330) the model invokes `codegraph:discover-1-structure` through the
+  Skill tool and receives its text; left to itself, in two full runs of
+  the guide, it read the step's `SKILL.md` by path instead. Both work; the
+  guide keeps both sentences. *The Hugo mount:* §24.4.
+- **Running the pages' SQL on five fixtures found six defects in the
+  pages, all fixed in the same change.** (1) the documented `node` view
+  rendered `ts:m/#23:2` for an anonymous TypeScript function, where
+  `renderId` gives `ts:m#23:2` — three copies wrong at once, the one
+  existing test ran Java only; (2) step 1's size and largest-type queries
+  listed Java's kinds and returned nothing on Elixir: a type is now asked
+  for by its trait, `TType`; (3) the size-per-module sum counted a nested
+  type's lines twice (Java fixture: 246 for 221); (4) the branching query
+  attributed a lambda to its method and a free function to whatever held
+  it: each operation now counts in the nearest type around it, the sum the
+  city draws, checked against the analyzer's own fold; (5) the kinds table
+  printed 7 of the fixture's 12 rows; (6) the cycle and coupling outputs
+  printed were not those of the commands above them. "The model header
+  carries the commit" is true only with `--repo-commit`: the walk records
+  `git rev-parse HEAD` in the state.
+- **`node:sqlite`, three facts the engine rests on.** `prepare` compiles
+  the first statement and silently drops what follows the `;` — a tail is
+  refused, not ignored; a parameter nobody gave binds NULL — refused by
+  name before the statement runs; a JS number binds as REAL — a whole
+  number is bound as an integer.
+- **The first live run failed usefully.** This machine's `~/.zshenv` sets
+  `CODEGRAPH_HOME` to the main checkout, whose build has no `query`; the
+  agent then answered the step's queries with a Python script of its own.
+  Hence a seventh principle, in the guide and in `rhythm.md` — *a command
+  that fails is reported, not replaced* — and a capability check at
+  preflight (`codegraph query --views`): the version number does not tell
+  two builds of 0.3.0 apart, the command does. The tool lookup became one
+  line every command begins with
+  (`[ -n "${CODEGRAPH_HOME:-}" ] && PATH="$CODEGRAPH_HOME/bin:$PATH"`),
+  and the exclude file is asked for with `--path-format=absolute`.
+- **The second live run** (PetClinic, a cold clone, Sonnet, headless, the
+  intake answers given in the prompt): 25 turns, 102 s, $0.53. The state
+  validates against the schema; six findings, each with a kind and an
+  anchor that resolves to a saved file; `git status --porcelain` of the
+  repository empty; nothing written outside `.codegraph/`; `spend` empty.
+  PetClinic resolves 78.1 % of its type references without a classpath,
+  under the page's "90 % and above is normal": the walk says so.
+- **Smaller departures.** Placeholders are five (`$REPO`, `$WS`, `$ROOT`,
+  `$SRC`, `$MODEL`), each defined in the skill that uses it. Step 1 runs
+  no `import`: `query` builds the store. The workspace gains `reports/`
+  and `<root>.extract.log`. A step's `findings` hold one finding per model
+  under each key, and each key names the page's "Write down" item it
+  answers (`x-page-item`), which is what the test compares. `capabilities.md`
+  is rendered by a test helper (`CODEGRAPH_UPDATE_SNAPSHOTS=1` rewrites
+  it), since the plugin has no build step. The pages hold 20 `sql` blocks,
+  the 18 measured and the two views; `structure.md` and the how-to are
+  covered, the other five pages listed with their milestone.
+- **Gate.** 1 278 CLI tests and 669 analyzer tests green (142 of them
+  the plugin's), typecheck and lint clean, `claude plugin validate plugin
+  --strict` passes, the single-executable image passes its gates with
+  `query` among them, the website builds. Not committed; README and
+  CLAUDE.md wait for M23e as planned.
+
+**As built — M23b (2026-11-22).** On the same worktree, on top of M23a,
+uncommitted. As designed, with what building it and three live tours
+changed:
+
+- **The joined report**, `history --report hotspots --model FILE`, test-first
+  on a hand-counted model and history. Three choices the plan left open.
+  *Lines are counted once per file:* the outermost measured entities written
+  in it — the nested-type double count of M23a again, this time in the SQL
+  `activity.md` handed to a spreadsheet. *A cycle is a file's:* the size of
+  its strongly connected component in the DECLARED file graph, the fold
+  `hidden` and `deadweight` already use, not step 1's type-level components
+  — the file is the unit of the report, and declared-only keeps "tangled" a
+  fact. *A score of 0 is not ranked:* thirty revisions and no measured
+  operation is "not measured", `-` in the table and `null` in the JSON, never
+  the simplest of the busy files. `fragile` is revisions × fix density, which
+  is the fixes, and is stated as that. `--rank` chooses the order (default
+  `branchy`, the page's "sort by revisions × cyclomatic"). The join happens
+  only when `--model` NAMES a model: a `model.jsonl` that sits in the
+  directory must not change what the plain report prints.
+- **Two additions the step needed and §24.5 did not list.** (1) `history
+  --report summary --model` gains `cross-module`. The page's recipe — fold
+  the coupling pairs to their first path segment — answers 0 % on every
+  Maven layout, where that segment is `src`; and its thresholds are in
+  commits, not pairs. It is now counted on commits, over the top-level
+  directories below the directory the model's files share (paths, never
+  ids). PetClinic: 40 of 165 commits, 24.2 %. (2) Each joined row says who
+  holds the file WITHOUT A NAME: the main author's share, that author's row
+  in `--report authors`, the day they were last seen. §24.2 already asked
+  for "one owner, 78 %, not who" and no report gave a per-file share; the
+  row number came from the second tour, whose agent caught itself saying
+  three hotspots had one owner when the report could not show it. On
+  PetClinic the five hotspots turn out to have two main authors.
+- **A defect found on the way.** A `--model` with one invalid line loaded as
+  an EMPTY union: `hidden` then printed "none — every co-changed pair is
+  explained by a declared dependency path", exit 0. It is now a finding,
+  exit 3, for every report that reads a model.
+- **Step 2's four queries, on five languages.** Three more page defects,
+  fixed with the query files: the stub table printed was not the query's
+  first rows; names nothing declares, which the extractor files in the
+  code's OWN package, were listed as the outside world (an `own` column now
+  sets them apart — five on PetClinic, two rows on the fixture); a C#
+  attribute is named by its class, `HttpGetAttribute`. The Spring-routes
+  block became one statement with its list bound (`annotated-with.sql`,
+  `:names` through `json_each`), checked on a hand-built Spring model since
+  no fixture has Spring. Elixir and Ruby return no annotation, by their
+  profile's own statement, which is what the test holds; `capabilities.md`
+  gains "External code is filed under", read from the five fixtures.
+  `activity.md` has no SQL left: 19 blocks on the pages, 13 of them query
+  files or listed as a page's own.
+- **The skills.** `discover-2-boundaries` (246 lines, 1 818 words),
+  `discover-3-activity` (239, 1 862), `query` (135, 942). The schema names
+  the findings of steps 2 and 3 (six and four keys), each tied to the item
+  of its page it answers. The tour is not a skill: it is a section of
+  `rhythm.md` saying how each beat is played when nothing is asked, and its
+  brief is the first section of `REPORT.md` (`references/report.md`: six
+  sections, ordered by the purpose given at intake, no name, no price, no
+  advice). One city per step, held by a test: complexity for step 1, the
+  Graph tab (by Spring role when there is Spring) for step 2, recent churn
+  for step 3.
+- **Three live tours** (Sonnet, headless, the prompt being the command and
+  "nobody can answer"), each checked on FILES by one script: the state
+  valid; steps 1–3 `done` at `HEAD`; every finding with an anchor that
+  resolves; the questions collected and open; `spend` empty; no page
+  served; no author of `history.jsonl` named in `REPORT.md`, `NOTEBOOK.md`
+  or `discovery.json`; `git status --porcelain` empty.
+  - *PetClinic*, a cold clone: 37 turns, 346 s, $0.98, 16 findings, 10
+    questions. The agent invoked the three step skills BY NAME, where
+    M23a's runs read them by path. It chose a two-year window by the page's
+    rule, marked it a guess, and kept the whole-history summary beside it.
+    It also assembled the state with `jq` and `mv`, and two writes failed
+    before it recovered: `state.md` now says to write the state with the
+    file tool, whole.
+  - *rake* (Ruby, 3 228 commits): 37 turns, 253 s, $1.12, 17 findings. The
+    report says what the tour could not do there — no annotation census,
+    external code filed under `<ruby>` and `<gems>` so the stack is the
+    gemspec's to give (it read it), no framework profile, a module is one
+    file, untyped receivers dropped. The state was written with the file
+    tool. Every saved report was read through a `python3` snippet: nothing
+    was computed that way, but `rhythm.md` now says a saved result is read
+    with the file tool or the command's own table.
+  - *PetClinic again*, a fresh clone, with the text as it now stands: 40
+    turns, 227 s, $1.04, every assertion holds. The state was written with
+    the file tool; one shell call went through a script where the two
+    earlier runs made 19 and 11; the shortlist says "five different main
+    authors hold the six files (`Owner` and `Pet` share row 9)" and that
+    the names are in `reports/authors.json` only.
+  - A directory `.remember/` appears in each clone: another plugin's
+    session hook on this machine, named by no tool call of the agent, and
+    ignored by its own `.gitignore`.
+  - The three runs cost $3.14 of Claude Code usage.
+- **Gate.** 1 420 CLI tests, 691 analyzer and 56 scm tests green, typecheck
+  and lint clean, `claude plugin validate plugin --strict` passes, the
+  single-executable image passes its gates, the website builds. Not
+  committed.
+
+**As built — M23c (2026-11-23).** On the same worktree, on top of M23a and
+M23b, uncommitted. As designed, with what measuring the page's four queries
+and running the step on six codebases changed:
+
+- **One CLI addition the plan did not list: `query --param-file NAME=FILE`.**
+  The walk forbids a script between two commands, and step 4 is a chain of
+  them: the inventory feeds the chains, the chains feed the ranking, the
+  groups and the residue, step 3's reports feed two of those. Without it an
+  agent retypes thirty ids on a command line. The flag binds `:NAME` to a
+  file's whole text, always as text; `json_each(:NAME, '$.rows')` reads what
+  a `--json` run saved. A result is then computed from a file a person can
+  open. Eleven tests first; one name is bound once, by either flag.
+- **The page's four queries, measured.** (1) *"Run it twice"* was false as
+  written: the candidate targets of `--report wiring` are in-memory only
+  (`framework/profile.ts` says so), never in the store, and no extractor of
+  Java, C# or TypeScript writes an invocation that is not `declared` — the
+  second run returned the first one's rows on three languages of five. (2)
+  The walk ignored the `candidates` list of a `dynamic-candidate` edge, which
+  is where an Elixir protocol call keeps its implementations: 1 row on facts,
+  10 with them. (3) It did not enter a lambda, a local function or an arrow
+  function, whose calls are edges FROM that entity. (4) The zero-callers
+  query named Java's kinds — the M23a defect again — and listed as "nothing
+  calls it" every implementation reached through its interface, every
+  constructor and every `toString`.
+- **The second run is now three stated inferences**: edges of another
+  provenance; the candidates an edge lists; and dispatch — a call to an
+  operation of a type may run the operation of the same name and arity in
+  any type of the code below it. That last one is class-hierarchy analysis,
+  an upper bound, and it subsumes what the wiring report would add. The C#
+  fixture's `IsFree(IPriceable)` reaches 3 entities on facts and 9 with the
+  candidates; the page prints those two numbers and a test holds them.
+- **The three layers are one statement** (`entry-points.sql`), fed by a
+  **stack table**: a JSON file of names, each with a kind of stimulus —
+  `annotations`, `supertypes` (a type the framework calls: the entry points
+  are the UNCALLED operations of every type below it, the callbacks and not
+  the helpers), `types` (a GLOB on a type's name), `operations`, `entries`
+  (an id a person named; an id that is not in the model comes back with a
+  NULL kind instead of vanishing) and `conventional`, the names the language
+  itself calls, copied from core's profile lexicon and held equal to it. A
+  row no table names is `no caller` with a NULL stimulus: unclassified, as
+  §24.2 asked. The kinds are eight, not seven: `inbound request` is what
+  `@RequestMapping`, `[Route]` and a Rails action are — a request whose name
+  does not say whether it reads or changes.
+- **The residue is measured wider than a chain.** "Everything no chain
+  reaches" listed every type that is only mentioned: a parameter's type, an
+  exception thrown, a class extended. It is now what no type reachable from
+  a classified entry point mentions by ANY edge, declared types and nested
+  types included. The first version of that statement tied every type to
+  its package and was always empty: found by a count from the model, which
+  is why each step-4 statement has an in-memory oracle on the five fixtures
+  (breadth-first walk, union-find, closure), and why six deliberate breaks
+  of a rule were run against them — each fails one to four tests.
+- **Nine query files**, ten with step 2's: `supertypes`, `entry-points`,
+  `entry-point-kinds`, `reach`, `chains`, `chain-ranking`, `chain-groups`,
+  `shared-types`, `residue`. The page shows the COMMAND and its rows on the
+  Java fixture where it explains a query, and the nine statements at its
+  end; the test maps a table to its file through the command. Groups are
+  single-linkage on shared types over all types (`:min` percent, start at
+  50), the types more than half the chains reach left out.
+- **Three things SQLite taught, each a 20- to 150-fold cost.** `node.id` is
+  computed per row, so `JOIN node ON n.id = list.id` is one pass over the
+  model per list row: 40 s for Mastodon's residue, 0.26 s once turned into
+  `WHERE n.id IN (…)`. `json_each(:param)` inside a correlated subquery
+  parses the JSON once per outer row: 22 s for the inventory, 0.33 s with
+  the lists read once (`AS MATERIALIZED`). A correlated `NOT EXISTS` over the
+  type closure rebuilt its lookup per row: replaced by a set. The `query`
+  skill now says the first two. In an `ORDER BY` expression a name is the
+  input column, not the alias of the same name: `unclassified` sorted first
+  until a test said last.
+- **Five stack tables, each run on a real codebase and its rows read**
+  (`references/stacks/*.json`, `references/stacks.md`; a test holds the
+  kinds to the page's eight, the conventional names to core, and the Spring
+  table to every entry-point annotation of the framework profile):
+
+  | Table | Corpus | Entities | Found | Unclassified |
+  |---|---|---|---|---|
+  | `spring` | spring-petclinic `500158f` | 451 | 32 by annotation, 6 by supertype, `main` | 16 |
+  | `aspnet` | dotnet/eShop `ab10e4c` | 7 386 | 14 by attribute, 44 by supertype | 392 |
+  | `aspnet` | OrchardCore `045b6d1` | 107 668 | 399 by attribute, 587 by supertype | 2 252 |
+  | `nestjs` | nestjs/nest `94df49d`, its 39 samples | 4 427 | 130 by decorator, 33 by supertype | 35 |
+  | `phoenix` | plausible/analytics `418da46` | 11 810 | 170 by type name, 253 by operation name, 11 by behaviour | 839 |
+  | `rails` | mastodon `v4.3.0` | 12 806 | 1 543 by supertype | 1 277 |
+
+  On OrchardCore: the inventory 0.75 s, the chains of 905 entry points 1.0 s
+  on facts (23 682 rows) and 43 s with candidates, the residue 2.2 s, the
+  groups 2.3 s. Not covered, and said so on the page and in the reference:
+  Jakarta EE, Micronaut, Quarkus, Azure Functions, Express, Fastify, Next.js,
+  Sinatra, Grape, Hanami.
+- **PetClinic's inventory, as the definition of done asks.** 55 rows: the 32
+  entry points of `--report wiring`, id for id and annotation for
+  annotation (two of them are not operations: a class-level
+  `@RequestMapping` and a `@ModelAttribute` parameter, listed as markers);
+  6 the supertype layer adds, checked in the source — `PetValidator.validate`
+  and `supports`, `PetTypeFormatter.print` and `parse`,
+  `PetClinicRuntimeHints.registerHints`, `WebConfiguration.addInterceptors`;
+  and 17 with no caller: `main`, and 16 unclassified, of which 15 have no
+  call site in the main source (bean properties a template or a binder
+  reaches, two methods only the tests call) and 1 is wrong.
+- **What the corpora showed the tables cannot find**, each stated where the
+  agent reads it: an ASP.NET minimal API (`MapGet("/items", GetAllItems)` is
+  not an edge at all in the C# model — the handler is unclassified, or
+  absent when another handler calls it); a Phoenix route (a macro) and `use
+  GenServer` (not a supertype without a trace: the callbacks are found by
+  name); which Rails controller method is an action (no visibility in the
+  model); a NestJS decorator whose package resolves to source outside the
+  roots (filed as its file, not by name — seen on the nest monorepo itself).
+- **A defect of the Java extractor, found and not fixed here.** Inside a
+  lambda whose functional interface is not on the classpath, a call to a
+  method of the enclosing class is not drawn: `cm -> cm.createCache("vets",
+  cacheConfiguration())` in PetClinic, and `cm -> inLambdaBody()` in a
+  three-method sample. The callee then shows as `no caller`, and a chain
+  stops at the lambda. It belongs to the extractor's own milestone; the
+  Spring notes name the PetClinic row.
+- **The skill.** `discover-4-stimuli`, 269 lines and 2 051 words; the
+  schema names its five findings (`inventory`, `unclassified`, `chains`,
+  `useCases`, `residue`), tied to the page's three items. A use case's name
+  is proposed by the agent and marked as proposed until a person gives one.
+- **Two live runs of the step** (Sonnet, headless, on the PetClinic
+  workspace the M23b tour left, steps 1 to 3 done; the prompt: resume, run
+  the next step only, ask nothing, serve no page), each checked on FILES by
+  one script: the state valid and four steps `done` at `HEAD`; the five
+  findings of step 4, each with an anchor that resolves; the ten saved
+  results and the table as applied; the inventory holding the 32 entry
+  points of `--report wiring`; nothing extracted or mined again; `spend`
+  empty; no author named; `git status --porcelain` empty.
+  - *First run:* 41 turns, 238 s, $1.06, no failed tool call, no script. It
+    resumed from the state alone and read the step's skill by path. It found
+    the lambda row by itself, read the source and anchored the finding at
+    `CacheConfiguration.java:37`; it named three use cases and marked each
+    as proposed; it wrote "this table found no external event, internal
+    event or temporal entry point. That says nothing about a scheduler
+    configured outside the code". One assertion failed: `REPORT.md` still
+    said three steps done — "the guide rewrites it at a stop, and this run
+    only goes up to the gate". A gate where the session ends IS a stop: a
+    step now rewrites the report when it writes the state (`rhythm.md`,
+    beat 6; a tour, once, after step 3).
+  - *Second run,* a fresh copy, with that change: 37 turns, 220 s, $1.02,
+    every assertion holds; the report lists step 4 as done and cites its
+    saved results. It checked twice that the state parses with `python3 -m
+    json.tool`: `state.md` now says to read it back with the same tool. It
+    did not open `stacks.md`, which the first run did.
+  - The first run's "chain to read first" was a `@ModelAttribute` callback:
+    it ties on hotspots with three POST handlers and reaches one more type.
+    The page and the skill now put a command, a query, a request or an
+    event before a `lifecycle` entry or a `framework callback` of the same
+    rank. That sentence was written after the second run.
+  - The two runs cost $2.08 of Claude Code usage.
+- **Gate.** 1 602 CLI tests (431 of them the plugin's), 691 analyzer, 544
+  core and 56 scm tests green, typecheck and lint clean, `claude plugin
+  validate plugin --strict` passes, the single-executable image passes its
+  gates and runs a step-4 query with `--param-file`, the website builds. Not
+  committed. Not live-tested: the interactive path of step 4 (its three
+  questions answered, a table extended by what a person says), `--step 4`
+  entered directly, and any stack but Spring in a session — the four other
+  tables were run through the same statements by hand.
+
+**As built — M23d (2026-11-23).** On the same worktree, on top of M23a to
+M23c, uncommitted; the Specy side on a new branch of its own repository. As
+designed, with what measuring the two pages and three live runs changed:
+
+- **The two pages, run before they were followed.** `meaning.md` read the
+  records with `jq`, which the walk forbids, named OpenRouter and Cloudflare
+  only, and printed a plan without its `models:` line; it now reads them with
+  `codegraph insights`, names Claude Code, and prints the command's output.
+  `domain.md` printed for `--framework spring` the bytes of the run without
+  it (100 827 for 100 949), its purity query left out the standard library by
+  `NOT LIKE 'java.%'` on every language — the C# fixture's `Acme.Order` read
+  53.1 % pure with every `System` type counted as a library, 95.1 % with its
+  own — and its order tied on every TypeScript, Elixir and Ruby module, so a
+  ranking moved between two runs. Its "planned change" sentence is corrected
+  (below). `stimuli.md` printed `25` where the command prints `25.0`: the
+  test now compares a page's table with the command's own cells
+  (`tableCells`, lifted out of `formatTable` in `query.ts`, no output
+  changed), where it compared `String(value)`.
+- **What a record is a function of, measured on the paid store.** On a copy,
+  this branch plans the M21 gate's bytes (`240f75ce…3b8e`, 53 llm, 33
+  template, 53 reuse). Three things move them, each now a reading rule of
+  the page and of the skill: (1) *the metrics pass* — the walk's own model of
+  the same commit, extracted at step 1 and measured, plans 90 llm and 16
+  reuse against the same store; with the pass's 1 466 keys stripped it plans
+  the gate's bytes exactly, so the cause is the fourteen measures each prompt
+  shows, not the extractor's version; (2) *the provider* — the same command
+  resolving to Claude Code (no key set) plans other bytes (`a502ba1a…`),
+  because the estimate counts Claude Code's scaffolding in every prompt; the
+  skill names `--provider` on every plan; (3) *the models and depth* — with
+  Claude Code's default model instead of the store's, the plan is 106 calls
+  and reuses nothing; the store's summary (`codegraph insights`) names its
+  models and depth, and the skill plans with those. The 53 calls that remain are 2a79c8f's words (§22.6): the
+  page now says a codegraph that asks other words plans those units again.
+- **Three query files**, with the M23c discipline: an in-memory oracle on the
+  five fixtures for each, then deliberate breaks — dropping the standard
+  library, counting a stub of the code's own package as a library, dropping
+  the supertypes from "reaches a library", any provenance, `entry` at depth
+  1, any field, reads for writes — each failing one to six oracle tests; one
+  break (an enum that is a stub) fails only the page-equality test, no
+  fixture having one. `purity.sql` (domain.md) binds the standard library
+  as `:stdlib`, a list of GLOB patterns from a five-row table on
+  `meaning.md`, held equal to the test's and each pattern to a module its
+  fixture references. `chain-position.sql` (meaning.md) counts, per type of
+  step 4's chains, where chains start (`entry`), pass (`inside`), and leave
+  the code (`edge`: the type calls or reads a library outside the standard
+  library, or one is above it — without the supertypes a repository
+  interface read as `inside`). `invariant-evidence.sql` (domain.md): per type,
+  writes to its own fields, throw sites, both in one operation (`guarded`),
+  and the enum-typed fields it writes. On PetClinic `guarded` is 0 for every
+  type: its guards are `Assert.notNull` calls, not throw sites, which the
+  page now says. The pages hold 26 `sql` blocks: the 21 query files and the
+  how-to's five own; no discovery page is left uncovered.
+- **The skills.** `discover-5-meaning` (266 lines, 2 036 words) and
+  `discover-6-domain` (236, 1 748); the schema closes both steps' findings
+  (seven and five keys, each tied to an item of its page's list, which gains
+  "What was explained" on `meaning.md`) and gives a finding an `origin`
+  (`explain` or `session`) for an `explanation`; a fourth example state,
+  `complete.discovery.json`. The consent block is `references/consent.md`,
+  the Specy skill's §1.4 block and question word for word. The test that
+  read "no line carries `--yes`" is restated as what it guarded: one line in
+  the plugin carries `--yes`, an `explain` run in step 5's Ask beat, with a
+  stated `--scope`, `--provider` and `--max-calls`, after an `explain` that
+  only plans and two that only estimate.
+- **Specy** (`~/specy/skills`, worktree `.claude/worktrees/codegraph-discovery`,
+  branch `feat/codegraph-discovery-workspace` from fa6f029, uncommitted; its
+  main working tree holds someone's edits since 2026-11-17 and was not
+  touched): `heuristics/codegraph.md` for `architecture-extract-from-code`
+  and for `sysreq-extract-from-code`, `heuristics/codegraph-workspace.md` for
+  `domain-extract-from-code` (lookup `.codegraph/`, then `specy/codegraph/`,
+  then any side-car; excluded paths, names a person gave, hotspot ranks
+  ordering the refactoring report, no second consent when `spend` or the
+  `run` finding holds the answer), each wired into its `main.md` and
+  `build.sh`, `dist/` rebuilt for the three skills against a clean export of
+  `metamodels` HEAD (a build from its working tree would carry someone's
+  uncommitted grammar). *Measured:* the plan's "§1.4" and "looks for
+  `specy/codegraph/*.insights.jsonl`, then any `*.insights.jsonl`" describe
+  that uncommitted working tree; the committed skill reads
+  `specy/codegraph/model.insights.jsonl` alone, on JVM code only. The branch
+  is written against the commit, so it will conflict with those edits in
+  `codegraph.md` §1 and `main.md` step 4 when they land.
+- **Three live runs** (Sonnet, headless, no provider key in the environment,
+  each checked on FILES by one script):
+  - *Step 5 on a copy of the paid store placed in a workspace* (the M23c
+    workspace, steps 1–4 done, its model replaced by the paid one so that the
+    store is the paid store whole; intake allowing OpenRouter up to $1; the
+    consent answered no): 33 turns, 237 s, $0.93. The saved plan is the M21
+    gate's bytes; the store and its side-car keep their sha256; the consent
+    block was shown with "Estimated cost: unknown" and a nine-type scope as
+    the cheaper line (33 calls); the readings came from the paid records,
+    free; `spend` empty; every finding anchored. It found by itself that
+    `Owner` is an entity at the edge of its seven chains (Spring's `Assert`
+    and `ToStringCreator`) and `BaseEntity` "plumbing" inside all eleven. It
+    rewrote `REPORT.md` through a `python3` script: `rhythm.md` now says the
+    three files are written with the file tool; and it proposed the whole
+    root, as the skill then said, where the page says not on a first visit:
+    the skill now proposes the scope.
+  - *Step 6 on the result, with the Specy branch loaded* (`--plugin-dir` of
+    its `dist/`, which replaces the installed `specy@skills-dir` — measured
+    with a session that cannot start, $0): 73 turns, 638 s, $2.80. Verdicts:
+    `system` and the root package infrastructure, `owner`, `vet` and `model`
+    undecided, the measures disagreeing. The Specy skill read
+    `codegraph-workspace.md`, extracted nothing, ran no `explain`, wrote
+    `specy/petclinic.domain` (two contexts, one aggregate, five entities,
+    five commands, five queries, six preconditions, no event), a `.sysreq`
+    and a refactoring report of 11 smells ordered by hotspot rank (first:
+    `OwnerController`, a transaction script, fragile #1); `specy validate`
+    passes on both, in the session and again in the checker; `git status`
+    shows `specy/` and nothing else. One `python3` call read the dossier's
+    shape.
+  - *Step 5 with a no at intake and no store* (the M23c workspace as it
+    was, its model measured by the pass): 55 turns, 237 s, $1.03. It planned
+    and estimated through Claude Code as the provider that "would have been"
+    (106 calls for the root, 50 for nine types), created no store, read five
+    types itself and wrote them as explanations with `origin: "session"`,
+    each anchored at a file and line, and the glossary from `codegraph
+    vocabulary` as `derived`. Two of the checker's assertions failed, and
+    both showed the text was silent: it wrote the step `partial` ("so a
+    resume offers step 5 again") and no `said` finding, a no nobody gave.
+    The skill now says the step is `done` after a no, a later yes being a new
+    question, and `consent.md` that `said` is for an answer a person gave in
+    the step. It also found that a scope of types gives no module record, so
+    no purpose and no glossary: the page and the skill now propose the module
+    that holds the chain and the shortlist (`owner`: 55 calls cold), the
+    types alone as the cheaper option. It read the state through `python3`
+    four times: `state.md` now says to read it with the file tool too.
+  - Before the second run, a session with an unknown model (it stops before
+    any call, $0) showed what a plugin directory does to an installed plugin
+    of the same name: `--plugin-dir` of the Specy branch's `dist/` replaces
+    `specy@skills-dir`, and `--safe-mode` drops every plugin's skills,
+    `--plugin-dir` ones included.
+  - The three runs cost $4.75 of Claude Code usage ($0.93, $2.80, $1.03).
+- **Gate.** 1 697 CLI tests (526 of them in the six plugin suites), 691 analyzer, 544
+  core, 96 llm and 56 scm tests green (run one package at a time: under a
+  parallel run the analyzer's `scale.test.ts` times out at 5 s, as M21
+  recorded, and passes alone); typecheck and lint clean; `claude plugin
+  validate plugin --strict` passes; the website builds (`hugo --themesDir`
+  the main checkout's themes; `pnpm -r build` fails on the website package
+  in a worktree, which has no theme); the single-executable image passes its
+  gates; the paid store's three files keep their sha256. Not committed, in
+  either repository. Not live-tested: a yes and the paid run behind it, its
+  `spend` entry, the consent asked of a person; the three changes made after
+  the third run; step 6 without the Specy plugin (the install line); the
+  architecture and requirements heuristics of Specy, which no session read;
+  `--step 5` or `--step 6` entered directly; any corpus but PetClinic; and
+  an enum-typed field whose enum is a stub, which no fixture has.
+
+Definition of done: from a cold checkout of PetClinic and two install
+commands, `/codegraph:discover <path> --tour` writes a valid workspace
+with `git status` unchanged; a second session resumes at step 4 from the
+state alone; no model call precedes a yes; every finding carries a kind
+and an anchor that resolves; on a Ruby corpus the walk says what it
+cannot do; the tests of §24.8 are green in `pnpm -r test`.
+
+**As built — M23e (2026-11-26).** On the same branch, rebased onto `main`
+e6ee860 (v0.4.0, with M21 and M22): the conflicts were M21's `walk` beside
+`query` in `args.ts` (both kept; `walk --print-definition` and `query
+--views` the two commands that read no model) and this section's numbering
+(24, Milestones 25, Decisions 26, as planned). As designed, with what the
+integration and the first eval run changed:
+
+- **The marketplace**: `.claude-plugin/marketplace.json` at the root, one
+  entry, `source: "./plugin"`; `claude plugin validate . --strict` passes;
+  `/plugin marketplace add defsquare/codegraph` + `/plugin install
+  codegraph@codegraph`. `plugin-manifest.test.ts` holds the entry to
+  `plugin.json` and `plugin.json` to the root `package.json` — which the
+  rebase had already broken (0.3.0 against 0.4.0): the bump of a release now
+  names both files. The marketplace is read from `main`, so the plugin
+  installable after the merge needs the `codegraph` of the release after
+  v0.4.0 (`query`, the joined hotspots); the preflight's `query --views`
+  probe says so to anyone on v0.4.0.
+- **Python arrived with the rebase** and the plugin had not heard of it:
+  `capabilities.md` regenerated with its column (`--trace`: yes), the guide's
+  preflight looks for `codegraph-python`, and `stacks.md` lists every Python
+  framework as not covered — no Django, Flask or FastAPI table was checked
+  on a corpus, so none ships.
+- **The eval suite**, `plugin/evals/`: four cases, one per property of the
+  conversation above, each with a `scaffold.sh` (run by bash, not
+  executable — the manifest test admits `case.yaml`, `prompt.md`,
+  `scaffold.sh` and graders under `evals/` and nothing else) and NO Bash:
+  this machine has no bubblewrap, and a Bash grant without the OS sandbox is
+  refused. So a case holds what a skill decides and says, not what its
+  commands print — which is what triggering, the gate and honesty are. The
+  scores are above. Its output (`evals/results/`) is gitignored and skipped
+  by the tests.
+- **The release step** in `docs/distribution.md`: validate, `claude plugin
+  tag plugin --push` (`codegraph--vX.Y.Z`, which does not match the `v*`
+  trigger), the eval before the tag.
+- **Docs**: `how-to/discover-with-claude-code.md`; a line on each discover
+  page naming its step's skill; `query-model-db.md` leads with `codegraph
+  query`, the views kept verbatim for other clients; README (usage, packages,
+  docs, status), CLAUDE.md (the layout, the boundary, the commands),
+  `docs/cli.md`, `plugin/README.md` (the install lines `claude plugin
+  validate` asks for).
+- **Not done**: three runs per arm; a judge's reason for the failing
+  `triggers-on-understand` reading; the scripted tour on PetClinic with the
+  installed plugin (not `--plugin-dir`), which needs the release.
+
+### 24.11 Deferred, explicitly
+
+- **`codegraph doctor`.** The preflight is some forty lines of shell an
+  agent adapts per system. It becomes a command when the desktop app
+  needs the same answer — the daemon's registry and extension census are
+  half of it.
+- **Entry points and reach as `analyze` reports**, with the annotation and
+  interface lists as framework-profile data (M10d's door).
+- **Deep links in `serve`**, so the agent can point at one building.
+- **Walk definitions shipped with the plugin** now that M21 is on `main`: a walk
+  naming each stimulus, a walk listing outbound systems, on the same
+  estimate-and-consent machinery.
+- **The insights store attached in `query`**, to join a concept with a
+  role in one statement: M16c's finding on read-only handles and `-wal`
+  files applies first.
+- **Other agent hosts.** The files follow the Agent Skills format; only
+  the frontmatter extensions and `${CLAUDE_PLUGIN_ROOT}` are Claude
+  Code's.
+- **A hard dependency on the Specy plugin**: across two marketplaces it
+  needs a setting on the user's side.
+- A data-flow diagram (`boundaries.md` says codegraph draws none), a walk
+  over several repositories as one system, the desktop app running the
+  walk.
+
+## 25. Milestones
 
 | # | Milestone | Definition of done |
 |---|---|---|
@@ -7287,8 +8261,13 @@ fixture in every per-fixture suite.
 | M22a | Python extractor — profile v2 + skeleton | ✅ (2026-11-22, worktree `python-extractor`, PR #51) §23.9: the parity script run first (CPython's `ast` against the recovered tree, on the fixture and on requests); `python` profile v2 in core (`decorator` and `lambda` no longer kinds, `annotationUse` and `throws` added, the module's name its path) and the registry test; `extractors/python/` in Rust on Ruff's parser pinned by tag, the typeshed table embedded and its generator beside it; the walking skeleton — decoding, import roots, classes / functions / methods / parameters at every nesting, absolute and relative imports with the submodule rule and re-export chains, bases, the stub roots `<builtins>` / `<stdlib>` / `<site>` — → `fixtures/python/expected/model.jsonl` byte-identical to core's encoder, profile-valid with zero issues; the core gate; `bin/codegraph-python`, `build.sh --python`, `test.sh --python` with the release-binary `cmp`; `python-test` in CI |
 | M22b | Python extractor — model | ✅ (2026-11-22, worktree `python-extractor`, PR #51) `attribute` and `variable`; scopes and the name tiers of §23.4; every receiver shape with its provenance (`declared` where the class is written, `derived` for flow, for an annotation and for a sole library ancestor); star imports bound; `annotationUse` with written arguments, `access`, `reference`, `throws`; synthetic classes; `declaredType`; comments, `sloc` + `cyclomatic`, literals; `.pyi` and shebang files; `python` in the metrics pass and a sixth `model.metrics.jsonl`; the full fixture in every per-fixture suite; every CLI command verified on it; city and navigator screenshots reviewed |
 | M22c | Python extractor — audit + oracles + distribution | ✅ (2026-11-23, worktree `python-extractor`, PR #51; `python-native` green on its four runners there, the release loop not yet run with a Python asset) as built: 81.6 / 73.4 / 81.9 / 77.0 / 78.7 % of sites resolved on requests / Django / Zulip / CPython 3.14.10 / 2.7.18; pyright agrees with `declared` at 98.6 % (requests), 98.3 % (Zulip) and 98.8 % (Django), and with `annotation-typed` at 99.1 % and 98.9 %, which stays `derived`; the rulings taken on the audit are in §23. As planned: requests, Django, Zulip, CPython 3.x `Lib/` and CPython 2.7.18 `Lib/` audited `validate`-clean; declarations equal to CPython's `ast` up to the stated folds; the import graph against grimp on Django; references against pyright per provenance, the annotation decision confirmed or reversed on those numbers; `trace/codegraph_trace.py` and `--trace`; binaries on four Unix runners, the registry entry, the formula, `--licenses`; `docs/python-extractor.md`, the website pages, README, CLAUDE.md |
+| M23a | Discovery skills — skeleton, guide, step 1, `query` | ✅ (2026-11-22, branch `feat/m23-discover-skills`, as built in §24.10) §24.10, the two measurements first (a skill reached by name or by file path; Hugo mounting `../plugin/queries`); the helper views defined once in `@codegraph/analyzer` and the three docs copies pinned to it; `codegraph query` (bound parameters, read-only by handle and by a one-statement rule, `codegraph.queryResult/1`) in every CLI suite and the SEA smoke; `plugin/` with `discover` (preflight, intake, state, resume) and `discover-1-structure`; the session-free tests of §24.8 green. Step 1 runs on PetClinic from a cold checkout and a second session resumes from `.codegraph/discovery.json` alone |
+| M23b | Discovery skills — steps 2–3, the tour | ✅ (2026-11-22, same branch) `history --report hotspots --model` with the four rank families, hand-counted on the history fixture; `discover-2-boundaries`, `discover-3-activity` and the `query` skill; `--tour` writing its brief and `REPORT.md` with no question asked; one city restyled per step; `activity.md` without its spreadsheet. On a non-Java corpus the tour says what it could not do |
+| M23c | Discovery skills — step 4 | ✅ (2026-11-23, same branch) the three detection layers, the slice on facts and with candidates, overlap groups and the residue as query files; `stacks/spring.md` plus one checked stack per other extractor language, the rest listed as not covered. PetClinic's inventory equals the entry points of `--report wiring` plus a hand count of what the two other layers add |
+| M23d | Discovery skills — steps 5–6, Specy | ✅ (2026-11-23, same branch; Specy's side on its branch `feat/codegraph-discovery-workspace`; a paid run behind a yes not live-tested) the consent block, the scope proposed from steps 3–4, the background run; `domain-facts`, the three readings and the hand-over; the three Specy changes of §24.6 in its repository; `domain.md` corrected. On a copy of the paid PetClinic store step 5 plans the M21 gate's bytes and spends nothing, and step 6's `.domain` passes `specy validate` |
+| M23e | Discovery skills — distribution | built (2026-11-26, same branch, rebased onto v0.4.0): the eval smoke is 3 of 4 (§24.8), three runs per arm and the installed-plugin tour owed before the release the marketplace file; the website how-to and `query-model-db.md` leading with `codegraph query`; the eval suite and its scores stated in §24.8; README, CLAUDE.md, `docs/cli.md`; the release step. Installable by two commands |
 
-## 25. Decisions made in this plan (deltas vs. the design doc)
+## 26. Decisions made in this plan (deltas vs. the design doc)
 
 | Topic | Decision | Rationale |
 |---|---|---|

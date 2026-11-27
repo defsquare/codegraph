@@ -75,6 +75,48 @@ describe("export puts ONLY the artifact on stdout", () => {
   });
 });
 
+describe("query puts ONLY the rows on stdout", () => {
+  const SQL = "SELECT id, kind FROM node WHERE kind = 'package' AND is_stub = 0 ORDER BY id";
+
+  it("--json yields one codegraph.queryResult/1 document and nothing else", () => {
+    const result = runCli(["query", FIXTURE, SQL, "--json"]);
+    expect(result.code, describeResult(result)).toBe(EXIT.OK);
+    const json = parseJsonArtifact(result.stdout, "query --json stdout");
+    expect(json["kind"]).toBe("codegraph.queryResult/1");
+    expect(json["columns"]).toEqual(["id", "kind"]);
+    expect((json["rows"] as unknown[]).length).toBe(3);
+    expect(json["total"]).toBe(3);
+  });
+
+  it("--csv yields a rectangular table and nothing else", () => {
+    const result = runCli(["query", FIXTURE, SQL, "--csv"]);
+    expect(result.code, describeResult(result)).toBe(EXIT.OK);
+    const table = parseCsv(result.stdout);
+    expect(table.header).toEqual(["id", "kind"]);
+    expect(table.rows.map((row) => table.column(row, "id"))).toEqual([
+      "java:com.acme.order",
+      "java:com.acme.order.adapter",
+      "java:com.acme.order.legacy",
+    ]);
+  });
+
+  it("says which store answered and how many rows on stderr, never on stdout", () => {
+    const result = runCli(["query", FIXTURE, SQL]);
+    expect(result.code, describeResult(result)).toBe(EXIT.OK);
+    expect(result.stdout.split("\n").filter((line) => line !== "").length).toBe(2 + 3);
+    expect(result.stdout).not.toMatch(/cache|rows\./);
+    expect(result.stderr).toMatch(/^cache: .*model\.db$/m);
+    expect(result.stderr).toContain("3 rows.");
+  });
+
+  it("a refused statement leaves stdout empty", () => {
+    const result = runCli(["query", FIXTURE, "DROP TABLE entity"]);
+    expect(result.code, describeResult(result)).toBe(EXIT.USAGE);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("SELECT, WITH, VALUES, EXPLAIN");
+  });
+});
+
 describe("the human stream carries the warnings, and stdout stays an artifact", () => {
   /**
    * Folding the java fixture to module level drops 5 base edges as unplaceable

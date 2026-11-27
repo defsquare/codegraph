@@ -81,3 +81,6 @@ website/static/city/assets/
 
 # Playwright screenshots taken while checking the website
 /.playwright-mcp/
+
+# claude plugin eval output (scores go to PLAN.md §24.8)
+plugin/evals/results/
